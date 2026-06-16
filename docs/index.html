@@ -33,9 +33,11 @@
 
 <script src="https://v8.js-dos.com/latest/js-dos.js"></script>
 <script>
-  // js-dos v8: minimal documented call. Bundle sits next to this file.
+  // js-dos v8: pathPrefix points to the folder holding emulators.js + the
+  // dosbox wasm core (it lives under /emulators/, not the js-dos.js root).
   Dos(document.getElementById("dos"), {
-    url: "city.jsdos"
+    url: "city.jsdos",
+    pathPrefix: "https://v8.js-dos.com/latest/emulators/"
   });
 </script>
 </body>
