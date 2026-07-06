@@ -69,6 +69,14 @@ TURNV   equ 2                   ; heading change per frame (of 256 = full turn)
 BANKMAX equ 30                  ; max bank/roll angle (of 256)
 BANKSTP equ 3                   ; bank approach/decay per frame
 
+; ---- fixed-timestep physics clock ------------------------------------------
+; PIT input is 1193182 Hz. Divisor 17045 -> ~70.0 Hz physics tick. Physics
+; (INPUT) advances once per elapsed timer tick, so real-world flight speed is
+; the same regardless of render frame rate. "per frame" constants above are
+; now "per physics tick" (still ~70/sec, so current feel is preserved).
+TIMDIV  equ 17045               ; PIT ch0 divisor -> ~70 Hz
+MAXSTEP equ 8                   ; cap physics catch-up per render (anti-spiral)
+
 ; ---- keyboard scan codes ---------------------------------------------------
 SC_ESC  equ 01h
 SC_UP   equ 48h
@@ -87,8 +95,12 @@ START:  jmp  MAIN
 ;  DATA
 ; ============================================================================
 bufseg  dw 0
-oldoff  dw 0
+oldoff  dw 0                    ; saved INT 9 vector (keyboard)
 oldseg  dw 0
+oi8of   dw 0                    ; saved INT 8 vector (timer)
+oi8sg   dw 0
+ticks   dw 0                    ; physics ticks counted by TIMERINT (~70 Hz)
+lastick dw 0                    ; ticks value at previous render frame
 
 camx    dw 0
 camy    dw 120
@@ -268,6 +280,23 @@ KBINT:  push ax
         iret
 
 ; ============================================================================
+;  TIMER INTERRUPT HANDLER (INT 8), PIT reprogrammed to ~70 Hz
+;  Just counts physics ticks. Not chained to BIOS (we restore the PIT + this
+;  vector on exit), so the DOS time-of-day runs fast during play - harmless.
+; ============================================================================
+TIMERINT:
+        push ax
+        push ds
+        mov  ax,cs
+        mov  ds,ax
+        inc  word ptr [ticks]
+        mov  al,20h
+        out  20h,al             ; EOI to PIC
+        pop  ds
+        pop  ax
+        iret
+
+; ============================================================================
 ;  MAIN PROGRAM
 ; ============================================================================
 MAIN:
@@ -285,6 +314,25 @@ MAIN:
         mov  ax,2509h
         int  21h                ; DS=CS already -> vector to CS:KBINT
 
+        ; hook INT 8 (timer) and speed the PIT to ~70 Hz for fixed-step physics
+        mov  ax,3508h
+        int  21h
+        mov  [oi8of],bx
+        mov  [oi8sg],es
+        mov  dx,offset TIMERINT
+        mov  ax,2508h
+        int  21h
+        cli
+        mov  al,36h             ; ch0, lobyte/hibyte, mode 3, binary
+        out  43h,al
+        mov  ax,TIMDIV
+        out  40h,al             ; divisor lobyte
+        mov  al,ah
+        out  40h,al             ; divisor hibyte
+        sti
+        mov  word ptr [ticks],0
+        mov  word ptr [lastick],0
+
         ; video mode 13h + palette
         mov  ax,0013h
         int  10h
@@ -295,8 +343,27 @@ MAIN:
         mov  word ptr [camz],0
         mov  word ptr [heading],0
         mov  word ptr [roll],0
+        call SETTRIG            ; seed hsin/hcos before the first physics tick
 
 GAMELOOP:
+        ; --- physics: run INPUT once per elapsed timer tick (fps-independent)
+        mov  ax,[ticks]
+        mov  bx,ax
+        sub  bx,[lastick]       ; bx = physics ticks elapsed since last frame
+        mov  [lastick],ax
+        cmp  bx,MAXSTEP         ; clamp catch-up (avoid spiral after a stall)
+        jbe  @@pcl
+        mov  bx,MAXSTEP
+@@pcl:  test bx,bx
+        jz   @@pdone
+@@ploop:
+        call INPUT              ; one fixed physics step
+        dec  bx
+        jnz  @@ploop
+@@pdone:
+        call COLLIDE
+
+        ; --- render (runs as fast as it can; speed no longer tied to it) ---
         call SETTRIG            ; heading/roll -> sin/cos for this frame
         mov  ax,[bufseg]        ; draw into back-buffer
         mov  es,ax
@@ -305,15 +372,29 @@ GAMELOOP:
         call CROSS
         call BLIT               ; to video memory
         call HUD                ; text overlay (BIOS)
-        call INPUT
-        call COLLIDE
-        call WAITV
+        call WAITV              ; tearing guard only (does not gate physics)
         cmp  byte ptr [KEYS+SC_ESC],0
         je   GAMELOOP
 
 QUIT:
         mov  ax,0003h
         int  10h
+        ; restore PIT to 18.2 Hz and the INT 8 vector
+        cli
+        mov  al,36h
+        out  43h,al
+        xor  al,al
+        out  40h,al
+        out  40h,al
+        sti
+        mov  dx,[oi8of]
+        mov  ax,[oi8sg]
+        push ds
+        mov  ds,ax
+        mov  ax,2508h
+        int  21h
+        pop  ds
+        ; restore INT 9 vector
         mov  dx,[oldoff]
         mov  ax,[oldseg]
         push ds
