@@ -65,7 +65,7 @@ NEARZ   equ 40                  ; near clip plane
 FARZ    equ 2400                ; far clip distance
 SPEEDV  equ 12                  ; forward speed (per frame)
 STEPY   equ 5                   ; altitude step
-TURNV   equ 2                   ; heading change per frame (of 256 = full turn)
+TURNV   equ 1                   ; heading change per physics tick (slower/wider turn)
 BANKMAX equ 30                  ; max bank/roll angle (of 256)
 BANKSTP equ 3                   ; bank approach/decay per frame
 
@@ -1984,16 +1984,17 @@ INPUT:  mov  word ptr [tmpi],0  ; tmpi = turn direction (-1/0/+1)
         jge  @@bset
         xor  ax,ax
 @@bset: mov  [roll],ax
-        ; climb / descend
+        ; pitch (flight-sim yoke convention): UP key = stick forward = nose
+        ; down = descend ; DOWN key = stick pulled to you = nose up = climb
         cmp  byte ptr [KEYS+SC_UP],0
         je   @@nu
         mov  ax,[camy]
-        add  ax,STEPY
+        sub  ax,STEPY          ; UP -> nose down -> lose altitude
         mov  [camy],ax
 @@nu:   cmp  byte ptr [KEYS+SC_DN],0
         je   @@nd
         mov  ax,[camy]
-        sub  ax,STEPY
+        add  ax,STEPY          ; DOWN -> nose up -> gain altitude
         mov  [camy],ax
 @@nd:   mov  ax,[camy]          ; clamp camy [24,420]
         cmp  ax,24

@@ -14,7 +14,7 @@ crash into one.
 
 ```
 Controls:  ← / →  turn (with bank)
-           ↑ / ↓  climb / descend
+           ↓ / ↑  nose up / down  (pull to climb, push to dive — flight-sim style)
            ESC    quit
            SPACE  restart after a crash
 ```
