@@ -1,6 +1,6 @@
 # WIRE CITY 86
 
-### ▶ Play online: https://kirindenis.github.io/wire-city-86/
+### ▶ Play online: https://kirindenis.github.io/wire-city-2/
 
 A wireframe night-flight over a procedural megacity, written in **8086 assembly**
 for **VGA mode 13h** and built with **Turbo Assembler (TASM)** into a tiny
@@ -79,7 +79,7 @@ that GitHub Pages can't set. If the page shows a `SharedArrayBuffer` error:
 
 1. Push the repo to GitHub.
 2. Settings → Pages → **Deploy from a branch** → branch `main`, folder `/docs`.
-3. The game appears at `https://<user>.github.io/wire-city-86/`.
+3. The game appears at `https://<user>.github.io/wire-city-2/`.
 
 ## License
 
