@@ -32,6 +32,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 if errorlevel 1 goto fail
 
 echo [3/3] Commit + push ...
+echo.
+echo --- files that will be committed to the PUBLIC repo: ---
+git status --short
+echo ---------------------------------------------------------
+set /p CONFIRM=Publish these files? [y/N]
+if /i not "%CONFIRM%"=="y" (
+  echo Aborted - nothing was committed or pushed.
+  exit /b 1
+)
 set MSG=%~1
 if "%MSG%"=="" set MSG=publish build
 git add -A

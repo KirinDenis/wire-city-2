@@ -14,3 +14,15 @@ Thumbs.db
 docs/.bundle/
 docs/city.zip
 /.vs
+
+# never let secrets reach the public repo (safety net for git add -A)
+.env
+.env.*
+*.key
+*.pem
+*.pfx
+*.p12
+*secret*
+*token*
+*password*
+credentials*
