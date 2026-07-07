@@ -62,7 +62,8 @@ RAD     equ 7                   ; building render radius (cells) - far horizon
 MAXD2   equ RAD*RAD*2           ; max squared cell distance (painter buckets)
 GR      equ 7                   ; ground-grid radius (cells)
 NEARZ   equ 40                  ; near clip plane
-FARZ    equ 3600                ; far clip distance
+FARZ    equ 10800               ; far clip distance (3x)
+MEGR    equ 10                  ; far-belt radius in 4x4-cell megablocks
 CEIL    equ 1500                ; flight ceiling (max camy)
 
 ; ---- jet flight model (all per 18.2 Hz physics tick) ------------------------
@@ -128,10 +129,17 @@ horiz   dw 100                  ; screen horizon row: pitch visual (78..122);
 daymode db 1                    ; 1 = day palette, 0 = night (N key toggles)
 prevn   db 0                    ; previous N-key state (edge detect)
 bcol    db 0                    ; terrain patch colour chosen by HBLD
-mk      dw 0                    ; mountain segment loop counter
-; distant mountain ridge: 16 peak heights around the compass (world units)
-MHTAB   dw 900,1250,700,1050,1350,800,600,1150
-        dw 950,1300,750,1100,650,1400,850,1000
+; rotated-background helpers (roll-aware sky/ground bands)
+bgu     dw 0                    ; corner coordinate along the horizon
+bgv     dw 0                    ; corner coordinate across the horizon
+bgv0    dw 0                    ; band start (v, perpendicular to horizon)
+bgv1    dw 0                    ; band end
+; mountain / megablock work
+prx     dw 0                    ; pyramid peak, camera space X
+prz     dw 0                    ; pyramid peak, camera space Z
+cammgi  dw 0                    ; camera megablock (cell>>2)
+cammgj  dw 0
+mring   dw 0                    ; current megablock ring
 
 camx    dw 0
 camy    dw 120
@@ -461,36 +469,82 @@ APPLYPAL:
 ; ============================================================================
 ;  CLEAR BACK-BUFFER  (top = sky, bottom = ground)   ES=bufseg
 ; ============================================================================
-; F-15 style banded horizon: sky darkens away from the horizon, a bright haze
-; strip sits right on it, and the ground fades lighter toward the distance.
-; All bands track [horiz] (pitch). Rows: sky(horiz-16) band9(10) haze12(6)
-; band11(10) ground(rest).
+; F-15 style banded horizon, now ROLL-AWARE: the five bands are drawn as
+; rotated parallelograms (SCANPOLY) about (160,horiz), so banking the plane
+; banks the sky/ground split with the rest of the scene. Bands overlap by 2
+; v-units so integer rounding can't leave unpainted seams.
 CLEARBUF:
-        xor  di,di
-        mov  ax,[horiz]
-        sub  ax,16
-        mov  bx,160             ; words per row
-        mul  bx
-        mov  cx,ax              ; upper sky rows
-        mov  ax,0707h           ; sky top (7)
-        rep  stosw
-        mov  cx,10*160
-        mov  ax,0909h           ; lighter sky band (9)
-        rep  stosw
-        mov  cx,6*160
-        mov  ax,0C0Ch           ; haze strip (12)
-        rep  stosw
-        mov  cx,10*160
-        mov  ax,0B0Bh           ; distant-ground band (11)
-        rep  stosw
-        mov  ax,[horiz]         ; ground: rest of the 32000 words
-        add  ax,10
-        mov  bx,160
-        mul  bx
-        mov  cx,32000
-        sub  cx,ax
-        mov  ax,0A0Ah           ; ground (10)
-        rep  stosw
+        mov  byte ptr [COLOR],7 ; upper sky
+        mov  word ptr [bgv0],-400
+        mov  word ptr [bgv1],-15
+        call BGBAND
+        mov  byte ptr [COLOR],9 ; lighter sky band near the horizon
+        mov  word ptr [bgv0],-17
+        mov  word ptr [bgv1],-5
+        call BGBAND
+        mov  byte ptr [COLOR],12 ; haze strip on the horizon
+        mov  word ptr [bgv0],-7
+        mov  word ptr [bgv1],1
+        call BGBAND
+        mov  byte ptr [COLOR],11 ; washed-out distant ground
+        mov  word ptr [bgv0],-1
+        mov  word ptr [bgv1],11
+        call BGBAND
+        mov  byte ptr [COLOR],10 ; ground
+        mov  word ptr [bgv0],9
+        mov  word ptr [bgv1],400
+        call BGBAND
+        ret
+
+; one background band: a parallelogram spanning u=-600..600 along the horizon
+; direction, v=[bgv0..bgv1] across it, rotated by roll about (160,horiz).
+BGBAND: mov  word ptr [NPOLY],4
+        mov  ax,-600
+        mov  bx,[bgv0]
+        xor  si,si
+        call BGCORN
+        mov  ax,600
+        mov  bx,[bgv0]
+        mov  si,2
+        call BGCORN
+        mov  ax,600
+        mov  bx,[bgv1]
+        mov  si,4
+        call BGCORN
+        mov  ax,-600
+        mov  bx,[bgv1]
+        mov  si,6
+        call BGCORN
+        call SCANPOLY
+        ret
+
+; corner: PX[si] = 160 + (u*rcos - v*rsin)/256 ; PY[si] = horiz + (u*rsin + v*rcos)/256
+BGCORN: mov  [bgu],ax
+        mov  [bgv],bx
+        mov  ax,[bgu]
+        imul word ptr [rcos]
+        mov  cx,256
+        idiv cx
+        mov  bx,ax
+        mov  ax,[bgv]
+        imul word ptr [rsin]
+        mov  cx,256
+        idiv cx
+        sub  bx,ax
+        add  bx,160
+        mov  [PX+si],bx
+        mov  ax,[bgu]
+        imul word ptr [rsin]
+        mov  cx,256
+        idiv cx
+        mov  bx,ax
+        mov  ax,[bgv]
+        imul word ptr [rcos]
+        mov  cx,256
+        idiv cx
+        add  bx,ax
+        add  bx,[horiz]
+        mov  [PY+si],bx
         ret
 
 ; ============================================================================
@@ -537,7 +591,7 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
         cmp  byte ptr [daymode],0
         jne  @@day              ; stars only at night
         call STARS
-@@day:  call MOUNTAINS          ; distant ridge sits on the horizon
+@@day:  call RENDERMEGAS        ; far belt: megablocks + real mountains
         call GRID
         call BUILDINGS
         ret
@@ -561,7 +615,316 @@ STARS:  mov  byte ptr [COLOR],8
         loop @@s
         ret
 
-; ----- ground grid ----------------------------------------------------------
+; ============================================================================
+;  FAR BELT - megablocks and REAL mountains, world objects at 4x4-cell scale.
+;  Painter order: Chebyshev rings from MEGR in to ring 2 (cells inside ring 2
+;  are covered by the near per-cell pass). City-zone megas draw as one grey
+;  block the size of a whole quarter; mountain-zone megas draw as pyramids.
+; ============================================================================
+RENDERMEGAS:
+        mov  ax,[camgi]
+        mov  cl,2
+        shr  ax,cl
+        mov  [cammgi],ax
+        mov  ax,[camgj]
+        mov  cl,2
+        shr  ax,cl
+        mov  [cammgj],ax
+        mov  word ptr [mring],MEGR
+@@rl:   call MEGARING
+        dec  word ptr [mring]
+        cmp  word ptr [mring],1 ; ring 1 too: near-pass misses its mountains
+        jge  @@rl
+        ret
+
+; walk the perimeter of Chebyshev ring [mring], calling MEGACELL per cell
+MEGARING:
+        mov  ax,[mring]
+        neg  ax
+        mov  [cdi],ax
+@@trow: mov  ax,[mring]         ; top & bottom edges
+        neg  ax
+        mov  [cdj],ax
+        call MEGACELL
+        mov  ax,[mring]
+        mov  [cdj],ax
+        call MEGACELL
+        mov  ax,[cdi]
+        inc  ax
+        mov  [cdi],ax
+        cmp  ax,[mring]
+        jle  @@trow
+        mov  ax,[mring]         ; left & right edges (corners already done)
+        neg  ax
+        inc  ax
+        mov  [cdj],ax
+@@lcol: mov  ax,[cdj]
+        mov  bx,[mring]
+        dec  bx
+        cmp  ax,bx
+        jg   @@done
+        mov  ax,[mring]
+        neg  ax
+        mov  [cdi],ax
+        call MEGACELL
+        mov  ax,[mring]
+        mov  [cdi],ax
+        call MEGACELL
+        mov  ax,[cdj]
+        inc  ax
+        mov  [cdj],ax
+        jmp  @@lcol
+@@done: ret
+
+; ----- one megablock at (cammgi+cdi, cammgj+cdj) -----------------------------
+MEGACELL:
+        mov  ax,[cammgi]
+        add  ax,[cdi]
+        mov  bx,ax              ; mi
+        mov  cl,2
+        shl  ax,cl
+        add  ax,2               ; centre cell gi = mi*4+2
+        mov  [gi],ax
+        mov  ax,[cammgj]
+        add  ax,[cdj]
+        mov  cl,2
+        shl  ax,cl
+        add  ax,2
+        mov  [gj],ax
+        mov  ax,[gi]
+        mov  bx,[gj]
+        call GETZONE            ; 0 city / 1 plain / 2 mountains
+        cmp  ax,1
+        je   @@ret              ; plains: nothing at this distance
+        push ax                 ; save zone
+        ; world centre of the mega (centre cell's centre)
+        mov  ax,[gi]
+        mov  cl,8
+        shl  ax,cl
+        add  ax,128
+        sub  ax,BIAS
+        mov  [wcx],ax
+        mov  ax,[gj]
+        mov  cl,8
+        shl  ax,cl
+        add  ax,128
+        sub  ax,BIAS
+        mov  [wcz],ax
+        ; mega hash for heights
+        mov  ax,[gi]
+        mov  bx,1973
+        imul bx
+        mov  si,ax
+        mov  ax,[gj]
+        mov  bx,9277
+        imul bx
+        add  ax,si
+        mov  bx,ax
+        mov  cl,7
+        shr  bx,cl
+        xor  ax,bx              ; ax = hash
+        pop  bx                 ; bx = zone
+        cmp  bx,2
+        je   @@mnt
+        ; --- city mega: one block covering the whole quarter ---
+        cmp  word ptr [mring],2 ; ring 1 city is covered by real buildings
+        jl   @@ret
+        mov  word ptr [bhw],350
+        mov  word ptr [bhd],350
+        and  ax,255
+        add  ax,80              ; height 80..335 (approximates the quarter)
+        mov  [bhgt2],ax
+        call ROTCUL
+        jc   @@ret
+        mov  ax,[camy]
+        neg  ax
+        mov  [bry0],ax
+        mov  ax,[bhgt2]
+        sub  ax,[camy]
+        mov  [bry1],ax
+        ; solid haze-coloured silhouette; nearer rings get shade + outline
+        mov  byte ptr [COLOR],1
+        cmp  word ptr [mring],6
+        jge  @@mfill
+        mov  byte ptr [COLOR],16
+@@mfill:
+        mov  ax,[camy]
+        cmp  ax,[bhgt2]
+        jle  @@mnr
+        call FACETOPC
+        call FACEFILL
+@@mnr:  call MEGAFILL
+        cmp  word ptr [mring],6
+        jge  @@ret              ; distant rings: silhouette only
+        mov  byte ptr [COLOR],1
+        call VISSTROKE
+        ret
+@@mnt:  ; --- mountain mega: a real pyramid in the world ---
+        mov  word ptr [bhw],480
+        mov  word ptr [bhd],480
+        and  ax,1023
+        add  ax,500             ; peak 500..1523
+        mov  [bhgt2],ax
+        call ROTCUL
+        jc   @@ret
+        call PYRAMID
+@@ret:  ret
+
+; fill the visible vertical faces with the CURRENT colour (no per-side tint)
+MEGAFILL:
+        mov  ax,[camx]
+        cmp  ax,[bwx0]
+        jge  @@e
+        mov  word ptr [fa],3
+        mov  word ptr [fb],0
+        call FACEV
+        call FACEFILL
+@@e:    mov  ax,[camx]
+        cmp  ax,[bwx1]
+        jle  @@s
+        mov  word ptr [fa],1
+        mov  word ptr [fb],2
+        call FACEV
+        call FACEFILL
+@@s:    mov  ax,[camz]
+        cmp  ax,[bwz0]
+        jge  @@n
+        mov  word ptr [fa],0
+        mov  word ptr [fb],1
+        call FACEV
+        call FACEFILL
+@@n:    mov  ax,[camz]
+        cmp  ax,[bwz1]
+        jle  @@d
+        mov  word ptr [fa],2
+        mov  word ptr [fb],3
+        call FACEV
+        call FACEFILL
+@@d:    ret
+
+; ============================================================================
+;  PYRAMID - draw a mountain: 4 triangular faces from the footprint corners
+;  (FRX/FRZ, already rotated+culled via ROTCUL) up to the peak over the world
+;  centre (wcx,wcz) at height bhgt2. Visible faces picked like VISFILL.
+;  Fill colour 13, outline colour 2. PYRFACE builds one triangle.
+; ============================================================================
+PYRAMID:
+        mov  ax,[wcx]           ; rotate the peak into camera space
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[wcz]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        call ROTXZ
+        mov  ax,[rcx]
+        mov  [prx],ax
+        mov  ax,[rcz]
+        mov  [prz],ax
+        ; fill pass (colour 13), then stroke pass (colour 2)
+        mov  byte ptr [COLOR],13
+        mov  word ptr [fa],0    ; reuse fa as pass flag: 0=fill
+        call PYRSIDES
+        mov  byte ptr [COLOR],2
+        mov  word ptr [fa],1    ; 1=stroke
+        call PYRSIDES
+        ret
+
+PYRSIDES:
+        mov  ax,[camx]          ; west face: corners 3,0
+        cmp  ax,[bwx0]
+        jge  @@e
+        mov  bx,3
+        mov  cx,0
+        call PYRFACE
+@@e:    mov  ax,[camx]          ; east: 1,2
+        cmp  ax,[bwx1]
+        jle  @@s
+        mov  bx,1
+        mov  cx,2
+        call PYRFACE
+@@s:    mov  ax,[camz]          ; south: 0,1
+        cmp  ax,[bwz0]
+        jge  @@n
+        mov  bx,0
+        mov  cx,1
+        call PYRFACE
+@@n:    mov  ax,[camz]          ; north: 2,3
+        cmp  ax,[bwz1]
+        jle  @@d
+        mov  bx,2
+        mov  cx,3
+        call PYRFACE
+@@d:    ret
+
+; triangle: base corner BX -> peak -> base corner CX (4th vertex duplicated)
+PYRFACE:
+        add  bx,bx
+        mov  ax,[FRX+bx]
+        mov  [IX],ax
+        mov  ax,[FRZ+bx]
+        mov  [IZ],ax
+        mov  bx,cx
+        add  bx,bx
+        mov  ax,[FRX+bx]
+        mov  [IX+4],ax
+        mov  [IX+6],ax
+        mov  ax,[FRZ+bx]
+        mov  [IZ+4],ax
+        mov  [IZ+6],ax
+        mov  ax,[prx]           ; peak
+        mov  [IX+2],ax
+        mov  ax,[prz]
+        mov  [IZ+2],ax
+        mov  ax,[camy]          ; base corners on the ground
+        neg  ax
+        mov  [IY],ax
+        mov  [IY+4],ax
+        mov  [IY+6],ax
+        mov  ax,[bhgt2]         ; peak height
+        sub  ax,[camy]
+        mov  [IY+2],ax
+        cmp  word ptr [fa],0
+        jne  @@st
+        call FACEFILL
+        ret
+@@st:   call FACESTROKE
+        ret
+
+; ============================================================================
+;  GETZONE - world zoning from 16x16-cell superzones (toroidal, hash-based).
+;   in: AX=cell gi, BX=cell gj   out: AX = 0 city / 1 plains / 2 mountains
+; ============================================================================
+GETZONE:
+        and  ax,255             ; toroidal world, 256-cell period
+        mov  cl,4
+        shr  ax,cl              ; zi 0..15
+        and  bx,255
+        mov  cl,4
+        shr  bx,cl              ; zj 0..15
+        mov  si,ax
+        mov  ax,29
+        mul  si                 ; zi*29
+        mov  si,ax
+        mov  ax,53
+        mul  bx                 ; zj*53
+        add  ax,si
+        mov  bx,ax
+        mov  cl,3
+        shr  bx,cl
+        xor  ax,bx
+        and  ax,15
+        cmp  ax,10
+        jb   @@city             ; 10/16 city
+        cmp  ax,13
+        jb   @@plain            ; 3/16 plains
+        mov  ax,2               ; 3/16 mountains
+        ret
+@@plain:
+        mov  ax,1
+        ret
+@@city: xor  ax,ax
+        ret
+
 ; ----- ground grid: world-aligned lines around the camera (rotate with view)
 GRID:   mov  byte ptr [COLOR],6
         ; lines parallel to world-Z (fixed X = gi)
@@ -728,8 +1091,8 @@ RENDERCELL:
         mov  [gj],ax
         call HBLD
         mov  ax,[bstreet]
-        test ax,ax
-        jnz  @@ret              ; empty street cell -> nothing to draw
+        cmp  ax,1
+        je   @@ret              ; plain street cell -> nothing to draw
         ; cell centre world coords:  gi*256 + 128 - BIAS   (shl = *CELL)
         mov  ax,[gi]
         mov  cl,8
@@ -743,81 +1106,25 @@ RENDERCELL:
         add  ax,128
         sub  ax,BIAS
         mov  [wcz],ax
-        ; footprint world bounds
-        mov  ax,[wcx]
-        sub  ax,[bhw]
-        mov  [bwx0],ax
-        mov  ax,[wcx]
-        add  ax,[bhw]
-        mov  [bwx1],ax
-        mov  ax,[wcz]
-        sub  ax,[bhd]
-        mov  [bwz0],ax
-        mov  ax,[wcz]
-        add  ax,[bhd]
-        mov  [bwz1],ax
-        ; rotate the 4 footprint corners; track min/max rz
-        mov  word ptr [minrz],32767
-        mov  word ptr [maxrz],-32768
-        ; corner 0 = (bwx0,bwz0)
-        mov  ax,[bwx0]
-        sub  ax,[camx]
-        mov  [wdx],ax
-        mov  ax,[bwz0]
-        sub  ax,[camz]
-        mov  [wdz],ax
-        call ROTXZ
-        mov  ax,[rcx]
-        mov  [FRX],ax
-        mov  ax,[rcz]
-        mov  [FRZ],ax
-        call @@trk
-        ; corner 1 = (bwx1,bwz0)
-        mov  ax,[bwx1]
-        sub  ax,[camx]
-        mov  [wdx],ax
-        mov  ax,[bwz0]
-        sub  ax,[camz]
-        mov  [wdz],ax
-        call ROTXZ
-        mov  ax,[rcx]
-        mov  [FRX+2],ax
-        mov  ax,[rcz]
-        mov  [FRZ+2],ax
-        call @@trk
-        ; corner 2 = (bwx1,bwz1)
-        mov  ax,[bwx1]
-        sub  ax,[camx]
-        mov  [wdx],ax
-        mov  ax,[bwz1]
-        sub  ax,[camz]
-        mov  [wdz],ax
-        call ROTXZ
-        mov  ax,[rcx]
-        mov  [FRX+4],ax
-        mov  ax,[rcz]
-        mov  [FRZ+4],ax
-        call @@trk
-        ; corner 3 = (bwx0,bwz1)
-        mov  ax,[bwx0]
-        sub  ax,[camx]
-        mov  [wdx],ax
-        mov  ax,[bwz1]
-        sub  ax,[camz]
-        mov  [wdz],ax
-        call ROTXZ
-        mov  ax,[rcx]
-        mov  [FRX+6],ax
-        mov  ax,[rcz]
-        mov  [FRZ+6],ax
-        call @@trk
-        ; cull
-        mov  ax,[maxrz]
-        cmp  ax,NEARZ
-        jl   @@ret              ; entirely behind
-        mov  ax,[minrz]
-        cmp  ax,FARZ
-        jg   @@ret              ; entirely too far
+        call ROTCUL             ; bounds -> rotate corners -> cull
+        jc   @@ret
+        ; flat terrain patch (forest/water/field)? just fill it on the ground
+        mov  ax,[bstreet]
+        cmp  ax,4
+        jne  @@np
+        call PYRAMID            ; a mountain rendered from the near pass
+        jmp  @@ret
+@@np:   cmp  ax,2
+        jne  @@solid
+        mov  ax,[camy]
+        neg  ax
+        mov  [bry1],ax          ; patch lies at ground level
+        mov  al,[bcol]
+        mov  [COLOR],al
+        call FACETOPC
+        call FACEFILL
+        jmp  @@ret
+@@solid:
         ; heights (camera-relative Y)
         mov  ax,[camy]
         neg  ax
@@ -826,14 +1133,14 @@ RENDERCELL:
         sub  ax,[camy]
         mov  [bry1],ax
 
-        ; ---- FILL visible faces (body color) ----
-        mov  byte ptr [COLOR],0
+        ; ---- FILL visible faces ----
+        mov  byte ptr [COLOR],17 ; sun-lit roof
         mov  ax,[camy]          ; roof, if above
         cmp  ax,[bhgt2]
         jle  @@nf0
         call FACETOPC
         call FACEFILL
-@@nf0:  call VISFILL
+@@nf0:  call VISFILL            ; walls (VISFILL picks lit/shaded per side)
         ; ---- stroke color by distance ----
         mov  ax,[minrz]
         cmp  ax,500
@@ -854,6 +1161,85 @@ RENDERCELL:
         call FACESTROKE
 @@ns0:  call VISSTROKE
 @@ret:  ret
+
+; ============================================================================
+;  ROTCUL - shared box setup: world bounds from (wcx,wcz,bhw,bhd), rotate the
+;  4 footprint corners into camera space (FRX/FRZ), track min/max rz, and
+;  cull. out: CF=1 -> box entirely behind/beyond, skip drawing.
+; ============================================================================
+ROTCUL:
+        mov  ax,[wcx]
+        sub  ax,[bhw]
+        mov  [bwx0],ax
+        mov  ax,[wcx]
+        add  ax,[bhw]
+        mov  [bwx1],ax
+        mov  ax,[wcz]
+        sub  ax,[bhd]
+        mov  [bwz0],ax
+        mov  ax,[wcz]
+        add  ax,[bhd]
+        mov  [bwz1],ax
+        mov  word ptr [minrz],32767
+        mov  word ptr [maxrz],-32768
+        mov  ax,[bwx0]          ; corner 0 = (bwx0,bwz0)
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[bwz0]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        call ROTXZ
+        mov  ax,[rcx]
+        mov  [FRX],ax
+        mov  ax,[rcz]
+        mov  [FRZ],ax
+        call @@trk
+        mov  ax,[bwx1]          ; corner 1 = (bwx1,bwz0)
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[bwz0]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        call ROTXZ
+        mov  ax,[rcx]
+        mov  [FRX+2],ax
+        mov  ax,[rcz]
+        mov  [FRZ+2],ax
+        call @@trk
+        mov  ax,[bwx1]          ; corner 2 = (bwx1,bwz1)
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[bwz1]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        call ROTXZ
+        mov  ax,[rcx]
+        mov  [FRX+4],ax
+        mov  ax,[rcz]
+        mov  [FRZ+4],ax
+        call @@trk
+        mov  ax,[bwx0]          ; corner 3 = (bwx0,bwz1)
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[bwz1]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        call ROTXZ
+        mov  ax,[rcx]
+        mov  [FRX+6],ax
+        mov  ax,[rcz]
+        mov  [FRZ+6],ax
+        call @@trk
+        mov  ax,[maxrz]         ; cull
+        cmp  ax,NEARZ
+        jl   @@rej              ; entirely behind
+        mov  ax,[minrz]
+        cmp  ax,FARZ
+        jg   @@rej              ; entirely too far
+        clc
+        ret
+@@rej:  stc
+        ret
 @@trk:  mov  ax,[rcz]           ; update minrz/maxrz with rcz
         cmp  ax,[minrz]
         jge  @@t1
@@ -865,10 +1251,11 @@ RENDERCELL:
 
 ; iterate visible vertical faces, calling FACEV+FACEFILL for each
 VISFILL:
-        ; west  (camx < bwx0): corners 3,0
+        ; west  (camx < bwx0): corners 3,0  - E/W faces get the shaded colour
         mov  ax,[camx]
         cmp  ax,[bwx0]
         jge  @@e
+        mov  byte ptr [COLOR],16
         mov  word ptr [fa],3
         mov  word ptr [fb],0
         call FACEV
@@ -876,13 +1263,15 @@ VISFILL:
 @@e:    mov  ax,[camx]          ; east (camx > bwx1): 1,2
         cmp  ax,[bwx1]
         jle  @@s
+        mov  byte ptr [COLOR],16
         mov  word ptr [fa],1
         mov  word ptr [fb],2
         call FACEV
         call FACEFILL
-@@s:    mov  ax,[camz]          ; south (camz < bwz0): 0,1
+@@s:    mov  ax,[camz]          ; south (camz < bwz0): 0,1 - sun-facing sides
         cmp  ax,[bwz0]
         jge  @@n
+        mov  byte ptr [COLOR],0
         mov  word ptr [fa],0
         mov  word ptr [fb],1
         call FACEV
@@ -890,6 +1279,7 @@ VISFILL:
 @@n:    mov  ax,[camz]          ; north (camz > bwz1): 2,3
         cmp  ax,[bwz1]
         jle  @@d
+        mov  byte ptr [COLOR],0
         mov  word ptr [fa],2
         mov  word ptr [fb],3
         call FACEV
@@ -1186,10 +1576,34 @@ APPLYROLL:
 ;   divide can't overflow. CLAMPAX bounds results to +/-4000 for safe 2D clip.
 ; ============================================================================
 PROJPT: push dx                 ; save ry
-        mov  bx,FOCAL
+        ; guard: at FARZ=10800 a side point can have |rx| up to ~15000 while
+        ; rz is small; rx*160/rz would then overflow a 16-bit quotient (INT 0).
+        ; overflow needs rz < |rx|*160/32767 ~ |rx|/204, i.e. only rz < 74.
+        cmp  cx,74
+        jge  @@sxok
+        mov  bx,ax
+        or   bx,bx
+        jns  @@g1
+        neg  bx                 ; bx = |rx|
+@@g1:   push ax
+        mov  ax,cx
+        mov  dx,204
+        mul  dx                 ; ax = rz*204 (rz<74 -> fits 16-bit)
+        cmp  bx,ax
+        pop  ax
+        jbe  @@sxok             ; |rx| <= rz*204 -> divide is safe
+        mov  bx,4000            ; would overflow: clamp offscreen, keep sign
+        or   ax,ax
+        jns  @@g2
+        neg  bx
+@@g2:   mov  ax,bx
+        jmp  @@sxadd
+@@sxok: mov  bx,FOCAL
         imul bx                 ; DX:AX = rx*FOCAL
         idiv cx                 ; AX = rx*FOCAL/rz
+@@sxadd:
         add  ax,160             ; sx_raw (screen centre x = 160)
+        call CLAMPAX            ; clamp BEFORE roll so APPLYROLL can't overflow
         mov  [ptmp],ax
         pop  ax                 ; ry
         mov  bx,FOCAL
@@ -1197,13 +1611,15 @@ PROJPT: push dx                 ; save ry
         idiv cx
         mov  bx,[horiz]
         sub  bx,ax              ; sy_raw = horiz - ry*FOCAL/rz (pitch shifts view)
-        mov  ax,[ptmp]          ; AX=sx_raw, DX=sy_raw
-        mov  dx,bx
-        call APPLYROLL          ; bank the whole scene about (160,100)
-        call CLAMPAX            ; clamp sx
+        mov  ax,bx
+        call CLAMPAX
+        mov  dx,ax
+        mov  ax,[ptmp]          ; AX=sx_raw, DX=sy_raw (both clamped)
+        call APPLYROLL          ; bank the whole scene about (160,horiz)
+        call CLAMPAX            ; final clamp for the 2D clipper
         mov  [ptmp],ax
         mov  ax,dx
-        call CLAMPAX            ; clamp sy
+        call CLAMPAX
         mov  dx,ax
         mov  ax,[ptmp]
         ret
@@ -1273,28 +1689,28 @@ FACETOPC:
 ;   bit-fields of the hash give width / depth / height (deterministic, so the
 ;   same cell always looks identical - no per-frame flicker, no storage).
 ; ============================================================================
-HBLD:   mov  ax,[gi]
+HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
+        mov  bx,[gj]
+        call GETZONE
+        cmp  ax,1
+        je   @@plain
+        cmp  ax,2
+        je   @@mzone
+        mov  ax,[gi]
         and  ax,3
         jz   @@st              ; gi on an avenue -> street
         mov  ax,[gj]
         and  ax,3
         jz   @@st              ; gj on an avenue -> street
-        mov  ax,[gi]           ; hash = mix(gi*1973 + gj*9277)
-        mov  bx,1973
-        imul bx
-        mov  si,ax
-        mov  ax,[gj]
-        mov  bx,9277
-        imul bx
-        add  ax,si
+        call CELLHASH          ; ax = hash of (gi,gj)
         mov  bx,ax
-        mov  cl,7
-        shr  bx,cl
-        xor  ax,bx              ; ax = hash
-        mov  bx,ax
-        and  bx,31
-        cmp  bx,7               ; rare empty lot (park) -> more varied skyline
-        je   @@st
+        and  bx,31              ; hash 7/8/9 of 32 -> flat terrain patches
+        cmp  bx,7
+        je   @@forest
+        cmp  bx,8
+        je   @@water
+        cmp  bx,9
+        je   @@field
         mov  bx,ax
         and  bx,31              ; bits[0..4]  -> half width  84..115
         add  bx,84
@@ -1334,6 +1750,69 @@ HBLD:   mov  ax,[gi]
         mov  word ptr [bstreet],0
         ret
 @@st:   mov  word ptr [bstreet],1
+        ret
+@@forest:
+        mov  byte ptr [bcol],15
+        jmp  @@patch
+@@water:
+        mov  byte ptr [bcol],14
+        jmp  @@patch
+@@field:
+        mov  byte ptr [bcol],11
+@@patch:                        ; flat ground patch fills most of the cell
+        mov  word ptr [bhw],116
+        mov  word ptr [bhd],116
+        mov  word ptr [bstreet],2
+        ret
+@@plain:                        ; plains: open land with woods/lakes/fields
+        call CELLHASH
+        and  ax,15
+        cmp  ax,7
+        je   @@forest
+        cmp  ax,8
+        je   @@water
+        cmp  ax,9
+        je   @@field
+        jmp  @@st
+@@mzone:                        ; mountain zone: a pyramid on each mega's
+        mov  ax,[gi]            ; centre cell, sparse woods elsewhere
+        and  ax,3
+        cmp  ax,2
+        jne  @@mwood
+        mov  ax,[gj]
+        and  ax,3
+        cmp  ax,2
+        jne  @@mwood
+        call CELLHASH           ; same hash/height as MEGACELL's mountain
+        and  ax,1023
+        add  ax,500             ; peak 500..1523
+        mov  [bhgt2],ax
+        mov  word ptr [bhw],480
+        mov  word ptr [bhd],480
+        mov  word ptr [bstreet],4
+        ret
+@@mwood:
+        call CELLHASH
+        and  ax,7
+        cmp  ax,1
+        jne  @@st
+        mov  byte ptr [bcol],15 ; scattered forest at the foothills
+        jmp  @@patch
+
+; hash = mix(gi*1973 + gj*9277) - shared by buildings, patches and mountains
+CELLHASH:
+        mov  ax,[gi]
+        mov  bx,1973
+        imul bx
+        mov  si,ax
+        mov  ax,[gj]
+        mov  bx,9277
+        imul bx
+        add  ax,si
+        mov  bx,ax
+        mov  cl,7
+        shr  bx,cl
+        xor  ax,bx
         ret
 
 ; ============================================================================
@@ -2220,6 +2699,16 @@ INPUT:
         mov  ax,CEIL
 @@y2:   mov  [camy],ax
 
+        ; --- N key: toggle day/night palette (on key-down edge only) ---
+        mov  al,[KEYS+SC_N]
+        cmp  al,[prevn]
+        je   @@nn
+        mov  [prevn],al
+        test al,al
+        jz   @@nn
+        xor  byte ptr [daymode],1
+        call APPLYPAL
+@@nn:
         ; --- wind drift (world space, constant breeze) ---
         mov  ax,[camx]
         add  ax,WINDX
@@ -2261,9 +2750,60 @@ COLLIDE:
         mov  [gj],ax
         call HBLD
         mov  ax,[bstreet]
-        test ax,ax
-        jnz  @@nocol            ; street -> no building here
-        ; cell center
+        cmp  ax,0
+        je   @@bld              ; building box
+        cmp  ax,4
+        je   @@mnt              ; mountain pyramid
+        jmp  @@nocol            ; street / patch -> free air
+@@bld:  ; --- building: inside footprint AND below roof? ---
+        call @@cellc
+        mov  ax,[camx]
+        sub  ax,[wcx]
+        cmp  ax,0
+        jge  @@a1
+        neg  ax
+@@a1:   cmp  ax,[bhw]
+        jge  @@nocol
+        mov  ax,[camz]
+        sub  ax,[wcz]
+        cmp  ax,0
+        jge  @@a2
+        neg  ax
+@@a2:   cmp  ax,[bhd]
+        jge  @@nocol
+        mov  ax,[camy]
+        cmp  ax,[bhgt2]
+        jge  @@nocol            ; above roof -> safe
+        call CRASHHANDLE
+        ret
+@@mnt:  ; --- mountain: pyramid narrows with height ---
+        mov  ax,[camy]
+        cmp  ax,[bhgt2]
+        jge  @@nocol            ; above the peak
+        call @@cellc
+        ; r = bhw*(bhgt2-camy)/bhgt2  (slope radius at our altitude)
+        mov  ax,[bhgt2]
+        sub  ax,[camy]
+        imul word ptr [bhw]     ; DX:AX = (h-y)*bhw
+        idiv word ptr [bhgt2]   ; AX = r
+        mov  bx,ax
+        mov  ax,[camx]
+        sub  ax,[wcx]
+        cmp  ax,0
+        jge  @@m1
+        neg  ax
+@@m1:   cmp  ax,bx
+        jge  @@nocol
+        mov  ax,[camz]
+        sub  ax,[wcz]
+        cmp  ax,0
+        jge  @@m2
+        neg  ax
+@@m2:   cmp  ax,bx
+        jge  @@nocol
+        call CRASHHANDLE
+        ret
+@@cellc:                        ; wcx/wcz = current cell centre (world)
         mov  ax,[gi]
         mov  cl,8
         shl  ax,cl
@@ -2276,27 +2816,7 @@ COLLIDE:
         add  ax,128
         sub  ax,BIAS
         mov  [wcz],ax
-        ; |camx-cx| < bhw ?
-        mov  ax,[camx]
-        sub  ax,[wcx]
-        cmp  ax,0
-        jge  @@a1
-        neg  ax
-@@a1:   cmp  ax,[bhw]
-        jge  @@nocol
-        ; |camz-cz| < bhd ?
-        mov  ax,[camz]
-        sub  ax,[wcz]
-        cmp  ax,0
-        jge  @@a2
-        neg  ax
-@@a2:   cmp  ax,[bhd]
-        jge  @@nocol
-        ; below roof?
-        mov  ax,[camy]
-        cmp  ax,[bhgt2]
-        jge  @@nocol            ; above roof -> safe
-        call CRASHHANDLE
+        ret
 @@nocol:
         ret
 
