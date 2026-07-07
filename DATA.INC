@@ -60,6 +60,13 @@ boxt    dw 0                    ; current box: top, relative to gbase
 pwcx    dw 0                    ; saved cell centre (composite buildings move wcx)
 pwcz    dw 0
 puffk   dw 0                    ; smoke puff loop counter
+sbh     dw 0                    ; superblock hash (district decisions)
+bdist   dw 0                    ; district: 0/3 residential, 1 downtown, 2 industry
+PUFO    dw 0,21,42              ; smoke puff phase offsets (loop of 64)
+bschm   dw 0                    ; wall colour scheme index 0..3
+wallL   db 0                    ; current lit wall colour (N/S faces)
+wallS   db 16                   ; current shaded wall colour (E/W faces)
+WSCH    db 0,16, 20,21, 22,23, 24,25 ; scheme pairs: grey/blue/red/white
 thmax   dw 0                    ; max raw H of the quad corners (colour pick)
 TRX     dw 1681 dup(0)          ; rotated node X (camera space), a*41+b
 TRZ     dw 1681 dup(0)          ; rotated node Z
@@ -360,7 +367,7 @@ HCOL    db 8
 ;            8 HUD       9 sky band    10 ground     11 field/ground band
 ;            12 haze     13 mountains  14 water      15 forest
 ;            16 wall E/W (shade)       17 roof
-NPALC   equ 20
+NPALC   equ 26
 PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db 30,32,36          ;1  far stroke (fades to haze)
         db 22,24,28          ;2  mid stroke
@@ -381,6 +388,12 @@ PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db 44,45,48          ;17 roof (sun-lit)
         db 33,24,14          ;18 minimap city (brown)
         db 63, 6, 6          ;19 red (map course tick)
+        db 30,34,48          ;20 blue wall lit
+        db 22,26,40          ;21 blue wall shade
+        db 46,28,22          ;22 red wall lit
+        db 34,20,16          ;23 red wall shade
+        db 52,52,54          ;24 white wall lit
+        db 40,40,44          ;25 white wall shade
 
 PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db 12,18,40          ;1  far stroke
@@ -402,6 +415,12 @@ PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db  3, 4,11          ;17 roof
         db 14,10, 6          ;18 minimap city (brown)
         db 52, 5, 5          ;19 red (map course tick)
+        db  4, 5,14          ;20 blue wall lit
+        db  3, 4,11          ;21 blue wall shade
+        db  8, 4, 5          ;22 red wall lit
+        db  6, 3, 4          ;23 red wall shade
+        db  5, 6,12          ;24 white wall lit
+        db  4, 4, 9          ;25 white wall shade
 
 STARN   equ 16                  ; star coords as words (X can exceed 255)
 STARTAB dw 20,18, 60,30, 110,12, 150,40, 200,22, 250,15, 300,35, 40,52

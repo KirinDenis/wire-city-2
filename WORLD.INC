@@ -151,6 +151,76 @@ BUILDINGS:
         jge  @@d2
         ret
 
+; ============================================================================
+;  DRAWBOX - one solid box standing on the terrain. Centre [wcx,wcz], half
+;  size bhw/bhd, vertical span gbase+boxb .. gbase+boxt. Runs the normal
+;  visible-face fill + distance-coloured stroke + windows. boxb/boxt survive.
+; ============================================================================
+DRAWBOX:
+        call ROTCUL
+        jc   @@r
+        mov  ax,[gbase]
+        add  ax,[boxb]
+        sub  ax,[camy]
+        mov  [bry0],ax
+        mov  ax,[gbase]
+        add  ax,[boxt]
+        sub  ax,[camy]
+        mov  [bry1],ax
+        mov  byte ptr [COLOR],17 ; sun-lit roof
+        mov  ax,[gbase]
+        add  ax,[boxt]
+        cmp  [camy],ax
+        jle  @@nf
+        call FACETOPC
+        call FACEFILL
+@@nf:   call VISFILL
+        mov  ax,[minrz]         ; stroke colour by distance
+        cmp  ax,500
+        jg   @@nn
+        mov  al,3
+        jmp  @@cc
+@@nn:   cmp  ax,1200
+        jg   @@ff
+        mov  al,2
+        jmp  @@cc
+@@ff:   mov  al,1
+@@cc:   mov  [COLOR],al
+        mov  [scol],al          ; VISSTROKE restores this per face
+        mov  ax,[gbase]
+        add  ax,[boxt]
+        cmp  [camy],ax
+        jle  @@ns
+        call FACETOPC
+        call FACESTROKE
+@@ns:   call VISSTROKE
+@@r:    ret
+
+; ============================================================================
+;  PUFFBOX - one soft smoke cube: haze colour, no outline, no windows.
+;  Same box parameters as DRAWBOX.
+; ============================================================================
+PUFFBOX:
+        call ROTCUL
+        jc   @@r
+        mov  ax,[gbase]
+        add  ax,[boxb]
+        sub  ax,[camy]
+        mov  [bry0],ax
+        mov  ax,[gbase]
+        add  ax,[boxt]
+        sub  ax,[camy]
+        mov  [bry1],ax
+        mov  byte ptr [COLOR],12 ; horizon-haze grey reads as smoke
+        mov  ax,[gbase]
+        add  ax,[boxt]
+        cmp  [camy],ax
+        jle  @@nf
+        call FACETOPC
+        call FACEFILL
+@@nf:   call MEGAFILL           ; flat fill that keeps the smoke colour
+@@r:    ret
+
 ; ----- render one city cell (cdi,cdj relative to camera cell) ---------------
 ;  Looks up the building for cell (camgi+cdi, camgj+cdj), rotates its 4
 ;  footprint corners into camera space (FRX/FRZ + min/maxrz), culls if all
@@ -203,46 +273,137 @@ RENDERCELL:
         call FACEFILL
         jmp  @@ret
 @@solid:
-        ; heights (camera-relative Y), building sits on the terrain
-        mov  ax,[gbase]
-        sub  ax,[camy]
-        mov  [bry0],ax
-        mov  ax,[gbase]
-        add  ax,[bhgt2]
-        sub  ax,[camy]
-        mov  [bry1],ax
-
-        ; ---- FILL visible faces ----
-        mov  byte ptr [COLOR],17 ; sun-lit roof
-        mov  ax,[gbase]         ; roof, if camera above gbase+bhgt2
-        add  ax,[bhgt2]
-        cmp  [camy],ax
-        jle  @@nf0
-        call FACETOPC
-        call FACEFILL
-@@nf0:  call VISFILL            ; walls (VISFILL picks lit/shaded per side)
-        ; ---- stroke color by distance ----
-        mov  ax,[minrz]
-        cmp  ax,500
-        jg   @@nn
-        mov  byte ptr [COLOR],3
-        jmp  @@cc
-@@nn:   cmp  ax,1200
-        jg   @@ff
-        mov  byte ptr [COLOR],2
-        jmp  @@cc
-@@ff:   mov  byte ptr [COLOR],1
-@@cc:
-        ; ---- STROKE visible faces ----
-        mov  al,[COLOR]         ; remember the stroke colour: windows repaint
-        mov  [scol],al          ; COLOR, VISSTROKE must restore it per face
-        mov  ax,[gbase]
-        add  ax,[bhgt2]
-        cmp  [camy],ax
-        jle  @@ns0
-        call FACETOPC
-        call FACESTROKE
-@@ns0:  call VISSTROKE
+        ; pick this building's wall colours from its scheme (SimCity mix)
+        mov  bx,[bschm]
+        add  bx,bx
+        mov  al,[WSCH+bx]
+        mov  [wallL],al
+        mov  al,[WSCH+bx+1]
+        mov  [wallS],al
+        ; composite structures: each type is a small stack of DRAWBOX calls
+        mov  ax,[wcx]           ; composites move the centre - remember it
+        mov  [pwcx],ax
+        mov  ax,[wcz]
+        mov  [pwcz],ax
+        mov  ax,[btype]
+        cmp  ax,1
+        je   @@bspire
+        cmp  ax,2
+        je   @@btower
+        cmp  ax,3
+        je   @@barch
+        cmp  ax,4
+        je   @@bfact
+        mov  word ptr [boxb],0  ; type 0: plain box
+        mov  ax,[bhgt2]
+        mov  [boxt],ax
+        call DRAWBOX
+        jmp  @@ret
+@@bspire:                       ; slim tall block + antenna spike
+        mov  word ptr [bhw],56
+        mov  word ptr [bhd],56
+        mov  word ptr [boxb],0
+        mov  ax,[bhgt2]
+        add  ax,60              ; spires read taller than plain boxes
+        mov  [boxt],ax
+        call DRAWBOX
+        mov  word ptr [bhw],14
+        mov  word ptr [bhd],14
+        mov  ax,[bhgt2]
+        add  ax,60
+        mov  [boxb],ax
+        add  ax,90
+        mov  [boxt],ax
+        call DRAWBOX
+        jmp  @@ret
+@@btower:                       ; telescoping tower: wide base, narrow top
+        mov  word ptr [boxb],0
+        mov  ax,[bhgt2]
+        shr  ax,1
+        mov  [boxt],ax
+        call DRAWBOX
+        mov  ax,[bhw]
+        shr  ax,1
+        add  ax,12
+        mov  [bhw],ax
+        mov  [bhd],ax
+        mov  ax,[bhgt2]
+        shr  ax,1
+        mov  [boxb],ax
+        mov  ax,[bhgt2]
+        mov  [boxt],ax
+        call DRAWBOX
+        jmp  @@ret
+@@barch:                        ; gate building: two legs + lintel on top
+        mov  ax,[bhgt2]
+        cmp  ax,240
+        jle  @@ba1
+        mov  ax,240
+@@ba1:  mov  [boxt],ax          ; leg height
+        mov  word ptr [bhw],34
+        mov  word ptr [bhd],80
+        mov  word ptr [boxb],0
+        mov  ax,[pwcx]
+        sub  ax,76
+        mov  [wcx],ax
+        call DRAWBOX
+        mov  ax,[pwcx]
+        add  ax,76
+        mov  [wcx],ax
+        call DRAWBOX
+        mov  ax,[pwcx]          ; lintel spans both legs
+        mov  [wcx],ax
+        mov  word ptr [bhw],110
+        mov  bx,[boxt]
+        mov  ax,bx
+        sub  ax,44
+        mov  [boxb],ax
+        mov  ax,bx
+        add  ax,6
+        mov  [boxt],ax
+        call DRAWBOX
+        jmp  @@ret
+@@bfact:                        ; factory: low hall + chimney + smoke loop
+        mov  word ptr [boxb],0
+        mov  ax,[bhgt2]
+        mov  [boxt],ax          ; hall (industrial heights are low)
+        call DRAWBOX
+        mov  word ptr [bhw],13
+        mov  word ptr [bhd],13
+        mov  ax,[pwcx]
+        add  ax,64
+        mov  [wcx],ax
+        mov  ax,[pwcz]
+        add  ax,40
+        mov  [wcz],ax
+        mov  word ptr [boxb],0
+        mov  word ptr [boxt],180
+        call DRAWBOX            ; chimney
+        ; SimCity-style smoke: 3 puffs rise on a loop and dissolve. Phase is
+        ; driven by the BIOS tick, so the animation speed is real-time.
+        mov  word ptr [puffk],0
+@@pf:   mov  si,[puffk]
+        add  si,si
+        mov  ax,[lasttk]
+        add  ax,ax              ; climb 2 units per tick
+        add  ax,[PUFO+si]       ; per-puff phase offset
+        and  ax,63              ; age 0..63
+        cmp  ax,50
+        ja   @@pnx              ; old puff has dissolved
+        mov  bx,ax
+        mov  cl,2
+        shr  bx,cl
+        add  bx,7               ; puffs grow as they rise: half-size 7..19
+        mov  [bhw],bx
+        mov  [bhd],bx
+        add  ax,180             ; chimney top + age
+        mov  [boxb],ax
+        add  ax,10
+        mov  [boxt],ax
+        call PUFFBOX
+@@pnx:  inc  word ptr [puffk]
+        cmp  word ptr [puffk],3
+        jl   @@pf
 @@ret:  ret
 
 ; ============================================================================
@@ -338,7 +499,8 @@ VISFILL:
         mov  ax,[camx]
         cmp  ax,[bwx0]
         jge  @@e
-        mov  byte ptr [COLOR],16
+        mov  al,[wallS]
+        mov  [COLOR],al
         mov  word ptr [fa],3
         mov  word ptr [fb],0
         call FACEV
@@ -346,7 +508,8 @@ VISFILL:
 @@e:    mov  ax,[camx]          ; east (camx > bwx1): 1,2
         cmp  ax,[bwx1]
         jle  @@s
-        mov  byte ptr [COLOR],16
+        mov  al,[wallS]
+        mov  [COLOR],al
         mov  word ptr [fa],1
         mov  word ptr [fb],2
         call FACEV
@@ -354,7 +517,8 @@ VISFILL:
 @@s:    mov  ax,[camz]          ; south (camz < bwz0): 0,1 - sun-facing sides
         cmp  ax,[bwz0]
         jge  @@n
-        mov  byte ptr [COLOR],0
+        mov  al,[wallL]
+        mov  [COLOR],al
         mov  word ptr [fa],0
         mov  word ptr [fb],1
         call FACEV
@@ -362,7 +526,8 @@ VISFILL:
 @@n:    mov  ax,[camz]          ; north (camz > bwz1): 2,3
         cmp  ax,[bwz1]
         jle  @@d
-        mov  byte ptr [COLOR],0
+        mov  al,[wallL]
+        mov  [COLOR],al
         mov  word ptr [fa],2
         mov  word ptr [fb],3
         call FACEV
@@ -418,5 +583,11 @@ WINMAYBE:
         mov  ax,[minrz]
         cmp  ax,1200
         jg   @@x
+        cmp  word ptr [bhw],50  ; no windows on spikes/chimneys/lintels
+        jl   @@x
+        mov  ax,[boxt]
+        sub  ax,[boxb]
+        cmp  ax,60              ; nor on flat slabs
+        jl   @@x
         call WINFACE
 @@x:    ret

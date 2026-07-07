@@ -90,6 +90,23 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         je   @@water
         cmp  bx,9
         je   @@field
+        ; --- superblock clustering: only ~3/16 of 8x8 blocks are built up.
+        ; Structures stay grouped (a built block keeps full density) but the
+        ; groups themselves are rare - SimCity-style districts on open land.
+        push ax                 ; keep the cell hash
+        call SBHASH             ; superblock hash (shared with MEGACELL)
+        mov  [sbh],ax
+        and  ax,15
+        cmp  ax,3
+        jae  @@unbuilt          ; empty block: open ground (patches still apply)
+        pop  ax
+        ; district type from the block hash: 0/3 residential, 1 downtown, 2 industry
+        mov  bx,[sbh]
+        mov  cl,4
+        shr  bx,cl
+        and  bx,3
+        mov  [bdist],bx
+        ; base footprint from the cell hash
         mov  bx,ax
         and  bx,31              ; bits[0..4]  -> half width  84..115
         add  bx,84
@@ -100,8 +117,45 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         and  bx,31              ; bits[5..9]  -> half depth  84..115
         add  bx,84
         mov  [bhd],bx
-        ; downtown composition: towers cluster toward the centre of each 8x8
-        ; superblock. dist = |gi&7 - 4| + |gj&7 - 4| (0..8); centre -> +288.
+        mov  bx,ax              ; wall colour scheme 0..3 (grey/blue/red/white)
+        mov  cl,13
+        shr  bx,cl
+        and  bx,3
+        mov  [bschm],bx
+        mov  bx,ax              ; bsel = building selector 0..7
+        mov  cl,10
+        shr  bx,cl
+        and  bx,7
+        mov  si,[bdist]
+        cmp  si,1
+        je   @@com
+        cmp  si,2
+        je   @@ind
+        ; --- residential: low boxes, an occasional tower ---
+        mov  word ptr [btype],0
+        cmp  bx,6
+        jb   @@rh
+        mov  word ptr [btype],2 ; tower
+@@rh:   mov  bx,ax
+        and  bx,63
+        add  bx,60              ; height 60..123
+        mov  [bhgt2],bx
+        jmp  @@bdone
+@@com:  ; --- commercial downtown: tall mixed skyline ---
+        mov  word ptr [btype],0
+        cmp  bx,3
+        jb   @@ch               ; 0..2 tall box
+        cmp  bx,5
+        jb   @@ctw              ; 3..4 tower
+        cmp  bx,7
+        jb   @@csp              ; 5..6 spire
+        mov  word ptr [btype],3 ; 7 arch
+        jmp  @@ch
+@@ctw:  mov  word ptr [btype],2
+        jmp  @@ch
+@@csp:  mov  word ptr [btype],1
+@@ch:   ; downtown height: towers cluster toward the block centre.
+        ; dist = |gi&7 - 4| + |gj&7 - 4| (0..8); centre -> +288 bonus.
         push ax
         mov  bx,[gi]
         and  bx,7
@@ -124,12 +178,27 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         mov  bx,ax
         and  bx,63              ; per-building variation 0..63
         add  bx,50
-        add  bx,si              ; height 50..401 (respawn 420 clears all)
+        add  bx,si              ; height 50..401 (respawn clears all)
         mov  [bhgt2],bx
+        jmp  @@bdone
+@@ind:  ; --- industrial: smoking factories and low sheds (always grey) ---
+        mov  word ptr [bschm],0
+        mov  word ptr [btype],4
+        cmp  bx,5
+        jb   @@ih               ; 0..4 factory with chimney
+        mov  word ptr [btype],0 ; 5..7 plain shed
+@@ih:   mov  bx,ax
+        and  bx,31
+        add  bx,50              ; low industry: 50..81
+        mov  [bhgt2],bx
+@@bdone:
         mov  word ptr [bstreet],0
         ret
 @@st:   mov  word ptr [bstreet],1
         ret
+@@unbuilt:
+        pop  ax                 ; discard the kept cell hash
+        jmp  @@st
 @@forest:
         mov  byte ptr [bcol],15
         jmp  @@patch
@@ -142,6 +211,31 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         mov  word ptr [bhw],116
         mov  word ptr [bhd],116
         mov  word ptr [bstreet],2
+        ret
+
+; SBHASH - superblock (8x8 cells) hash for cell [gi],[gj] -> AX.
+; Single source of truth for "is this block built up": HBLD plans buildings
+; with it and MEGACELL must agree, or far megas ghost over empty ground.
+SBHASH: mov  ax,[gi]
+        mov  cl,3
+        shr  ax,cl
+        and  ax,31              ; superblock i (toroidal)
+        mov  si,ax
+        mov  ax,[gj]
+        mov  cl,3
+        shr  ax,cl
+        and  ax,31
+        mov  bx,ax
+        mov  ax,331
+        mul  si
+        mov  si,ax
+        mov  ax,769
+        mul  bx
+        add  ax,si
+        mov  bx,ax
+        mov  cl,4
+        shr  bx,cl
+        xor  ax,bx
         ret
 
 ; hash = mix(gi*1973 + gj*9277) - shared by buildings, patches and mountains

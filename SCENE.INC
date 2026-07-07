@@ -123,6 +123,11 @@ MEGACELL:
         call GETZONE            ; 0 city / 1 plain / 2 mnt / 3 water / 4 foothills
         test ax,ax
         jnz  @@ret              ; only city megas here: terrain draws the rest
+        call SBHASH             ; same clustering test as HBLD: an unbuilt
+        and  ax,15              ; superblock has no buildings, so no far
+        cmp  ax,3               ; stand-in block either (no ghost boxes)
+        jae  @@ret
+        xor  ax,ax
         push ax                 ; keep stack shape (zone, always 0 now)
         ; world centre of the mega (centre cell's centre)
         mov  ax,[gi]
