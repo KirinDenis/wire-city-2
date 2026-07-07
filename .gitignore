@@ -13,3 +13,4 @@ Thumbs.db
 # js-dos bundle staging (the final docs/city.jsdos IS committed for Pages)
 docs/.bundle/
 docs/city.zip
+/.vs
