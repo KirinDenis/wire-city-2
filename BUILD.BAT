@@ -1,5 +1,9 @@
 @echo off
-REM Build CITY.COM from CITY.ASM with Turbo Assembler
+REM Build CITY.COM with Turbo Assembler.
+REM CITY.ASM is the main file; it INCLUDEs the subsystem modules:
+REM   DATA.INC KEYB.INC VIDEO.INC M3D.INC RASTER.INC TERRAIN.INC
+REM   SCENE.INC WORLD.INC WORLD2.INC FLIGHT.INC HUD.INC
+REM One TASM pass assembles everything (no separate linking of modules).
 set PATH=c:\bp\bin;%PATH%
 TASM /T CITY.ASM
 if errorlevel 1 goto err
