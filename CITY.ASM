@@ -58,24 +58,40 @@
 FOCAL   equ 160                 ; projection focal length
 CELL    equ 256                 ; grid pitch (doc only; code uses shl/shr 8 and 128)
 BIAS    equ 8192                ; world->cell bias (keeps cell math unsigned)
-RAD     equ 5                   ; building render radius (cells)
+RAD     equ 7                   ; building render radius (cells) - far horizon
 MAXD2   equ RAD*RAD*2           ; max squared cell distance (painter buckets)
-GR      equ 6                   ; ground-grid radius (cells)
+GR      equ 7                   ; ground-grid radius (cells)
 NEARZ   equ 40                  ; near clip plane
-FARZ    equ 2400                ; far clip distance
-SPEEDV  equ 12                  ; forward speed (per frame)
-STEPY   equ 5                   ; altitude step
-TURNV   equ 1                   ; heading change per physics tick (slower/wider turn)
-BANKMAX equ 30                  ; max bank/roll angle (of 256)
-BANKSTP equ 3                   ; bank approach/decay per frame
+FARZ    equ 3600                ; far clip distance
+CEIL    equ 1500                ; flight ceiling (max camy)
+
+; ---- jet flight model (all per 18.2 Hz physics tick) ------------------------
+; Forces: thrust vs drag decide airspeed; climb/dive trade speed <-> altitude
+; (energy management); air density (rho) falls with altitude, cutting both jet
+; thrust and drag -> higher up = faster top speed. Fuel burns while the engine
+; runs; mass = MEMPTY + fuel/3, and acceleration = force/mass. Wind drifts the
+; plane in world space. Below VSTALL the nose drops and climb is impossible.
+; vel is airspeed *16 fixed point; forward motion per tick = vel/16 units.
+THRUST  equ 720                 ; engine thrust (force units)
+DRAGK   equ 256                 ; drag divisor: drag = vel*rho/DRAGK
+MEMPTY  equ 4000                ; empty mass
+FUELMAX equ 6000                ; full tank (1 unit burned per tick ~ 5.5 min)
+VSTALL  equ 300                 ; stall airspeed (vel units)
+CRUISE  equ 736                 ; initial airspeed (= 46 units/tick, old feel)
+TURNDRG equ 2                   ; induced drag per tick while turning
+WINDX   equ 2                   ; wind drift, world units per tick
+WINDZ   equ -1
+TURNV   equ 4                   ; heading change per tick
+BANKMAX equ 30                  ; max bank/roll angle (of 256) - an angle, not a rate
+BANKSTP equ 12                  ; bank approach/decay per tick
 
 ; ---- fixed-timestep physics clock ------------------------------------------
-; PIT input is 1193182 Hz. Divisor 17045 -> ~70.0 Hz physics tick. Physics
-; (INPUT) advances once per elapsed timer tick, so real-world flight speed is
-; the same regardless of render frame rate. "per frame" constants above are
-; now "per physics tick" (still ~70/sec, so current feel is preserved).
-TIMDIV  equ 17045               ; PIT ch0 divisor -> ~70 Hz
-MAXSTEP equ 8                   ; cap physics catch-up per render (anti-spiral)
+; We touch NOTHING in the hardware: no INT 8 hook, no PIT reprogram (both hung
+; in this emulator). We just READ the stock BIOS timer tick at 0040:006C, which
+; advances at its native 18.2 Hz in real time. Physics runs one INPUT step per
+; elapsed tick -> constant real-world speed at any render rate. Coarse but
+; rock-solid: nothing to install, nothing to restore, nothing to hang.
+MAXSTEP equ 6                   ; max physics steps per render (anti-spiral)
 
 ; ---- keyboard scan codes ---------------------------------------------------
 SC_ESC  equ 01h
@@ -84,6 +100,7 @@ SC_DN   equ 50h
 SC_LF   equ 4Bh
 SC_RT   equ 4Dh
 SC_SP   equ 39h
+SC_N    equ 31h                 ; N key: toggle day/night palette
 
 CODE    SEGMENT
         ASSUME  CS:CODE, DS:CODE, ES:CODE, SS:CODE
@@ -97,10 +114,24 @@ START:  jmp  MAIN
 bufseg  dw 0
 oldoff  dw 0                    ; saved INT 9 vector (keyboard)
 oldseg  dw 0
-oi8of   dw 0                    ; saved INT 8 vector (timer)
-oi8sg   dw 0
-ticks   dw 0                    ; physics ticks counted by TIMERINT (~70 Hz)
-lastick dw 0                    ; ticks value at previous render frame
+lasttk  dw 0                    ; BIOS tick (0040:006C low word) at previous frame
+
+; ---- flight state ----
+vel     dw CRUISE               ; airspeed, *16 fixed point
+fuel    dw FUELMAX              ; remaining fuel (burn 1/tick)
+rho     dw 256                  ; air density factor 64..256 (from altitude)
+teff    dw 0                    ; effective thrust this tick (scratch)
+fwd     dw 0                    ; forward units this tick = vel/16 (scratch)
+vrate   dw 0                    ; climb/dive rate this tick (scratch)
+horiz   dw 100                  ; screen horizon row: pitch visual (78..122);
+                                ; nose up -> world slides down (horiz > 100)
+daymode db 1                    ; 1 = day palette, 0 = night (N key toggles)
+prevn   db 0                    ; previous N-key state (edge detect)
+bcol    db 0                    ; terrain patch colour chosen by HBLD
+mk      dw 0                    ; mountain segment loop counter
+; distant mountain ridge: 16 peak heights around the compass (world units)
+MHTAB   dw 900,1250,700,1050,1350,800,600,1150
+        dw 950,1300,750,1100,650,1400,850,1000
 
 camx    dw 0
 camy    dw 120
@@ -150,9 +181,9 @@ camgi   dw 0
 camgj   dw 0
 gi      dw 0
 gj      dw 0
-di      dw 0
-dj      dw 0
-ring    dw 0
+cdi     dw 0                    ; cell offset from camera (was 'di' - clashed with reg)
+cdj     dw 0
+ring    dw 0                    ; current d^2 painter bucket
 bstreet dw 0
 bhw     dw 0
 bhd     dw 0
@@ -225,18 +256,50 @@ COLOR   db 0
 HCOL    db 8
 
 ; palette: 12 colors, DAC values 0..63 (R,G,B) - indigo / cornflower
-PAL     db  2, 3, 9          ;0  background
-        db 12,18,40          ;1  far buildings
-        db 22,33,58          ;2  mid
-        db 40,55,63          ;3  near
-        db 50,60,63          ;4  window (cyan)
-        db 63,48,20          ;5  window (amber)
+; Two 18-colour palettes (DAC 0..63), toggled with the N key.
+; Index map: 0 wall N/S  1 far stroke  2 mid stroke  3 near stroke
+;            4 window    5 window amber 6 ground grid 7 sky top
+;            8 HUD       9 sky band    10 ground     11 field/ground band
+;            12 haze     13 mountains  14 water      15 forest
+;            16 wall E/W (shade)       17 roof
+NPALC   equ 18
+PALDAY  db 36,37,40          ;0  wall N/S (light grey)
+        db 30,32,36          ;1  far stroke (fades to haze)
+        db 22,24,28          ;2  mid stroke
+        db 12,13,16          ;3  near stroke (dark on light)
+        db 16,22,32          ;4  window (dark glass)
+        db 24,28,38          ;5  window (lighter glass)
+        db 18,32,16          ;6  ground grid
+        db 18,32,58          ;7  sky top (blue)
+        db 63,63,63          ;8  HUD / white
+        db 34,46,62          ;9  sky band (lighter near horizon)
+        db 22,38,18          ;10 ground (green)
+        db 32,46,28          ;11 field / ground band near horizon
+        db 50,56,63          ;12 haze at the horizon (near white)
+        db 28,38,47          ;13 mountains (grey-blue silhouette)
+        db 16,32,54          ;14 water
+        db 12,27,10          ;15 forest
+        db 28,29,33          ;16 wall E/W (shaded side)
+        db 44,45,48          ;17 roof (sun-lit)
+
+PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
+        db 12,18,40          ;1  far stroke
+        db 22,33,58          ;2  mid stroke
+        db 40,55,63          ;3  near stroke (bright on dark)
+        db 50,60,63          ;4  window (lit cyan)
+        db 63,48,20          ;5  window (lit amber)
         db 10,16,34          ;6  ground grid
-        db  6, 9,22          ;7  sky
+        db  6, 9,22          ;7  sky top
         db 60,63,63          ;8  HUD / white
-        db 28,40,63          ;9  horizon
+        db 12,17,40          ;9  sky band (city glow)
         db  4, 6,16          ;10 ground
-        db 40,30,63          ;11 (spare) violet
+        db  7,10,24          ;11 field / ground band
+        db 18,24,48          ;12 haze (glow at horizon)
+        db 10,14,32          ;13 mountains
+        db  8,14,38          ;14 water
+        db  3, 7,13          ;15 forest
+        db  2, 3, 9          ;16 wall E/W (same as body at night)
+        db  3, 4,11          ;17 roof
 
 STARN   equ 16                  ; star coords as words (X can exceed 255)
 STARTAB dw 20,18, 60,30, 110,12, 150,40, 200,22, 250,15, 300,35, 40,52
@@ -245,7 +308,10 @@ STARTAB dw 20,18, 60,30, 110,12, 150,40, 200,22, 250,15, 300,35, 40,52
 MSGTITLE db 'WIRE CITY',0
 MSGALT   db 'ALT ',0
 MSGHDG   db 'HDG ',0
-MSGHELP  db '  ARROWS:FLY  ESC:QUIT',0
+MSGT     db 'T ',0
+MSGSPD   db '  SPD ',0
+MSGFUE   db '  FUEL ',0
+MSGHELP  db '  ESC:QUIT',0
 MSGCRASH db '*** CRASH ***',0
 MSGREST  db 'SPACE = RESTART',0
 
@@ -280,23 +346,6 @@ KBINT:  push ax
         iret
 
 ; ============================================================================
-;  TIMER INTERRUPT HANDLER (INT 8), PIT reprogrammed to ~70 Hz
-;  Just counts physics ticks. Not chained to BIOS (we restore the PIT + this
-;  vector on exit), so the DOS time-of-day runs fast during play - harmless.
-; ============================================================================
-TIMERINT:
-        push ax
-        push ds
-        mov  ax,cs
-        mov  ds,ax
-        inc  word ptr [ticks]
-        mov  al,20h
-        out  20h,al             ; EOI to PIC
-        pop  ds
-        pop  ax
-        iret
-
-; ============================================================================
 ;  MAIN PROGRAM
 ; ============================================================================
 MAIN:
@@ -314,29 +363,12 @@ MAIN:
         mov  ax,2509h
         int  21h                ; DS=CS already -> vector to CS:KBINT
 
-        ; hook INT 8 (timer) and speed the PIT to ~70 Hz for fixed-step physics
-        mov  ax,3508h
-        int  21h
-        mov  [oi8of],bx
-        mov  [oi8sg],es
-        mov  dx,offset TIMERINT
-        mov  ax,2508h
-        int  21h
-        cli
-        mov  al,36h             ; ch0, lobyte/hibyte, mode 3, binary
-        out  43h,al
-        mov  ax,TIMDIV
-        out  40h,al             ; divisor lobyte
-        mov  al,ah
-        out  40h,al             ; divisor hibyte
-        sti
-        mov  word ptr [ticks],0
-        mov  word ptr [lastick],0
+        ; (no PIT reprogram, no INT 8 hook - we only read the stock BIOS tick)
 
-        ; video mode 13h + palette
+        ; video mode 13h + palette (day by default; N toggles at runtime)
         mov  ax,0013h
         int  10h
-        call SETPAL
+        call APPLYPAL
 
         mov  word ptr [camx],0
         mov  word ptr [camy],120
@@ -344,20 +376,32 @@ MAIN:
         mov  word ptr [heading],0
         mov  word ptr [roll],0
         call SETTRIG            ; seed hsin/hcos before the first physics tick
+        push es                 ; seed lasttk from the BIOS tick
+        mov  ax,40h
+        mov  es,ax
+        mov  ax,es:[6Ch]
+        pop  es
+        mov  [lasttk],ax
 
 GAMELOOP:
-        ; --- physics: run INPUT once per elapsed timer tick (fps-independent)
-        mov  ax,[ticks]
+        ; --- physics: one INPUT step per BIOS tick elapsed since last frame ---
+        push es
+        mov  ax,40h
+        mov  es,ax
+        mov  ax,es:[6Ch]        ; BIOS tick low word (18.2 Hz)
+        pop  es
         mov  bx,ax
-        sub  bx,[lastick]       ; bx = physics ticks elapsed since last frame
-        mov  [lastick],ax
-        cmp  bx,MAXSTEP         ; clamp catch-up (avoid spiral after a stall)
+        sub  bx,[lasttk]        ; bx = ticks elapsed since last render frame
+        mov  [lasttk],ax
+        cmp  bx,MAXSTEP         ; clamp catch-up (anti-spiral)
         jbe  @@pcl
         mov  bx,MAXSTEP
 @@pcl:  test bx,bx
         jz   @@pdone
 @@ploop:
+        push bx                 ; INPUT clobbers BX (leaves BX=256 from idiv)
         call INPUT              ; one fixed physics step
+        pop  bx
         dec  bx
         jnz  @@ploop
 @@pdone:
@@ -379,21 +423,6 @@ GAMELOOP:
 QUIT:
         mov  ax,0003h
         int  10h
-        ; restore PIT to 18.2 Hz and the INT 8 vector
-        cli
-        mov  al,36h
-        out  43h,al
-        xor  al,al
-        out  40h,al
-        out  40h,al
-        sti
-        mov  dx,[oi8of]
-        mov  ax,[oi8sg]
-        push ds
-        mov  ds,ax
-        mov  ax,2508h
-        int  21h
-        pop  ds
         ; restore INT 9 vector
         mov  dx,[oldoff]
         mov  ax,[oldseg]
@@ -408,27 +437,59 @@ QUIT:
 ; ============================================================================
 ;  SET PALETTE
 ; ============================================================================
-SETPAL: mov  dx,3C8h
+SETPAL: mov  dx,3C8h            ; in: SI -> palette table (NPALC colours)
         xor  al,al
         out  dx,al
         mov  dx,3C9h
-        mov  si,offset PAL
-        mov  cx,12*3
+        mov  cx,NPALC*3
+        cld                     ; lodsb must walk forward
 @@pl:   lodsb
         out  dx,al
         loop @@pl
         ret
 
+; pick the palette that matches [daymode] and load it
+APPLYPAL:
+        cmp  byte ptr [daymode],0
+        je   @@nit
+        mov  si,offset PALDAY
+        jmp  @@go
+@@nit:  mov  si,offset PALNITE
+@@go:   call SETPAL
+        ret
+
 ; ============================================================================
 ;  CLEAR BACK-BUFFER  (top = sky, bottom = ground)   ES=bufseg
 ; ============================================================================
+; F-15 style banded horizon: sky darkens away from the horizon, a bright haze
+; strip sits right on it, and the ground fades lighter toward the distance.
+; All bands track [horiz] (pitch). Rows: sky(horiz-16) band9(10) haze12(6)
+; band11(10) ground(rest).
 CLEARBUF:
         xor  di,di
-        mov  ax,0707h           ; sky (index 7)
-        mov  cx,16000
+        mov  ax,[horiz]
+        sub  ax,16
+        mov  bx,160             ; words per row
+        mul  bx
+        mov  cx,ax              ; upper sky rows
+        mov  ax,0707h           ; sky top (7)
         rep  stosw
-        mov  ax,0A0Ah           ; ground (index 10)
-        mov  cx,16000
+        mov  cx,10*160
+        mov  ax,0909h           ; lighter sky band (9)
+        rep  stosw
+        mov  cx,6*160
+        mov  ax,0C0Ch           ; haze strip (12)
+        rep  stosw
+        mov  cx,10*160
+        mov  ax,0B0Bh           ; distant-ground band (11)
+        rep  stosw
+        mov  ax,[horiz]         ; ground: rest of the 32000 words
+        add  ax,10
+        mov  bx,160
+        mul  bx
+        mov  cx,32000
+        sub  cx,ax
+        mov  ax,0A0Ah           ; ground (10)
         rep  stosw
         ret
 
@@ -473,7 +534,10 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
         mov  cl,8
         shr  ax,cl
         mov  [camgj],ax
+        cmp  byte ptr [daymode],0
+        jne  @@day              ; stars only at night
         call STARS
+@@day:  call MOUNTAINS          ; distant ridge sits on the horizon
         call GRID
         call BUILDINGS
         ret
@@ -487,10 +551,12 @@ STARS:  mov  byte ptr [COLOR],8
         mov  [tmpsx],ax
         mov  ax,[si+2]          ; star Y (word)
         mov  [tmpsy],ax
-        mov  ax,[tmpsx]
         mov  bx,[tmpsy]
+        cmp  bx,[horiz]         ; skip stars below the pitched horizon
+        jge  @@sk
+        mov  ax,[tmpsx]
         call PUTPIXEL
-        pop  cx
+@@sk:   pop  cx
         add  si,4
         loop @@s
         ret
@@ -601,12 +667,9 @@ GRID:   mov  byte ptr [COLOR],6
         jle  @@gz
         ret
 
-; ----- buildings: grid of cells around camera, drawn in far->near rings ------
-;  Painter's algorithm: draw cells far->near ordered by SQUARED cell distance
-;  (di*di + dj*dj). This is the true Euclidean order, so diagonal far cells no
-;  longer overdraw nearer straight ones (the old Chebyshev-ring order did).
+; ----- buildings: painter's algorithm, far -> near by squared cell distance --
 ;  Outer loop walks the d^2 bucket from MAXD2 down to 0; inner scan renders the
-;  cells whose di*di+dj*dj matches the current bucket. [ring] = current bucket.
+;  cells whose cdi*cdi+cdj*cdj matches the current bucket. [ring] = bucket.
 ;  (camgi/camgj are also set in RENDER before GRID; recomputed here too.)
 BUILDINGS:
         mov  ax,[camx]          ; camera cell = (pos+BIAS)>>8  (shr = floor /CELL)
@@ -620,28 +683,28 @@ BUILDINGS:
         shr  ax,cl
         mov  [camgj],ax
         mov  word ptr [ring],MAXD2
-@@d2:   mov  word ptr [di],-RAD
+@@d2:   mov  word ptr [cdi],-RAD
 @@iloop:
-        mov  word ptr [dj],-RAD
+        mov  word ptr [cdj],-RAD
 @@jloop:
-        mov  ax,[di]            ; di*di + dj*dj
+        mov  ax,[cdi]           ; cdi^2 + cdj^2
         imul ax
         mov  bx,ax
-        mov  ax,[dj]
+        mov  ax,[cdj]
         imul ax
         add  ax,bx
         cmp  ax,[ring]
         jne  @@jnext
         call RENDERCELL         ; this cell is in the current distance bucket
 @@jnext:
-        mov  ax,[dj]
+        mov  ax,[cdj]
         inc  ax
-        mov  [dj],ax
+        mov  [cdj],ax
         cmp  ax,RAD
         jle  @@jloop
-        mov  ax,[di]
+        mov  ax,[cdi]
         inc  ax
-        mov  [di],ax
+        mov  [cdi],ax
         cmp  ax,RAD
         jle  @@iloop
         dec  word ptr [ring]
@@ -650,18 +713,18 @@ BUILDINGS:
         jge  @@d2
         ret
 
-; ----- render one city cell (di,dj relative to camera cell) -----------------
-;  Looks up the building for cell (camgi+di, camgj+dj), rotates its 4
+; ----- render one city cell (cdi,cdj relative to camera cell) ---------------
+;  Looks up the building for cell (camgi+cdi, camgj+cdj), rotates its 4
 ;  footprint corners into camera space (FRX/FRZ + min/maxrz), culls if all
 ;  behind/too far, then fills+strokes only the box faces facing the camera
 ;  (chosen by world-space camx/camz vs the footprint, so yaw-independent).
 ;  Visible vertical faces are drawn via FACEV; roof via FACETOPC.
 RENDERCELL:
         mov  ax,[camgi]
-        add  ax,[di]
+        add  ax,[cdi]
         mov  [gi],ax
         mov  ax,[camgj]
-        add  ax,[dj]
+        add  ax,[cdj]
         mov  [gj],ax
         call HBLD
         mov  ax,[bstreet]
@@ -1080,9 +1143,9 @@ ROTXZ:  mov  ax,[wdx]
 ;   inside PROJPT so all world geometry tilts; HUD/crosshair bypass it.
 ; ============================================================================
 APPLYROLL:
-        sub  ax,160             ; rddx,rddy = offset from screen centre
+        sub  ax,160             ; rddx,rddy = offset from the view centre
         mov  [rddx],ax
-        sub  dx,100
+        sub  dx,[horiz]         ; roll pivots on the pitch horizon
         mov  [rddy],dx
         ; sx = 160 + (rddx*rcos - rddy*rsin)/256
         mov  ax,[rddx]
@@ -1110,7 +1173,7 @@ APPLYROLL:
         idiv bx
         mov  bx,si
         add  bx,ax
-        add  bx,100
+        add  bx,[horiz]
         mov  ax,[rsxo]
         mov  dx,bx
         ret
@@ -1132,8 +1195,8 @@ PROJPT: push dx                 ; save ry
         mov  bx,FOCAL
         imul bx
         idiv cx
-        mov  bx,100
-        sub  bx,ax              ; sy_raw = 100 - ry*FOCAL/rz (y is down)
+        mov  bx,[horiz]
+        sub  bx,ax              ; sy_raw = horiz - ry*FOCAL/rz (pitch shifts view)
         mov  ax,[ptmp]          ; AX=sx_raw, DX=sy_raw
         mov  dx,bx
         call APPLYROLL          ; bank the whole scene about (160,100)
@@ -1229,6 +1292,10 @@ HBLD:   mov  ax,[gi]
         shr  bx,cl
         xor  ax,bx              ; ax = hash
         mov  bx,ax
+        and  bx,31
+        cmp  bx,7               ; rare empty lot (park) -> more varied skyline
+        je   @@st
+        mov  bx,ax
         and  bx,31              ; bits[0..4]  -> half width  84..115
         add  bx,84
         mov  [bhw],bx
@@ -1238,11 +1305,32 @@ HBLD:   mov  ax,[gi]
         and  bx,31              ; bits[5..9]  -> half depth  84..115
         add  bx,84
         mov  [bhd],bx
-        mov  bx,350             ; wide height spread: 60 + (hash*350)>>16
-        mul  bx                 ; dx:ax = hash*350 ; dx = high word = 0..349
-        mov  ax,dx
-        add  ax,60              ; height 60..409 (respawn at 420 still clears it)
-        mov  [bhgt2],ax
+        ; downtown composition: towers cluster toward the centre of each 8x8
+        ; superblock. dist = |gi&7 - 4| + |gj&7 - 4| (0..8); centre -> +288.
+        push ax
+        mov  bx,[gi]
+        and  bx,7
+        sub  bx,4
+        jns  @@a1
+        neg  bx
+@@a1:   mov  si,bx              ; |gi&7 - 4|
+        mov  bx,[gj]
+        and  bx,7
+        sub  bx,4
+        jns  @@a2
+        neg  bx
+@@a2:   add  si,bx              ; manhattan dist to superblock centre, 0..8
+        mov  ax,8
+        sub  ax,si
+        mov  bx,36
+        imul bx                 ; downtown bonus 0..288
+        mov  si,ax
+        pop  ax
+        mov  bx,ax
+        and  bx,63              ; per-building variation 0..63
+        add  bx,50
+        add  bx,si              ; height 50..401 (respawn 420 clears all)
+        mov  [bhgt2],bx
         mov  word ptr [bstreet],0
         ret
 @@st:   mov  word ptr [bstreet],1
@@ -1935,7 +2023,72 @@ CROSS:  mov  byte ptr [COLOR],8
 ;  INPUT  (via KEYS table) -> update camera
 ; ============================================================================
 ; turn (yaw) + bank (roll) + climb + auto-advance along heading
-INPUT:  mov  word ptr [tmpi],0  ; tmpi = turn direction (-1/0/+1)
+; ============================================================================
+;  INPUT - one physics tick of the jet flight model (see constants block).
+;  Order: air density -> engine (fuel burn, thrust) -> drag -> F=ma airspeed
+;  -> turn + bank (induced drag) -> pitch/energy (dive gains speed, climb
+;  costs it) -> stall -> altitude clamp -> wind drift -> advance along heading.
+; ============================================================================
+INPUT:
+        ; --- air density: rho = 256 - camy/8, clamped to 64..256 ---
+        mov  ax,[camy]
+        mov  bx,ax
+        mov  cl,3
+        shr  bx,cl
+        mov  ax,256
+        sub  ax,bx
+        cmp  ax,64
+        jge  @@r1
+        mov  ax,64
+@@r1:   mov  [rho],ax
+
+        ; --- engine: burn fuel; jet thrust breathes air: T*(rho+256)/512 ---
+        xor  cx,cx              ; default thrust 0 (flame-out)
+        mov  ax,[fuel]
+        test ax,ax
+        jz   @@noth
+        dec  ax
+        mov  [fuel],ax
+        mov  ax,[rho]
+        add  ax,256
+        mov  bx,ax
+        mov  ax,THRUST
+        imul bx                 ; DX:AX = THRUST*(rho+256)
+        mov  bx,512
+        idiv bx
+        mov  cx,ax              ; cx = effective thrust
+@@noth: mov  [teff],cx
+
+        ; --- drag = vel*rho/DRAGK ; net force = thrust - drag ---
+        mov  ax,[vel]
+        imul word ptr [rho]     ; DX:AX = vel*rho
+        mov  bx,DRAGK
+        idiv bx
+        mov  bx,ax              ; bx = drag
+        mov  ax,[teff]
+        sub  ax,bx              ; ax = net force (+/-)
+
+        ; --- accel = force*64/mass ; mass = MEMPTY + fuel/3 ---
+        mov  cx,64
+        imul cx                 ; DX:AX = force*64 (32-bit)
+        push ax
+        push dx
+        mov  ax,[fuel]
+        xor  dx,dx
+        mov  bx,3
+        div  bx
+        add  ax,MEMPTY
+        mov  bx,ax              ; bx = mass (4000..6000)
+        pop  dx
+        pop  ax
+        idiv bx                 ; ax = accel this tick
+        add  ax,[vel]
+        jns  @@v0
+        xor  ax,ax              ; airspeed never negative
+@@v0:   mov  [vel],ax
+
+        ; --- turn (yaw) ---
+        mov  word ptr [tmpi],0  ; tmpi = turn direction (-1/0/+1)
         cmp  byte ptr [KEYS+SC_LF],0
         je   @@nl
         mov  ax,[heading]       ; turn left
@@ -1950,7 +2103,16 @@ INPUT:  mov  word ptr [tmpi],0  ; tmpi = turn direction (-1/0/+1)
         and  ax,255
         mov  [heading],ax
         mov  word ptr [tmpi],1
-@@nr:   ; bank toward target (roll follows turn, decays to 0)
+@@nr:   ; induced drag: turning bleeds a little airspeed
+        mov  ax,[tmpi]
+        test ax,ax
+        jz   @@ntd
+        mov  ax,[vel]
+        sub  ax,TURNDRG
+        jns  @@td1
+        xor  ax,ax
+@@td1:  mov  [vel],ax
+@@ntd:  ; bank toward target (roll follows turn, decays to 0)
         mov  ax,[tmpi]
         test ax,ax
         jz   @@decay
@@ -1984,38 +2146,100 @@ INPUT:  mov  word ptr [tmpi],0  ; tmpi = turn direction (-1/0/+1)
         jge  @@bset
         xor  ax,ax
 @@bset: mov  [roll],ax
-        ; pitch (flight-sim yoke convention): UP key = stick forward = nose
-        ; down = descend ; DOWN key = stick pulled to you = nose up = climb
+
+        ; --- pitch & energy (yoke convention: UP = nose down = dive) ---
+        ; vertical rate scales with airspeed: vrate = vel/40
+        mov  ax,[vel]
+        xor  dx,dx
+        mov  bx,40
+        div  bx
+        mov  [vrate],ax
         cmp  byte ptr [KEYS+SC_UP],0
         je   @@nu
-        mov  ax,[camy]
-        sub  ax,STEPY          ; UP -> nose down -> lose altitude
+        mov  ax,[camy]          ; dive: lose altitude...
+        sub  ax,[vrate]
         mov  [camy],ax
+        mov  ax,[vrate]         ; ...and trade it for airspeed (energy)
+        mov  cl,2
+        shr  ax,cl
+        add  [vel],ax
 @@nu:   cmp  byte ptr [KEYS+SC_DN],0
         je   @@nd
-        mov  ax,[camy]
-        add  ax,STEPY          ; DOWN -> nose up -> gain altitude
+        mov  ax,[vel]           ; climb only above stall speed
+        cmp  ax,VSTALL
+        jl   @@nd
+        mov  ax,[camy]          ; climb: gain altitude...
+        add  ax,[vrate]
         mov  [camy],ax
-@@nd:   mov  ax,[camy]          ; clamp camy [24,420]
+        mov  ax,[vrate]         ; ...paying with airspeed (energy)
+        shr  ax,1
+        sub  [vel],ax
+@@nd:
+        ; --- pitch visual: horizon eases toward 78 (dive) / 122 (climb) /100 ---
+        mov  cx,100             ; neutral
+        cmp  byte ptr [KEYS+SC_UP],0
+        je   @@h1
+        mov  cx,78              ; nose down -> horizon rises on screen
+@@h1:   cmp  byte ptr [KEYS+SC_DN],0
+        je   @@h2
+        mov  cx,122             ; nose up -> horizon sinks on screen
+@@h2:   mov  ax,[horiz]
+        cmp  ax,cx
+        je   @@hd
+        jl   @@hup
+        sub  ax,3               ; ease down toward target
+        cmp  ax,cx
+        jge  @@hs
+        mov  ax,cx
+        jmp  @@hs
+@@hup:  add  ax,3               ; ease up toward target
+        cmp  ax,cx
+        jle  @@hs
+        mov  ax,cx
+@@hs:   mov  [horiz],ax
+@@hd:
+        ; --- stall: below VSTALL the nose drops on its own ---
+        mov  ax,[vel]
+        cmp  ax,VSTALL
+        jge  @@nst
+        mov  bx,VSTALL
+        sub  bx,ax
+        mov  cl,3
+        shr  bx,cl              ; sink = (VSTALL-vel)/8
+        mov  ax,[camy]
+        sub  ax,bx
+        mov  [camy],ax
+@@nst:
+        ; --- altitude clamp [24, CEIL] ---
+        mov  ax,[camy]
         cmp  ax,24
         jge  @@y1
         mov  ax,24
-@@y1:   cmp  ax,420
+@@y1:   cmp  ax,CEIL
         jle  @@y2
-        mov  ax,420
+        mov  ax,CEIL
 @@y2:   mov  [camy],ax
-        ; advance along heading. Forward world vector = (hsin,hcos)/256, so
-        ; camx += SPEED*hsin/256 ; camz += SPEED*hcos/256 (fixed-point: the
-        ; *256 in hsin/hcos is removed by the idiv 256). |step| <= SPEED.
+
+        ; --- wind drift (world space, constant breeze) ---
+        mov  ax,[camx]
+        add  ax,WINDX
+        mov  [camx],ax
+        mov  ax,[camz]
+        add  ax,WINDZ
+        mov  [camz],ax
+
+        ; --- advance along heading at vel/16 units per tick ---
+        mov  ax,[vel]
+        mov  cl,4
+        shr  ax,cl
+        mov  [fwd],ax
         mov  ax,[hsin]
-        mov  bx,SPEEDV
-        imul bx                 ; DX:AX = hsin * SPEED
+        imul word ptr [fwd]     ; DX:AX = hsin * fwd
         mov  bx,256
-        idiv bx                 ; AX = SPEED * sin(heading)
+        idiv bx                 ; AX = fwd * sin(heading)
         add  [camx],ax
         mov  ax,[hcos]
-        mov  bx,SPEEDV
-        imul bx
+        imul word ptr [fwd]
         mov  bx,256
         idiv bx
         add  [camz],ax
@@ -2102,8 +2326,11 @@ CRASHHANDLE:
         call PRSTR
 @@w1:   cmp  byte ptr [KEYS+SC_SP],0
         je   @@w1
-        mov  word ptr [camy],420   ; respawn ABOVE the city (max bldg height 355)
-        mov  word ptr [roll],0     ; so we don't reappear inside the same tower
+        mov  word ptr [camy],420    ; respawn ABOVE the city (max bldg 409)
+        mov  word ptr [roll],0      ; so we don't reappear inside the same tower
+        mov  word ptr [vel],CRUISE  ; fresh jet: cruise speed + full tank
+        mov  word ptr [fuel],FUELMAX
+        mov  word ptr [horiz],100   ; level pitch
 @@w2:   cmp  byte ptr [KEYS+SC_SP],0
         jne  @@w2
         ret
@@ -2137,8 +2364,36 @@ HUD:    mov  byte ptr [HCOL],8
         call PRSTR
         mov  ax,[heading]
         call PRNUM
+        mov  si,offset MSGSPD   ; airspeed (vel units, jet-style number)
+        call PRSTR
+        mov  ax,[vel]
+        call PRNUM
+        mov  si,offset MSGFUE   ; fuel as 0..100 percent
+        call PRSTR
+        mov  ax,[fuel]
+        xor  dx,dx
+        mov  bx,60
+        div  bx
+        call PRNUM
         mov  si,offset MSGHELP
         call PRSTR
+        ; real-time seconds (BIOS tick, 18.2 Hz) - compare against a stopwatch
+        mov  ah,02h
+        mov  bh,0
+        mov  dh,0
+        mov  dl,15
+        int  10h
+        mov  si,offset MSGT
+        call PRSTR
+        push es
+        mov  ax,40h
+        mov  es,ax
+        mov  ax,es:[6Ch]       ; BIOS tick low word (18.2 Hz)
+        pop  es
+        xor  dx,dx
+        mov  bx,18
+        div  bx                ; ax ~= seconds
+        call PRNUM
         ret
 
 PRSTR:  lodsb
