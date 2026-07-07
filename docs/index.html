@@ -21,7 +21,7 @@
 <body>
 <div id="wrap">
   <h1>W I R E&nbsp;&nbsp;C I T Y&nbsp;&nbsp;8 6</h1>
-  <div class="hint">&larr;/&rarr; turn (bank) &nbsp;&middot;&nbsp; &darr; nose up / &uarr; nose down &nbsp;&middot;&nbsp; ESC quit &nbsp;&middot;&nbsp; click the screen first to grab the keyboard</div>
+  <div class="hint">&larr;/&rarr; turn (bank) &nbsp;&middot;&nbsp; &darr; nose up / &uarr; nose down &nbsp;&middot;&nbsp; N day/night &nbsp;&middot;&nbsp; ESC quit &nbsp;&middot;&nbsp; click the screen first to grab the keyboard</div>
   <div id="dos"></div>
   <div class="hint">8086 / TASM wireframe flight, running in DOSBox (WASM) via <a href="https://js-dos.com" target="_blank" rel="noopener">js-dos</a></div>
 </div>
@@ -36,7 +36,7 @@
   // Self-hosted js-dos runtime (the js-dos CDN 503s cross-origin hotlinks).
   // pathPrefix points at our local folder holding emulators.js + dosbox wasm.
   Dos(document.getElementById("dos"), {
-    url: "city.jsdos?v=10",
+    url: "city.jsdos?v=11",
     pathPrefix: "jsdos/emulators/"
   });
 </script>
