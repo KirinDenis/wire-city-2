@@ -58,12 +58,12 @@
 FOCAL   equ 160                 ; projection focal length
 CELL    equ 256                 ; grid pitch (doc only; code uses shl/shr 8 and 128)
 BIAS    equ 8192                ; world->cell bias (keeps cell math unsigned)
-RAD     equ 7                   ; building render radius (cells) - far horizon
+RAD     equ 9                   ; building render radius (cells)
 MAXD2   equ RAD*RAD*2           ; max squared cell distance (painter buckets)
 GR      equ 7                   ; ground-grid radius (cells)
 NEARZ   equ 40                  ; near clip plane
-FARZ    equ 10800               ; far clip distance (3x)
-MEGR    equ 10                  ; far-belt radius in 4x4-cell megablocks
+FARZ    equ 21600               ; far clip distance
+MEGR    equ 20                  ; far-belt radius in 4x4-cell megablocks
 CEIL    equ 1500                ; flight ceiling (max camy)
 
 ; ---- jet flight model (all per 18.2 Hz physics tick) ------------------------
@@ -135,11 +135,209 @@ bgv     dw 0                    ; corner coordinate across the horizon
 bgv0    dw 0                    ; band start (v, perpendicular to horizon)
 bgv1    dw 0                    ; band end
 ; mountain / megablock work
-prx     dw 0                    ; pyramid peak, camera space X
-prz     dw 0                    ; pyramid peak, camera space Z
 cammgi  dw 0                    ; camera megablock (cell>>2)
 cammgj  dw 0
 mring   dw 0                    ; current megablock ring
+
+; ---- Diamond-Square world heightmap (the CityGame terrain generator) -------
+; 64x64 nodes on a TORUS (indices wrap &63) -> seamlessly tiles our toroidal
+; 256-cell world: 1 node = 4x4 cells. Generated once at startup by DSGEN.
+rseed   dw 21845                ; LCG state (re-seeded from the clock at boot)
+dss     dw 0                    ; DS: current side length
+dsh     dw 0                    ; DS: half side
+dsx     dw 0                    ; DS: loop x / scratch
+dsy     dw 0                    ; DS: loop y / scratch
+dsamp   dw 0                    ; DS: noise amplitude (power of two)
+dsac    dw 0                    ; DS: accumulator
+HMAP    db 4096 dup(0)          ; heights 0..255, addr = (x&63)*64 + (y&63)
+MMAP    db 4096 dup(0)          ; minimap pixels, baked once from HMAP; row-
+                                ; major screen layout, row = 63-nodeZ (north up)
+
+; ---- 3D terrain mesh state (one node = 4 cells = 1024 world units) ---------
+NR      equ 20                  ; terrain draw radius in nodes around camera
+NSIDE   equ 41                  ; cached node grid side (2*NR+1)
+tnx     dw 0                    ; camera node x = (camx+BIAS)>>10
+tnz     dw 0                    ; camera node z
+tidx    dw 0                    ; index into TORD
+tta     dw 0                    ; node-grid loop a (0..NSIDE-1)
+ttb     dw 0                    ; node-grid loop b
+gbase   dw 0                    ; ground height under the current cell (world)
+scol    db 3                    ; stroke colour for the current building
+btype   dw 0                    ; building type: 0 box 1 spire 2 tower 3 arch 4 factory
+boxb    dw 0                    ; current box: bottom, relative to gbase
+boxt    dw 0                    ; current box: top, relative to gbase
+pwcx    dw 0                    ; saved cell centre (composite buildings move wcx)
+pwcz    dw 0
+puffk   dw 0                    ; smoke puff loop counter
+thmax   dw 0                    ; max raw H of the quad corners (colour pick)
+TRX     dw 1681 dup(0)          ; rotated node X (camera space), a*41+b
+TRZ     dw 1681 dup(0)          ; rotated node Z
+TWH     dw 1681 dup(0)          ; world height of node (after WORLDH mapping)
+TH      db 1681 dup(0)          ; raw map height of node (for colours/water)
+
+; terrain quad draw order: (di,dj) pairs, di,dj in [-20..19], sorted by
+; squared distance of the quad centre DESCENDING (painter, far -> near)
+TORD    db -20,19, 19,19, 19,-20, -20,-20, 18,19, -19,19, 19,-19, 19,18, -19,-20, -20,18
+        db -20,-19, 18,-20, 19,17, -18,19, -18,-20, -20,-18, -20,17, 19,-18, 17,-20, 17,19
+        db 18,18, -19,-19, -19,18, 18,-19, -17,19, -20,16, -20,-17, 19,-17, 16,-20, 19,16
+        db -17,-20, 16,19, 17,18, -18,18, -19,-18, -19,17, 17,-19, -18,-19, 18,17, 18,-18
+        db 15,19, 19,15, 15,-20, -16,19, -20,15, -20,-16, -16,-20, 19,-16, -17,18, 18,-17
+        db 18,16, -19,16, -19,-17, -17,-19, 16,-19, 16,18, 17,17, -18,17, -18,-18, 17,-18
+        db 14,19, -15,19, 19,-15, 19,14, 14,-20, -20,14, -20,-15, -15,-20, 18,15, -19,15
+        db -19,-16, -16,18, 15,18, -16,-19, 18,-16, 15,-19, -18,16, -17,-18, 16,17, 16,-18
+        db -18,-17, 17,16, -17,17, 17,-17, -20,-14, 13,19, -14,19, 19,13, -20,13, -14,-20
+        db 19,-14, 13,-20, 18,-15, 14,18, -19,-15, 14,-19, -19,14, -15,18, -15,-19, 18,14
+        db 17,15, 17,-16, -18,-16, 15,17, -16,17, 15,-18, -18,15, -16,-18, 16,16, -17,16
+        db -17,-17, 16,-17, -20,-13, 12,-20, 19,-13, 12,19, -13,-20, -13,19, -20,12, 19,12
+        db 18,-14, 13,18, 18,13, -14,18, -14,-19, -19,13, -19,-14, 13,-19, -18,-15, -18,14
+        db -15,-18, 14,17, 17,-15, 17,14, -15,17, 14,-18, -17,-16, 15,-17, 11,19, -16,-17
+        db -20,11, -17,15, -20,-12, 19,-12, -16,16, 16,-16, -12,-20, 11,-20, 15,16, -12,19
+        db 16,15, 19,11, 18,-13, -13,-19, -19,-13, -19,12, 12,-19, -13,18, 18,12, 12,18
+        db -20,10, 19,10, -11,-20, 19,-11, 10,19, -11,19, -20,-11, 10,-20, -14,17, 13,-18
+        db -14,-18, 13,17, 17,-14, 17,13, -18,-14, -18,13, 16,-15, -17,-15, 14,16, -17,14
+        db 16,14, -15,-17, -15,16, 14,-17, -16,-16, -16,15, 15,-16, 15,15, 11,18, -12,18
+        db -12,-19, 11,-19, 18,-12, 18,11, -19,-12, -19,11, -10,19, -20,9, 19,9, 19,-10
+        db -10,-20, 9,19, 9,-20, -20,-10, 12,17, -18,12, 12,-18, -13,17, 17,-13, -13,-18
+        db 17,12, -18,-13, 13,-17, 13,16, -14,16, -17,13, 16,-14, -14,-17, -17,-14, 16,13
+        db -11,18, 19,-9, -19,10, -11,-19, 19,8, -9,19, -9,-20, 8,-20, -20,8, 10,-19
+        db 10,18, -20,-9, 18,10, 18,-11, -19,-11, 8,19, 15,-15, 14,-16, -16,14, -15,-16
+        db 15,14, -16,-15, 14,15, -15,15, -12,17, -18,-12, 17,11, -12,-18, 11,17, 11,-18
+        db 17,-12, -18,11, -8,19, 19,7, -20,7, 7,19, -8,-20, 19,-8, 7,-20, -20,-8
+        db -10,18, -19,9, -19,-10, 9,-19, 18,9, 9,18, -10,-19, 18,-10, -13,-17, 16,12
+        db 12,16, -13,16, -17,12, 16,-13, 12,-17, -17,-13, -20,-7, -16,13, 13,15, -7,-20
+        db -7,19, -16,-14, 6,19, 19,-7, 15,13, 19,6, -14,15, -20,6, 6,-20, 15,-14
+        db -14,-16, 13,-16, 14,-15, 14,14, -15,-15, -15,14, -18,-11, -11,-18, 10,17, -11,17
+        db -18,10, 10,-18, 17,10, 17,-11, 8,-19, -9,18, 8,18, 18,-9, -19,8, -9,-19
+        db -19,-9, 18,8, -6,19, -20,-6, 5,-20, -6,-20, 5,19, -20,5, 19,5, 19,-6
+        db 16,11, 11,-17, 11,16, -12,16, -17,11, 16,-12, -12,-17, -17,-12, -5,-20, 19,4
+        db 19,-5, 4,19, -20,4, -5,19, 4,-20, -20,-5, -8,18, 18,-8, 18,7, -19,-8
+        db 7,-19, 7,18, -8,-19, -19,7, -10,-18, -10,17, -13,-16, 15,-13, -18,9, -16,-13
+        db 17,9, 17,-10, 15,12, -16,12, 9,17, -13,15, -18,-10, 12,-16, 9,-18, 12,15
+        db 3,19, 3,-20, 19,-4, -15,-14, -4,-20, 19,3, -4,19, -20,-4, -20,3, -14,-15
+        db -14,14, -15,13, 13,-15, 14,13, 13,14, 14,-14, -20,-3, -3,19, 19,2, -3,-20
+        db 19,-3, 2,19, -20,2, 2,-20, -7,18, 18,-7, -7,-19, 6,18, -19,6, 18,6
+        db -19,-7, 6,-19, -20,-2, -20,1, 10,-17, 10,16, 19,-2, 19,1, 16,-11, -2,19
+        db -11,-17, 1,-20, 1,19, -2,-20, -11,16, -17,-11, -17,10, 16,10, 0,-20, 19,0
+        db 19,-1, -1,-20, 0,19, -1,19, -20,-1, -20,0, -18,8, -18,-9, 17,8, -9,-18
+        db 17,-9, 8,-18, 8,17, -9,17, -12,15, 15,11, -6,-19, 15,-12, -19,-6, -12,-16
+        db 5,-19, -16,-12, 5,18, 18,-6, 18,5, -6,18, -16,11, 11,-16, -19,5, 11,15
+        db -13,-15, 14,12, -13,14, 12,-15, -15,-13, 12,14, -15,12, 14,-13, 13,-14, 13,13
+        db -14,-14, -14,13, 16,9, -17,-10, 4,18, 16,-10, 18,-5, -5,18, 7,-18, -18,-8
+        db -10,16, 7,17, 17,-8, 18,4, -19,-5, 17,7, -19,4, -17,9, -10,-17, -18,7
+        db -5,-19, -8,-18, 9,-17, 9,16, 4,-19, -8,17, -4,18, 3,-19, -4,-19, 18,-4
+        db 18,3, 3,18, -19,-4, -19,3, -16,10, 15,10, -11,-16, 15,-11, -16,-11, 10,15
+        db 10,-16, -11,15, 17,6, 17,-7, -7,17, -7,-18, 18,2, 18,-3, -3,18, 2,18
+        db -19,2, -18,-7, 6,-18, 6,17, -19,-3, -18,6, 2,-19, -3,-19, -9,-17, 1,-19
+        db 8,16, -17,8, -19,1, -19,-2, 8,-17, 1,18, 18,-2, 16,-9, -9,16, -2,18
+        db -2,-19, 16,8, 18,1, -17,-9, -15,-12, 14,-12, 0,-19, 14,11, 11,-15, 0,18
+        db 11,14, -1,18, -1,-19, -12,14, -12,-15, -15,11, 18,0, -19,-1, -19,0, 18,-1
+        db -14,-13, 12,13, -14,12, -13,-14, 13,-13, 13,12, 12,-14, -13,13, -18,-6, -18,5
+        db 17,-6, -6,-18, 5,17, -6,17, 17,5, 5,-18, -16,-10, 9,-16, 9,15, -16,9
+        db 15,9, -10,-16, 15,-10, -10,15, 7,-17, -17,-8, 7,16, 16,-8, -17,7, 16,7
+        db -8,16, -8,-17, 4,17, -5,17, -18,4, -5,-18, 4,-18, 17,-5, -18,-5, 17,4
+        db -11,14, 14,-11, -15,10, 10,14, 14,10, 10,-15, -15,-11, -11,-15, -18,-4, -4,17
+        db -4,-18, 17,-4, 3,17, -18,3, 3,-18, 17,3, -17,-7, -7,16, 11,-14, -17,6
+        db 16,6, -14,11, 6,16, 13,-12, -12,13, 13,11, -7,-17, 11,13, -12,-14, 16,-7
+        db 6,-17, -14,-12, 15,-9, 8,-16, -3,-18, -18,-3, 15,8, -16,-9, 8,15, 17,-3
+        db -9,-16, -3,17, -16,8, -13,-13, 12,12, 2,-18, 17,2, 12,-13, 2,17, -18,2
+        db -9,15, -13,12, -2,17, 1,17, 17,-2, 17,1, -18,-2, -18,1, 1,-18, -2,-18
+        db 0,17, -18,-1, -1,-18, -18,0, -1,17, 0,-18, 17,-1, 17,0, 16,-6, 16,5
+        db -17,-6, -17,5, 5,16, -6,16, -6,-17, 5,-17, -10,-15, -10,14, 9,-15, 14,9
+        db -15,9, -15,-10, 14,-10, 9,14, -8,-16, 15,-8, 15,7, -16,7, 7,-16, 7,15
+        db -16,-8, -8,15, 4,-17, 13,10, -11,13, -11,-14, -14,10, 13,-11, 16,-5, -5,16
+        db -14,-11, 10,13, -5,-17, -17,4, 16,4, 4,16, 10,-14, -17,-5, 11,-13, -13,-12
+        db -12,12, 11,12, 12,-12, 12,11, -12,-13, -13,11, -17,3, 3,-17, -4,16, 16,3
+        db -17,-4, 16,-4, -4,-17, 3,16, 14,-9, -16,6, -15,-9, 6,-16, -9,14, -7,15
+        db -15,8, -7,-16, 6,15, -9,-15, 8,-15, 15,6, 14,8, 8,14, 15,-7, -16,-7
+        db 16,2, -3,16, -17,-3, 2,-17, -3,-17, 2,16, 16,-3, -17,2, 16,-2, -17,-2
+        db 1,16, 16,1, -2,-17, -17,1, -2,16, 1,-17, -14,-10, -17,-1, -14,9, -10,13
+        db -17,0, -1,-17, 9,-14, -10,-14, 16,-1, 0,-17, 16,0, 0,16, 13,9, -1,16
+        db 13,-10, 9,13, -6,-16, -16,5, 15,5, -6,15, 5,-16, 5,15, 15,-6, -16,-6
+        db -15,7, -13,-11, 14,7, 10,-13, 10,12, -8,14, 14,-8, 12,-11, 7,-15, -11,12
+        db -8,-15, -13,10, -15,-8, 12,10, 7,14, -11,-13, -12,-12, -12,11, 11,11, 11,-12
+        db -5,15, 4,-16, -5,-16, -16,-5, 15,4, 4,15, -16,4, 15,-5, -9,13, 13,8
+        db -14,8, 8,13, -9,-14, -14,-9, 13,-9, 8,-14, 6,-15, 14,-7, 15,3, 6,14
+        db 15,-4, -4,15, 14,6, -16,3, 3,-16, -4,-16, -7,14, -16,-4, -7,-15, 3,15
+        db -15,6, -15,-7, -10,12, -3,-16, 2,-16, 9,12, 2,15, 15,2, -16,-3, 9,-13
+        db -16,2, 15,-3, -13,9, -10,-13, -3,15, -13,-10, 12,-10, 12,9, -11,-12, -12,-11
+        db 15,1, 1,-16, 11,-11, -12,10, 11,10, -2,-16, 1,15, 10,-12, -2,15, 10,11
+        db -16,-2, -11,11, -16,1, 15,-2, 15,0, -16,0, -1,-16, -16,-1, -1,15, -15,-6
+        db -6,-15, -6,14, -15,5, 5,-15, 0,15, 0,-16, 14,-6, 15,-1, 14,5, 5,14
+        db 7,-14, -8,-14, -14,7, -8,13, -14,-8, 13,7, 7,13, 13,-8, 14,4, -5,-15
+        db 4,14, 14,-5, 4,-15, -15,4, -15,-5, -5,14, 12,8, -9,12, 12,-9, 8,-13
+        db -13,8, -9,-13, 8,12, -13,-9, 6,-14, 6,13, -14,-7, 13,6, -14,6, -7,13
+        db 13,-7, -7,-14, 3,-15, 3,14, 11,9, -15,3, -12,-10, 11,-10, 14,3, 14,-4
+        db -4,-15, -4,14, -15,-4, 9,11, 9,-12, -12,9, -10,11, -10,-12, -11,-11, -11,10
+        db 10,10, 10,-11, 14,2, -15,-3, 2,-15, -15,2, -3,-15, 14,-3, 2,14, -3,14
+        db -15,-2, -15,1, 12,-8, 12,7, 7,12, 7,-13, 5,-14, 5,13, -13,-8, 13,5
+        db 14,-2, 14,1, 13,-6, -13,7, -14,5, -14,-6, 1,-15, -2,14, -8,-13, 1,14
+        db -8,12, -2,-15, -6,13, -6,-14, -1,14, -1,-15, -15,0, 14,0, 0,-15, 14,-1
+        db -15,-1, 0,14, 8,-12, -9,11, -12,-9, 11,8, 8,11, -9,-12, 11,-9, -12,8
+        db 13,4, -14,-5, -14,4, -5,-14, -5,13, 4,13, 4,-14, 13,-5, -11,9, 10,-10
+        db -10,-11, 10,9, 9,-11, -11,-10, -10,10, 9,10, -7,12, 6,-13, -7,-13, 12,-7
+        db -13,6, 6,12, 12,6, -13,-7, -14,3, -4,13, -4,-14, 3,-14, 13,3, 13,-4
+        db 3,13, -14,-4, 11,-8, 13,2, 7,11, 2,-14, 11,7, -12,-8, 7,-12, 13,-3
+        db -14,2, -14,-3, -3,-14, -3,13, -12,7, 2,13, -8,-12, -8,11, -6,12, -13,-6
+        db 5,12, -6,-13, 5,-13, 12,5, 12,-6, -13,5, 1,-14, 1,13, -14,-2, -2,13
+        db -2,-14, -14,1, 13,1, 13,-2, -1,13, -14,-1, 8,10, 0,-14, 10,8, 8,-11
+        db -14,0, -1,-14, 13,-1, 10,-9, -11,8, 13,0, -9,-11, 0,13, -9,10, -11,-9
+        db -10,-10, 9,9, -10,9, 9,-10, -13,-5, 12,4, -13,4, -5,-13, 4,12, 12,-5
+        db -5,12, 4,-13, -7,-12, -12,6, 6,-12, 11,-7, -7,11, 11,6, 6,11, -12,-7
+        db -4,-13, 12,-4, -13,3, 3,-13, 3,12, 12,3, -4,12, -13,-4, 7,-11, -8,-11
+        db 10,-8, 7,10, -11,7, -8,10, 10,7, -11,-8, 5,11, 11,-6, 2,12, 9,-9
+        db -10,8, 5,-12, -13,2, -12,-6, 9,8, -6,-12, -6,11, -9,9, -12,5, 12,2
+        db -9,-10, -3,12, 8,-10, 2,-13, 12,-3, -3,-13, 8,9, -10,-9, -13,-3, 11,5
+        db 12,-2, 12,1, 1,-13, -2,12, -13,-2, 1,12, -2,-13, -13,1, -1,-13, -13,-1
+        db -1,12, 12,-1, 12,0, 0,-13, 0,12, -13,0, 10,-7, -5,-12, 6,-11, -12,4
+        db -7,-11, 11,4, 11,-5, -11,-7, 4,11, -12,-5, 10,6, -11,6, -5,11, -7,10
+        db 6,10, 4,-12, -8,-10, 7,9, 9,-8, -10,-8, 7,-10, -8,9, 9,7, -10,7
+        db -9,8, 11,3, -4,11, 8,8, 8,-9, 11,-4, -12,-4, -4,-12, 3,-12, 3,11
+        db -12,3, -9,-9, -11,-6, 10,-6, 5,10, -11,5, -6,10, 5,-11, 10,5, -6,-11
+        db -12,2, 11,2, 2,11, 11,-3, -3,11, -3,-12, 2,-12, -12,-3, 1,-12, -2,-12
+        db 11,-2, 1,11, 11,1, -12,-2, -12,1, -2,11, -10,6, -1,-12, 9,6, 6,9
+        db 0,-12, -12,0, 9,-7, 11,0, -7,-10, -10,-7, -7,9, 11,-1, 0,11, -12,-1
+        db 6,-10, -1,11, 10,4, 10,-5, -11,4, -11,-5, -5,10, 4,10, 4,-11, -5,-11
+        db -9,7, -8,-9, -8,8, 8,7, -9,-8, 7,-9, 7,8, 8,-8, 10,3, 10,-4
+        db 3,-11, 3,10, -4,10, -11,3, -11,-4, -4,-11, -10,5, -10,-6, -6,9, -6,-10
+        db 9,5, 5,9, 5,-10, 9,-6, -3,10, 2,-11, -11,-3, 2,10, -11,2, 10,2
+        db -3,-11, 10,-3, 8,6, 8,-7, -7,-9, -7,8, -9,-7, 6,-9, -9,6, 6,8
+        db -8,-8, 1,-11, -11,-2, 10,1, 7,7, 10,-2, 7,-8, -2,-11, -2,10, -8,7
+        db -11,1, 1,10, 4,-10, 0,10, -1,10, -1,-11, -5,9, -5,-10, 10,0, 9,-5
+        db 4,9, 0,-11, -10,4, -11,0, -11,-1, 9,4, -10,-5, 10,-1, 3,-10, -10,-4
+        db 3,9, 9,3, 5,-9, 5,8, -10,3, -4,-10, -9,5, -4,9, -9,-6, 8,-6
+        db -6,8, 9,-4, -6,-9, 8,5, 6,-8, -7,7, -7,-8, -8,-7, 7,-7, 7,6
+        db 6,7, -8,6, 2,-10, -10,2, 9,-3, 9,2, -3,9, -10,-3, -3,-10, 2,9
+        db 9,-2, -9,-5, -10,-2, 1,9, 4,-9, 4,8, -2,-10, -2,9, -9,4, 9,1
+        db -5,-9, -5,8, -10,1, 1,-10, 8,-5, 8,4, -10,0, 9,-1, -1,-10, 0,-10
+        db 9,0, 0,9, -1,9, -10,-1, -8,5, -6,7, 5,-8, -8,-6, 7,-6, 7,5
+        db -6,-8, 5,7, -7,6, 6,-7, 6,6, 3,-9, -4,8, -7,-7, 8,-4, -9,-4
+        db 3,8, -4,-9, 8,3, -9,3, -3,8, -3,-9, 8,-3, -9,-3, -9,2, 2,-9
+        db 2,8, 8,2, -5,7, -8,-5, -8,4, 7,4, 7,-5, -5,-8, 4,-8, 4,7
+        db -2,-9, -9,1, -9,-2, 8,1, -2,8, 1,8, 8,-2, 1,-9, -6,-7, -7,5
+        db -6,6, 6,-6, 5,6, 5,-7, -1,-9, 6,5, 0,8, -7,-6, 0,-9, -1,8
+        db -9,-1, -9,0, 8,0, 8,-1, 7,-4, -4,7, -8,-4, 3,-8, -4,-8, 3,7
+        db 7,3, -8,3, 7,2, 2,7, 7,-3, -5,6, 4,6, -8,-3, 2,-8, -7,4
+        db 6,-5, 6,4, 4,-7, -5,-7, -3,7, -8,2, -3,-8, -7,-5, -6,5, -6,-6
+        db 5,-6, 5,5, -8,-2, 7,1, -2,7, -8,1, 7,-2, -2,-8, 1,-8, 1,7
+        db 7,-1, 7,0, 0,7, 0,-8, -8,-1, -1,-8, -8,0, -1,7, -7,3, 3,-7
+        db 6,-4, 6,3, -4,6, 3,6, -4,-7, -7,-4, -6,-5, -5,5, -6,4, 4,5
+        db -5,-6, 5,4, 4,-6, 5,-5, 6,-3, -7,2, 6,2, -7,-3, -3,6, 2,-7
+        db 2,6, -3,-7, 6,1, -7,-2, 6,-2, -2,6, -7,1, 1,-7, -2,-7, 1,6
+        db -6,-4, 3,-6, -7,0, 0,6, 0,-7, -1,6, 3,5, -6,3, -7,-1, 5,-4
+        db 6,0, -1,-7, -4,-6, 5,3, -4,5, 6,-1, 4,-5, 4,4, -5,-5, -5,4
+        db 5,2, -6,2, -6,-3, -3,5, 2,5, -3,-6, 5,-3, 2,-6, -2,-6, 4,-4
+        db 5,1, -2,5, -4,4, -4,-5, 1,5, 4,3, -5,-4, 3,-5, -6,1, 3,4
+        db -5,3, 1,-6, 5,-2, -6,-2, 5,0, 0,-6, -1,-6, -1,5, 0,5, -6,0
+        db -6,-1, 5,-1, 2,-5, 4,-3, 4,2, -3,4, -5,2, -5,-3, 2,4, -3,-5
+        db 3,3, -4,3, -4,-4, 3,-4, 4,1, 1,-5, 4,-2, 1,4, -2,-5, -5,-2
+        db -2,4, -5,1, -1,-5, -1,4, -5,-1, 0,4, -5,0, 0,-5, 4,-1, 4,0
+        db 3,2, -3,-4, 3,-3, 2,-4, -3,3, 2,3, -4,2, -4,-3, 3,1, -2,-4
+        db 1,-4, -4,-2, 1,3, -2,3, 3,-2, -4,1, 0,3, 2,2, 0,-4, 2,-3
+        db 3,-1, 3,0, -1,-4, -1,3, -3,2, -4,0, -4,-1, -3,-3, -2,2, -2,-3
+        db -3,-2, 2,1, -3,1, 2,-2, 1,2, 1,-3, -3,-1, -3,0, 0,2, 2,0
+        db -1,2, 0,-3, -1,-3, 2,-1, 1,1, 1,-2, -2,1, -2,-2, -2,-1, 0,1
+        db 0,-2, -1,1, -1,-2, -2,0, 1,0, 1,-1, -1,-1, 0,0, 0,-1, -1,0
+
 
 camx    dw 0
 camy    dw 120
@@ -243,6 +441,7 @@ wr      db 0
 wc      db 0
 wbi     db 0                    ; window-block pixel loop (x)
 wbj     db 0                    ; window-block pixel loop (y)
+wbsz    db 3                    ; window block size: 3x3 close, 1x1 further
 
 cdx     dw 0
 cdy     dw 0
@@ -270,7 +469,7 @@ HCOL    db 8
 ;            8 HUD       9 sky band    10 ground     11 field/ground band
 ;            12 haze     13 mountains  14 water      15 forest
 ;            16 wall E/W (shade)       17 roof
-NPALC   equ 18
+NPALC   equ 20
 PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db 30,32,36          ;1  far stroke (fades to haze)
         db 22,24,28          ;2  mid stroke
@@ -284,11 +483,13 @@ PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db 22,38,18          ;10 ground (green)
         db 32,46,28          ;11 field / ground band near horizon
         db 50,56,63          ;12 haze at the horizon (near white)
-        db 28,38,47          ;13 mountains (grey-blue silhouette)
+        db 26,17,10          ;13 mountains/rock (dark brown)
         db 16,32,54          ;14 water
         db 12,27,10          ;15 forest
         db 28,29,33          ;16 wall E/W (shaded side)
         db 44,45,48          ;17 roof (sun-lit)
+        db 33,24,14          ;18 minimap city (brown)
+        db 63, 6, 6          ;19 red (map course tick)
 
 PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db 12,18,40          ;1  far stroke
@@ -303,11 +504,13 @@ PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db  4, 6,16          ;10 ground
         db  7,10,24          ;11 field / ground band
         db 18,24,48          ;12 haze (glow at horizon)
-        db 10,14,32          ;13 mountains
+        db 10, 7, 4          ;13 mountains/rock (dark brown)
         db  8,14,38          ;14 water
         db  3, 7,13          ;15 forest
         db  2, 3, 9          ;16 wall E/W (same as body at night)
         db  3, 4,11          ;17 roof
+        db 14,10, 6          ;18 minimap city (brown)
+        db 52, 5, 5          ;19 red (map course tick)
 
 STARN   equ 16                  ; star coords as words (X can exceed 255)
 STARTAB dw 20,18, 60,30, 110,12, 150,40, 200,22, 250,15, 300,35, 40,52
@@ -373,14 +576,56 @@ MAIN:
 
         ; (no PIT reprogram, no INT 8 hook - we only read the stock BIOS tick)
 
+        push es                 ; seed the world from the clock: new map
+        mov  ax,40h             ; every run (the map lives in HMAP after this,
+        mov  es,ax              ; so everything stays self-consistent)
+        mov  ax,es:[6Ch]
+        pop  es
+        or   ax,1               ; LCG must not start at 0
+        mov  [rseed],ax
+        call DSGEN              ; build the Diamond-Square world heightmap
+        call MMAPGEN            ; bake the minimap from it
+
         ; video mode 13h + palette (day by default; N toggles at runtime)
         mov  ax,0013h
         int  10h
         call APPLYPAL
 
+        ; spawn over a city node (H in 130..160), not out at sea
         mov  word ptr [camx],0
-        mov  word ptr [camy],120
         mov  word ptr [camz],0
+        xor  si,si
+@@seek: mov  al,[HMAP+si]
+        cmp  al,130
+        jb   @@snext
+        cmp  al,160
+        ja   @@snext
+        mov  ax,si              ; node x = si>>6 -> world centre of that node
+        mov  cl,6
+        shr  ax,cl
+        mov  cl,2
+        shl  ax,cl
+        mov  cl,8
+        shl  ax,cl              ; *1024
+        add  ax,512
+        sub  ax,BIAS
+        mov  [camx],ax
+        mov  ax,si
+        and  ax,63
+        mov  cl,2
+        shl  ax,cl
+        mov  cl,8
+        shl  ax,cl
+        add  ax,512
+        sub  ax,BIAS
+        mov  [camz],ax
+        jmp  @@sdone
+@@snext:
+        inc  si
+        cmp  si,4096
+        jb   @@seek
+@@sdone:
+        mov  word ptr [camy],1450 ; start high above everything (peaks ~1110)
         mov  word ptr [heading],0
         mov  word ptr [roll],0
         call SETTRIG            ; seed hsin/hcos before the first physics tick
@@ -591,9 +836,11 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
         cmp  byte ptr [daymode],0
         jne  @@day              ; stars only at night
         call STARS
-@@day:  call RENDERMEGAS        ; far belt: megablocks + real mountains
-        call GRID
+@@day:  call TERRPREP           ; rotate + cache the terrain nodes
+        call TERRAIN            ; real 3D relief, far -> near
+        call RENDERMEGAS        ; distant city blocks on the lowlands
         call BUILDINGS
+        call MINIMAP            ; bottom-right world map + plane marker
         ret
 
 ; ----- stars (sky background; horizon is the sky/ground colour split) -------
@@ -693,10 +940,10 @@ MEGACELL:
         mov  [gj],ax
         mov  ax,[gi]
         mov  bx,[gj]
-        call GETZONE            ; 0 city / 1 plain / 2 mountains
-        cmp  ax,1
-        je   @@ret              ; plains: nothing at this distance
-        push ax                 ; save zone
+        call GETZONE            ; 0 city / 1 plain / 2 mnt / 3 water / 4 foothills
+        test ax,ax
+        jnz  @@ret              ; only city megas here: terrain draws the rest
+        push ax                 ; keep stack shape (zone, always 0 now)
         ; world centre of the mega (centre cell's centre)
         mov  ax,[gi]
         mov  cl,8
@@ -723,11 +970,9 @@ MEGACELL:
         mov  cl,7
         shr  bx,cl
         xor  ax,bx              ; ax = hash
-        pop  bx                 ; bx = zone
-        cmp  bx,2
-        je   @@mnt
+        pop  bx                 ; (zone, always city here)
         ; --- city mega: one block covering the whole quarter ---
-        cmp  word ptr [mring],2 ; ring 1 city is covered by real buildings
+        cmp  word ptr [mring],3 ; rings 1-2 city covered by real buildings
         jl   @@ret
         mov  word ptr [bhw],350
         mov  word ptr [bhd],350
@@ -736,38 +981,36 @@ MEGACELL:
         mov  [bhgt2],ax
         call ROTCUL
         jc   @@ret
-        mov  ax,[camy]
-        neg  ax
+        mov  ax,[gi]            ; sit the block on the local terrain
+        mov  bx,[gj]
+        call GETH
+        call WORLDH
+        mov  [gbase],ax
+        sub  ax,[camy]
         mov  [bry0],ax
-        mov  ax,[bhgt2]
+        mov  ax,[gbase]
+        add  ax,[bhgt2]
         sub  ax,[camy]
         mov  [bry1],ax
         ; solid haze-coloured silhouette; nearer rings get shade + outline
         mov  byte ptr [COLOR],1
-        cmp  word ptr [mring],6
+        cmp  word ptr [mring],12
         jge  @@mfill
         mov  byte ptr [COLOR],16
 @@mfill:
-        mov  ax,[camy]
-        cmp  ax,[bhgt2]
+        mov  ax,[gbase]
+        add  ax,[bhgt2]
+        cmp  [camy],ax
         jle  @@mnr
         call FACETOPC
         call FACEFILL
 @@mnr:  call MEGAFILL
-        cmp  word ptr [mring],6
+        cmp  word ptr [mring],12
         jge  @@ret              ; distant rings: silhouette only
-        mov  byte ptr [COLOR],1
+        mov  al,1               ; distant stroke colour, and VISSTROKE's
+        mov  [COLOR],al         ; per-face restore value (scol) must match
+        mov  [scol],al
         call VISSTROKE
-        ret
-@@mnt:  ; --- mountain mega: a real pyramid in the world ---
-        mov  word ptr [bhw],480
-        mov  word ptr [bhd],480
-        and  ax,1023
-        add  ax,500             ; peak 500..1523
-        mov  [bhgt2],ax
-        call ROTCUL
-        jc   @@ret
-        call PYRAMID
 @@ret:  ret
 
 ; fill the visible vertical faces with the CURRENT colour (no per-side tint)
@@ -803,121 +1046,284 @@ MEGAFILL:
 @@d:    ret
 
 ; ============================================================================
-;  PYRAMID - draw a mountain: 4 triangular faces from the footprint corners
-;  (FRX/FRZ, already rotated+culled via ROTCUL) up to the peak over the world
-;  centre (wcx,wcz) at height bhgt2. Visible faces picked like VISFILL.
-;  Fill colour 13, outline colour 2. PYRFACE builds one triangle.
+;  RND16 - LCG pseudo-random.  out: AX. preserves BX,DX (MUL clobbers DX!).
 ; ============================================================================
-PYRAMID:
-        mov  ax,[wcx]           ; rotate the peak into camera space
-        sub  ax,[camx]
-        mov  [wdx],ax
-        mov  ax,[wcz]
-        sub  ax,[camz]
-        mov  [wdz],ax
-        call ROTXZ
-        mov  ax,[rcx]
-        mov  [prx],ax
-        mov  ax,[rcz]
-        mov  [prz],ax
-        ; fill pass (colour 13), then stroke pass (colour 2)
-        mov  byte ptr [COLOR],13
-        mov  word ptr [fa],0    ; reuse fa as pass flag: 0=fill
-        call PYRSIDES
-        mov  byte ptr [COLOR],2
-        mov  word ptr [fa],1    ; 1=stroke
-        call PYRSIDES
+RND16:  push bx
+        push dx
+        mov  ax,[rseed]
+        mov  bx,25173
+        mul  bx
+        add  ax,13849
+        mov  [rseed],ax
+        pop  dx
+        pop  bx
         ret
 
-PYRSIDES:
-        mov  ax,[camx]          ; west face: corners 3,0
-        cmp  ax,[bwx0]
-        jge  @@e
-        mov  bx,3
-        mov  cx,0
-        call PYRFACE
-@@e:    mov  ax,[camx]          ; east: 1,2
-        cmp  ax,[bwx1]
-        jle  @@s
-        mov  bx,1
-        mov  cx,2
-        call PYRFACE
-@@s:    mov  ax,[camz]          ; south: 0,1
-        cmp  ax,[bwz0]
-        jge  @@n
-        mov  bx,0
-        mov  cx,1
-        call PYRFACE
-@@n:    mov  ax,[camz]          ; north: 2,3
-        cmp  ax,[bwz1]
-        jle  @@d
-        mov  bx,2
-        mov  cx,3
-        call PYRFACE
-@@d:    ret
-
-; triangle: base corner BX -> peak -> base corner CX (4th vertex duplicated)
-PYRFACE:
-        add  bx,bx
-        mov  ax,[FRX+bx]
-        mov  [IX],ax
-        mov  ax,[FRZ+bx]
-        mov  [IZ],ax
-        mov  bx,cx
-        add  bx,bx
-        mov  ax,[FRX+bx]
-        mov  [IX+4],ax
-        mov  [IX+6],ax
-        mov  ax,[FRZ+bx]
-        mov  [IZ+4],ax
-        mov  [IZ+6],ax
-        mov  ax,[prx]           ; peak
-        mov  [IX+2],ax
-        mov  ax,[prz]
-        mov  [IZ+2],ax
-        mov  ax,[camy]          ; base corners on the ground
-        neg  ax
-        mov  [IY],ax
-        mov  [IY+4],ax
-        mov  [IY+6],ax
-        mov  ax,[bhgt2]         ; peak height
-        sub  ax,[camy]
-        mov  [IY+2],ax
-        cmp  word ptr [fa],0
-        jne  @@st
-        call FACEFILL
+; ---- heightmap access: node (BX=x, DX=y), toroidal --------------------------
+HGET:   push bx                 ; out: AL = height ; preserves BX,DX
+        push dx
+        and  bx,63
+        mov  cl,6
+        shl  bx,cl
+        and  dx,63
+        add  bx,dx
+        mov  al,[HMAP+bx]
+        pop  dx
+        pop  bx
         ret
-@@st:   call FACESTROKE
+HPUT:   push bx                 ; in: AL = height ; preserves BX,DX,AX
+        push dx
+        and  bx,63
+        mov  cl,6
+        shl  bx,cl
+        and  dx,63
+        add  bx,dx
+        mov  [HMAP+bx],al
+        pop  dx
+        pop  bx
         ret
 
 ; ============================================================================
-;  GETZONE - world zoning from 16x16-cell superzones (toroidal, hash-based).
-;   in: AX=cell gi, BX=cell gj   out: AX = 0 city / 1 plains / 2 mountains
+;  DSGEN - Diamond-Square heightmap on a 64x64 TORUS (from CityGame's integer
+;  terrain generator), then a histogram stretch to the full 0..255 range
+;  (plain DS averaging squeezes everything toward the middle, flattening it).
+; ============================================================================
+DSGEN:  mov  word ptr [dss],32  ; seed anchors on the coarsest grid
+        mov  word ptr [dsamp],128
+        xor  bx,bx
+        xor  dx,dx
+        call RND16
+        and  al,127
+        add  al,64              ; anchors 64..191 (mid range)
+        call HPUT
+        mov  bx,32
+        call RND16
+        and  al,127
+        add  al,64
+        call HPUT
+        xor  bx,bx
+        mov  dx,32
+        call RND16
+        and  al,127
+        add  al,64
+        call HPUT
+        mov  bx,32
+        call RND16
+        and  al,127
+        add  al,64
+        call HPUT
+@@pass: ; ---- diamond step ----
+        mov  ax,[dss]
+        shr  ax,1
+        mov  [dsh],ax
+        mov  word ptr [dsx],0
+@@dx:   mov  word ptr [dsy],0
+@@dy:   mov  bx,[dsx]
+        mov  dx,[dsy]
+        call HGET
+        xor  ah,ah
+        mov  [dsac],ax
+        mov  bx,[dsx]
+        add  bx,[dss]
+        call HGET
+        xor  ah,ah
+        add  [dsac],ax
+        mov  dx,[dsy]
+        add  dx,[dss]
+        call HGET
+        xor  ah,ah
+        add  [dsac],ax
+        mov  bx,[dsx]
+        call HGET
+        xor  ah,ah
+        add  [dsac],ax
+        call @@noise            ; AX = avg4 + noise, clamped 0..255
+        mov  bx,[dsx]
+        add  bx,[dsh]
+        mov  dx,[dsy]
+        add  dx,[dsh]
+        call HPUT
+        mov  ax,[dsy]
+        add  ax,[dss]
+        mov  [dsy],ax
+        cmp  ax,64
+        jb   @@dy
+        mov  ax,[dsx]
+        add  ax,[dss]
+        mov  [dsx],ax
+        cmp  ax,64
+        jb   @@dx
+        ; ---- square step: the two edge midpoints of every square ----
+        mov  word ptr [dsx],0
+@@sx:   mov  word ptr [dsy],0
+@@sy:   ; point (dsx+h, dsy): neighbours (x,y) (x+s,y) (x+h,y-h) (x+h,y+h)
+        mov  bx,[dsx]
+        mov  dx,[dsy]
+        call HGET
+        xor  ah,ah
+        mov  [dsac],ax
+        mov  bx,[dsx]
+        add  bx,[dss]
+        call HGET
+        xor  ah,ah
+        add  [dsac],ax
+        mov  bx,[dsx]
+        add  bx,[dsh]
+        mov  dx,[dsy]
+        sub  dx,[dsh]
+        call HGET
+        xor  ah,ah
+        add  [dsac],ax
+        mov  dx,[dsy]
+        add  dx,[dsh]
+        call HGET
+        xor  ah,ah
+        add  [dsac],ax
+        call @@noise
+        mov  bx,[dsx]
+        add  bx,[dsh]
+        mov  dx,[dsy]
+        call HPUT
+        ; point (dsx, dsy+h): neighbours (x,y) (x,y+s) (x-h,y+h) (x+h,y+h)
+        mov  bx,[dsx]
+        mov  dx,[dsy]
+        call HGET
+        xor  ah,ah
+        mov  [dsac],ax
+        mov  dx,[dsy]
+        add  dx,[dss]
+        call HGET
+        xor  ah,ah
+        add  [dsac],ax
+        mov  bx,[dsx]
+        sub  bx,[dsh]
+        mov  dx,[dsy]
+        add  dx,[dsh]
+        call HGET
+        xor  ah,ah
+        add  [dsac],ax
+        mov  bx,[dsx]
+        add  bx,[dsh]
+        call HGET
+        xor  ah,ah
+        add  [dsac],ax
+        call @@noise
+        mov  bx,[dsx]
+        mov  dx,[dsy]
+        add  dx,[dsh]
+        call HPUT
+        mov  ax,[dsy]
+        add  ax,[dss]
+        mov  [dsy],ax
+        cmp  ax,64
+        jb   @@sy
+        mov  ax,[dsx]
+        add  ax,[dss]
+        mov  [dsx],ax
+        cmp  ax,64
+        jb   @@sx
+        ; ---- next octave: halve side and amplitude ----
+        mov  ax,[dsh]
+        mov  [dss],ax
+        mov  ax,[dsamp]
+        shr  ax,1
+        cmp  ax,4
+        jge  @@a4
+        mov  ax,4
+@@a4:   mov  [dsamp],ax
+        cmp  word ptr [dss],1
+        jg   @@pass
+        ; ---- histogram stretch: min..max -> 0..255 ----
+        mov  al,255             ; al = min so far
+        mov  ah,0               ; ah = max so far
+        xor  si,si
+@@mm:   mov  bl,[HMAP+si]
+        cmp  bl,al
+        jae  @@m1
+        mov  al,bl
+@@m1:   cmp  bl,ah
+        jbe  @@m2
+        mov  ah,bl
+@@m2:   inc  si
+        cmp  si,4096
+        jb   @@mm
+        mov  bl,ah
+        sub  bl,al              ; range = max - min
+        jz   @@sdone            ; degenerate map: leave as is
+        mov  bh,0
+        mov  [dsy],bx           ; dsy = range (word)
+        mov  ah,0
+        mov  [dsx],ax           ; dsx = min (word)
+        xor  si,si
+@@sc:   mov  al,[HMAP+si]
+        mov  ah,0
+        sub  ax,[dsx]           ; v - min
+        mov  cx,255
+        mul  cx                 ; DX:AX = (v-min)*255 ; DX=0 (fits 16 bits)
+        div  word ptr [dsy]     ; AX = scaled 0..255
+        mov  [HMAP+si],al
+        inc  si
+        cmp  si,4096
+        jb   @@sc
+@@sdone:
+        ret
+@@noise:                        ; AX = dsac/4 + (rnd & (amp-1)) - amp/2, 0..255
+        call RND16
+        mov  bx,[dsamp]
+        dec  bx
+        and  ax,bx              ; 0..amp-1
+        mov  bx,[dsamp]
+        shr  bx,1
+        sub  ax,bx              ; -amp/2 .. amp/2-1
+        mov  bx,[dsac]
+        shr  bx,1
+        shr  bx,1               ; avg of 4
+        add  ax,bx
+        jns  @@n1
+        xor  ax,ax
+@@n1:   cmp  ax,255
+        jle  @@n2
+        mov  ax,255
+@@n2:   ret
+
+; ============================================================================
+;  GETH - world height for cell (AX=gi, BX=gj) from the DS map (1 node = 4x4
+;  cells, toroidal). out: AX = height 0..255.
+; ============================================================================
+GETH:   mov  cl,2
+        shr  ax,cl              ; node x = gi>>2 (wraps in HGET)
+        push bx
+        mov  bx,ax
+        pop  dx
+        mov  cl,2
+        shr  dx,cl              ; node y
+        call HGET
+        xor  ah,ah
+        ret
+
+; ============================================================================
+;  GETZONE - world zoning from the Diamond-Square heightmap.
+;   in: AX=cell gi, BX=cell gj
+;   out: AX = 0 city / 1 plains / 2 mountains / 3 water / 4 foothills
+;  Height bands: <88 sea, 88..119 plains, 120..167 city (lowlands),
+;  168..199 foothills (dense woods), >=200 mountains.
 ; ============================================================================
 GETZONE:
-        and  ax,255             ; toroidal world, 256-cell period
-        mov  cl,4
-        shr  ax,cl              ; zi 0..15
-        and  bx,255
-        mov  cl,4
-        shr  bx,cl              ; zj 0..15
-        mov  si,ax
-        mov  ax,29
-        mul  si                 ; zi*29
-        mov  si,ax
-        mov  ax,53
-        mul  bx                 ; zj*53
-        add  ax,si
-        mov  bx,ax
-        mov  cl,3
-        shr  bx,cl
-        xor  ax,bx
-        and  ax,15
-        cmp  ax,10
-        jb   @@city             ; 10/16 city
-        cmp  ax,13
-        jb   @@plain            ; 3/16 plains
-        mov  ax,2               ; 3/16 mountains
+        call GETH
+        cmp  ax,88
+        jb   @@water
+        cmp  ax,120
+        jb   @@plain
+        cmp  ax,168
+        jb   @@city
+        cmp  ax,200
+        jb   @@foot
+        mov  ax,2               ; mountains
+        ret
+@@water:
+        mov  ax,3
+        ret
+@@foot: mov  ax,4
         ret
 @@plain:
         mov  ax,1
@@ -925,6 +1331,457 @@ GETZONE:
 @@city: xor  ax,ax
         ret
 
+; ============================================================================
+;  WORLDH - map height H (0..255) -> world height.  Sea floor clamps to 0,
+;  land rises 5/unit, mountains (H>200) climb twice as fast -> peaks ~1110.
+;   in: AX = raw H   out: AX = world height
+; ============================================================================
+WORLDH: sub  ax,88
+        jns  @@w0
+        xor  ax,ax              ; below sea level -> 0 (water surface)
+        ret
+@@w0:   mov  bx,5
+        imul bx                 ; (H-88)*5   (max 835)
+        cmp  ax,560             ; H=200 -> 560: steepen above this (mountains)
+        jle  @@w1
+        mov  bx,ax
+        sub  bx,560
+        add  ax,bx              ; doubled slope above 560 -> peaks ~1110
+@@w1:   ret
+
+; ============================================================================
+;  TERRPREP - once per frame: rotate all NSIDE^2 nodes around the camera into
+;  camera space (TRX/TRZ) and cache their heights (TWH world, TH raw).
+; ============================================================================
+TERRPREP:
+        mov  ax,[camx]
+        add  ax,BIAS
+        mov  cl,2
+        shr  ax,cl
+        mov  cl,8
+        shr  ax,cl              ; (camx+BIAS)>>10 = camera node x
+        mov  [tnx],ax
+        mov  ax,[camz]
+        add  ax,BIAS
+        mov  cl,2
+        shr  ax,cl
+        mov  cl,8
+        shr  ax,cl
+        mov  [tnz],ax
+        mov  word ptr [tta],0
+@@al:   mov  word ptr [ttb],0
+@@bl:   ; world position of node (tnx+tta-NR, tnz+ttb-NR)
+        mov  ax,[tnx]
+        add  ax,[tta]
+        sub  ax,NR
+        mov  bx,ax              ; node x (for HGET, wraps)
+        mov  cl,2
+        shl  ax,cl
+        mov  cl,8
+        shl  ax,cl              ; node*1024
+        sub  ax,BIAS
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[tnz]
+        add  ax,[ttb]
+        sub  ax,NR
+        mov  dx,ax              ; node z
+        mov  cl,2
+        shl  ax,cl
+        mov  cl,8
+        shl  ax,cl
+        sub  ax,BIAS
+        sub  ax,[camz]
+        mov  [wdz],ax
+        push bx
+        push dx
+        call ROTXZ
+        pop  dx
+        pop  bx
+        ; cache index si = tta*41 + ttb   (41 = 32 + 8 + 1)
+        mov  ax,[tta]
+        mov  cl,5
+        shl  ax,cl              ; *32
+        push bx
+        mov  bx,[tta]
+        mov  cl,3
+        shl  bx,cl              ; *8
+        add  ax,bx
+        pop  bx
+        add  ax,[tta]           ; *41
+        add  ax,[ttb]
+        mov  si,ax
+        add  si,si              ; word offset
+        mov  ax,[rcx]
+        mov  [TRX+si],ax
+        mov  ax,[rcz]
+        mov  [TRZ+si],ax
+        call HGET               ; AL = raw H of node (BX,DX preserved inside)
+        mov  di,si
+        shr  di,1
+        mov  [TH+di],al
+        xor  ah,ah
+        push si
+        call WORLDH
+        pop  si
+        mov  [TWH+si],ax
+        inc  word ptr [ttb]
+        cmp  word ptr [ttb],NSIDE
+        jl   @@bl
+        inc  word ptr [tta]
+        cmp  word ptr [tta],NSIDE
+        jl   @@al
+        ret
+
+; ============================================================================
+;  TERRAIN - draw the 3D landscape: 1600 heightmap quads far -> near (TORD).
+;  Colours by the max raw H of the quad corners: water, grass, woods, rock,
+;  snow. Near quads also get a grid stroke. Buildings draw after this.
+; ============================================================================
+TERRAIN:
+        mov  word ptr [tidx],0
+@@tl:   mov  si,[tidx]
+        add  si,si
+        mov  al,[TORD+si]       ; di (signed)
+        cbw
+        add  ax,NR              ; a = di+NR
+        mov  [tta],ax
+        mov  al,[TORD+si+1]
+        cbw
+        add  ax,NR
+        mov  [ttb],ax
+        ; base cache index = a*41+b   (41 = 32 + 8 + 1)
+        mov  ax,[tta]
+        mov  cl,5
+        shl  ax,cl              ; *32
+        mov  bx,[tta]
+        mov  cl,3
+        shl  bx,cl              ; *8
+        add  ax,bx
+        add  ax,[tta]           ; *41
+        add  ax,[ttb]
+        mov  si,ax
+        add  si,si              ; word index of node (a,b)
+        ; corners: n0=(a,b) n1=(a+1,b) n2=(a+1,b+1) n3=(a,b+1)
+        mov  ax,[TRX+si]
+        mov  [IX],ax
+        mov  ax,[TRZ+si]
+        mov  [IZ],ax
+        mov  ax,[TWH+si]
+        sub  ax,[camy]
+        mov  [IY],ax
+        mov  ax,[TRX+si+82]     ; +41 nodes = +82 bytes -> (a+1,b)
+        mov  [IX+2],ax
+        mov  ax,[TRZ+si+82]
+        mov  [IZ+2],ax
+        mov  ax,[TWH+si+82]
+        sub  ax,[camy]
+        mov  [IY+2],ax
+        mov  ax,[TRX+si+84]     ; (a+1,b+1)
+        mov  [IX+4],ax
+        mov  ax,[TRZ+si+84]
+        mov  [IZ+4],ax
+        mov  ax,[TWH+si+84]
+        sub  ax,[camy]
+        mov  [IY+4],ax
+        mov  ax,[TRX+si+2]      ; (a,b+1)
+        mov  [IX+6],ax
+        mov  ax,[TRZ+si+2]
+        mov  [IZ+6],ax
+        mov  ax,[TWH+si+2]
+        sub  ax,[camy]
+        mov  [IY+6],ax
+        ; quick cull: all corners behind, or all beyond FARZ
+        mov  ax,[IZ]
+        cmp  ax,[IZ+2]
+        jge  @@z1
+        mov  ax,[IZ+2]
+@@z1:   cmp  ax,[IZ+4]
+        jge  @@z2
+        mov  ax,[IZ+4]
+@@z2:   cmp  ax,[IZ+6]
+        jge  @@z3
+        mov  ax,[IZ+6]
+@@z3:   cmp  ax,NEARZ
+        jl   @@next             ; max z < NEARZ -> fully behind
+        mov  ax,[IZ]
+        cmp  ax,[IZ+2]
+        jle  @@n1
+        mov  ax,[IZ+2]
+@@n1:   cmp  ax,[IZ+4]
+        jle  @@n2
+        mov  ax,[IZ+4]
+@@n2:   cmp  ax,[IZ+6]
+        jle  @@n3
+        mov  ax,[IZ+6]
+@@n3:   cmp  ax,FARZ
+        jg   @@next             ; min z beyond far -> skip
+        ; colour from the max raw H of the 4 corners
+        mov  di,si
+        shr  di,1               ; byte index
+        mov  al,[TH+di]
+        mov  ah,[TH+di+41]
+        cmp  al,ah
+        jae  @@c1
+        mov  al,ah
+@@c1:   mov  ah,[TH+di+42]
+        cmp  al,ah
+        jae  @@c2
+        mov  al,ah
+@@c2:   mov  ah,[TH+di+1]
+        cmp  al,ah
+        jae  @@c3
+        mov  al,ah
+@@c3:   ; al = max H
+        cmp  al,88
+        jb   @@water
+        cmp  al,168
+        jb   @@grass
+        cmp  al,200
+        jb   @@woods
+        cmp  al,230
+        jb   @@rock
+        mov  byte ptr [COLOR],8 ; snow caps
+        jmp  @@fill
+@@water:
+        mov  byte ptr [COLOR],14
+        jmp  @@fill
+@@grass:
+        mov  byte ptr [COLOR],10
+        jmp  @@fill
+@@woods:
+        mov  byte ptr [COLOR],15
+        jmp  @@fill
+@@rock: mov  byte ptr [COLOR],13
+@@fill: call FACEFILL
+        ; near quads: subtle grid stroke so low flight reads speed
+        mov  ax,[tta]
+        sub  ax,NR
+        cmp  ax,-3
+        jl   @@next
+        cmp  ax,2
+        jg   @@next
+        mov  ax,[ttb]
+        sub  ax,NR
+        cmp  ax,-3
+        jl   @@next
+        cmp  ax,2
+        jg   @@next
+        mov  byte ptr [COLOR],6
+        call FACESTROKE
+@@next: inc  word ptr [tidx]
+        cmp  word ptr [tidx],1600
+        jl   @@tl
+        ret
+
+; ============================================================================
+;  MMAPGEN - bake the 64x64 world minimap from HMAP (once, after DSGEN).
+;  Colours: water/plain/CITY-BROWN/woods/rock/snow. North (+Z) is up.
+; ============================================================================
+MMAPGEN:
+        mov  word ptr [dsx],0   ; node i (world X)
+@@i:    mov  word ptr [dsy],0   ; node j (world Z)
+@@j:    mov  bx,[dsx]
+        mov  dx,[dsy]
+        call HGET               ; AL = H
+        mov  ah,14              ; water
+        cmp  al,88
+        jb   @@put
+        mov  ah,10              ; plains green
+        cmp  al,120
+        jb   @@put
+        mov  ah,18              ; CITY -> brown blocks
+        cmp  al,168
+        jb   @@put
+        mov  ah,15              ; woods
+        cmp  al,200
+        jb   @@put
+        mov  ah,13              ; rock
+        cmp  al,230
+        jb   @@put
+        mov  ah,8               ; snow
+@@put:  mov  bx,63              ; screen row = 63 - j (north up)
+        sub  bx,[dsy]
+        mov  cl,6
+        shl  bx,cl
+        add  bx,[dsx]
+        mov  [MMAP+bx],ah
+        inc  word ptr [dsy]
+        cmp  word ptr [dsy],64
+        jl   @@j
+        inc  word ptr [dsx]
+        cmp  word ptr [dsx],64
+        jl   @@i
+        ret
+
+; ============================================================================
+;  MINIMAP - blit the baked map to the bottom-right corner (rows 123..186)
+;  with a white frame, and stamp the plane: white 2x2 blip + red course tick.
+;  ES=bufseg. Our shared debug eye on what DSGEN actually built.
+; ============================================================================
+MINIMAP:
+        cld
+        ; white frame so the map does not blend into the terrain
+        mov  al,8
+        mov  di,122*320+251     ; top edge
+        mov  cx,66
+        rep  stosb
+        mov  di,187*320+251     ; bottom edge (clear of the HUD text row)
+        mov  cx,66
+        rep  stosb
+        mov  di,122*320+251     ; side edges
+        mov  cx,66
+@@fr:   mov  es:[di],al
+        mov  es:[di+65],al
+        add  di,320
+        loop @@fr
+        ; blit the baked map
+        mov  si,offset MMAP
+        mov  di,123*320+252
+        mov  cx,64
+@@row:  push cx
+        mov  cx,32
+        rep  movsw              ; one 64-byte map row
+        pop  cx
+        add  di,320-64
+        loop @@row
+        ; plane blip at node (camx,camz)
+        mov  ax,[camx]
+        add  ax,BIAS
+        mov  cl,2
+        shr  ax,cl
+        mov  cl,8
+        shr  ax,cl
+        and  ax,63
+        mov  bx,ax              ; col = node x
+        mov  ax,[camz]
+        add  ax,BIAS
+        mov  cl,2
+        shr  ax,cl
+        mov  cl,8
+        shr  ax,cl
+        and  ax,63
+        mov  dx,63
+        sub  dx,ax              ; row = 63 - node z
+        mov  ax,dx
+        add  ax,123
+        mov  di,ax              ; di = row*320 (=*256+*64)
+        mov  cl,8
+        shl  di,cl
+        mov  cl,6
+        shl  ax,cl
+        add  di,ax
+        add  di,252
+        add  di,bx
+        mov  al,8               ; white 2x2 blip
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+        ; heading tick: 3 map pixels ahead of the blip
+        mov  ax,[hsin]
+        add  ax,ax
+        add  ax,[hsin]          ; hsin*3
+        mov  bx,256
+        cwd
+        idiv bx                 ; dxn = -3..3
+        mov  si,ax
+        mov  ax,[hcos]
+        add  ax,ax
+        add  ax,[hcos]
+        cwd
+        idiv bx                 ; dzn
+        mov  cx,320             ; +Z is up on the map -> minus one row per node
+        imul cx                 ; DX:AX = dzn*320
+        mov  cx,ax
+        mov  ax,si
+        sub  ax,cx              ; pixel offset = dxn - dzn*320
+        add  di,ax
+        mov  al,19              ; red course tick
+        mov  es:[di],al
+        ret
+
+; ============================================================================
+;  TERRH - bilinear terrain height at world (camx,camz).  out: AX (>=0).
+;  Node grid pitch is 1024; fractions are taken in 1/64 of a node.
+;  NB: WORLDH's imul clobbers DX, so BX/DX are re-set before every HGET.
+; ============================================================================
+TERRH:  mov  ax,[camx]
+        add  ax,BIAS            ; unsigned world coordinate
+        mov  bx,ax
+        mov  cl,2
+        shr  bx,cl
+        mov  cl,8
+        shr  bx,cl              ; node x
+        mov  cl,4
+        shr  ax,cl
+        and  ax,63              ; fx = fraction across the node, 0..63
+        mov  [tta],bx           ; node x
+        mov  [dsx],ax           ; fx
+        mov  ax,[camz]
+        add  ax,BIAS
+        mov  dx,ax
+        mov  cl,2
+        shr  dx,cl
+        mov  cl,8
+        shr  dx,cl              ; node z
+        mov  cl,4
+        shr  ax,cl
+        and  ax,63              ; fz
+        mov  [ttb],dx
+        mov  [dsy],ax
+        ; world heights of the 4 surrounding nodes
+        mov  bx,[tta]
+        mov  dx,[ttb]
+        call HGET
+        xor  ah,ah
+        call WORLDH
+        mov  [x0],ax            ; h00 (reuse edge scratch vars)
+        mov  bx,[tta]
+        inc  bx
+        mov  dx,[ttb]
+        call HGET
+        xor  ah,ah
+        call WORLDH
+        mov  [x1],ax            ; h10
+        mov  bx,[tta]
+        mov  dx,[ttb]
+        inc  dx
+        call HGET
+        xor  ah,ah
+        call WORLDH
+        mov  [y0],ax            ; h01
+        mov  bx,[tta]
+        inc  bx
+        mov  dx,[ttb]
+        inc  dx
+        call HGET
+        xor  ah,ah
+        call WORLDH
+        mov  [y1],ax            ; h11
+        ; ha = h00 + (h10-h00)*fx/64 ; hb = h01 + (h11-h01)*fx/64
+        mov  ax,[x1]
+        sub  ax,[x0]
+        imul word ptr [dsx]
+        mov  bx,64
+        idiv bx
+        add  ax,[x0]
+        mov  [x0],ax            ; ha
+        mov  ax,[y1]
+        sub  ax,[y0]
+        imul word ptr [dsx]
+        mov  bx,64
+        idiv bx
+        add  ax,[y0]            ; hb
+        ; h = ha + (hb-ha)*fz/64
+        sub  ax,[x0]
+        imul word ptr [dsy]
+        mov  bx,64
+        idiv bx
+        add  ax,[x0]
+        ret
+
+; DEAD (flat-ground era; replaced by the TERRAIN mesh, no callers) -----------
 ; ----- ground grid: world-aligned lines around the camera (rotate with view)
 GRID:   mov  byte ptr [COLOR],6
         ; lines parallel to world-Z (fixed X = gi)
@@ -1108,35 +1965,40 @@ RENDERCELL:
         mov  [wcz],ax
         call ROTCUL             ; bounds -> rotate corners -> cull
         jc   @@ret
-        ; flat terrain patch (forest/water/field)? just fill it on the ground
+        ; ground height under this cell (terrain-aware)
+        mov  ax,[gi]
+        mov  bx,[gj]
+        call GETH
+        call WORLDH
+        mov  [gbase],ax
+        ; flat terrain patch (forest/water/field)? fill it on the local ground
         mov  ax,[bstreet]
-        cmp  ax,4
-        jne  @@np
-        call PYRAMID            ; a mountain rendered from the near pass
-        jmp  @@ret
-@@np:   cmp  ax,2
+        cmp  ax,2
         jne  @@solid
-        mov  ax,[camy]
-        neg  ax
-        mov  [bry1],ax          ; patch lies at ground level
+        mov  ax,[gbase]
+        add  ax,2               ; a hair above the terrain quad (paint order)
+        sub  ax,[camy]
+        mov  [bry1],ax
         mov  al,[bcol]
         mov  [COLOR],al
         call FACETOPC
         call FACEFILL
         jmp  @@ret
 @@solid:
-        ; heights (camera-relative Y)
-        mov  ax,[camy]
-        neg  ax
+        ; heights (camera-relative Y), building sits on the terrain
+        mov  ax,[gbase]
+        sub  ax,[camy]
         mov  [bry0],ax
-        mov  ax,[bhgt2]
+        mov  ax,[gbase]
+        add  ax,[bhgt2]
         sub  ax,[camy]
         mov  [bry1],ax
 
         ; ---- FILL visible faces ----
         mov  byte ptr [COLOR],17 ; sun-lit roof
-        mov  ax,[camy]          ; roof, if above
-        cmp  ax,[bhgt2]
+        mov  ax,[gbase]         ; roof, if camera above gbase+bhgt2
+        add  ax,[bhgt2]
+        cmp  [camy],ax
         jle  @@nf0
         call FACETOPC
         call FACEFILL
@@ -1154,8 +2016,11 @@ RENDERCELL:
 @@ff:   mov  byte ptr [COLOR],1
 @@cc:
         ; ---- STROKE visible faces ----
-        mov  ax,[camy]
-        cmp  ax,[bhgt2]
+        mov  al,[COLOR]         ; remember the stroke colour: windows repaint
+        mov  [scol],al          ; COLOR, VISSTROKE must restore it per face
+        mov  ax,[gbase]
+        add  ax,[bhgt2]
+        cmp  [camy],ax
         jle  @@ns0
         call FACETOPC
         call FACESTROKE
@@ -1291,6 +2156,8 @@ VISSTROKE:
         mov  ax,[camx]
         cmp  ax,[bwx0]
         jge  @@e
+        mov  al,[scol]          ; windows change COLOR - restore per face
+        mov  [COLOR],al
         mov  word ptr [fa],3
         mov  word ptr [fb],0
         call FACEV
@@ -1299,6 +2166,8 @@ VISSTROKE:
 @@e:    mov  ax,[camx]
         cmp  ax,[bwx1]
         jle  @@s
+        mov  al,[scol]
+        mov  [COLOR],al
         mov  word ptr [fa],1
         mov  word ptr [fb],2
         call FACEV
@@ -1307,6 +2176,8 @@ VISSTROKE:
 @@s:    mov  ax,[camz]
         cmp  ax,[bwz0]
         jge  @@n
+        mov  al,[scol]
+        mov  [COLOR],al
         mov  word ptr [fa],0
         mov  word ptr [fb],1
         call FACEV
@@ -1315,6 +2186,8 @@ VISSTROKE:
 @@n:    mov  ax,[camz]
         cmp  ax,[bwz1]
         jle  @@d
+        mov  al,[scol]
+        mov  [COLOR],al
         mov  word ptr [fa],2
         mov  word ptr [fb],3
         call FACEV
@@ -1325,7 +2198,7 @@ VISSTROKE:
 ; windows only on near faces
 WINMAYBE:
         mov  ax,[minrz]
-        cmp  ax,900
+        cmp  ax,1200
         jg   @@x
         call WINFACE
 @@x:    ret
@@ -1579,7 +2452,7 @@ PROJPT: push dx                 ; save ry
         ; guard: at FARZ=10800 a side point can have |rx| up to ~15000 while
         ; rz is small; rx*160/rz would then overflow a 16-bit quotient (INT 0).
         ; overflow needs rz < |rx|*160/32767 ~ |rx|/204, i.e. only rz < 74.
-        cmp  cx,74
+        cmp  cx,160
         jge  @@sxok
         mov  bx,ax
         or   bx,bx
@@ -1693,9 +2566,13 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         mov  bx,[gj]
         call GETZONE
         cmp  ax,1
-        je   @@plain
+        je   @@st               ; plains: the terrain mesh paints the land
         cmp  ax,2
-        je   @@mzone
+        je   @@st               ; mountains: the terrain mesh IS the mountain
+        cmp  ax,3
+        je   @@st               ; water: the terrain mesh paints the sea
+        cmp  ax,4
+        je   @@st               ; foothills: terrain paints the woods
         mov  ax,[gi]
         and  ax,3
         jz   @@st              ; gi on an avenue -> street
@@ -1764,40 +2641,6 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         mov  word ptr [bhd],116
         mov  word ptr [bstreet],2
         ret
-@@plain:                        ; plains: open land with woods/lakes/fields
-        call CELLHASH
-        and  ax,15
-        cmp  ax,7
-        je   @@forest
-        cmp  ax,8
-        je   @@water
-        cmp  ax,9
-        je   @@field
-        jmp  @@st
-@@mzone:                        ; mountain zone: a pyramid on each mega's
-        mov  ax,[gi]            ; centre cell, sparse woods elsewhere
-        and  ax,3
-        cmp  ax,2
-        jne  @@mwood
-        mov  ax,[gj]
-        and  ax,3
-        cmp  ax,2
-        jne  @@mwood
-        call CELLHASH           ; same hash/height as MEGACELL's mountain
-        and  ax,1023
-        add  ax,500             ; peak 500..1523
-        mov  [bhgt2],ax
-        mov  word ptr [bhw],480
-        mov  word ptr [bhd],480
-        mov  word ptr [bstreet],4
-        ret
-@@mwood:
-        call CELLHASH
-        and  ax,7
-        cmp  ax,1
-        jne  @@st
-        mov  byte ptr [bcol],15 ; scattered forest at the foothills
-        jmp  @@patch
 
 ; hash = mix(gi*1973 + gj*9277) - shared by buildings, patches and mountains
 CELLHASH:
@@ -1923,7 +2766,12 @@ WINFACE:
         jg   @@wn
         call WLIT2
         jz   @@wn
-        mov  byte ptr [wbj],0       ; draw a 3x3 window block (bigger windows)
+        mov  al,3                   ; window block: 3x3 near, 1x1 mid-range
+        cmp  word ptr [minrz],600
+        jle  @@wsz
+        mov  al,1
+@@wsz:  mov  [wbsz],al
+        mov  byte ptr [wbj],0
 @@wby:  mov  byte ptr [wbi],0
 @@wbx:  mov  al,[wbi]
         cbw
@@ -1933,10 +2781,12 @@ WINFACE:
         add  bx,[wpy]
         call PUTPIXEL
         inc  byte ptr [wbi]
-        cmp  byte ptr [wbi],3
+        mov  al,[wbi]
+        cmp  al,[wbsz]
         jl   @@wbx
         inc  byte ptr [wbj]
-        cmp  byte ptr [wbj],3
+        mov  al,[wbj]
+        cmp  al,[wbsz]
         jl   @@wby
 @@wn:   inc  byte ptr [wc]
         cmp  byte ptr [wc],3
@@ -2748,15 +3598,31 @@ COLLIDE:
         mov  cl,8
         shr  ax,cl
         mov  [gj],ax
+        ; --- terrain collision first: bilinear ground height under camera ---
+        call TERRH              ; AX = ground height at (camx,camz)
+        add  ax,14              ; hull clearance above the slope
+        cmp  [camy],ax
+        jge  @@terok
+        call CRASHHANDLE        ; flew into the hillside
+        ret
+@@terok:
         call HBLD
         mov  ax,[bstreet]
         cmp  ax,0
-        je   @@bld              ; building box
-        cmp  ax,4
-        je   @@mnt              ; mountain pyramid
-        jmp  @@nocol            ; street / patch -> free air
-@@bld:  ; --- building: inside footprint AND below roof? ---
-        call @@cellc
+        jne  @@nocol            ; street / patch -> free air
+        ; --- building: inside footprint AND below rooftop (base+height)? ---
+        mov  ax,[gi]
+        mov  cl,8
+        shl  ax,cl
+        add  ax,128
+        sub  ax,BIAS
+        mov  [wcx],ax
+        mov  ax,[gj]
+        mov  cl,8
+        shl  ax,cl
+        add  ax,128
+        sub  ax,BIAS
+        mov  [wcz],ax
         mov  ax,[camx]
         sub  ax,[wcx]
         cmp  ax,0
@@ -2771,52 +3637,14 @@ COLLIDE:
         neg  ax
 @@a2:   cmp  ax,[bhd]
         jge  @@nocol
-        mov  ax,[camy]
-        cmp  ax,[bhgt2]
+        mov  ax,[gi]            ; rooftop = terrain base + building height
+        mov  bx,[gj]
+        call GETH
+        call WORLDH
+        add  ax,[bhgt2]
+        cmp  [camy],ax
         jge  @@nocol            ; above roof -> safe
         call CRASHHANDLE
-        ret
-@@mnt:  ; --- mountain: pyramid narrows with height ---
-        mov  ax,[camy]
-        cmp  ax,[bhgt2]
-        jge  @@nocol            ; above the peak
-        call @@cellc
-        ; r = bhw*(bhgt2-camy)/bhgt2  (slope radius at our altitude)
-        mov  ax,[bhgt2]
-        sub  ax,[camy]
-        imul word ptr [bhw]     ; DX:AX = (h-y)*bhw
-        idiv word ptr [bhgt2]   ; AX = r
-        mov  bx,ax
-        mov  ax,[camx]
-        sub  ax,[wcx]
-        cmp  ax,0
-        jge  @@m1
-        neg  ax
-@@m1:   cmp  ax,bx
-        jge  @@nocol
-        mov  ax,[camz]
-        sub  ax,[wcz]
-        cmp  ax,0
-        jge  @@m2
-        neg  ax
-@@m2:   cmp  ax,bx
-        jge  @@nocol
-        call CRASHHANDLE
-        ret
-@@cellc:                        ; wcx/wcz = current cell centre (world)
-        mov  ax,[gi]
-        mov  cl,8
-        shl  ax,cl
-        add  ax,128
-        sub  ax,BIAS
-        mov  [wcx],ax
-        mov  ax,[gj]
-        mov  cl,8
-        shl  ax,cl
-        add  ax,128
-        sub  ax,BIAS
-        mov  [wcz],ax
-        ret
 @@nocol:
         ret
 
@@ -2846,7 +3674,7 @@ CRASHHANDLE:
         call PRSTR
 @@w1:   cmp  byte ptr [KEYS+SC_SP],0
         je   @@w1
-        mov  word ptr [camy],420    ; respawn ABOVE the city (max bldg 409)
+        mov  word ptr [camy],1450   ; respawn above everything (peaks ~1110)
         mov  word ptr [roll],0      ; so we don't reappear inside the same tower
         mov  word ptr [vel],CRUISE  ; fresh jet: cruise speed + full tank
         mov  word ptr [fuel],FUELMAX
