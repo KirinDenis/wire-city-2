@@ -111,7 +111,10 @@ SC_C    equ 2Eh
 SC_Q    equ 10h                 ; rudder left
 SC_E    equ 12h                 ; rudder right
 SC_ENT  equ 1Ch                 ; target lock
-SC_M    equ 32h                 ; right MFD mode toggle                 ; C: toggle cockpit panel
+SC_M    equ 32h                 ; right MFD mode toggle
+WRKSZ   equ 292                 ; wreck slot size (see the BSS block)
+WFP     equ 4                   ; face records offset inside a slot
+WCO     equ 100                 ; corner offsets offset inside a slot                 ; C: toggle cockpit panel
 
 CODE    SEGMENT
         ASSUME  CS:CODE, DS:CODE, ES:CODE, SS:CODE
@@ -461,13 +464,11 @@ FONTBUF equ  BSS+19959              ; 246 bytes: font from CITY.DAT (untyped:
 PSPAN   equ  BSS+20215              ; 6400 bytes: cockpit blit span table,
                                     ;  (buffer offset, length) pairs, 0FFFFh
                                     ;  terminated; built once at startup
-WRK     equ  BSS+26615              ; wreck pool: 4 slots of WRKSZ bytes.
-                                    ;  +0 wtim, +2 wgy, +4 faces (8 x 12b:
-                                    ;  x,y,z,vx,vy,vz), +100 corner offsets
-                                    ;  (8 faces x 4 x 6b: x,y,z, prerotated)
-WRKSZ   equ  292
-WFP     equ  4                      ; face records offset inside a slot
-WCO     equ  100                    ; corner offsets offset inside a slot
+WRK     equ  BSS+26615              ; wreck pool: 4 slots of WRKSZ bytes
+                                    ;  (+0 wtim, +2 wgy, +WFP faces 8x12b:
+                                    ;  x,y,z,vx,vy,vz, +WCO corner offsets
+                                    ;  8x4x6b; sizes are up in the constants
+                                    ;  block - TASM needs them pre-include)
 BSSEND  equ  BSS+27783
 
 CODE    ENDS
