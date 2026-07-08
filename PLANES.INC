@@ -81,6 +81,18 @@ PLANESUPD:
         and  ax,511
         add  ax,800             ; altitude 800..1311
         mov  [pay+si],ax
+        mov  bx,si              ; a teleported jet must not leave its old
+        mov  cl,4               ; contrail hanging in the sky: reseed the
+        shl  bx,cl              ; whole ring at the new position
+        mov  cx,TLN
+@@rtf:  mov  ax,[pax+si]
+        mov  [TLX+bx],ax
+        mov  ax,[pay+si]
+        mov  [TLY+bx],ax
+        mov  ax,[paz+si]
+        mov  [TLZ+bx],ax
+        add  bx,2
+        loop @@rtf
         ; drop a contrail point every 8th tick
         mov  ax,[lasttk]
         and  ax,7
