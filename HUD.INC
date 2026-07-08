@@ -1025,6 +1025,11 @@ PANELBMP:
         mov  word ptr [fty],182
         mov  ax,[psc]
         call FNUM
+        mov  byte ptr [COLOR],5 ; cannon rounds, amber
+        mov  word ptr [ftx],92
+        mov  word ptr [fty],182
+        mov  ax,[gunam]
+        call FNUM
         ; missile pips along the radar's bottom edge
         xor  si,si
 @@amo:  mov  ax,si

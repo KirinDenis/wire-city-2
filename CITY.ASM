@@ -112,6 +112,7 @@ SC_Q    equ 10h                 ; rudder left
 SC_E    equ 12h                 ; rudder right
 SC_ENT  equ 1Ch                 ; target lock
 SC_M    equ 32h                 ; right MFD mode toggle
+SC_BS   equ 0Eh                 ; cannon trigger (Backspace)
 WRKSZ   equ 292                 ; wreck slot size (see the BSS block)
 WFP     equ 4                   ; face records offset inside a slot
 WCO     equ 100                 ; corner offsets offset inside a slot                 ; C: toggle cockpit panel
@@ -337,6 +338,10 @@ MAIN:
         and  ax,31
         inc  ax
         mov  [pnum+bx],al
+        call RND16
+        and  ax,3
+        add  ax,2               ; 2..5 cannon hits to bring one down
+        mov  [php+bx],al
         mov  bx,si              ; seed the contrail at the spawn point
         mov  cl,4
         shl  bx,cl              ; slot base = plane*TLN*2 (TLN=16)

@@ -86,6 +86,10 @@ PLANESUPD:
         and  ax,31
         inc  ax
         mov  [pnum+bx],al
+        call RND16
+        and  ax,3
+        add  ax,2               ; fresh jet, fresh armour
+        mov  [php+bx],al
         push si
         call RND16
         pop  si
@@ -389,7 +393,35 @@ PLANESDRAW:
         jc   @@nomk
         mov  [dsx],ax           ; marker centre on screen
         mov  [dsy],dx
-        mov  bx,[pdz]
+        mov  ax,[hitfx]         ; cannon-hit sparkle: a yellow star
+        cmp  ax,[pidx]
+        jne  @@nfl
+        cmp  word ptr [hitft],0
+        je   @@nfl
+        mov  ax,[dsx]
+        cmp  ax,3
+        jl   @@nfl
+        cmp  ax,316
+        jg   @@nfl
+        mov  ax,[dsy]
+        cmp  ax,3
+        jl   @@nfl
+        cmp  ax,188
+        jg   @@nfl
+        call ROW320
+        add  di,[dsx]
+        mov  al,96
+        mov  es:[di],al
+        mov  es:[di-2],al
+        mov  es:[di+2],al
+        mov  es:[di-640],al
+        mov  es:[di+640],al
+        mov  al,8
+        mov  es:[di-321],al
+        mov  es:[di+321],al
+        mov  es:[di-319],al
+        mov  es:[di+319],al
+@@nfl:  mov  bx,[pdz]
         mov  ax,11440
         cwd
         idiv bx
@@ -1688,3 +1720,63 @@ AMSLDRAW:
         cmp  word ptr [tpi],NAMSL
         jb   @@dl
         ret
+
+; ---------------------------------------------------------------------------
+;  GUNDRAW - cannon tracers: two jittering lines from the wing roots to
+;  the aiming point, flickering red/yellow. Pure screen-space theatre -
+;  the actual hit test lives in the INPUT trigger code.
+; ---------------------------------------------------------------------------
+GUNDRAW:
+        cmp  byte ptr [guntik],0
+        je   @@gd0
+        call RND16              ; left gun
+        mov  bx,ax
+        and  ax,7
+        add  ax,118
+        mov  [sx0],ax
+        mov  word ptr [sy0],192
+        mov  ax,bx
+        mov  cl,3
+        shr  ax,cl
+        and  ax,15
+        add  ax,152
+        mov  [sx1],ax
+        mov  ax,bx
+        mov  cl,6
+        shr  ax,cl
+        and  ax,7
+        add  ax,94
+        mov  [sy1],ax
+        mov  byte ptr [COLOR],96
+        test bx,8000h
+        jz   @@gc1
+        mov  byte ptr [COLOR],19
+@@gc1:  call CLIPLINE
+        jc   @@gr
+        call LINE
+@@gr:   call RND16              ; right gun
+        mov  bx,ax
+        and  ax,7
+        add  ax,194
+        mov  [sx0],ax
+        mov  word ptr [sy0],192
+        mov  ax,bx
+        mov  cl,3
+        shr  ax,cl
+        and  ax,15
+        add  ax,152
+        mov  [sx1],ax
+        mov  ax,bx
+        mov  cl,6
+        shr  ax,cl
+        and  ax,7
+        add  ax,94
+        mov  [sy1],ax
+        mov  byte ptr [COLOR],19
+        test bx,8000h
+        jz   @@gc2
+        mov  byte ptr [COLOR],96
+@@gc2:  call CLIPLINE
+        jc   @@gd0
+        call LINE
+@@gd0:  ret

@@ -144,6 +144,12 @@ aifire  dw 90                   ; cooldown until somebody opens fire
 tscf    dw 0                    ; team score: hostiles downed
 tsch    dw 0                    ; team score: friendlies downed
 psc     dw 0                    ; personal kills
+php     db NPLANE dup(3)        ; hit points: 2..5 cannon hits to down
+gunam   dw 250                  ; cannon rounds
+gunreg  dw 0                    ; belt regen timer
+guntik  db 0                    ; tracers on screen while > 0
+hitfx   dw 0FFFFh               ; plane flashing from a cannon hit
+hitft   dw 0                    ; ...and for how many ticks
 ctx     dw 0                    ; BOOM scratch: face centroid
 cty     dw 0
 ctz     dw 0

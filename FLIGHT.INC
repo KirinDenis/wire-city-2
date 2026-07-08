@@ -488,6 +488,84 @@ INPUT:
         mov  word ptr [mrel],0
         inc  byte ptr [pammo]
 @@nrl:
+        ; --- Backspace: the cannon. Hold to fire; a volley lands every
+        ; 2nd tick on whatever sits inside the aiming circle. Each jet
+        ; soaks 2..5 hits (its HP roll) before it comes apart.
+        cmp  byte ptr [guntik],0
+        je   @@gt0
+        dec  byte ptr [guntik]
+@@gt0:  cmp  word ptr [hitft],0
+        je   @@gt1
+        dec  word ptr [hitft]
+@@gt1:  cmp  byte ptr [KEYS+SC_BS],0
+        je   @@gnr
+        cmp  word ptr [gunam],0
+        je   @@gnf
+        mov  byte ptr [guntik],2
+        mov  ax,[lasttk]
+        test ax,1
+        jnz  @@gnf              ; volleys on even ticks
+        dec  word ptr [gunam]
+        xor  si,si              ; who is in the ring?
+@@gsc:  mov  bx,si
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        jne  @@gsn
+        mov  ax,[pax+si]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[paz+si]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        push si
+        call ROTXZ
+        pop  si
+        mov  ax,[rcz]
+        cmp  ax,NEARZ
+        jl   @@gsn
+        cmp  ax,4500            ; cannon reach
+        jg   @@gsn
+        mov  dx,[pay+si]
+        sub  dx,[camy]
+        mov  ax,[rcx]
+        mov  cx,[rcz]
+        push si
+        call PPOINT
+        pop  si
+        jc   @@gsn
+        sub  ax,160
+        jns  @@gh1
+        neg  ax
+@@gh1:  cmp  ax,18
+        jg   @@gsn
+        sub  dx,100
+        jns  @@gh2
+        neg  dx
+@@gh2:  cmp  dx,18
+        jg   @@gsn
+        mov  [hitfx],si         ; hit! sparkle on the victim
+        mov  word ptr [hitft],5
+        mov  bx,si
+        shr  bx,1
+        dec  byte ptr [php+bx]
+        jnz  @@gnf              ; wounded, still flying
+        push si
+        call BOOM
+        pop  si
+        inc  word ptr [psc]
+        jmp  @@gnf
+@@gsn:  add  si,2
+        cmp  si,NPLANE*2
+        jb   @@gsc
+        jmp  @@gnf
+@@gnr:  cmp  word ptr [gunam],250 ; trigger released: the belt feeds in
+        jae  @@gnf
+        inc  word ptr [gunreg]
+        cmp  word ptr [gunreg],8
+        jb   @@gnf
+        mov  word ptr [gunreg],0
+        inc  word ptr [gunam]
+@@gnf:
         call PLANESUPD          ; AI traffic flies on the same clock
         call MSLUPD             ; the missile chases on the same clock
         call AMSLUPD            ; the AI shoots its own war
@@ -609,6 +687,7 @@ CRASHHANDLE:
         mov  byte ptr [abon],0
         mov  byte ptr [pammo],4     ; fresh rails, no missile in flight
         mov  byte ptr [msact],0
+        mov  word ptr [gunam],250   ; and a full cannon belt
 @@w2:   cmp  byte ptr [KEYS+SC_SP],0
         jne  @@w2
         ret
