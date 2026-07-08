@@ -269,56 +269,78 @@ INPUT:
         add  ax,WINDZ
         mov  [camz],ax
 
-        ; --- turbulence, graded by the terrain below ([lgnd]):
-        ; mountains (>= 700) rough -3..+3, open water (< 440) -2/+2 with
-        ; an occasional sinking pull, plains a gentle -1/+1. Roll/pitch
-        ; rocking: 1-in-4 ticks in rough air, 1-in-8 in calm (CX = gate).
-        call RND16
-        mov  bx,ax              ; noise bits, reused below
-        mov  cx,0700h           ; calm rocking gate (3 bits = 1-in-8)
-        mov  ax,[lgnd]
-        cmp  ax,700
+        ; --- turbulence as a slow swell: vertical speed and roll/pitch
+        ; wobble follow ~4.7s / ~7s sines of the BIOS tick, so the plane
+        ; breathes instead of rattling. Amplitude grows over water and
+        ; mountains; only mountain rotor adds an occasional sharp kick.
+        mov  ax,[lasttk]
+        mov  bx,ax
+        add  ax,ax
+        add  ax,bx              ; phase = tick*3 (~4.7 s cycle)
+        call SINQ               ; AX = sin*256
+        mov  cx,1               ; calm-air amplitude
+        mov  bx,[lgnd]
+        cmp  bx,700
         jl   @@t1
-        mov  ax,bx              ; mountain rotor
-        and  ax,6
-        sub  ax,3               ; -3,-1,+1,+3
-        mov  cx,0300h           ; and lively rocking
-        jmp  @@tap
-@@t1:   cmp  ax,440
+        mov  cx,3               ; mountain waves
+        jmp  @@t2
+@@t1:   cmp  bx,440
         jge  @@t2
-        mov  ax,bx              ; air pockets over open water
-        and  ax,4
-        sub  ax,2               ; -2/+2
-        test bx,0C00h
-        jnz  @@tap
-        dec  ax                 ; 1-in-4: the pocket pulls down
-        jmp  @@tap
-@@t2:   mov  ax,bx              ; calm air over the plains
+        mov  cx,2               ; long swell over open water
+@@t2:   imul cx
+        mov  cx,256
+        idiv cx                 ; vertical speed -amp..+amp this tick
+        add  [camy],ax
+        ; roll sway: roll tracks wobble = sin(tick*2)*3/256 via deltas,
+        ; so it cannot drift - the sine integrates back to zero itself
+        mov  ax,[lasttk]
+        add  ax,ax              ; phase = tick*2 (~7 s cycle)
+        call SINQ
+        mov  cx,3
+        imul cx
+        mov  cx,256
+        idiv cx                 ; wobble -3..3
+        mov  bx,ax
+        sub  ax,[wobr]          ; delta since the previous tick
+        mov  [wobr],bx
+        add  ax,[roll]
+        and  ax,255
+        mov  [roll],ax
+        ; pitch sway: opposite phase, smaller
+        mov  ax,[lasttk]
+        add  ax,ax
+        add  ax,128
+        call SINQ
+        mov  cx,2
+        imul cx
+        mov  cx,256
+        idiv cx                 ; wobble -2..2
+        mov  bx,ax
+        sub  ax,[wobp]
+        mov  [wobp],bx
+        add  [pitch],ax
+        ; mountain rotor: a sharp little kick now and then
+        cmp  word ptr [lgnd],700
+        jl   @@t3
+        call RND16
+        test ax,0700h           ; 1-in-8 ticks
+        jnz  @@t3
+        mov  bx,ax
         and  ax,2
         dec  ax                 ; -1/+1
-@@tap:  add  [camy],ax
-        test bx,cx              ; roll rock gate
-        jnz  @@tb2
+        add  [pitch],ax
+        test bx,0800h
+        jz   @@t4
         mov  ax,[roll]
-        test bx,8000h
-        jz   @@tbl
         inc  ax
-        jmp  @@tbr
-@@tbl:  dec  ax
-@@tbr:  and  ax,255
+        and  ax,255
         mov  [roll],ax
-@@tb2:  mov  dx,cx              ; pitch gate = roll gate, other bits
-        mov  cl,3
-        shl  dx,cl
-        test bx,dx
-        jnz  @@tb3
-        mov  ax,[pitch]
-        test bx,4000h
-        jz   @@tbd
-        inc  ax
-        jmp  @@tbu
-@@tbd:  dec  ax
-@@tbu:  mov  [pitch],ax
+        jmp  @@t3
+@@t4:   mov  ax,[roll]
+        dec  ax
+        and  ax,255
+        mov  [roll],ax
+@@t3:
 @@tb3:
         ; --- advance: split vel/16 into horizontal (cos p) and climb (sin p)
         mov  ax,[vel]

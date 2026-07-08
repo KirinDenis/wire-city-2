@@ -55,7 +55,9 @@
                                 ;   (emits jcc short + jmp near; pure 8086)
 
 ; ---- world constants -------------------------------------------------------
-FOCAL   equ 160                 ; projection focal length
+FOCAL   equ 220                 ; projection focal length: ~72 deg horizontal
+                                ; FOV (160 was a 90-deg fisheye - the world
+                                ; read as a diorama, buildings looked tiny)
 CELL    equ 256                 ; grid pitch (doc only; code uses shl/shr 8 and 128)
 BIAS    equ 8192                ; world->cell bias (keeps cell math unsigned)
 RAD     equ 9                   ; building render radius (cells)

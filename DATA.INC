@@ -28,6 +28,8 @@ prevc   db 0                    ; previous C-key state (edge detect)
 mapt    dw 123                  ; minimap top row (rises above the panel)
 resseg  dw 0                    ; segment CITY.DAT is loaded into (CS+2000h)
 pimgo   dw 0                    ; cockpit bitmap offset in resseg (0 = none)
+wobr    dw 0                    ; turbulence: previous roll wobble value
+wobp    dw 0                    ; turbulence: previous pitch wobble value
 ftx     dw 0                    ; font cursor x
 fty     dw 0                    ; font cursor y
 NB      db 6 dup(0)             ; number->text scratch for FNUM
