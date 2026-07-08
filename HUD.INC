@@ -957,6 +957,74 @@ PANELBMP:
 @@rn:   add  si,2
         cmp  si,NPLANE*2
         jb   @@rdr
+        ; missiles on the scope: amber sparks (player's and the AI's)
+        cmp  byte ptr [msact],0
+        je   @@rms
+        mov  ax,[msx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[msz]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        call @@rblip
+@@rms:  xor  si,si
+@@rml:  mov  bx,si
+        cmp  byte ptr [amact+bx],0
+        je   @@rmn
+        add  bx,bx
+        mov  ax,[amx+bx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[amz+bx]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        push si
+        call @@rblip
+        pop  si
+@@rmn:  inc  si
+        cmp  si,NAMSL
+        jb   @@rml
+        jmp  @@rsc
+@@rblip:                        ; plot one amber spark from wdx/wdz
+        call ROTXZ
+        mov  ax,[rcx]
+        cmp  ax,7680
+        jge  @@rbx
+        cmp  ax,-7680
+        jle  @@rbx
+        mov  bx,[rcz]
+        cmp  bx,7680
+        jge  @@rbx
+        cmp  bx,-7680
+        jle  @@rbx
+        mov  cl,9
+        sar  ax,cl
+        sar  bx,cl
+        add  ax,87
+        mov  [dsx],ax
+        mov  ax,171
+        sub  ax,bx
+        call ROW320
+        add  di,[dsx]
+        mov  al,5
+        mov  es:[di],al
+@@rbx:  ret
+@@rsc:  ; scoreboard on the scope: green team, yellow team, own kills
+        mov  byte ptr [COLOR],95
+        mov  word ptr [ftx],53
+        mov  word ptr [fty],155
+        mov  ax,[tscf]
+        call FNUM
+        mov  byte ptr [COLOR],96
+        mov  word ptr [ftx],110
+        mov  word ptr [fty],155
+        mov  ax,[tsch]
+        call FNUM
+        mov  byte ptr [COLOR],8
+        mov  word ptr [ftx],106
+        mov  word ptr [fty],182
+        mov  ax,[psc]
+        call FNUM
         ; missile pips along the radar's bottom edge
         xor  si,si
 @@amo:  mov  ax,si

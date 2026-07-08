@@ -909,6 +909,7 @@ MSLUPD: cmp  byte ptr [msact],0
         cmp  bx,160
         jge  @@pxn
         call BOOM               ; direct hit: SI = the unlucky jet
+        inc  word ptr [psc]     ; chalk one on the canopy
         mov  byte ptr [msact],0
         ret
 @@pxn:  add  si,2
@@ -929,7 +930,12 @@ BOOM:   mov  bx,si
         cmp  ax,si
         jne  @@bk1
         mov  word ptr [locki],0FFFFh
-@@bk1:  mov  di,[wnext]         ; claim a wreck slot
+@@bk1:  test si,2               ; scoreboard: the other team scores
+        jnz  @@bsc
+        inc  word ptr [tsch]    ; a friendly fell
+        jmp  @@bsd
+@@bsc:  inc  word ptr [tscf]    ; a hostile fell
+@@bsd:  mov  di,[wnext]         ; claim a wreck slot
         add  word ptr [wnext],WRKSZ
         cmp  word ptr [wnext],WRKSZ*4
         jb   @@bk2
@@ -1446,7 +1452,7 @@ AMSLUPD:
         je   @@try
         dec  word ptr [aifire]
         jmp  @@fly
-@@try:  mov  word ptr [aifire],48
+@@try:  mov  word ptr [aifire],24
         xor  bx,bx              ; a free launch rail?
 @@fs:   cmp  byte ptr [amact+bx],0
         je   @@have
@@ -1455,10 +1461,8 @@ AMSLUPD:
         jb   @@fs
         jmp  @@fly
 @@have: mov  [wcc],bx           ; slot index
-        call RND16              ; random shooter
-        and  ax,31
-        cmp  ax,NPLANE
-        jae  @@fly
+        call RND16              ; random shooter (first 16 jets)
+        and  ax,15
         add  ax,ax
         mov  si,ax              ; shooter offset
         mov  bx,si
@@ -1482,14 +1486,14 @@ AMSLUPD:
         jns  @@g1
         neg  ax
 @@g1:   mov  bx,ax
-        cmp  bx,7000
+        cmp  bx,10000
         jge  @@tgn
         mov  ax,[paz+di]
         sub  ax,[paz+si]
         jns  @@g2
         neg  ax
 @@g2:   add  bx,ax
-        cmp  bx,7000
+        cmp  bx,10000
         jl   @@shoot
 @@tgn:  add  di,2
         cmp  di,NPLANE*2
