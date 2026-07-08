@@ -1025,6 +1025,12 @@ PANELBMP:
         mov  word ptr [fty],182
         mov  ax,[psc]
         call FNUM
+        mov  byte ptr [COLOR],19 ; damage taken, red, top centre
+        mov  word ptr [ftx],84
+        mov  word ptr [fty],155
+        mov  al,[pdam]
+        xor  ah,ah
+        call FNUM
         mov  byte ptr [COLOR],5 ; cannon rounds, amber
         mov  word ptr [ftx],92
         mov  word ptr [fty],182

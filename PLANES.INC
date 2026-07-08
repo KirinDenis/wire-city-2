@@ -597,7 +597,11 @@ PPOINT: mov  [dsx],ax           ; rx
 ; ---------------------------------------------------------------------------
 LOCKHUD:
         mov  word ptr [dsac],8
-        mov  ax,[locki]
+        cmp  word ptr [phit],0  ; taking fire: the ring flashes red
+        je   @@lh0
+        mov  word ptr [dsac],19
+        jmp  @@ring
+@@lh0:  mov  ax,[locki]
         cmp  ax,0FFFFh
         je   @@ring
         mov  word ptr [dsac],95
@@ -1835,3 +1839,184 @@ GUNDRAW:
         cmp  word ptr [tpi],NTRC
         jb   @@gl
         ret
+
+; ---------------------------------------------------------------------------
+;  AIGUN - knife-range strafing. Every ~0.8 s a random living jet with an
+;  enemy (or the player, hostiles only) within 2500 fires a 4-round burst
+;  into the shared tracer pool and rolls the dice: 1-in-4 bursts land a
+;  hit. Jets lose HP down to the usual BOOM; the player soaks 8 hits,
+;  flashes the ring red, and rides the crash screen on the last one.
+; ---------------------------------------------------------------------------
+AIGUN:  cmp  word ptr [aigt],0
+        je   @@go
+        dec  word ptr [aigt]
+        ret
+@@go:   mov  word ptr [aigt],14
+        call RND16
+        and  ax,15              ; shooter among the first 16
+        add  ax,ax
+        mov  si,ax
+        mov  bx,si
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        jne  @@no
+        test si,2               ; hostiles check the player first
+        jz   @@ai
+        mov  ax,[camx]
+        sub  ax,[pax+si]
+        jns  @@p1
+        neg  ax
+@@p1:   cmp  ax,2500
+        jge  @@ai
+        mov  bx,ax
+        mov  ax,[camz]
+        sub  ax,[paz+si]
+        jns  @@p2
+        neg  ax
+@@p2:   add  bx,ax
+        cmp  bx,2500
+        jge  @@ai
+        mov  di,0FFFFh          ; target: the player
+        jmp  @@fire
+@@ai:   mov  dx,si              ; find a living enemy in knife range
+        and  dx,2
+        xor  dx,2
+        xor  di,di
+@@tg:   mov  bx,di
+        and  bx,2
+        cmp  bx,dx
+        jne  @@tn
+        mov  bx,di
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        jne  @@tn
+        mov  ax,[pax+di]
+        sub  ax,[pax+si]
+        jns  @@g1
+        neg  ax
+@@g1:   mov  bx,ax
+        cmp  bx,2500
+        jge  @@tn
+        mov  ax,[paz+di]
+        sub  ax,[paz+si]
+        jns  @@g2
+        neg  ax
+@@g2:   add  bx,ax
+        cmp  bx,2500
+        jl   @@fire
+@@tn:   add  di,2
+        cmp  di,NPLANE*2
+        jb   @@tg
+@@no:   ret
+@@fire: ; direction to the target
+        cmp  di,0FFFFh
+        jne  @@tt
+        mov  ax,[camx]
+        sub  ax,[pax+si]
+        mov  [ctx],ax
+        mov  ax,[camy]
+        sub  ax,[pay+si]
+        mov  [cty],ax
+        mov  ax,[camz]
+        sub  ax,[paz+si]
+        mov  [ctz],ax
+        jmp  @@dir
+@@tt:   mov  ax,[pax+di]
+        sub  ax,[pax+si]
+        mov  [ctx],ax
+        mov  ax,[pay+di]
+        sub  ax,[pay+si]
+        mov  [cty],ax
+        mov  ax,[paz+di]
+        sub  ax,[paz+si]
+        mov  [ctz],ax
+@@dir:  mov  bx,[ctx]           ; m = max of the absolutes
+        or   bx,bx
+        jns  @@m1
+        neg  bx
+@@m1:   mov  ax,[cty]
+        or   ax,ax
+        jns  @@m2
+        neg  ax
+@@m2:   cmp  ax,bx
+        jle  @@m3
+        mov  bx,ax
+@@m3:   mov  ax,[ctz]
+        or   ax,ax
+        jns  @@m4
+        neg  ax
+@@m4:   cmp  ax,bx
+        jle  @@m5
+        mov  bx,ax
+@@m5:   test bx,bx
+        jz   @@no               ; on top of each other: hold fire
+        mov  [wcc],bx           ; m
+        ; ---- a 4-round burst into the shared tracer pool ----
+        mov  word ptr [tpi],4
+@@bs:   mov  bx,[trnext]
+        inc  word ptr [trnext]
+        and  word ptr [trnext],NTRC-1
+        mov  byte ptr [trcact+bx],1
+        add  bx,bx
+        mov  word ptr [trlif+bx],24
+        mov  ax,[pax+si]
+        mov  [tcx+bx],ax
+        mov  ax,[pay+si]
+        sub  ax,10
+        mov  [tcy+bx],ax
+        mov  ax,[paz+si]
+        mov  [tcz+bx],ax
+        mov  ax,[ctx]           ; velocity = dir*150/m + spread
+        mov  cx,150
+        imul cx
+        idiv word ptr [wcc]
+        mov  [trvx+bx],ax
+        mov  ax,[cty]
+        mov  cx,150
+        imul cx
+        idiv word ptr [wcc]
+        mov  [trvy+bx],ax
+        mov  ax,[ctz]
+        mov  cx,150
+        imul cx
+        idiv word ptr [wcc]
+        mov  [trvz+bx],ax
+        push bx
+        call RND16
+        pop  bx
+        and  ax,7
+        sub  ax,3
+        add  [trvx+bx],ax
+        push bx
+        call RND16
+        pop  bx
+        and  ax,7
+        sub  ax,3
+        add  [trvy+bx],ax
+        push bx
+        call RND16
+        pop  bx
+        and  ax,7
+        sub  ax,3
+        add  [trvz+bx],ax
+        dec  word ptr [tpi]
+        jnz  @@bs
+        ; ---- the dice: 1-in-4 bursts connect ----
+        call RND16
+        and  ax,3
+        jnz  @@no2
+        cmp  di,0FFFFh
+        jne  @@hai
+        inc  byte ptr [pdam]    ; the player takes one
+        mov  word ptr [phit],6
+        cmp  byte ptr [pdam],8
+        jb   @@no2
+        call CRASHHANDLE        ; shot down (resets pdam itself)
+        ret
+@@hai:  mov  bx,di
+        shr  bx,1
+        dec  byte ptr [php+bx]
+        jnz  @@no2
+        mov  si,di              ; the last hit: BOOM wants SI
+        call BOOM
+@@no2:  ret

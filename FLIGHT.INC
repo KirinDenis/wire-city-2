@@ -511,8 +511,11 @@ INPUT:
         je   @@gt0
         dec  byte ptr [guntik]
 @@gt0:  cmp  word ptr [hitft],0
-        je   @@gt1
+        je   @@gt0a
         dec  word ptr [hitft]
+@@gt0a: cmp  word ptr [phit],0
+        je   @@gt1
+        dec  word ptr [phit]
 @@gt1:  cmp  byte ptr [KEYS+SC_SP],0
         je   @@gnr
         cmp  word ptr [gunam],0
@@ -659,6 +662,7 @@ INPUT:
         call MSLUPD             ; the missile chases on the same clock
         call TRCUPD             ; tracer rounds fly on the same clock
         call AMSLUPD            ; the AI shoots its own war
+        call AIGUN              ; ...and strafes at knife range
         call WRECKUPD           ; debris falls on the same clock
         ret
 
@@ -778,6 +782,7 @@ CRASHHANDLE:
         mov  byte ptr [pammo],4     ; fresh rails, no missile in flight
         mov  byte ptr [msact],0
         mov  word ptr [gunam],250   ; and a full cannon belt
+        mov  byte ptr [pdam],0      ; patched up
 @@w2:   cmp  byte ptr [KEYS+SC_SP],0
         jne  @@w2
         ret

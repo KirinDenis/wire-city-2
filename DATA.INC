@@ -142,6 +142,9 @@ ampz    dw NAMSL dup(0)
 amtgt   dw NAMSL dup(0)         ; target plane offset
 amlife  dw NAMSL dup(0)         ; self-destruct timer
 aifire  dw 90                   ; cooldown until somebody opens fire
+aigt    dw 60                   ; cooldown until somebody strafes
+pdam    db 0                    ; player damage taken (8 = shot down)
+phit    dw 0                    ; player hit flash timer
 tscf    dw 0                    ; team score: hostiles downed
 tsch    dw 0                    ; team score: friendlies downed
 psc     dw 0                    ; personal kills
