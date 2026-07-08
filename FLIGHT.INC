@@ -269,6 +269,39 @@ INPUT:
         add  ax,WINDZ
         mov  [camz],ax
 
+        ; --- turbulence: random bumps so the air feels alive. Vertical
+        ; jolt -3..+3 every tick; over water ([lgnd] < 440 = sea level)
+        ; the pockets are twice as deep and pull down a little. Roll and
+        ; pitch get a +-1 rock on ~1/4 of the ticks each.
+        call RND16              ; AX = noise, BX-safe bits reused below
+        mov  bx,ax
+        and  ax,6               ; 0,2,4,6
+        sub  ax,3               ; -3,-1,+1,+3
+        cmp  word ptr [lgnd],440
+        jge  @@tb1
+        add  ax,ax              ; air pocket over open water...
+        dec  ax                 ; ...with a sinking bias
+@@tb1:  add  [camy],ax
+        test bx,0300h           ; both bits clear: 1-in-4 roll rock
+        jnz  @@tb2
+        mov  ax,[roll]
+        test bx,0400h
+        jz   @@tbl
+        inc  ax
+        jmp  @@tbr
+@@tbl:  dec  ax
+@@tbr:  and  ax,255
+        mov  [roll],ax
+@@tb2:  test bx,1800h           ; other bits: 1-in-4 pitch bump
+        jnz  @@tb3
+        mov  ax,[pitch]
+        test bx,2000h
+        jz   @@tbd
+        inc  ax
+        jmp  @@tbu
+@@tbd:  dec  ax
+@@tbu:  mov  [pitch],ax
+@@tb3:
         ; --- advance: split vel/16 into horizontal (cos p) and climb (sin p)
         mov  ax,[vel]
         mov  cl,4
@@ -312,6 +345,21 @@ COLLIDE:
         ; --- terrain collision first: bilinear ground height under camera ---
         call TERRH              ; AX = ground height at (camx,camz)
         mov  [lgnd],ax          ; remembered for the TERR caution light
+        ; --- ground effect: within 250 units of the surface the wing rides
+        ; its own compressed air, pushing up harder the lower you get.
+        ; Needs airflow (vel >= 150), so a stalled drop still hits dirt.
+        mov  bx,[camy]
+        sub  bx,ax              ; height above ground
+        cmp  bx,250
+        jge  @@gfx
+        cmp  word ptr [vel],150
+        jl   @@gfx
+        mov  ax,250
+        sub  ax,bx              ; cushion grows as the gap shrinks
+        mov  cl,4
+        shr  ax,cl              ; up to ~15 units of lift per tick
+        add  [camy],ax
+@@gfx:  mov  ax,[lgnd]
         add  ax,14              ; hull clearance above the slope
         cmp  [camy],ax
         jge  @@terok
