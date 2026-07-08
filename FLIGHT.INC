@@ -24,16 +24,24 @@ INPUT:
 
         ; --- throttle: W up, S down; A holds the afterburner ---
         cmp  byte ptr [KEYS+SC_W],0
+        jne  @@tup
+        cmp  byte ptr [KEYS+SC_NPP],0
+        jne  @@tup
+        cmp  byte ptr [KEYS+SC_EQ],0
         je   @@tw
-        mov  ax,[throt]
+@@tup:  mov  ax,[throt]
         add  ax,2
         cmp  ax,64
         jle  @@tw1
         mov  ax,64
 @@tw1:  mov  [throt],ax
 @@tw:   cmp  byte ptr [KEYS+SC_S],0
+        jne  @@tdn
+        cmp  byte ptr [KEYS+SC_NPM],0
+        jne  @@tdn
+        cmp  byte ptr [KEYS+SC_MIN],0
         je   @@ts
-        mov  ax,[throt]
+@@tdn:  mov  ax,[throt]
         sub  ax,2
         jns  @@ts1
         xor  ax,ax
@@ -144,14 +152,22 @@ INPUT:
         ; rudder: 1 unit/tick = a full circle in ~14 s. Good for lining
         ; up a runway or a gun run without dropping a wing.
         cmp  byte ptr [KEYS+SC_Q],0
+        jne  @@rdl
+        cmp  byte ptr [KEYS+SC_Z],0
+        jne  @@rdl
+        cmp  byte ptr [KEYS+SC_NP7],0
         je   @@rdq
-        mov  ax,[heading]
+@@rdl:  mov  ax,[heading]
         dec  ax
         and  ax,255
         mov  [heading],ax
 @@rdq:  cmp  byte ptr [KEYS+SC_E],0
+        jne  @@rdr
+        cmp  byte ptr [KEYS+SC_C],0
+        jne  @@rdr
+        cmp  byte ptr [KEYS+SC_NP9],0
         je   @@rde
-        mov  ax,[heading]
+@@rdr:  mov  ax,[heading]
         inc  ax
         and  ax,255
         mov  [heading],ax
@@ -268,8 +284,8 @@ INPUT:
         xor  byte ptr [daymode],1
         call APPLYPAL
 @@nn:
-        ; --- C key: cockpit panel on/off (edge-triggered) ---
-        mov  al,[KEYS+SC_C]
+        ; --- F2: cockpit panel on/off (edge-triggered; C is rudder now) ---
+        mov  al,[KEYS+SC_F2]
         cmp  al,[prevc]
         je   @@ncp
         mov  [prevc],al
@@ -416,9 +432,9 @@ INPUT:
         mov  bx,256
         idiv bx
         add  [camz],ax
-        ; --- Space: fire a missile (edge). Homing on the lock, straight
-        ; down the nose otherwise. One in the air at a time.
-        mov  al,[KEYS+SC_SP]
+        ; --- Backspace: fire a missile (edge; sits right above Enter =
+        ; lock). Homing on the lock, straight down the nose otherwise.
+        mov  al,[KEYS+SC_BS]
         cmp  al,[prevf]
         je   @@nfr
         mov  [prevf],al
@@ -488,7 +504,7 @@ INPUT:
         mov  word ptr [mrel],0
         inc  byte ptr [pammo]
 @@nrl:
-        ; --- Backspace: the cannon. Hold to fire; a volley lands every
+        ; --- Space: the cannon. Hold to fire; a volley lands every
         ; 2nd tick on whatever sits inside the aiming circle. Each jet
         ; soaks 2..5 hits (its HP roll) before it comes apart.
         cmp  byte ptr [guntik],0
@@ -497,7 +513,7 @@ INPUT:
 @@gt0:  cmp  word ptr [hitft],0
         je   @@gt1
         dec  word ptr [hitft]
-@@gt1:  cmp  byte ptr [KEYS+SC_BS],0
+@@gt1:  cmp  byte ptr [KEYS+SC_SP],0
         je   @@gnr
         cmp  word ptr [gunam],0
         je   @@gnf

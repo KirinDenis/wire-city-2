@@ -112,7 +112,15 @@ SC_Q    equ 10h                 ; rudder left
 SC_E    equ 12h                 ; rudder right
 SC_ENT  equ 1Ch                 ; target lock
 SC_M    equ 32h                 ; right MFD mode toggle
-SC_BS   equ 0Eh                 ; cannon trigger (Backspace)
+SC_BS   equ 0Eh                 ; missile launch (Backspace, above Enter)
+SC_Z    equ 2Ch                 ; rudder left
+SC_F2   equ 3Ch                 ; cockpit view toggle
+SC_NP7  equ 47h                 ; numpad 7: rudder left
+SC_NP9  equ 49h                 ; numpad 9: rudder right
+SC_NPP  equ 4Eh                 ; numpad +: throttle up
+SC_NPM  equ 4Ah                 ; numpad -: throttle down
+SC_EQ   equ 0Dh                 ; main-row =/+: throttle up
+SC_MIN  equ 0Ch                 ; main-row -: throttle down
 WRKSZ   equ 292                 ; wreck slot size (see the BSS block)
 WFP     equ 4                   ; face records offset inside a slot
 WCO     equ 100                 ; corner offsets offset inside a slot                 ; C: toggle cockpit panel
