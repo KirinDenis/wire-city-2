@@ -6,7 +6,41 @@
 ;  intersection with the Z=NEARZ plane (APPENDISECT). This is what lets a
 ;  building you fly past get sliced cleanly instead of popping out of view.
 ; ============================================================================
+; PITCH4 - rotate the 4 face vertices IY/IZ about the camera X axis by the
+; current pitch. One shared spot: every filled/stroked polygon passes here,
+; so the whole world pitches for loops and dives. Clobbers AX,BX,CX,DI.
+PITCH4: push si
+        xor  si,si
+@@l:    mov  ax,[IY+si]
+        imul word ptr [pcos]
+        mov  bx,256
+        idiv bx
+        mov  cx,ax              ; y*pcos/256
+        mov  ax,[IZ+si]
+        imul word ptr [psin]
+        mov  bx,256
+        idiv bx
+        sub  cx,ax              ; y' = (y*pcos - z*psin)/256
+        mov  ax,[IY+si]
+        imul word ptr [psin]
+        mov  bx,256
+        idiv bx
+        mov  di,ax              ; y*psin/256
+        mov  ax,[IZ+si]
+        imul word ptr [pcos]
+        mov  bx,256
+        idiv bx
+        add  ax,di              ; z' = (y*psin + z*pcos)/256
+        mov  [IZ+si],ax
+        mov  [IY+si],cx
+        add  si,2
+        cmp  si,8
+        jl   @@l
+        pop  si
+        ret
+
 CLIPNEAR:
+        call PITCH4             ; apply pitch before the near-plane clip
         mov  word ptr [oc],0
         mov  word ptr [ci],0
 @@cl:   mov  ax,[ci]

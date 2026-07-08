@@ -105,10 +105,10 @@ GRID:   mov  byte ptr [COLOR],6
         jle  @@gz
         ret
 
-; ----- buildings: painter's algorithm, far -> near by squared cell distance --
-;  Outer loop walks the d^2 bucket from MAXD2 down to 0; inner scan renders the
-;  cells whose cdi*cdi+cdj*cdj matches the current bucket. [ring] = bucket.
-;  (camgi/camgj are also set in RENDER before GRID; recomputed here too.)
+; ----- buildings: one linear far->near walk of the BORD order table ---------
+;  2401 cells to radius 24; empty cells drop out of RENDERCELL quickly, and
+;  the clustered city keeps the populated count low. Real buildings all the
+;  way to the horizon - the megablock stand-ins are gone.
 BUILDINGS:
         mov  ax,[camx]          ; camera cell = (pos+BIAS)>>8  (shr = floor /CELL)
         add  ax,BIAS
@@ -120,35 +120,19 @@ BUILDINGS:
         mov  cl,8
         shr  ax,cl
         mov  [camgj],ax
-        mov  word ptr [ring],MAXD2
-@@d2:   mov  word ptr [cdi],-RAD
-@@iloop:
-        mov  word ptr [cdj],-RAD
-@@jloop:
-        mov  ax,[cdi]           ; cdi^2 + cdj^2
-        imul ax
-        mov  bx,ax
-        mov  ax,[cdj]
-        imul ax
-        add  ax,bx
-        cmp  ax,[ring]
-        jne  @@jnext
-        call RENDERCELL         ; this cell is in the current distance bucket
-@@jnext:
-        mov  ax,[cdj]
-        inc  ax
-        mov  [cdj],ax
-        cmp  ax,RAD
-        jle  @@jloop
-        mov  ax,[cdi]
-        inc  ax
+        mov  word ptr [ring],0  ; reuse [ring] as the BORD index
+@@bl:   mov  si,[ring]
+        add  si,si
+        mov  al,[BORD+si]       ; di (signed)
+        cbw
         mov  [cdi],ax
-        cmp  ax,RAD
-        jle  @@iloop
-        dec  word ptr [ring]
-        mov  ax,[ring]
-        cmp  ax,0
-        jge  @@d2
+        mov  al,[BORD+si+1]     ; dj (signed)
+        cbw
+        mov  [cdj],ax
+        call RENDERCELL
+        inc  word ptr [ring]
+        cmp  word ptr [ring],2401
+        jl   @@bl
         ret
 
 ; ============================================================================

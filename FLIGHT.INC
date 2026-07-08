@@ -22,11 +22,33 @@ INPUT:
         mov  ax,64
 @@r1:   mov  [rho],ax
 
-        ; --- engine: burn fuel; jet thrust breathes air: T*(rho+256)/512 ---
+        ; --- throttle: W up, S down; A holds the afterburner ---
+        cmp  byte ptr [KEYS+SC_W],0
+        je   @@tw
+        mov  ax,[throt]
+        add  ax,2
+        cmp  ax,64
+        jle  @@tw1
+        mov  ax,64
+@@tw1:  mov  [throt],ax
+@@tw:   cmp  byte ptr [KEYS+SC_S],0
+        je   @@ts
+        mov  ax,[throt]
+        sub  ax,2
+        jns  @@ts1
+        xor  ax,ax
+@@ts1:  mov  [throt],ax
+@@ts:   mov  byte ptr [abon],0
+        cmp  byte ptr [KEYS+SC_A],0
+        je   @@ab0
+        mov  byte ptr [abon],1  ; afterburner lit (needs fuel, checked below)
+@@ab0:
+        ; --- engine: burn fuel; jet thrust breathes air: T*(rho+256)/512,
+        ; scaled by throttle/64; afterburner doubles it and drinks 4x fuel ---
         xor  cx,cx              ; default thrust 0 (flame-out)
         mov  ax,[fuel]
         test ax,ax
-        jz   @@noth
+        jz   @@nofu
         dec  ax
         mov  [fuel],ax
         mov  ax,[rho]
@@ -36,7 +58,20 @@ INPUT:
         imul bx                 ; DX:AX = THRUST*(rho+256)
         mov  bx,512
         idiv bx
-        mov  cx,ax              ; cx = effective thrust
+        imul word ptr [throt]   ; * throttle
+        mov  bx,64
+        idiv bx                 ; /64
+        mov  cx,ax
+        cmp  byte ptr [abon],0
+        je   @@noth
+        add  cx,cx              ; afterburner: double thrust...
+        mov  ax,[fuel]          ; ...and burn 3 extra units
+        sub  ax,3
+        jns  @@abf
+        xor  ax,ax
+@@abf:  mov  [fuel],ax
+        jmp  @@noth
+@@nofu: mov  byte ptr [abon],0  ; tanks dry: no burner glow either
 @@noth: mov  [teff],cx
 
         ; --- drag = vel*rho/DRAGK ; net force = thrust - drag ---
@@ -67,128 +102,135 @@ INPUT:
         xor  ax,ax              ; airspeed never negative
 @@v0:   mov  [vel],ax
 
-        ; --- turn (yaw) ---
-        mov  word ptr [tmpi],0  ; tmpi = turn direction (-1/0/+1)
+        ; --- ROLL: left/right arrows spin the ailerons, full 360 degrees ---
+        mov  word ptr [tmpi],0
         cmp  byte ptr [KEYS+SC_LF],0
         je   @@nl
-        mov  ax,[heading]       ; turn left
-        sub  ax,TURNV
+        mov  ax,[roll]
+        sub  ax,3               ; roll rate: full barrel roll in ~4.7 s
         and  ax,255
-        mov  [heading],ax
-        mov  word ptr [tmpi],-1
+        mov  [roll],ax
+        mov  word ptr [tmpi],1
 @@nl:   cmp  byte ptr [KEYS+SC_RT],0
         je   @@nr
-        mov  ax,[heading]       ; turn right
-        add  ax,TURNV
+        mov  ax,[roll]
+        add  ax,3
+        and  ax,255
+        mov  [roll],ax
+        mov  word ptr [tmpi],1
+@@nr:   cmp  word ptr [tmpi],0  ; hands off: dihedral stability rights the
+        jne  @@rlp              ; plane, rolling the SHORT way back to level
+        mov  ax,[roll]
+        test ax,ax
+        jz   @@rlp
+        cmp  ax,128
+        ja   @@rlup             ; 129..255: roll upward to 256 (= level)
+        sub  ax,2               ; 1..128: roll down toward 0
+        jns  @@rls1
+        xor  ax,ax
+@@rls1: cmp  ax,2               ; snap the last couple of units
+        ja   @@rls2
+        xor  ax,ax
+@@rls2: mov  [roll],ax
+        jmp  @@rlp
+@@rlup: add  ax,2
+        and  ax,255
+        cmp  ax,254
+        jb   @@rlu2
+        xor  ax,ax
+@@rlu2: mov  [roll],ax
+@@rlp:
+        ; --- PITCH: real fighter controls. Pull (DOWN key) rotates the nose
+        ; through the roll plane: pitch_rate = q*cos(roll), yaw = q*sin(roll).
+        ; Wings level -> loop; knife-edge -> flat turn; inverted -> split-S.
+        xor  cx,cx              ; q = elevator input
+        cmp  byte ptr [KEYS+SC_DN],0
+        je   @@q1
+        mov  cx,2               ; pull: nose up
+@@q1:   cmp  byte ptr [KEYS+SC_UP],0
+        je   @@q2
+        sub  cx,2               ; push: nose down
+@@q2:   jcxz @@nopq
+        mov  ax,[vel]           ; turning bleeds a bit of airspeed
+        sub  ax,TURNDRG
+        jns  @@qd
+        xor  ax,ax
+@@qd:   mov  [vel],ax
+        push cx
+        mov  ax,[roll]          ; cr = cos(roll)
+        add  ax,64
+        call SINQ
+        pop  cx
+        push cx
+        imul cx                 ; q*cos(roll)*256
+        mov  bx,256
+        idiv bx
+        add  [pitch],ax
+        mov  ax,[roll]          ; sr = sin(roll)
+        call SINQ
+        pop  cx
+        imul cx                 ; q*sin(roll)*256
+        mov  bx,256
+        idiv bx
+        add  ax,[heading]
         and  ax,255
         mov  [heading],ax
-        mov  word ptr [tmpi],1
-@@nr:   ; induced drag: turning bleeds a little airspeed
-        mov  ax,[tmpi]
+        jmp  @@gflip            ; active stick: skip the self-trim
+@@nopq: ; stick released: longitudinal stability eases the nose back level
+        mov  ax,[pitch]
         test ax,ax
-        jz   @@ntd
-        mov  ax,[vel]
-        sub  ax,TURNDRG
-        jns  @@td1
-        xor  ax,ax
-@@td1:  mov  [vel],ax
-@@ntd:  ; bank toward target (roll follows turn, decays to 0)
-        mov  ax,[tmpi]
-        test ax,ax
-        jz   @@decay
-        jg   @@bankr
-        ; bank left: roll -> -BANKMAX
+        jz   @@gflip
+        jg   @@tr1
+        inc  ax
+        jmp  @@tr2
+@@tr1:  dec  ax
+@@tr2:  mov  [pitch],ax
+@@gflip:
+        ; --- gimbal flip at the vertical (the classic Euler trick): going
+        ; over the top swaps to inverted flight so the loop closes smoothly
+        mov  ax,[pitch]
+        cmp  ax,64
+        jle  @@pf1
+        mov  bx,128
+        sub  bx,ax
+        mov  [pitch],bx
+        jmp  @@pflip
+@@pf1:  cmp  ax,-64
+        jge  @@pok
+        mov  bx,-128
+        sub  bx,ax
+        mov  [pitch],bx
+@@pflip:
+        mov  ax,[heading]
+        add  ax,128
+        and  ax,255
+        mov  [heading],ax
         mov  ax,[roll]
-        sub  ax,BANKSTP
-        cmp  ax,-BANKMAX
-        jge  @@bset
-        mov  ax,-BANKMAX
-        jmp  @@bset
-@@bankr:
-        mov  ax,[roll]
-        add  ax,BANKSTP
-        cmp  ax,BANKMAX
-        jle  @@bset
-        mov  ax,BANKMAX
-        jmp  @@bset
-@@decay:
-        mov  ax,[roll]          ; return roll toward 0
-        test ax,ax
-        jz   @@bset
-        jg   @@dpos
-        add  ax,BANKSTP
-        cmp  ax,0
-        jle  @@bset
-        xor  ax,ax
-        jmp  @@bset
-@@dpos: sub  ax,BANKSTP
-        cmp  ax,0
-        jge  @@bset
-        xor  ax,ax
-@@bset: mov  [roll],ax
+        add  ax,128
+        and  ax,255
+        mov  [roll],ax
+@@pok:
 
-        ; --- pitch & energy (yoke convention: UP = nose down = dive) ---
-        ; vertical rate scales with airspeed: vrate = vel/40
-        mov  ax,[vel]
-        xor  dx,dx
-        mov  bx,40
-        div  bx
-        mov  [vrate],ax
-        cmp  byte ptr [KEYS+SC_UP],0
-        je   @@nu
-        mov  ax,[camy]          ; dive: lose altitude...
-        sub  ax,[vrate]
-        mov  [camy],ax
-        mov  ax,[vrate]         ; ...and trade it for airspeed (energy)
-        mov  cl,2
-        shr  ax,cl
-        add  [vel],ax
-@@nu:   cmp  byte ptr [KEYS+SC_DN],0
-        je   @@nd
-        mov  ax,[vel]           ; climb only above stall speed
-        cmp  ax,VSTALL
-        jl   @@nd
-        mov  ax,[camy]          ; climb: gain altitude...
-        add  ax,[vrate]
-        mov  [camy],ax
-        mov  ax,[vrate]         ; ...paying with airspeed (energy)
-        shr  ax,1
-        sub  [vel],ax
-@@nd:
-        ; --- pitch visual: horizon eases toward 78 (dive) / 122 (climb) /100 ---
-        mov  cx,100             ; neutral
-        cmp  byte ptr [KEYS+SC_UP],0
-        je   @@h1
-        mov  cx,78              ; nose down -> horizon rises on screen
-@@h1:   cmp  byte ptr [KEYS+SC_DN],0
-        je   @@h2
-        mov  cx,122             ; nose up -> horizon sinks on screen
-@@h2:   mov  ax,[horiz]
-        cmp  ax,cx
-        je   @@hd
-        jl   @@hup
-        sub  ax,3               ; ease down toward target
-        cmp  ax,cx
-        jge  @@hs
-        mov  ax,cx
-        jmp  @@hs
-@@hup:  add  ax,3               ; ease up toward target
-        cmp  ax,cx
-        jle  @@hs
-        mov  ax,cx
-@@hs:   mov  [horiz],ax
-@@hd:
-        ; --- stall: below VSTALL the nose drops on its own ---
+        ; --- energy: climbing costs airspeed, diving buys it back ---
+        mov  ax,[psin]          ; sin(pitch)*256
+        mov  bx,24
+        imul bx                 ; DX:AX = psin*24
+        mov  bx,256
+        idiv bx                 ; -24..24 per tick
+        mov  bx,[vel]
+        sub  bx,ax
+        jns  @@ve
+        xor  bx,bx
+@@ve:   mov  [vel],bx
+        ; --- stall: below VSTALL the nose falls through on its own ---
         mov  ax,[vel]
         cmp  ax,VSTALL
         jge  @@nst
-        mov  bx,VSTALL
-        sub  bx,ax
-        mov  cl,3
-        shr  bx,cl              ; sink = (VSTALL-vel)/8
-        mov  ax,[camy]
-        sub  ax,bx
-        mov  [camy],ax
+        mov  ax,[pitch]
+        cmp  ax,-48
+        jle  @@nst
+        dec  ax
+        mov  [pitch],ax
 @@nst:
         ; --- altitude clamp [24, CEIL] ---
         mov  ax,[camy]
@@ -218,10 +260,19 @@ INPUT:
         add  ax,WINDZ
         mov  [camz],ax
 
-        ; --- advance along heading at vel/16 units per tick ---
+        ; --- advance: split vel/16 into horizontal (cos p) and climb (sin p)
         mov  ax,[vel]
         mov  cl,4
-        shr  ax,cl
+        shr  ax,cl              ; total speed, units per tick
+        push ax
+        imul word ptr [psin]    ; climb component
+        mov  bx,256
+        idiv bx
+        add  [camy],ax
+        pop  ax
+        imul word ptr [pcos]    ; horizontal component
+        mov  bx,256
+        idiv bx
         mov  [fwd],ax
         mov  ax,[hsin]
         imul word ptr [fwd]     ; DX:AX = hsin * fwd
@@ -329,7 +380,9 @@ CRASHHANDLE:
         mov  word ptr [roll],0      ; so we don't reappear inside the same tower
         mov  word ptr [vel],CRUISE  ; fresh jet: cruise speed + full tank
         mov  word ptr [fuel],FUELMAX
-        mov  word ptr [horiz],100   ; level pitch
+        mov  word ptr [pitch],0     ; wings level, nose on the horizon
+        mov  word ptr [throt],64    ; military power
+        mov  byte ptr [abon],0
 @@w2:   cmp  byte ptr [KEYS+SC_SP],0
         jne  @@w2
         ret

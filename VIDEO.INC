@@ -30,32 +30,47 @@ APPLYPAL:
 ; rotated parallelograms (SCANPOLY) about (160,horiz), so banking the plane
 ; banks the sky/ground split with the rest of the scene. Bands overlap by 2
 ; v-units so integer rounding can't leave unpainted seams.
+; F-15 SE style horizon: four sky steps brightening toward a white haze
+; line, then the far ground DARK against it, then the normal green. Bands
+; overlap by 2 v-units so rounding never leaves seams; pitch (pofs) and
+; roll (BGCORN) move the whole stack as one.
 CLEARBUF:
-        mov  byte ptr [COLOR],7 ; upper sky
-        mov  word ptr [bgv0],-400
-        mov  word ptr [bgv1],-15
+        mov  byte ptr [COLOR],7 ; deep upper sky
+        mov  word ptr [bgv0],-3000
+        mov  word ptr [bgv1],-58
         call BGBAND
-        mov  byte ptr [COLOR],9 ; lighter sky band near the horizon
-        mov  word ptr [bgv0],-17
-        mov  word ptr [bgv1],-5
+        mov  byte ptr [COLOR],26 ; sky step 2
+        mov  word ptr [bgv0],-60
+        mov  word ptr [bgv1],-32
         call BGBAND
-        mov  byte ptr [COLOR],12 ; haze strip on the horizon
-        mov  word ptr [bgv0],-7
-        mov  word ptr [bgv1],1
+        mov  byte ptr [COLOR],9 ; sky step 3
+        mov  word ptr [bgv0],-34
+        mov  word ptr [bgv1],-14
         call BGBAND
-        mov  byte ptr [COLOR],11 ; washed-out distant ground
-        mov  word ptr [bgv0],-1
-        mov  word ptr [bgv1],11
+        mov  byte ptr [COLOR],27 ; sky step 4, brightest blue
+        mov  word ptr [bgv0],-16
+        mov  word ptr [bgv1],-4
         call BGBAND
-        mov  byte ptr [COLOR],10 ; ground
-        mov  word ptr [bgv0],9
-        mov  word ptr [bgv1],400
+        mov  byte ptr [COLOR],12 ; white haze on the horizon line
+        mov  word ptr [bgv0],-6
+        mov  word ptr [bgv1],2
+        call BGBAND
+        mov  byte ptr [COLOR],28 ; far ground reads DARK against the haze
+        mov  word ptr [bgv0],0
+        mov  word ptr [bgv1],16
+        call BGBAND
+        mov  byte ptr [COLOR],10 ; normal ground
+        mov  word ptr [bgv0],14
+        mov  word ptr [bgv1],3000
         call BGBAND
         ret
 
 ; one background band: a parallelogram spanning u=-600..600 along the horizon
 ; direction, v=[bgv0..bgv1] across it, rotated by roll about (160,horiz).
 BGBAND: mov  word ptr [NPOLY],4
+        mov  ax,[pofs]          ; pitch slides the whole band stack
+        add  [bgv0],ax
+        add  [bgv1],ax
         mov  ax,-600
         mov  bx,[bgv0]
         xor  si,si

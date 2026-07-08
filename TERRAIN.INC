@@ -507,8 +507,27 @@ TERRAIN:
         mov  byte ptr [COLOR],15
         jmp  @@fill
 @@rock: mov  byte ptr [COLOR],13
-@@fill: call FACEFILL
-        ; near quads: subtle grid stroke so low flight reads speed
+@@fill: ; PITCH4 (inside FACEFILL's clip) rotates IY/IZ in place; stash them
+        ; so the stroke pass below starts from unpitched vertices, not
+        ; double-pitched ones (that was the "grid drifts away" bug).
+        mov  ax,[IY]
+        mov  [SIY],ax
+        mov  ax,[IY+2]
+        mov  [SIY+2],ax
+        mov  ax,[IY+4]
+        mov  [SIY+4],ax
+        mov  ax,[IY+6]
+        mov  [SIY+6],ax
+        mov  ax,[IZ]
+        mov  [SIZ],ax
+        mov  ax,[IZ+2]
+        mov  [SIZ+2],ax
+        mov  ax,[IZ+4]
+        mov  [SIZ+4],ax
+        mov  ax,[IZ+6]
+        mov  [SIZ+6],ax
+        call FACEFILL
+        ; near quads: dark relief edges so low flight reads the slopes
         mov  ax,[tta]
         sub  ax,NR
         cmp  ax,-3
@@ -521,7 +540,23 @@ TERRAIN:
         jl   @@next
         cmp  ax,2
         jg   @@next
-        mov  byte ptr [COLOR],6
+        mov  ax,[SIY]           ; restore the unpitched vertices
+        mov  [IY],ax
+        mov  ax,[SIY+2]
+        mov  [IY+2],ax
+        mov  ax,[SIY+4]
+        mov  [IY+4],ax
+        mov  ax,[SIY+6]
+        mov  [IY+6],ax
+        mov  ax,[SIZ]
+        mov  [IZ],ax
+        mov  ax,[SIZ+2]
+        mov  [IZ+2],ax
+        mov  ax,[SIZ+4]
+        mov  [IZ+4],ax
+        mov  ax,[SIZ+6]
+        mov  [IZ+6],ax
+        mov  byte ptr [COLOR],28 ; dark ground colour: edges sit IN the relief
         call FACESTROKE
 @@next: inc  word ptr [tidx]
         cmp  word ptr [tidx],1600

@@ -64,7 +64,7 @@ GR      equ 7                   ; ground-grid radius (cells)
 NEARZ   equ 40                  ; near clip plane
 FARZ    equ 21600               ; far clip distance
 MEGR    equ 20                  ; far-belt radius in 4x4-cell megablocks
-CEIL    equ 1500                ; flight ceiling (max camy)
+CEIL    equ 3000                ; flight ceiling (loops need headroom)
 
 ; ---- jet flight model (all per 18.2 Hz physics tick) ------------------------
 ; Forces: thrust vs drag decide airspeed; climb/dive trade speed <-> altitude
@@ -102,6 +102,9 @@ SC_LF   equ 4Bh
 SC_RT   equ 4Dh
 SC_SP   equ 39h
 SC_N    equ 31h                 ; N key: toggle day/night palette
+SC_W    equ 11h                 ; W: throttle up
+SC_S    equ 1Fh                 ; S: throttle down
+SC_A    equ 1Eh                 ; A: afterburner (hold)
 
 CODE    SEGMENT
         ASSUME  CS:CODE, DS:CODE, ES:CODE, SS:CODE

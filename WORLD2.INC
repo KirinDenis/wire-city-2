@@ -94,7 +94,7 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         ; Structures stay grouped (a built block keeps full density) but the
         ; groups themselves are rare - SimCity-style districts on open land.
         push ax                 ; keep the cell hash
-        call SBHASH             ; superblock hash (shared with MEGACELL)
+        call SBHASH             ; superblock hash (clustering decision)
         mov  [sbh],ax
         and  ax,15
         cmp  ax,3
@@ -215,7 +215,7 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
 
 ; SBHASH - superblock (8x8 cells) hash for cell [gi],[gj] -> AX.
 ; Single source of truth for "is this block built up": HBLD plans buildings
-; with it and MEGACELL must agree, or far megas ghost over empty ground.
+; with it; anything distance-related must agree with this decision.
 SBHASH: mov  ax,[gi]
         mov  cl,3
         shr  ax,cl
@@ -272,7 +272,21 @@ WINFACE:
         mov  ax,[IZ+6]
         cmp  ax,NEARZ
         jl   @@ret
-        ; project 4 corners -> wqx/wqy
+        ; project 4 corners -> wqx/wqy (pitch them like CLIPNEAR does,
+        ; or the glass detaches from the wall in a dive)
+        call PITCH4
+        mov  ax,[IZ]            ; pitched corners can cross the near plane
+        cmp  ax,NEARZ
+        jl   @@ret
+        mov  ax,[IZ+2]
+        cmp  ax,NEARZ
+        jl   @@ret
+        mov  ax,[IZ+4]
+        cmp  ax,NEARZ
+        jl   @@ret
+        mov  ax,[IZ+6]
+        cmp  ax,NEARZ
+        jl   @@ret
         mov  word ptr [pk],0
 @@pj:   mov  si,[pk]
         add  si,si

@@ -160,6 +160,27 @@ SETTRIG:
         add  ax,64
         call SINQ
         mov  [rcos],ax
+        mov  ax,[pitch]         ; pitch trig for the vertex rotation
+        call SINQ
+        mov  [psin],ax
+        mov  ax,[pitch]
+        add  ax,64
+        call SINQ
+        mov  [pcos],ax
+        ; background horizon shift: pofs = psin*FOCAL/pcos (clamped tangent)
+        mov  ax,[pcos]
+        cmp  ax,48
+        jl   @@pbig             ; looking almost straight up/down
+        mov  ax,[psin]
+        mov  bx,FOCAL
+        imul bx
+        idiv word ptr [pcos]
+        jmp  @@pset
+@@pbig: mov  ax,2600            ; push the horizon far off screen
+        cmp  word ptr [psin],0
+        jge  @@pset
+        neg  ax
+@@pset: mov  [pofs],ax
         ret
 
 ; ============================================================================
@@ -275,11 +296,31 @@ PROJPT: push dx                 ; save ry
         call CLAMPAX            ; clamp BEFORE roll so APPLYROLL can't overflow
         mov  [ptmp],ax
         pop  ax                 ; ry
-        mov  bx,FOCAL
+        cmp  cx,160             ; same overflow guard as rx: pitched vertices
+        jge  @@syok             ; can be far above/below at small rz
+        mov  bx,ax
+        or   bx,bx
+        jns  @@g3
+        neg  bx
+@@g3:   push ax
+        mov  ax,cx
+        mov  dx,204
+        mul  dx
+        cmp  bx,ax
+        pop  ax
+        jbe  @@syok
+        mov  bx,4000
+        or   ax,ax
+        jns  @@g4
+        neg  bx
+@@g4:   mov  ax,bx
+        jmp  @@syadd
+@@syok: mov  bx,FOCAL
         imul bx
         idiv cx
+@@syadd:
         mov  bx,[horiz]
-        sub  bx,ax              ; sy_raw = horiz - ry*FOCAL/rz (pitch shifts view)
+        sub  bx,ax              ; sy_raw = horiz - ry*FOCAL/rz
         mov  ax,bx
         call CLAMPAX
         mov  dx,ax

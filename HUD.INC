@@ -39,8 +39,19 @@ HUD:    mov  byte ptr [HCOL],8
         mov  bx,60
         div  bx
         call PRNUM
-        mov  si,offset MSGHELP
+        mov  si,offset MSGTHR   ; throttle as 0..100 percent
         call PRSTR
+        mov  ax,[throt]
+        mov  bx,100
+        imul bx
+        mov  bx,64
+        idiv bx
+        call PRNUM
+        cmp  byte ptr [abon],0  ; '+' marks a lit afterburner
+        je   @@nab
+        mov  al,'+'
+        call PRCH
+@@nab:
         ; real-time seconds (BIOS tick, 18.2 Hz) - compare against a stopwatch
         mov  ah,02h
         mov  bh,0
