@@ -277,6 +277,67 @@ INPUT:
         jz   @@ncp
         xor  byte ptr [cockpit],1
 @@ncp:
+        ; --- M key: right MFD mode, map <-> target camera (edge) ---
+        mov  al,[KEYS+SC_M]
+        cmp  al,[prevm]
+        je   @@nmfd
+        mov  [prevm],al
+        test al,al
+        jz   @@nmfd
+        xor  byte ptr [mfdmode],1
+@@nmfd:
+        ; --- Enter: lock the plane inside the aiming ring (edge). The
+        ; nearest jet whose screen point is within 24 px of the ring
+        ; centre (160,100) wins; nothing there = lock dropped.
+        mov  al,[KEYS+SC_ENT]
+        cmp  al,[prevt]
+        je   @@nlk
+        mov  [prevt],al
+        test al,al
+        jz   @@nlk
+        mov  word ptr [locki],0FFFFh
+        mov  word ptr [lockd],7FFFh
+        xor  si,si
+@@lks:  mov  ax,[pax+si]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[paz+si]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        push si
+        call ROTXZ
+        pop  si
+        mov  ax,[rcz]
+        cmp  ax,NEARZ
+        jl   @@lkn
+        mov  [tpi],ax           ; keep the range for the best-pick test
+        mov  dx,[pay+si]
+        sub  dx,[camy]
+        mov  ax,[rcx]
+        mov  cx,[rcz]
+        push si
+        call PPOINT             ; last frame's view state: close enough
+        pop  si
+        jc   @@lkn
+        sub  ax,160
+        jns  @@lk1
+        neg  ax
+@@lk1:  cmp  ax,24
+        jg   @@lkn
+        sub  dx,100
+        jns  @@lk2
+        neg  dx
+@@lk2:  cmp  dx,24
+        jg   @@lkn
+        mov  ax,[tpi]
+        cmp  ax,[lockd]
+        jae  @@lkn
+        mov  [lockd],ax
+        mov  [locki],si
+@@lkn:  add  si,2
+        cmp  si,NPLANE*2
+        jb   @@lks
+@@nlk:
         ; --- wind drift (world space, constant breeze) ---
         mov  ax,[camx]
         add  ax,WINDX

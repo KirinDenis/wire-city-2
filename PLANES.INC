@@ -61,7 +61,11 @@ PLANESUPD:
         neg  ax
 @@l2:   cmp  ax,12000
         jl   @@trl              ; inside the leash: go drop a trail point
-@@resp: push si
+@@resp: mov  ax,[locki]         ; a teleported target is a lost target
+        cmp  ax,si
+        jne  @@rlk
+        mov  word ptr [locki],0FFFFh
+@@rlk:  push si
         call RND16
         pop  si
         and  ax,8191
@@ -371,8 +375,13 @@ PLANESDRAW:
 @@mr1:  mov  [dsac],ax          ; half-size
         test word ptr [pidx],2
         jnz  @@hst
-        ; friendly: green square
+        ; friendly: green square (red when locked)
         mov  byte ptr [COLOR],95
+        mov  ax,[locki]
+        cmp  ax,[pidx]
+        jne  @@fc1
+        mov  byte ptr [COLOR],19
+@@fc1:
         mov  ax,[dsx]
         sub  ax,[dsac]
         mov  [sx0],ax
@@ -418,8 +427,13 @@ PLANESDRAW:
         mov  [sy1],ax
         call @@mln              ; right
         jmp  @@nomk
-@@hst:  ; hostile: yellow diamond
+@@hst:  ; hostile: yellow diamond (red when locked)
         mov  byte ptr [COLOR],96
+        mov  ax,[locki]
+        cmp  ax,[pidx]
+        jne  @@hc1
+        mov  byte ptr [COLOR],19
+@@hc1:
         mov  ax,[dsx]
         mov  [sx0],ax
         mov  ax,[dsy]
@@ -516,4 +530,252 @@ PPOINT: mov  [dsx],ax           ; rx
         ret
 @@behind:
         stc
+        ret
+
+; ---------------------------------------------------------------------------
+;  LOCKHUD - the aiming ring at (160,100), r=20 dotted. White when free;
+;  IFF-coloured when locked. A locked target off the screen gets a small
+;  block riding the ring edge toward it; TARGET/FRIEND + callsign are
+;  printed under the ring.
+; ---------------------------------------------------------------------------
+LOCKHUD:
+        mov  word ptr [dsac],8
+        mov  ax,[locki]
+        cmp  ax,0FFFFh
+        je   @@ring
+        mov  word ptr [dsac],95
+        test ax,2
+        jz   @@ring
+        mov  word ptr [dsac],19
+@@ring: mov  word ptr [tpi],0
+@@ck:   mov  ax,[tpi]
+        call SINQ
+        mov  bx,20
+        imul bx
+        mov  bx,256
+        idiv bx
+        add  ax,160
+        mov  [dsx],ax
+        mov  ax,[tpi]
+        add  ax,64
+        call SINQ
+        mov  bx,20
+        imul bx
+        mov  bx,256
+        idiv bx
+        mov  bx,100
+        sub  bx,ax
+        mov  ax,bx
+        call ROW320
+        add  di,[dsx]
+        mov  ax,[dsac]
+        mov  es:[di],al
+        add  word ptr [tpi],16
+        cmp  word ptr [tpi],256
+        jb   @@ck
+        mov  si,[locki]
+        cmp  si,0FFFFh
+        je   @@done
+        ; where is the target on screen?
+        mov  ax,[pax+si]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[paz+si]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        push si
+        call ROTXZ
+        pop  si
+        mov  dx,[pay+si]
+        sub  dx,[camy]
+        mov  ax,[rcx]
+        mov  cx,[rcz]
+        push si
+        call PPOINT
+        pop  si
+        jc   @@offs
+        cmp  ax,0
+        jl   @@dir
+        cmp  ax,319
+        jg   @@dir
+        cmp  dx,0
+        jl   @@dir
+        cmp  dx,191
+        jg   @@dir
+        jmp  @@text             ; visible: its marker is already red
+@@offs: mov  ax,160             ; behind us: point straight down
+        mov  dx,192
+@@dir:  sub  ax,160             ; shrink the direction onto the ring edge
+        sub  dx,100
+@@hv:   mov  bx,ax
+        or   bx,bx
+        jns  @@a1
+        neg  bx
+@@a1:   cmp  bx,18
+        jg   @@shr
+        mov  bx,dx
+        or   bx,bx
+        jns  @@a2
+        neg  bx
+@@a2:   cmp  bx,18
+        jle  @@pt
+@@shr:  sar  ax,1
+        sar  dx,1
+        jmp  @@hv
+@@pt:   add  ax,160
+        add  dx,100
+        mov  [dsx],ax
+        mov  ax,dx
+        call ROW320
+        add  di,[dsx]
+        mov  ax,[dsac]
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+@@text: mov  si,[locki]
+        mov  byte ptr [COLOR],19
+        mov  bx,offset MSGTGT
+        test si,2
+        jnz  @@t2
+        mov  byte ptr [COLOR],95
+        mov  bx,offset MSGFRD
+@@t2:   mov  word ptr [ftx],148
+        mov  word ptr [fty],124
+        push si
+        mov  si,bx
+        call FDRAW
+        pop  si
+        mov  word ptr [ftx],142
+        mov  word ptr [fty],132
+        call CSDRAW
+@@done: ret
+
+; ---------------------------------------------------------------------------
+;  CSDRAW - print the callsign of plane SI (offset) at ftx/fty in the
+;  current COLOR: pool name (friendly/hostile by parity) + number.
+; ---------------------------------------------------------------------------
+CSDRAW: push si
+        mov  bx,si
+        shr  bx,1
+        mov  al,[pcs+bx]
+        xor  ah,ah
+        add  ax,ax
+        mov  bx,ax
+        pop  ax                 ; plane offset
+        push ax
+        test ax,2
+        jnz  @@hn
+        mov  si,[FNTAB+bx]
+        jmp  @@nm
+@@hn:   mov  si,[HNTAB+bx]
+@@nm:   call FDRAW
+        add  word ptr [ftx],2
+        pop  bx
+        shr  bx,1
+        mov  al,[pnum+bx]
+        xor  ah,ah
+        call FNUM
+        ret
+
+; ---------------------------------------------------------------------------
+;  TGTVIEW - sensor view of the locked target on the green MFD: callsign,
+;  a wireframe of the jet (aspect follows its heading) and the IFF tag.
+; ---------------------------------------------------------------------------
+TGTVIEW:
+        mov  si,[locki]
+        mov  byte ptr [COLOR],8
+        mov  word ptr [ftx],197
+        mov  word ptr [fty],155
+        call CSDRAW
+        mov  si,[locki]
+        mov  byte ptr [COLOR],19
+        mov  bx,offset MSGTGT
+        test si,2
+        jnz  @@tg
+        mov  byte ptr [COLOR],95
+        mov  bx,offset MSGFRD
+@@tg:   mov  word ptr [ftx],197
+        mov  word ptr [fty],182
+        push si
+        mov  si,bx
+        call FDRAW
+        pop  si
+        ; wireframe: rotate the model by its aspect, project small
+        mov  ax,[pah+si]
+        sub  ax,[heading]
+        and  ax,255
+        push ax
+        call SINQ
+        mov  [msin],ax
+        pop  ax
+        add  ax,64
+        call SINQ
+        mov  [mcos],ax
+        xor  si,si
+        xor  di,di
+@@tv2:  mov  ax,[MVERT+si]      ; vx = (mx*mcos + mz*msin)/256
+        imul word ptr [mcos]
+        mov  bx,ax
+        mov  ax,[MVERT+si+4]
+        imul word ptr [msin]
+        add  ax,bx
+        cwd
+        mov  bx,256
+        idiv bx
+        mov  [dsx],ax
+        mov  ax,[MVERT+si]      ; vz = (mz*mcos - mx*msin)/256 + 300
+        imul word ptr [msin]
+        mov  bx,ax
+        mov  ax,[MVERT+si+4]
+        imul word ptr [mcos]
+        sub  ax,bx
+        cwd
+        mov  bx,256
+        idiv bx
+        add  ax,300
+        mov  [dsac],ax
+        mov  ax,[dsx]           ; sx = 217 + vx*64/vz
+        mov  bx,64
+        imul bx
+        idiv word ptr [dsac]
+        add  ax,217
+        mov  [PVX+di],ax
+        mov  ax,[MVERT+si+2]    ; sy = 170 - vy*64/vz
+        mov  bx,64
+        imul bx
+        idiv word ptr [dsac]
+        mov  bx,170
+        sub  bx,ax
+        mov  [PVY+di],bx
+        add  si,6
+        add  di,2
+        cmp  si,13*6
+        jb   @@tv2
+        xor  si,si              ; sensor-green edges
+@@te:   mov  al,[WEDG+si]
+        xor  ah,ah
+        add  ax,ax
+        mov  bx,ax
+        mov  ax,[PVX+bx]
+        mov  [sx0],ax
+        mov  ax,[PVY+bx]
+        mov  [sy0],ax
+        mov  al,[WEDG+si+1]
+        xor  ah,ah
+        add  ax,ax
+        mov  bx,ax
+        mov  ax,[PVX+bx]
+        mov  [sx1],ax
+        mov  ax,[PVY+bx]
+        mov  [sy1],ax
+        mov  byte ptr [COLOR],95
+        push si
+        call CLIPLINE
+        jc   @@ten
+        call LINE
+@@ten:  pop  si
+        add  si,2
+        cmp  si,NWEDG*2
+        jb   @@te
         ret

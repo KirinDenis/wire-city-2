@@ -109,7 +109,9 @@ SC_S    equ 1Fh                 ; S: throttle down
 SC_A    equ 1Eh                 ; A: afterburner (hold)
 SC_C    equ 2Eh
 SC_Q    equ 10h                 ; rudder left
-SC_E    equ 12h                 ; rudder right                 ; C: toggle cockpit panel
+SC_E    equ 12h                 ; rudder right
+SC_ENT  equ 1Ch                 ; target lock
+SC_M    equ 32h                 ; right MFD mode toggle                 ; C: toggle cockpit panel
 
 CODE    SEGMENT
         ASSUME  CS:CODE, DS:CODE, ES:CODE, SS:CODE
@@ -311,6 +313,15 @@ MAIN:
         call RND16
         and  ax,255
         mov  [pah+si],ax
+        call RND16              ; callsign: name + number
+        mov  bx,si
+        shr  bx,1
+        and  ax,3
+        mov  [pcs+bx],al
+        call RND16
+        and  ax,31
+        inc  ax
+        mov  [pnum+bx],al
         mov  bx,si              ; seed the contrail at the spawn point
         mov  cl,4
         shl  bx,cl              ; slot base = plane*TLN*2 (TLN=16)

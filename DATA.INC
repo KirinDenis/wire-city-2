@@ -86,6 +86,31 @@ TLX     dw NPLANE*TLN dup(0)    ; contrail ring buffers (world coords)
 TLY     dw NPLANE*TLN dup(0)
 TLZ     dw NPLANE*TLN dup(0)
 tlh     dw 0                    ; shared ring head (byte offset, step 2)
+locki   dw 0FFFFh               ; locked plane offset (0FFFFh = no lock)
+lockd   dw 0                    ; lock scan: best distance so far
+prevt   db 0                    ; Enter key edge detector
+prevm   db 0                    ; M key edge detector
+mfdmode db 0                    ; right MFD: 0 = map, 1 = target camera
+pcs     db NPLANE dup(0)        ; callsign: name table index (0..3)
+pnum    db NPLANE dup(0)        ; callsign: number 1..32
+; callsign names: friendly and hostile pools (4x6 font, A-Z only)
+FNAM0   db 'VIPER',0
+FNAM1   db 'EAGLE',0
+FNAM2   db 'HAWK',0
+FNAM3   db 'STORM',0
+HNAM0   db 'BANDIT',0
+HNAM1   db 'COBRA',0
+HNAM2   db 'RAPTOR',0
+HNAM3   db 'VULTUR',0
+FNTAB   dw FNAM0,FNAM1,FNAM2,FNAM3
+HNTAB   dw HNAM0,HNAM1,HNAM2,HNAM3
+MSGTGT  db 'TARGET',0
+MSGFRD  db 'FRIEND',0
+; wireframe edge list for the MFD sensor view (vertex id pairs)
+WEDG    db 0,1, 0,2, 0,3, 0,4, 1,2, 3,4, 1,3, 2,4
+        db 7,5, 5,8, 8,7, 7,6, 6,9, 9,7
+        db 10,11, 11,12, 12,10
+NWEDG   equ 17
 ftx     dw 0                    ; font cursor x
 fty     dw 0                    ; font cursor y
 NB      db 6 dup(0)             ; number->text scratch for FNUM
@@ -781,6 +806,7 @@ MSGRDR   db 'RDR OFF',0
 MSGS2    db 'S',0
 MSGH2    db 'H',0
 MSGABON  db 'AB ON',0
+MSGL2    db 'L',0
 lampx    dw 0                   ; lamp/bar scratch: x or lit-count
 lampy    dw 0                   ; lamp y / bar x
 lampc    db 0                   ; current lamp/segment colour

@@ -786,7 +786,14 @@ PANELBMP:
         add  si,4
         jmp  @@sp
 @@spd:
-        call MINIMAP2           ; half-scale map on the green MFD
+        cmp  byte ptr [mfdmode],0
+        je   @@mmap
+        cmp  word ptr [locki],0FFFFh
+        jne  @@tcam
+@@mmap: call MINIMAP2           ; half-scale map on the green MFD
+        jmp  @@mfdd
+@@tcam: call TGTVIEW            ; sensor view of the locked target
+@@mfdd:
         ; ---- title strip: name, mission time, altitude ----
         mov  byte ptr [COLOR],8
         mov  word ptr [ftx],100
@@ -853,6 +860,20 @@ PANELBMP:
         jge  @@lt
         mov  cx,5               ; terrain close: amber
 @@lt:   mov  si,offset MSGT2
+        call LAMP2
+        mov  word ptr [lampx],289 ; lock lamp: top right strut square
+        mov  word ptr [lampy],1
+        mov  word ptr [dsx],10
+        mov  word ptr [dsy],9
+        xor  cx,cx
+        mov  ax,[locki]
+        cmp  ax,0FFFFh
+        je   @@llk
+        mov  cx,95              ; friendly under lock: green warning
+        test ax,2
+        jz   @@llk
+        mov  cx,19              ; hostile locked: red
+@@llk:  mov  si,offset MSGL2
         call LAMP2
         ; ---- throttle ladder: 12 segments up from y=186 at x=44 ----
         mov  ax,[throt]
