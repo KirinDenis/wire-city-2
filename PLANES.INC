@@ -1481,10 +1481,10 @@ MSLDRAW:
 ; ---------------------------------------------------------------------------
 AMSLUPD:
         cmp  word ptr [aifire],0
-        je   @@try
+        je   @@tcy
         dec  word ptr [aifire]
         jmp  @@fly
-@@try:  mov  word ptr [aifire],24
+@@tcy:  mov  word ptr [aifire],24
         xor  bx,bx              ; a free launch rail?
 @@fs:   cmp  byte ptr [amact+bx],0
         je   @@have
@@ -1722,61 +1722,116 @@ AMSLDRAW:
         ret
 
 ; ---------------------------------------------------------------------------
-;  GUNDRAW - cannon tracers: two jittering lines from the wing roots to
-;  the aiming point, flickering red/yellow. Pure screen-space theatre -
-;  the actual hit test lives in the INPUT trigger code.
+;  TRCUPD - fly the tracer rounds: straight at ~150/tick with a slight
+;  droop, burned out after 30 ticks (~4500 reach, same as the hit test).
+; ---------------------------------------------------------------------------
+TRCUPD: xor  bx,bx
+@@t:    cmp  byte ptr [trcact+bx],0
+        je   @@n
+        mov  di,bx
+        add  di,di
+        dec  word ptr [trlif+di]
+        jnz  @@f
+        mov  byte ptr [trcact+bx],0
+        jmp  @@n
+@@f:    mov  ax,[trvx+di]
+        add  [tcx+di],ax
+        mov  ax,[trvy+di]
+        add  [tcy+di],ax
+        dec  word ptr [trvy+di] ; the round droops as it flies
+        mov  ax,[trvz+di]
+        add  [tcz+di],ax
+@@n:    inc  bx
+        cmp  bx,NTRC
+        jb   @@t
+        ret
+
+; ---------------------------------------------------------------------------
+;  GUNDRAW - the tracer rounds: each is a 3D streak from its position
+;  half a velocity step back, with a random 1px tumble on the tail and
+;  a red/yellow flicker. The rounds keep flying after the trigger is
+;  released - the pool renders whatever is still in the air.
 ; ---------------------------------------------------------------------------
 GUNDRAW:
-        cmp  byte ptr [guntik],0
-        je   @@gd0
-        call RND16              ; left gun
-        mov  bx,ax
-        and  ax,7
-        add  ax,118
+        mov  word ptr [tpi],0
+@@gl:   mov  bx,[tpi]
+        cmp  byte ptr [trcact+bx],0
+        je   @@gn
+        mov  di,bx
+        add  di,di
+        mov  ax,[tcx+di]        ; the head of the streak
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[tcz+di]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        push di
+        call ROTXZ
+        pop  di
+        mov  dx,[tcy+di]
+        sub  dx,[camy]
+        mov  ax,[rcx]
+        mov  cx,[rcz]
+        push di
+        call PPOINT
+        pop  di
+        jc   @@gn
         mov  [sx0],ax
-        mov  word ptr [sy0],192
-        mov  ax,bx
-        mov  cl,3
-        shr  ax,cl
-        and  ax,15
-        add  ax,152
-        mov  [sx1],ax
-        mov  ax,bx
-        mov  cl,6
-        shr  ax,cl
-        and  ax,7
-        add  ax,94
-        mov  [sy1],ax
-        mov  byte ptr [COLOR],96
-        test bx,8000h
-        jz   @@gc1
-        mov  byte ptr [COLOR],19
-@@gc1:  call CLIPLINE
-        jc   @@gr
-        call LINE
-@@gr:   call RND16              ; right gun
+        mov  [sy0],dx
+        mov  ax,[trvx+di]       ; the tail: half a step behind
+        sar  ax,1
+        mov  bx,[tcx+di]
+        sub  bx,ax
+        sub  bx,[camx]
+        mov  [wdx],bx
+        mov  ax,[trvz+di]
+        sar  ax,1
+        mov  bx,[tcz+di]
+        sub  bx,ax
+        sub  bx,[camz]
+        mov  [wdz],bx
+        mov  ax,[trvy+di]
+        sar  ax,1
+        mov  dx,[tcy+di]
+        sub  dx,ax
+        sub  dx,[camy]
+        push dx
+        push di
+        call ROTXZ
+        pop  di
+        pop  dx
+        mov  ax,[rcx]
+        mov  cx,[rcz]
+        call PPOINT
+        jc   @@gn
+        push ax                 ; a pinch of tumble on the tail end
+        push dx
+        call RND16
         mov  bx,ax
-        and  ax,7
-        add  ax,194
-        mov  [sx0],ax
-        mov  word ptr [sy0],192
+        pop  dx
+        pop  ax
+        mov  cx,bx
+        and  cx,3
+        dec  cx
+        add  ax,cx
+        push ax
         mov  ax,bx
-        mov  cl,3
+        mov  cl,2
         shr  ax,cl
-        and  ax,15
-        add  ax,152
+        and  ax,3
+        dec  ax
+        add  dx,ax
+        pop  ax
         mov  [sx1],ax
-        mov  ax,bx
-        mov  cl,6
-        shr  ax,cl
-        and  ax,7
-        add  ax,94
-        mov  [sy1],ax
-        mov  byte ptr [COLOR],19
-        test bx,8000h
-        jz   @@gc2
+        mov  [sy1],dx
         mov  byte ptr [COLOR],96
-@@gc2:  call CLIPLINE
-        jc   @@gd0
+        test bx,1000h
+        jz   @@gc
+        mov  byte ptr [COLOR],19
+@@gc:   call CLIPLINE
+        jc   @@gn
         call LINE
-@@gd0:  ret
+@@gn:   inc  word ptr [tpi]
+        cmp  word ptr [tpi],NTRC
+        jb   @@gl
+        ret

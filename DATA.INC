@@ -150,6 +150,16 @@ gunreg  dw 0                    ; belt regen timer
 guntik  db 0                    ; tracers on screen while > 0
 hitfx   dw 0FFFFh               ; plane flashing from a cannon hit
 hitft   dw 0                    ; ...and for how many ticks
+NTRC    equ 16                  ; tracer rounds in the pool
+trcact  db NTRC dup(0)          ; round in flight?
+tcx     dw NTRC dup(0)          ; position
+tcy     dw NTRC dup(0)
+tcz     dw NTRC dup(0)
+trvx    dw NTRC dup(0)          ; velocity (150/tick + spread, droops)
+trvy    dw NTRC dup(0)
+trvz    dw NTRC dup(0)
+trlif   dw NTRC dup(0)          ; ticks to burn out
+trnext  dw 0                    ; ring: next slot to fire from
 ctx     dw 0                    ; BOOM scratch: face centroid
 cty     dw 0
 ctz     dw 0

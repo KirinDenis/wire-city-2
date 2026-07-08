@@ -502,6 +502,79 @@ INPUT:
         cmp  word ptr [gunam],0
         je   @@gnf
         mov  byte ptr [guntik],2
+        ; ---- launch one tracer round (ring of NTRC, oldest reused) ----
+        mov  bx,[trnext]
+        inc  word ptr [trnext]
+        and  word ptr [trnext],NTRC-1
+        mov  di,bx
+        add  di,di              ; word offset
+        mov  byte ptr [trcact+bx],1
+        mov  word ptr [trlif+di],30
+        mov  ax,[hcos]          ; muzzle: wing-root offset, gun alternates
+        mov  cx,40
+        imul cx
+        mov  cx,256
+        idiv cx
+        test bx,1
+        jz   @@gmr
+        neg  ax                 ; left gun this time
+@@gmr:  add  ax,[camx]
+        mov  [tcx+di],ax
+        mov  ax,[hsin]
+        mov  cx,40
+        imul cx
+        mov  cx,256
+        idiv cx
+        neg  ax
+        test bx,1
+        jz   @@gmz
+        neg  ax
+@@gmz:  add  ax,[camz]
+        mov  [tcz+di],ax
+        mov  ax,[camy]
+        sub  ax,14
+        mov  [tcy+di],ax
+        mov  ax,[pcos]          ; 150/tick along the nose
+        mov  cx,150
+        imul cx
+        mov  cx,256
+        idiv cx
+        mov  [dsac],ax          ; horizontal component
+        mov  ax,[hsin]
+        imul word ptr [dsac]
+        mov  cx,256
+        idiv cx
+        mov  [trvx+di],ax
+        mov  ax,[hcos]
+        imul word ptr [dsac]
+        mov  cx,256
+        idiv cx
+        mov  [trvz+di],ax
+        mov  ax,[psin]
+        mov  cx,150
+        imul cx
+        mov  cx,256
+        idiv cx
+        mov  [trvy+di],ax
+        push di                 ; a pinch of spread on every axis
+        call RND16
+        pop  di
+        mov  bx,ax
+        and  ax,7
+        sub  ax,3
+        add  [trvx+di],ax
+        mov  ax,bx
+        mov  cl,3
+        shr  ax,cl
+        and  ax,7
+        sub  ax,3
+        add  [trvy+di],ax
+        mov  ax,bx
+        mov  cl,6
+        shr  ax,cl
+        and  ax,7
+        sub  ax,3
+        add  [trvz+di],ax
         mov  ax,[lasttk]
         test ax,1
         jnz  @@gnf              ; volleys on even ticks
@@ -568,6 +641,7 @@ INPUT:
 @@gnf:
         call PLANESUPD          ; AI traffic flies on the same clock
         call MSLUPD             ; the missile chases on the same clock
+        call TRCUPD             ; tracer rounds fly on the same clock
         call AMSLUPD            ; the AI shoots its own war
         call WRECKUPD           ; debris falls on the same clock
         ret
