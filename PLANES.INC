@@ -60,7 +60,7 @@ PLANESUPD:
         jns  @@l2
         neg  ax
 @@l2:   cmp  ax,12000
-        jl   @@next
+        jl   @@trl              ; inside the leash: go drop a trail point
 @@resp: push si
         call RND16
         pop  si
@@ -93,7 +93,7 @@ PLANESUPD:
         mov  [TLZ+bx],ax
         add  bx,2
         loop @@rtf
-        ; drop a contrail point every 8th tick
+@@trl:  ; drop a contrail point every 8th tick
         mov  ax,[lasttk]
         and  ax,7
         jnz  @@next
