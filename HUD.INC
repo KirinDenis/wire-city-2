@@ -1234,3 +1234,303 @@ LAMP2:  jcxz @@no
         mov  [COLOR],al
         call FDRAW
 @@no:   ret
+
+; ============================================================================
+;  HUD tapes (F-15 style, projected on the glass - they do NOT ride the
+;  view sway). Compass on top (ticks every 8 units, numbers every 45 deg),
+;  speed tape on the left, altitude tape on the right. Critical marks in
+;  red: stall speed, the terrain below us, the service ceiling.
+; ============================================================================
+; VLINE2 - vertical line: AX=y0, [dsx]=x, CX=len, BL=colour
+VLINE2: call ROW320
+        add  di,[dsx]
+        mov  al,bl
+@@v:    mov  es:[di],al
+        add  di,320
+        loop @@v
+        ret
+; HLINE2 - horizontal line: AX=y, [dsx]=x, CX=len, BL=colour
+HLINE2: call ROW320
+        add  di,[dsx]
+        mov  al,bl
+        rep  stosb
+        ret
+; FNUM3 - AX (0..999) as three padded digits at ftx/fty
+FNUM3:  xor  dx,dx
+        mov  bx,100
+        div  bx
+        add  al,'0'
+        mov  [NB],al
+        mov  ax,dx
+        xor  dx,dx
+        mov  bx,10
+        div  bx
+        add  al,'0'
+        mov  [NB+1],al
+        add  dl,'0'
+        mov  [NB+2],dl
+        mov  byte ptr [NB+3],0
+        mov  si,offset NB
+        call FDRAW
+        ret
+
+HUDBARS:
+        cld
+        ; ================= compass tape: top centre =================
+        mov  ax,[heading]
+        add  ax,223             ; heading-40, +7 to round, +256 bias
+        and  ax,0FFF8h          ; first tick: multiple of 8
+        mov  [ctx],ax
+@@cp:   mov  ax,[ctx]
+        sub  ax,256
+        sub  ax,[heading]       ; signed offset from the nose
+        cmp  ax,40
+        jg   @@cpd
+        mov  bx,ax              ; x = 160 + off*3/2
+        add  ax,ax
+        add  ax,bx
+        sar  ax,1
+        add  ax,160
+        mov  [dsx],ax
+        cmp  ax,102
+        jl   @@cpn
+        cmp  ax,218
+        jg   @@cpn
+        mov  ax,[ctx]
+        and  ax,31              ; every 32 units = 45 degrees: major
+        jnz  @@cmin
+        mov  ax,18
+        mov  cx,6
+        mov  bl,8
+        call VLINE2
+        mov  ax,[ctx]
+        and  ax,255
+        mov  bx,45
+        imul bx
+        mov  cl,5
+        shr  ax,cl              ; degrees = units*45/32
+        mov  bx,[dsx]
+        sub  bx,6
+        mov  [ftx],bx
+        mov  word ptr [fty],26
+        mov  byte ptr [COLOR],8
+        call FNUM3
+        jmp  @@cpn
+@@cmin: mov  ax,20
+        mov  cx,3
+        mov  bl,8
+        call VLINE2
+@@cpn:  add  word ptr [ctx],8
+        jmp  @@cp
+@@cpd:  mov  ax,35              ; the caret under the tape
+        call ROW320
+        add  di,160
+        mov  al,96
+        mov  es:[di],al
+        mov  es:[di-321],al
+        mov  es:[di-319],al
+
+        ; ================= speed tape: left =================
+        mov  ax,60              ; the spine
+        mov  word ptr [dsx],68
+        mov  cx,71
+        mov  bl,8
+        call VLINE2
+        mov  ax,[vel]           ; first tick: multiple of 50 >= vel-140
+        sub  ax,140
+        jns  @@s0
+        xor  ax,ax
+@@s0:   add  ax,49
+        xor  dx,dx
+        mov  bx,50
+        div  bx
+        mul  bx
+        mov  [ctx],ax
+@@sp:   mov  ax,[ctx]
+        sub  ax,[vel]
+        cmp  ax,140
+        jg   @@spd
+        mov  [dsac],ax          ; keep the offset (label crowding test)
+        sar  ax,1
+        sar  ax,1
+        mov  bx,95
+        sub  bx,ax
+        mov  [cty],bx           ; y
+        cmp  bx,60
+        jl   @@spn
+        cmp  bx,130
+        jg   @@spn
+        mov  ax,[ctx]
+        xor  dx,dx
+        mov  bx,100
+        div  bx
+        test dx,dx
+        jnz  @@smin
+        mov  ax,[cty]
+        mov  word ptr [dsx],60
+        mov  cx,8
+        mov  bl,8
+        call HLINE2
+        mov  ax,[dsac]          ; the centre shows the live value
+        cmp  ax,25
+        jg   @@slb
+        cmp  ax,-25
+        jge  @@spn
+@@slb:  mov  ax,[cty]
+        sub  ax,2
+        mov  [fty],ax
+        mov  word ptr [ftx],38
+        mov  byte ptr [COLOR],8
+        mov  ax,[ctx]
+        call FNUM
+        jmp  @@spn
+@@smin: mov  ax,[cty]
+        mov  word ptr [dsx],64
+        mov  cx,4
+        mov  bl,8
+        call HLINE2
+@@spn:  add  word ptr [ctx],50
+        jmp  @@sp
+@@spd:  mov  ax,VSTALL          ; the stall line, red
+        sub  ax,[vel]
+        cmp  ax,140
+        jg   @@snc
+        cmp  ax,-140
+        jl   @@snc
+        sar  ax,1
+        sar  ax,1
+        mov  bx,95
+        sub  bx,ax
+        cmp  bx,60
+        jl   @@snc
+        cmp  bx,130
+        jg   @@snc
+        mov  ax,bx
+        mov  word ptr [dsx],59
+        mov  cx,9
+        mov  bl,19
+        call HLINE2
+@@snc:  mov  ax,95              ; caret + live speed
+        call ROW320
+        add  di,69
+        mov  al,96
+        mov  es:[di],al
+        mov  es:[di+1-320],al
+        mov  es:[di+1+320],al
+        mov  word ptr [ftx],38
+        mov  word ptr [fty],92
+        mov  byte ptr [COLOR],96
+        mov  ax,[vel]
+        call FNUM
+
+        ; ================= altitude tape: right =================
+        mov  ax,60              ; the spine
+        mov  word ptr [dsx],252
+        mov  cx,71
+        mov  bl,8
+        call VLINE2
+        mov  ax,[camy]          ; first tick: multiple of 100 >= camy-280
+        sub  ax,280
+        jns  @@a0
+        xor  ax,ax
+@@a0:   add  ax,99
+        xor  dx,dx
+        mov  bx,100
+        div  bx
+        mul  bx
+        mov  [ctx],ax
+@@ap:   mov  ax,[ctx]
+        sub  ax,[camy]
+        cmp  ax,280
+        jg   @@apd
+        mov  [dsac],ax
+        sar  ax,1
+        sar  ax,1
+        sar  ax,1
+        mov  bx,95
+        sub  bx,ax
+        mov  [cty],bx
+        cmp  bx,60
+        jl   @@apn
+        cmp  bx,130
+        jg   @@apn
+        mov  ax,[ctx]
+        xor  dx,dx
+        mov  bx,500
+        div  bx
+        test dx,dx
+        jnz  @@amin
+        mov  ax,[cty]
+        mov  word ptr [dsx],253
+        mov  cx,8
+        mov  bl,8
+        call HLINE2
+        mov  ax,[dsac]
+        cmp  ax,70
+        jg   @@alb
+        cmp  ax,-70
+        jge  @@apn
+@@alb:  mov  ax,[cty]
+        sub  ax,2
+        mov  [fty],ax
+        mov  word ptr [ftx],263
+        mov  byte ptr [COLOR],8
+        mov  ax,[ctx]
+        call FNUM
+        jmp  @@apn
+@@amin: mov  ax,[cty]
+        mov  word ptr [dsx],253
+        mov  cx,4
+        mov  bl,8
+        call HLINE2
+@@apn:  add  word ptr [ctx],100
+        jmp  @@ap
+@@apd:  mov  ax,[lgnd]          ; the ground below us, red on the tape
+        sub  ax,[camy]
+        cmp  ax,280
+        jg   @@anc
+        cmp  ax,-280
+        jl   @@anc
+        sar  ax,1
+        sar  ax,1
+        sar  ax,1
+        mov  bx,95
+        sub  bx,ax
+        cmp  bx,60
+        jl   @@anc
+        cmp  bx,130
+        jg   @@anc
+        mov  ax,bx
+        mov  word ptr [dsx],252
+        mov  cx,9
+        mov  bl,19
+        call HLINE2
+@@anc:  mov  ax,CEIL            ; the service ceiling, red too
+        sub  ax,[camy]
+        cmp  ax,280
+        jg   @@anc2
+        sar  ax,1
+        sar  ax,1
+        sar  ax,1
+        mov  bx,95
+        sub  bx,ax
+        cmp  bx,60
+        jl   @@anc2
+        mov  ax,bx
+        mov  word ptr [dsx],252
+        mov  cx,9
+        mov  bl,19
+        call HLINE2
+@@anc2: mov  ax,95              ; caret + live altitude
+        call ROW320
+        add  di,250
+        mov  al,96
+        mov  es:[di],al
+        mov  es:[di-1-320],al
+        mov  es:[di-1+320],al
+        mov  word ptr [ftx],263
+        mov  word ptr [fty],92
+        mov  byte ptr [COLOR],96
+        mov  ax,[camy]
+        call FNUM
+        ret

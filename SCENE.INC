@@ -25,6 +25,7 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
         call AMSLDRAW           ; the AI's missiles too
         call LOCKHUD            ; aiming ring, lock pointer, callsign
         call GUNDRAW            ; cannon tracers
+        call HUDBARS            ; glass HUD: compass, speed, altitude
         mov  word ptr [mapt],123
         cmp  byte ptr [cockpit],0
         je   @@nopan

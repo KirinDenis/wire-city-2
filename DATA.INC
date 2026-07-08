@@ -21,7 +21,8 @@ pitch   dw 0                    ; pitch angle, signed -64..64 (64 = straight up)
 psin    dw 0                    ; sin(pitch)*256
 pcos    dw 256                  ; cos(pitch)*256
 pofs    dw 0                    ; background horizon shift = tan(pitch)*FOCAL
-throt   dw 64                   ; throttle 0..64 (64 = military power)
+throt   dw 42                   ; throttle 0..64 (start at 65%: full
+                                ; military power outruns the AI jets)
 abon    db 0                    ; afterburner active this tick
 cockpit db 1                    ; 1 = instrument panel shown (C toggles)
 prevc   db 0                    ; previous C-key state (edge detect)

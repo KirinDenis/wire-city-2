@@ -773,7 +773,7 @@ CRASHHANDLE:
         mov  word ptr [vel],CRUISE  ; fresh jet: cruise speed + full tank
         mov  word ptr [fuel],FUELMAX
         mov  word ptr [pitch],0     ; wings level, nose on the horizon
-        mov  word ptr [throt],64    ; military power
+        mov  word ptr [throt],42    ; 65% power (100% outruns the AI)
         mov  byte ptr [abon],0
         mov  byte ptr [pammo],4     ; fresh rails, no missile in flight
         mov  byte ptr [msact],0
