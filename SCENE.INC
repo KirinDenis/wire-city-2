@@ -19,6 +19,7 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
 @@day:  call TERRPREP           ; rotate + cache the terrain nodes
         call TERRAIN            ; real 3D relief, far -> near
         call BUILDINGS          ; real buildings to the horizon (BORD walk)
+        call PLANESDRAW         ; AI jets own the sky
         mov  word ptr [mapt],123
         cmp  byte ptr [cockpit],0
         je   @@nopan

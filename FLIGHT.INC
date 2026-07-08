@@ -351,6 +351,7 @@ INPUT:
         mov  bx,256
         idiv bx
         add  [camz],ax
+        call PLANESUPD          ; AI traffic flies on the same clock
         ret
 
 ; ============================================================================

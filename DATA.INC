@@ -33,6 +33,53 @@ swspd   dw 360                  ; sway: phase step per tick (~10 s cycle)
 swamp   dw 4                    ; sway: current amplitude, screen pixels
 swayx   dw 0                    ; sway: this tick's X shift (screen px)
 swayy   dw 0                    ; sway: this tick's Y shift (screen px)
+
+; ---- AI traffic: low-poly jets (see PLANES.INC) ----------------------------
+NPLANE  equ 3
+pax     dw NPLANE dup(0)        ; world position
+pay     dw NPLANE dup(0)
+paz     dw NPLANE dup(0)
+pah     dw NPLANE dup(0)        ; heading 0..255
+; model vertices (x,y,z), nose +Z, wingspan ~104 world units
+MVERT   dw   0,  4, 64          ; 0 nose
+        dw  -8, 10,-44          ; 1 rear top L
+        dw   8, 10,-44          ; 2 rear top R
+        dw  -8, -6,-44          ; 3 rear bottom L
+        dw   8, -6,-44          ; 4 rear bottom R
+        dw -52,  2,-34          ; 5 wing tip L
+        dw  52,  2,-34          ; 6 wing tip R
+        dw   0,  2, 26          ; 7 wing root fore
+        dw  -8,  2,-44          ; 8 wing rear L
+        dw   8,  2,-44          ; 9 wing rear R
+        dw   0,  8,-20          ; 10 fin base fore
+        dw   0, 30,-52          ; 11 fin top rear
+        dw   0, 10,-44          ; 12 fin base rear
+; faces: 4 corner ids (triangles repeat the first) + colour
+MFACE   db 0,1,2,0, 24          ; body top (sun-lit white)
+        db 0,3,4,0, 16          ; body bottom (shade)
+        db 0,1,3,0, 25          ; body left
+        db 0,2,4,0, 25          ; body right
+        db 7,5,8,7, 0           ; wing L (light grey)
+        db 7,6,9,7, 0           ; wing R
+        db 10,11,12,10, 25      ; tail fin
+        db 1,2,4,3, 94          ; engine nozzle: palette-cycled fire
+NFACE   equ 8
+GLOWT   db 63,52,12             ; nozzle DAC cycle: yellow
+        db 63,34, 6             ; orange
+        db 56,14, 4             ; red
+        db 63,34, 6             ; orange again (smooth loop)
+PVX     dw 13 dup(0)            ; camera-space vertex cache
+PVY     dw 13 dup(0)
+PVZ     dw 13 dup(0)
+FCD     dw NFACE dup(0)         ; face depths for the painter sort
+FCO     db NFACE dup(0)         ; face draw order
+msin    dw 0                    ; model-vs-camera yaw sin/cos
+mcos    dw 0
+pdx     dw 0                    ; plane centre in camera space
+pdy     dw 0
+pdz     dw 0
+pidx    dw 0                    ; draw loop: plane offset
+pfc     dw 0                    ; draw loop: face counter
 ftx     dw 0                    ; font cursor x
 fty     dw 0                    ; font cursor y
 NB      db 6 dup(0)             ; number->text scratch for FNUM

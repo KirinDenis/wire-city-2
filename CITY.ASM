@@ -292,6 +292,31 @@ MAIN:
         jb   @@seek
 @@sdone:
         mov  word ptr [camy],1450 ; start high above everything (peaks ~1110)
+        ; ---- AI traffic initial spots (leash respawn adjusts later) ----
+        mov  ax,[camx]
+        add  ax,3000
+        mov  [pax],ax
+        mov  ax,[camz]
+        add  ax,4000
+        mov  [paz],ax
+        mov  word ptr [pay],900
+        mov  word ptr [pah],32
+        mov  ax,[camx]
+        sub  ax,4000
+        mov  [pax+2],ax
+        mov  ax,[camz]
+        add  ax,6000
+        mov  [paz+2],ax
+        mov  word ptr [pay+2],1100
+        mov  word ptr [pah+2],200
+        mov  ax,[camx]
+        add  ax,1000
+        mov  [pax+4],ax
+        mov  ax,[camz]
+        add  ax,8000
+        mov  [paz+4],ax
+        mov  word ptr [pay+4],1300
+        mov  word ptr [pah+4],128
         mov  word ptr [heading],0
         mov  word ptr [roll],0
         call SETTRIG            ; seed hsin/hcos before the first physics tick
@@ -334,6 +359,24 @@ GAMELOOP:
         call RENDER
         call CROSS
         call BLIT               ; to video memory
+        ; nozzle fire: re-write DAC entry 94 (the F-15 SE II trick - the
+        ; engines burn by palette cycling, not by drawing anything)
+        mov  ax,[lasttk]
+        shr  ax,1
+        and  ax,3
+        mov  bx,ax
+        add  bx,bx
+        add  bx,ax              ; *3
+        mov  dx,3C8h
+        mov  al,94
+        out  dx,al
+        inc  dx
+        mov  al,[GLOWT+bx]
+        out  dx,al
+        mov  al,[GLOWT+bx+1]
+        out  dx,al
+        mov  al,[GLOWT+bx+2]
+        out  dx,al
         call HUD                ; text overlay (BIOS)
         call WAITV              ; tearing guard only (does not gate physics)
         cmp  byte ptr [KEYS+SC_ESC],0
@@ -362,6 +405,7 @@ QUIT:
         INCLUDE WORLD2.INC      ; face builders, city plan, window glyphs
         INCLUDE FLIGHT.INC      ; physics, collisions, crash screen
         INCLUDE HUD.INC         ; text HUD and world minimap blit
+        INCLUDE PLANES.INC      ; AI jets in the sky
 
 
 ; ============================================================================
