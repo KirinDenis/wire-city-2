@@ -1,32 +1,37 @@
-# mkpanel.py - convert res/panel1.bmp (320x200, 24-bit) into game resources:
-#   PANELIMG.INC - 64000 palette-index bytes (db lines), resource id 2 body.
-#                  255 = transparent (the world shows through), everything
-#                  else = palette index 31..93 (63 quantized panel colours).
-#   PALPNL.INC   - 63 VGA DAC triplets (0..63), appended to PALDAY/PALNITE.
-# Marker rectangles painted by the artist are flattened to a dark MFD
-# screen colour so the instruments can draw on top of them each frame:
-#   red (237,28,36)  -> radar screen     blue (0,162,232) -> ADI screen
-#   green (181,230,29) -> map screen     near-white       -> transparent
+# mkpanel.py - convert the cockpit artwork into game resources:
+#   res/panel1.bmp - the ART: what the player sees (white = viewport)
+#   res/panel2.bmp - the MARKUP: same image with flat colour rectangles
+#                    telling the game where the instruments live
+# Outputs:
+#   PANELIMG.INC - 64000 palette-index bytes, resource id 2 in CITY.DAT.
+#                  255 = transparent, panel colours at palette 31..93.
+#   PALPNL.INC   - 63 VGA DAC triplets appended to PALDAY/PALNITE.
+# Markup colours (MS Paint / Photoshop defaults):
+#   red   (237,28,36)   radar MFD      blue (0,162,232)  ADI MFD
+#   green (34,177,76)   map MFD        cyan (153,217,234) text/lamp areas
+# All marked zones are flattened to a dark glass colour in the art so the
+# instruments draw on a clean background. Zone coordinates are printed -
+# they are hardcoded in HUD.INC (PANELBMP), update it if the layout moves.
 # Run from the repo root:  python res\mkpanel.py
 import os
 from PIL import Image
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-im = Image.open(os.path.join(root, 'res', 'panel1.bmp')).convert('RGB')
-w, h = im.size
-assert (w, h) == (320, 200), f'panel must be 320x200, got {w}x{h}'
-px = im.load()
+art = Image.open(os.path.join(root, 'res', 'panel1.bmp')).convert('RGB')
+mrk = Image.open(os.path.join(root, 'res', 'panel2.bmp')).convert('RGB')
+assert art.size == (320, 200) and mrk.size == (320, 200)
+w, h = art.size
+apx, mpx = art.load(), mrk.load()
 
-# ---- locate the largest blob of each marker colour --------------------------
-def near(c, t, tol=40):
+def near(c, t, tol=30):
     return all(abs(a - b) < tol for a, b in zip(c, t))
 
-def main_blob(target, tol=40):
+def blobs(target, tol=30, minpx=15):
     seen = bytearray(w * h)
-    best = None
+    out = []
     for y0 in range(h):
         for x0 in range(w):
-            if seen[y0 * w + x0] or not near(px[x0, y0], target, tol):
+            if seen[y0 * w + x0] or not near(mpx[x0, y0], target, tol):
                 continue
             stack = [(x0, y0)]
             seen[y0 * w + x0] = 1
@@ -37,56 +42,50 @@ def main_blob(target, tol=40):
                 for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                     nx, ny = x + dx, y + dy
                     if 0 <= nx < w and 0 <= ny < h and not seen[ny * w + nx] \
-                       and near(px[nx, ny], target, tol):
+                       and near(mpx[nx, ny], target, tol):
                         seen[ny * w + nx] = 1
                         stack.append((nx, ny))
-            if best is None or n > best[0]:
-                best = (n, min(xs), min(ys), max(xs), max(ys))
-    return best
+            if n >= minpx:
+                out.append((n, min(xs), min(ys), max(xs), max(ys)))
+    out.sort(reverse=True)
+    return out
 
+SCREEN_DARK = (10, 14, 20)
 MARKERS = {
-    'RADAR': (237, 28, 36),
-    'ADI':   (0, 162, 232),
-    'MAP':   (181, 230, 29),
+    'RADAR (red)':  ((237, 28, 36),   1),   # colour, max blobs to take
+    'ADI (blue)':   ((0, 162, 232),   1),
+    'MAP (green)':  ((34, 177, 76),   1),
+    'TEXT (cyan)':  ((153, 217, 234), 99),
 }
-SCREEN_DARK = (10, 14, 20)      # "MFD switched off" glass
-zones = {}
-for name, col in MARKERS.items():
-    n, x0, y0, x1, y1 = main_blob(col)
-    zones[name] = (x0, y0, x1, y1)
-    # grow by 1 to swallow the anti-aliased rim of the marker rectangle
-    for y in range(max(0, y0 - 1), min(h, y1 + 2)):
-        for x in range(max(0, x0 - 1), min(w, x1 + 2)):
-            px[x, y] = SCREEN_DARK
-    print(f'{name}: x {x0}..{x1}  y {y0}..{y1}  ({x1-x0+1}x{y1-y0+1}, {n}px)')
+for name, (col, take) in MARKERS.items():
+    for n, x0, y0, x1, y1 in blobs(col)[:take]:
+        print(f'{name}: x {x0}..{x1}  y {y0}..{y1}  ({x1-x0+1}x{y1-y0+1})')
+        for y in range(max(0, y0 - 1), min(h, y1 + 2)):
+            for x in range(max(0, x0 - 1), min(w, x1 + 2)):
+                apx[x, y] = SCREEN_DARK
 
-# ---- transparency mask from the ORIGINAL near-white pixels -------------------
+# transparency from the ART's near-white pixels
 transparent = bytearray(w * h)
-ntr = 0
 for y in range(h):
     for x in range(w):
-        r, g, b = px[x, y]
+        r, g, b = apx[x, y]
         if r >= 240 and g >= 240 and b >= 240:
             transparent[y * w + x] = 1
-            ntr += 1
-print(f'transparent pixels: {ntr}')
+print(f'transparent pixels: {sum(transparent)}')
 
-# ---- quantize the panel to 63 colours ----------------------------------------
-q = im.quantize(colors=63, dither=Image.Dither.FLOYDSTEINBERG)
+q = art.quantize(colors=63, dither=Image.Dither.FLOYDSTEINBERG)
 qpx = q.load()
 pal = q.getpalette()[:63 * 3]
 
-# ---- emit the image bytes -----------------------------------------------------
 data = bytearray(w * h)
 for y in range(h):
     for x in range(w):
         i = y * w + x
         data[i] = 255 if transparent[i] else 31 + qpx[x, y]
 
-# span count sanity: the loader's span table holds 1599 spans max
 spans = 0
 prev = True
-for i, v in enumerate(data):
+for v in data:
     t = (v == 255)
     if prev and not t:
         spans += 1
@@ -94,19 +93,17 @@ for i, v in enumerate(data):
 print(f'blit spans: {spans} (loader cap 1599)')
 assert spans <= 1599, 'too many spans - simplify the transparent area'
 
-out = os.path.join(root, 'PANELIMG.INC')
-with open(out, 'w', encoding='ascii') as f:
+with open(os.path.join(root, 'PANELIMG.INC'), 'w', encoding='ascii') as f:
     f.write('; PANELIMG.INC - generated by res\\mkpanel.py from res\\panel1.bmp\n')
     f.write('; 320x200 palette indexes, 255 = transparent. DO NOT EDIT BY HAND.\n')
     for i in range(0, len(data), 20):
         f.write('        db ' + ','.join(str(b) for b in data[i:i + 20]) + '\n')
-print('wrote', out)
+print('wrote PANELIMG.INC')
 
-out = os.path.join(root, 'PALPNL.INC')
-with open(out, 'w', encoding='ascii') as f:
+with open(os.path.join(root, 'PALPNL.INC'), 'w', encoding='ascii') as f:
     f.write('; PALPNL.INC - generated by res\\mkpanel.py, 63 panel colours\n')
     f.write('; (VGA DAC 0..63), palette indexes 31..93. DO NOT EDIT BY HAND.\n')
     for i in range(63):
         r, g, b = pal[i * 3] >> 2, pal[i * 3 + 1] >> 2, pal[i * 3 + 2] >> 2
         f.write(f'        db {r},{g},{b}          ;{31 + i}\n')
-print('wrote', out)
+print('wrote PALPNL.INC')

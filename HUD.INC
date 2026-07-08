@@ -758,10 +758,13 @@ FNUM:   mov  di,offset NB+5
 
 ; ============================================================================
 ;  PANELBMP - the photo cockpit (CITY.DAT resource 2) over the rendered
-;  world: rep movsb the precomputed span table from resseg, then draw the
-;  instruments onto the dark MFD screens the converter left in the image.
-;  Zones (from res\mkpanel.py): radar 46..131 x 123..154, ADI 137..203 x
-;  121..153 (centre 170,137), map 214..288 x 119..156. ES=bufseg, DS=CS.
+;  world, instruments placed by the res\panel2.bmp markup (run
+;  res\mkpanel.py to reprint the zones after moving them):
+;    radar 51..123 x 153..188      ADI 136..183 x 155..187 (centre 160,171)
+;    map 195..239 x 153..188       readouts 241..272 x 156..188
+;    title strip 96..223 x 0..9    AB strip 141..176 x 14..20
+;    lamps: FUEL 3,2 13x8  STALL 7,107 10x10  TERR 19,123 10x10
+;    throttle ladder 43..49 x 162..187.  ES=bufseg, DS=CS.
 ; ============================================================================
 PANELBMP:
         cld
@@ -783,9 +786,157 @@ PANELBMP:
         add  si,4
         jmp  @@sp
 @@spd:
-        call MINIMAP2           ; squeezed map on the right MFD
-        ; ---- compact ADI on the centre MFD: roll-rotated pitch ladder ----
-        ; rung k = -2..2 at 10-degree steps; offset = (pitch-k*7)/2, +-10.
+        call MINIMAP2           ; half-scale map on the green MFD
+        ; ---- title strip: name, mission time, altitude ----
+        mov  byte ptr [COLOR],8
+        mov  word ptr [ftx],100
+        mov  word ptr [fty],2
+        mov  si,offset MSGTITLE
+        call FDRAW
+        mov  byte ptr [COLOR],6
+        mov  word ptr [ftx],146
+        mov  si,offset MSGT2
+        call FDRAW
+        mov  byte ptr [COLOR],8
+        mov  word ptr [ftx],154
+        mov  ax,[lasttk]        ; BIOS ticks -> seconds
+        xor  dx,dx
+        mov  bx,18
+        div  bx
+        call FNUM
+        mov  byte ptr [COLOR],6
+        mov  word ptr [ftx],178
+        mov  si,offset MSGALT
+        call FDRAW
+        mov  byte ptr [COLOR],8
+        mov  ax,[camy]
+        call FNUM
+        ; ---- afterburner strip ----
+        cmp  byte ptr [abon],0
+        je   @@ab
+        mov  byte ptr [COLOR],5
+        mov  word ptr [ftx],149
+        mov  word ptr [fty],15
+        mov  si,offset MSGABON
+        call FDRAW
+@@ab:
+        ; ---- caution lights: FUEL (top left), STALL and TERR (left strut)
+        mov  word ptr [lampx],3
+        mov  word ptr [lampy],2
+        mov  word ptr [dsx],13
+        mov  word ptr [dsy],8
+        xor  cx,cx
+        cmp  word ptr [fuel],1200
+        jge  @@lf
+        mov  cx,19              ; low fuel: red
+@@lf:   mov  si,offset MSGF2
+        call LAMP2
+        mov  word ptr [lampx],7
+        mov  word ptr [lampy],107
+        mov  word ptr [dsx],10
+        mov  word ptr [dsy],10
+        xor  cx,cx
+        mov  ax,[vel]
+        cmp  ax,VSTALL
+        jge  @@ls
+        mov  cx,19              ; stall: red
+@@ls:   mov  si,offset MSGS2
+        call LAMP2
+        mov  word ptr [lampx],19
+        mov  word ptr [lampy],123
+        mov  word ptr [dsx],10
+        mov  word ptr [dsy],10
+        xor  cx,cx
+        mov  ax,[camy]
+        sub  ax,[lgnd]
+        cmp  ax,150
+        jge  @@lt
+        mov  cx,5               ; terrain close: amber
+@@lt:   mov  si,offset MSGT2
+        call LAMP2
+        ; ---- throttle ladder: 12 segments up from y=186 at x=44 ----
+        mov  ax,[throt]
+        mov  bx,3
+        imul bx
+        mov  cl,4
+        shr  ax,cl              ; lit segments = throt*3/16 (0..12)
+        mov  dx,ax
+        mov  word ptr [dsx],186 ; current segment row
+        xor  si,si              ; segment index
+@@tb:   cmp  si,12
+        jae  @@tbd
+        mov  ax,[dsx]
+        call ROW320
+        add  di,44
+        mov  al,29              ; dark segment...
+        cmp  si,dx
+        jae  @@tbc
+        mov  al,5               ; ...lit amber up to the throttle setting
+@@tbc:  mov  cx,5
+        rep  stosb
+        sub  word ptr [dsx],2
+        inc  si
+        jmp  @@tb
+@@tbd:
+        ; ---- radar MFD is not fitted yet ----
+        mov  byte ptr [COLOR],6
+        mov  word ptr [ftx],73
+        mov  word ptr [fty],168
+        mov  si,offset MSGRDR
+        call FDRAW
+        ; ---- readouts right of the map: S/T/F/H rows ----
+        mov  byte ptr [COLOR],6
+        mov  word ptr [ftx],242
+        mov  word ptr [fty],157
+        mov  si,offset MSGS2
+        call FDRAW
+        mov  byte ptr [COLOR],8
+        mov  word ptr [ftx],248
+        mov  ax,[vel]
+        call FNUM
+        mov  byte ptr [COLOR],6
+        mov  word ptr [ftx],242
+        mov  word ptr [fty],165
+        mov  si,offset MSGT2
+        call FDRAW
+        mov  byte ptr [COLOR],8
+        mov  word ptr [ftx],248
+        mov  ax,[throt]
+        mov  bx,100
+        imul bx
+        mov  bx,64
+        idiv bx
+        call FNUM
+        cmp  byte ptr [abon],0
+        je   @@nab
+        mov  byte ptr [COLOR],5
+        mov  si,offset MSGAB    ; '+' right after the percentage
+        call FDRAW
+@@nab:  mov  byte ptr [COLOR],8
+        cmp  word ptr [fuel],1200
+        jge  @@fok
+        mov  byte ptr [COLOR],19
+@@fok:  mov  word ptr [ftx],242
+        mov  word ptr [fty],173
+        mov  si,offset MSGF2
+        call FDRAW
+        mov  word ptr [ftx],248
+        mov  ax,[fuel]
+        xor  dx,dx
+        mov  bx,60
+        div  bx
+        call FNUM
+        mov  byte ptr [COLOR],6
+        mov  word ptr [ftx],242
+        mov  word ptr [fty],181
+        mov  si,offset MSGH2
+        call FDRAW
+        mov  byte ptr [COLOR],8
+        mov  word ptr [ftx],248
+        mov  ax,[heading]
+        call FNUM
+        ; ---- compact ADI on the blue MFD: roll-rotated pitch ladder ----
+        ; rung k = -2..2 at 10-degree steps; offset = (pitch-k*7)/2, +-13.
         mov  word ptr [tmpi],-2
 @@cl:   mov  ax,[tmpi]
         mov  bx,7
@@ -795,10 +946,10 @@ PANELBMP:
         mov  ax,bx
         cwd
         mov  bx,2
-        idiv bx                 ; offset from the screen centre
-        cmp  ax,10
+        idiv bx
+        cmp  ax,13
         jg   @@cn
-        cmp  ax,-10
+        cmp  ax,-13
         jl   @@cn
         mov  [dsx],ax
         mov  ax,[rsin]          ; rung centre = C + perp*offset
@@ -806,25 +957,25 @@ PANELBMP:
         mov  bx,256
         idiv bx
         neg  ax
-        add  ax,170
+        add  ax,160
         mov  [dsy],ax
         mov  ax,[rcos]
         imul word ptr [dsx]
         mov  bx,256
         idiv bx
-        add  ax,137
+        add  ax,171
         mov  [dsac],ax
         mov  bx,6               ; short rung...
         cmp  word ptr [tmpi],0
         jne  @@cln
-        mov  bx,[rsin]          ; ...horizon: 24 - |rsin|/16 keeps it on
+        mov  bx,[rsin]          ; ...horizon: 20 - |rsin|/16 stays on
         test bx,bx              ; the glass at any bank angle
         jns  @@cp
         neg  bx
 @@cp:   mov  cl,4
         shr  bx,cl
         neg  bx
-        add  bx,24
+        add  bx,20
 @@cln:  mov  ax,[rcos]
         imul bx
         push bx
@@ -862,9 +1013,9 @@ PANELBMP:
         cmp  word ptr [tmpi],2
         jle  @@cl
         ; fixed red wings in the middle of the glass
-        mov  ax,137
+        mov  ax,171
         call ROW320
-        add  di,170
+        add  di,160
         mov  al,19
         mov  es:[di],al         ; nose dot
         push di
@@ -879,10 +1030,45 @@ PANELBMP:
 @@wr:   mov  es:[di],al
         inc  di
         loop @@wr
-        ; ---- radar MFD is not fitted yet ----
-        mov  byte ptr [COLOR],6
-        mov  word ptr [ftx],75
-        mov  word ptr [fty],136
-        mov  si,offset MSGRDR
-        call FDRAW
+        ret
+
+; ============================================================================
+;  LAMP2 - small caution light. in: [lampx]/[lampy] = top-left corner,
+;  [dsx]/[dsy] = width/height, CX = lit colour (0 = off), SI -> one-letter
+;  label. Lit lamps blink on the BIOS tick like the classic panel LAMP.
+; ============================================================================
+LAMP2:  mov  [dsac],cx          ; body colour
+        jcxz @@dk
+        mov  ax,[lasttk]
+        test ax,2               ; blink phase
+        jnz  @@ck
+@@dk:   mov  word ptr [dsac],29 ; dark body
+@@ck:   mov  ax,[lampy]
+        call ROW320
+        add  di,[lampx]
+        mov  dx,[dsy]
+@@rw:   mov  cx,[dsx]
+        mov  ax,[dsac]
+        rep  stosb
+        add  di,320
+        sub  di,[dsx]
+        dec  dx
+        jnz  @@rw
+        mov  ax,[lampx]         ; centre the letter in the body
+        mov  bx,[dsx]
+        sub  bx,4
+        shr  bx,1
+        add  ax,bx
+        mov  [ftx],ax
+        mov  ax,[lampy]
+        mov  bx,[dsy]
+        sub  bx,6
+        shr  bx,1
+        add  ax,bx
+        mov  [fty],ax
+        mov  byte ptr [COLOR],8
+        cmp  word ptr [dsac],29
+        jne  @@fd
+        mov  byte ptr [COLOR],30 ; off/blink-dark: dim label
+@@fd:   call FDRAW
         ret

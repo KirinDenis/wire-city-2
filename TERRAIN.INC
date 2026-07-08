@@ -791,25 +791,27 @@ TERRH:  mov  ax,[camx]
         ret
 
 ; ============================================================================
-;  MINIMAP2 - the baked map squeezed to 64x32 (every other row) onto the
-;  right MFD of the photo cockpit at (219,122). White plane blip and red
-;  course tick, same math as MINIMAP with the row halved. ES=bufseg.
+;  MINIMAP2 - the baked map at half scale (32x32, every other row and
+;  column) on the green MFD at (202,155). White plane blip, red course
+;  tick. Full 1:1 map needs a 64x64 green square in the artwork.
 ; ============================================================================
 MINIMAP2:
         cld
         mov  si,offset MMAP
-        mov  ax,122
+        mov  ax,155
         call ROW320
-        add  di,219
-        mov  cx,32
-@@row:  push cx
-        mov  cx,32
-        rep  movsw              ; one 64-byte map row
-        pop  cx
+        add  di,202
+        mov  dx,32              ; dest rows
+@@row:  mov  cx,32
+@@px:   lodsb                   ; every other source column
+        inc  si
+        stosb
+        loop @@px
         add  si,64              ; skip the odd source row
-        add  di,320-64
-        loop @@row
-        ; plane blip at node (camx,camz)
+        add  di,320-32
+        dec  dx
+        jnz  @@row
+        ; plane blip at node (camx,camz), halved
         mov  ax,[camx]
         add  ax,BIAS
         mov  cl,2
@@ -817,7 +819,8 @@ MINIMAP2:
         mov  cl,8
         shr  ax,cl
         and  ax,63
-        mov  bx,ax              ; col = node x
+        shr  ax,1
+        mov  bx,ax              ; col/2
         mov  ax,[camz]
         add  ax,BIAS
         mov  cl,2
@@ -827,36 +830,32 @@ MINIMAP2:
         and  ax,63
         mov  dx,63
         sub  dx,ax              ; row = 63 - node z
-        shr  dx,1               ; squeezed to 32 rows
+        shr  dx,1
         mov  ax,dx
-        add  ax,122
+        add  ax,155
         push bx
         call ROW320
         pop  bx
-        add  di,219
+        add  di,202
         add  di,bx
-        mov  al,8               ; white 2x1 blip (rows are half-height)
+        mov  al,8               ; white blip
         mov  es:[di],al
-        mov  es:[di+1],al
-        ; heading tick: dxn - (dzn/2) rows, +Z is up on the map
+        ; course tick 1-2 px ahead of the blip
         mov  ax,[hsin]
-        add  ax,ax
-        add  ax,[hsin]          ; hsin*3
+        add  ax,ax              ; hsin*2 -> -2..2 screen px
         mov  bx,256
         cwd
-        idiv bx                 ; dxn = -3..3
+        idiv bx
         mov  si,ax
         mov  ax,[hcos]
         add  ax,ax
-        add  ax,[hcos]
         cwd
-        idiv bx                 ; dzn = -3..3
-        sar  ax,1               ; halve for the squeezed rows
+        idiv bx                 ; dz -> minus one row per unit (+Z is up)
         mov  cx,320
         imul cx
         mov  cx,ax
         mov  ax,si
-        sub  ax,cx              ; pixel offset = dxn - (dzn/2)*320
+        sub  ax,cx
         add  di,ax
         mov  al,19              ; red course tick
         mov  es:[di],al

@@ -714,6 +714,9 @@ MSGF2    db 'F',0
 MSGD20   db '20',0
 MSGD0    db '0',0
 MSGRDR   db 'RDR OFF',0
+MSGS2    db 'S',0
+MSGH2    db 'H',0
+MSGABON  db 'AB ON',0
 lampx    dw 0                   ; lamp/bar scratch: x or lit-count
 lampy    dw 0                   ; lamp y / bar x
 lampc    db 0                   ; current lamp/segment colour
