@@ -266,10 +266,12 @@ APPLYROLL:
 ;   divide can't overflow. CLAMPAX bounds results to +/-4000 for safe 2D clip.
 ; ============================================================================
 PROJPT: push dx                 ; save ry
-        ; guard: at FARZ=10800 a side point can have |rx| up to ~15000 while
-        ; rz is small; rx*160/rz would then overflow a 16-bit quotient (INT 0).
-        ; overflow needs rz < |rx|*160/32767 ~ |rx|/204, i.e. only rz < 74.
-        cmp  cx,160
+        ; guard: a side point can have |rx| up to ~29000 (grid corner)
+        ; while rz is small; rx*FOCAL/rz would then overflow a 16-bit
+        ; quotient (INT 0). Safe ratio |rx|/rz <= 32767/FOCAL, and past
+        ; rz=256 even the worst |rx| cannot overflow. BOTH constants
+        ; scale with FOCAL - do not hardcode them again.
+        cmp  cx,256
         jge  @@sxok
         mov  bx,ax
         or   bx,bx
@@ -277,8 +279,8 @@ PROJPT: push dx                 ; save ry
         neg  bx                 ; bx = |rx|
 @@g1:   push ax
         mov  ax,cx
-        mov  dx,204
-        mul  dx                 ; ax = rz*204 (rz<74 -> fits 16-bit)
+        mov  dx,32767/FOCAL     ; safe |rx|/rz ratio for this lens
+        mul  dx                 ; ax = rz*(32767/FOCAL), rz<256 fits 16-bit
         cmp  bx,ax
         pop  ax
         jbe  @@sxok             ; |rx| <= rz*204 -> divide is safe
@@ -296,7 +298,7 @@ PROJPT: push dx                 ; save ry
         call CLAMPAX            ; clamp BEFORE roll so APPLYROLL can't overflow
         mov  [ptmp],ax
         pop  ax                 ; ry
-        cmp  cx,160             ; same overflow guard as rx: pitched vertices
+        cmp  cx,256             ; same overflow guard as rx: pitched vertices
         jge  @@syok             ; can be far above/below at small rz
         mov  bx,ax
         or   bx,bx
@@ -304,7 +306,7 @@ PROJPT: push dx                 ; save ry
         neg  bx
 @@g3:   push ax
         mov  ax,cx
-        mov  dx,204
+        mov  dx,32767/FOCAL
         mul  dx
         cmp  bx,ax
         pop  ax
