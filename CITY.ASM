@@ -312,8 +312,8 @@ MAIN:
         and  ax,255
         mov  [pah+si],ax
         mov  bx,si              ; seed the contrail at the spawn point
-        mov  cl,3
-        shl  bx,cl              ; slot base = plane*TLN*2
+        mov  cl,4
+        shl  bx,cl              ; slot base = plane*TLN*2 (TLN=16)
         mov  cx,TLN
 @@tlf:  mov  ax,[pax+si]
         mov  [TLX+bx],ax

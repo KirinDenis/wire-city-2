@@ -86,8 +86,8 @@ PLANESUPD:
         and  ax,7
         jnz  @@next
         mov  bx,si
-        mov  cl,3
-        shl  bx,cl              ; slot base = plane*TLN*2
+        mov  cl,4
+        shl  bx,cl              ; slot base = plane*TLN*2 (TLN=16)
         add  bx,[tlh]
         mov  ax,[pax+si]
         mov  [TLX+bx],ax
@@ -152,9 +152,9 @@ PLANESDRAW:
         mov  [pdy],ax
         ; ---- contrail: TLN dots behind the jet (haze colour) ----
         mov  bx,si
-        mov  cl,3
+        mov  cl,4
         shl  bx,cl
-        mov  [pfc],bx           ; slot base
+        mov  [pfc],bx           ; slot base (TLN=16)
         mov  word ptr [tpi],0
 @@tr:   mov  bx,[pfc]
         add  bx,[tpi]
@@ -185,8 +185,9 @@ PLANESDRAW:
         mov  ax,dx
         call ROW320
         add  di,[dsx]
-        mov  al,12              ; haze: reads as vapour day and night
+        mov  al,8               ; white vapour, 2 px - visible on the sky
         mov  es:[di],al
+        mov  es:[di+1],al
 @@trn:  add  word ptr [tpi],2
         cmp  word ptr [tpi],TLN*2
         jb   @@tr

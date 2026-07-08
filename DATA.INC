@@ -81,7 +81,7 @@ pdz     dw 0
 pidx    dw 0                    ; draw loop: plane offset
 pfc     dw 0                    ; draw loop: face counter
 tpi     dw 0                    ; draw loop: trail point counter
-TLN     equ 8                   ; contrail points per plane
+TLN     equ 16                  ; contrail points per plane
 TLX     dw NPLANE*TLN dup(0)    ; contrail ring buffers (world coords)
 TLY     dw NPLANE*TLN dup(0)
 TLZ     dw NPLANE*TLN dup(0)
