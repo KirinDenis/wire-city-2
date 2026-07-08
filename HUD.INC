@@ -793,7 +793,7 @@ PANELBMP:
         mov  word ptr [fty],2
         mov  si,offset MSGTITLE
         call FDRAW
-        mov  byte ptr [COLOR],6
+        mov  byte ptr [COLOR],5
         mov  word ptr [ftx],146
         mov  si,offset MSGT2
         call FDRAW
@@ -804,7 +804,7 @@ PANELBMP:
         mov  bx,18
         div  bx
         call FNUM
-        mov  byte ptr [COLOR],6
+        mov  byte ptr [COLOR],5
         mov  word ptr [ftx],178
         mov  si,offset MSGALT
         call FDRAW
@@ -884,22 +884,22 @@ PANELBMP:
         mov  si,offset MSGRDR
         call FDRAW
         ; ---- readouts right of the map: S/T/F/H rows ----
-        mov  byte ptr [COLOR],6
-        mov  word ptr [ftx],244
+        mov  byte ptr [COLOR],5
+        mov  word ptr [ftx],242
         mov  word ptr [fty],157
-        mov  si,offset MSGS2
+        mov  si,offset MSGSPD2
         call FDRAW
         mov  byte ptr [COLOR],8
-        mov  word ptr [ftx],248
+        mov  word ptr [ftx],256
         mov  ax,[vel]
         call FNUM
-        mov  byte ptr [COLOR],6
-        mov  word ptr [ftx],244
+        mov  byte ptr [COLOR],5
+        mov  word ptr [ftx],242
         mov  word ptr [fty],165
-        mov  si,offset MSGT2
+        mov  si,offset MSGTHR2
         call FDRAW
         mov  byte ptr [COLOR],8
-        mov  word ptr [ftx],248
+        mov  word ptr [ftx],256
         mov  ax,[throt]
         mov  bx,100
         imul bx
@@ -911,27 +911,31 @@ PANELBMP:
         mov  byte ptr [COLOR],5
         mov  si,offset MSGAB    ; '+' right after the percentage
         call FDRAW
-@@nab:  mov  byte ptr [COLOR],8
+@@nab:  mov  byte ptr [COLOR],5
         cmp  word ptr [fuel],1200
         jge  @@fok
         mov  byte ptr [COLOR],19
-@@fok:  mov  word ptr [ftx],244
+@@fok:  mov  word ptr [ftx],242
         mov  word ptr [fty],173
-        mov  si,offset MSGF2
+        mov  si,offset MSGFUE2
         call FDRAW
-        mov  word ptr [ftx],248
-        mov  ax,[fuel]
+        mov  word ptr [ftx],260
+        mov  byte ptr [COLOR],8
+        cmp  word ptr [fuel],1200
+        jge  @@fv
+        mov  byte ptr [COLOR],19
+@@fv:   mov  ax,[fuel]
         xor  dx,dx
         mov  bx,60
         div  bx
         call FNUM
-        mov  byte ptr [COLOR],6
-        mov  word ptr [ftx],244
+        mov  byte ptr [COLOR],5
+        mov  word ptr [ftx],242
         mov  word ptr [fty],181
-        mov  si,offset MSGH2
+        mov  si,offset MSGHDG2
         call FDRAW
         mov  byte ptr [COLOR],8
-        mov  word ptr [ftx],248
+        mov  word ptr [ftx],256
         mov  ax,[heading]
         call FNUM
         ; ---- compact ADI on the blue MFD: roll-rotated pitch ladder ----
@@ -1032,28 +1036,17 @@ PANELBMP:
         ret
 
 ; ============================================================================
-;  LAMP2 - small caution light. in: [lampx]/[lampy] = top-left corner,
-;  [dsx]/[dsy] = width/height, CX = lit colour (0 = off), SI -> one-letter
-;  label. Draws ONLY when lit and on the bright blink phase - the artwork
-;  provides the lamp socket, so an off lamp is pure art.
+;  LAMP2 - caution light as a bare blinking letter. in: [lampx]/[lampy] =
+;  zone top-left, [dsx]/[dsy] = zone size (the letter is centred in it),
+;  CX = colour (0 = off, draws nothing), SI -> one-letter label. The
+;  artwork provides the socket; the game only lights the glyph up.
 ; ============================================================================
 LAMP2:  jcxz @@no
         mov  ax,[lasttk]
         test ax,2               ; blink: dark phase shows the artwork
         jz   @@no
         mov  [dsac],cx
-        mov  ax,[lampy]
-        call ROW320
-        add  di,[lampx]
-        mov  dx,[dsy]
-@@rw:   mov  cx,[dsx]
-        mov  ax,[dsac]
-        rep  stosb
-        add  di,320
-        sub  di,[dsx]
-        dec  dx
-        jnz  @@rw
-        mov  ax,[lampx]         ; centre the letter in the body
+        mov  ax,[lampx]         ; centre the letter in the zone
         mov  bx,[dsx]
         sub  bx,4
         shr  bx,1
@@ -1065,6 +1058,7 @@ LAMP2:  jcxz @@no
         shr  bx,1
         add  ax,bx
         mov  [fty],ax
-        mov  byte ptr [COLOR],8
+        mov  ax,[dsac]
+        mov  [COLOR],al
         call FDRAW
 @@no:   ret
