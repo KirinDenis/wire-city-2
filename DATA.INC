@@ -111,6 +111,28 @@ WEDG    db 0,1, 0,2, 0,3, 0,4, 1,2, 3,4, 1,3, 2,4
         db 7,5, 5,8, 8,7, 7,6, 6,9, 9,7
         db 10,11, 11,12, 12,10
 NWEDG   equ 17
+; ---- missiles and wrecks ----------------------------------------------------
+pst     db NPLANE dup(0)        ; plane state: 0 = flying, else respawn timer
+pammo   db 4                    ; player missiles on the rails
+mrel    dw 0                    ; reload timer (one missile per ~20 s)
+prevf   db 0                    ; fire key edge detector
+msact   db 0                    ; missile in flight?
+msx     dw 0                    ; missile world position
+msy     dw 0
+msz     dw 0
+mpx     dw 0                    ; previous position (smoke puff)
+mpy     dw 0
+mpz     dw 0
+mvx     dw 0                    ; straight-flight velocity (no lock)
+mvy     dw 0
+mvz     dw 0
+mstgt   dw 0FFFFh               ; homing target (plane offset)
+mlife   dw 0                    ; ticks to self-destruct
+wnext   dw 0                    ; wreck pool: next slot byte offset
+ctx     dw 0                    ; BOOM scratch: face centroid
+cty     dw 0
+ctz     dw 0
+wcc     dw 0                    ; BOOM scratch: corner counter
 ftx     dw 0                    ; font cursor x
 fty     dw 0                    ; font cursor y
 NB      db 6 dup(0)             ; number->text scratch for FNUM

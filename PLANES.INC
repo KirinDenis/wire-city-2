@@ -15,6 +15,18 @@
 PLANESUPD:
         xor  si,si              ; plane offset (words)
 @@pl:
+        mov  bx,si              ; dead jets sit out their respawn timer
+        shr  bx,1
+        mov  al,[pst+bx]
+        test al,al
+        jz   @@fly
+        dec  al
+        mov  [pst+bx],al
+        jz   @@reborn
+        jmp  @@next
+@@reborn:
+        jmp  @@resp             ; timer over: come back somewhere nearby
+@@fly:
         ; gentle circle: nudge the heading on every 4th tick
         mov  ax,[lasttk]
         and  ax,3
@@ -65,7 +77,16 @@ PLANESUPD:
         cmp  ax,si
         jne  @@rlk
         mov  word ptr [locki],0FFFFh
-@@rlk:  push si
+@@rlk:  call RND16              ; a reborn jet flies under a new callsign
+        mov  bx,si
+        shr  bx,1
+        and  ax,3
+        mov  [pcs+bx],al
+        call RND16
+        and  ax,31
+        inc  ax
+        mov  [pnum+bx],al
+        push si
         call RND16
         pop  si
         and  ax,8191
@@ -136,6 +157,10 @@ PLANESDRAW:
         mov  word ptr [pidx],0
 @@pd:
         mov  si,[pidx]
+        mov  bx,si              ; dead jets are debris, not aircraft
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        jne  @@skip
         ; centre -> camera space (yaw only; PITCH4 pitches faces later)
         mov  ax,[pax+si]
         sub  ax,[camx]
@@ -779,3 +804,633 @@ TGTVIEW:
         cmp  si,NWEDG*2
         jb   @@te
         ret
+
+; ---------------------------------------------------------------------------
+;  MSLUPD - one tick of the missile: home on the lock target (or fly
+;  straight), proximity-fuse against every living jet, die by timer.
+; ---------------------------------------------------------------------------
+MSLUPD: cmp  byte ptr [msact],0
+        je   @@out
+        dec  word ptr [mlife]
+        jnz  @@mv
+        mov  byte ptr [msact],0 ; burned out
+        ret
+@@mv:   mov  ax,[msx]           ; remember the old spot (exhaust puff)
+        mov  [mpx],ax
+        mov  ax,[msy]
+        mov  [mpy],ax
+        mov  ax,[msz]
+        mov  [mpz],ax
+        mov  si,[mstgt]
+        cmp  si,0FFFFh
+        je   @@str
+        mov  bx,si              ; target died mid-flight? go ballistic
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        je   @@home
+        mov  word ptr [mstgt],0FFFFh
+@@str:  mov  ax,[mvx]           ; straight: the velocity set at launch
+        add  [msx],ax
+        mov  ax,[mvy]
+        add  [msy],ax
+        mov  ax,[mvz]
+        add  [msz],ax
+        jmp  @@prox
+@@home: ; chase at 64/tick, direction normalised by the dominant axis
+        mov  ax,[pax+si]
+        sub  ax,[msx]
+        mov  [wdx],ax           ; dx
+        mov  ax,[pay+si]
+        sub  ax,[msy]
+        mov  [wdz],ax           ; dy (borrowing the scratch)
+        mov  ax,[paz+si]
+        sub  ax,[msz]
+        mov  [ctx],ax           ; dz
+        mov  bx,[wdx]           ; m = max of the absolutes
+        or   bx,bx
+        jns  @@m1
+        neg  bx
+@@m1:   mov  ax,[wdz]
+        or   ax,ax
+        jns  @@m2
+        neg  ax
+@@m2:   cmp  ax,bx
+        jle  @@m3
+        mov  bx,ax
+@@m3:   mov  ax,[ctx]
+        or   ax,ax
+        jns  @@m4
+        neg  ax
+@@m4:   cmp  ax,bx
+        jle  @@m5
+        mov  bx,ax
+@@m5:   test bx,bx
+        jnz  @@m6
+        inc  bx
+@@m6:   mov  [cty],bx           ; m
+        mov  ax,[wdx]
+        mov  cx,64
+        imul cx
+        idiv word ptr [cty]
+        add  [msx],ax
+        mov  ax,[wdz]
+        mov  cx,64
+        imul cx
+        idiv word ptr [cty]
+        add  [msy],ax
+        mov  ax,[ctx]
+        mov  cx,64
+        imul cx
+        idiv word ptr [cty]
+        add  [msz],ax
+@@prox: ; proximity fuse: |dx|+|dy|+|dz| < 160 pops any living jet
+        xor  si,si
+@@px:   mov  bx,si
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        jne  @@pxn
+        mov  ax,[pax+si]
+        sub  ax,[msx]
+        jns  @@p1
+        neg  ax
+@@p1:   cmp  ax,160
+        jge  @@pxn
+        mov  bx,ax
+        mov  ax,[pay+si]
+        sub  ax,[msy]
+        jns  @@p2
+        neg  ax
+@@p2:   add  bx,ax
+        mov  ax,[paz+si]
+        sub  ax,[msz]
+        jns  @@p3
+        neg  ax
+@@p3:   add  bx,ax
+        cmp  bx,160
+        jge  @@pxn
+        call BOOM               ; direct hit: SI = the unlucky jet
+        mov  byte ptr [msact],0
+        ret
+@@pxn:  add  si,2
+        cmp  si,NPLANE*2
+        jb   @@px
+@@out:  ret
+
+; ---------------------------------------------------------------------------
+;  BOOM - break plane SI into its faces. The jet hides behind a respawn
+;  timer; a wreck slot (round robin of 4) gets: ground height, per-face
+;  world positions with random scatter velocities, and pre-rotated corner
+;  offsets, so the debris keeps the jet's shape as it flies apart.
+; ---------------------------------------------------------------------------
+BOOM:   mov  bx,si
+        shr  bx,1
+        mov  byte ptr [pst+bx],180 ; ~10 s until a fresh jet takes the slot
+        mov  ax,[locki]
+        cmp  ax,si
+        jne  @@bk1
+        mov  word ptr [locki],0FFFFh
+@@bk1:  mov  di,[wnext]         ; claim a wreck slot
+        add  word ptr [wnext],WRKSZ
+        cmp  word ptr [wnext],WRKSZ*4
+        jb   @@bk2
+        mov  word ptr [wnext],0
+@@bk2:  add  di,offset WRK
+        mov  word ptr [di],1    ; wtim = 1: alive and burning
+        ; ground height under the kill (TERRH reads camx/camz: swap in)
+        push word ptr [camx]
+        push word ptr [camz]
+        mov  ax,[pax+si]
+        mov  [camx],ax
+        mov  ax,[paz+si]
+        mov  [camz],ax
+        push si
+        push di
+        call TERRH
+        pop  di
+        pop  si
+        pop  word ptr [camz]
+        pop  word ptr [camx]
+        add  ax,6               ; debris rests a touch above the slope
+        mov  [di+2],ax          ; wgy
+        ; the dying jet's orientation
+        mov  ax,[pah+si]
+        push si
+        push di
+        call SINQ
+        mov  [msin],ax
+        pop  di
+        pop  si
+        mov  ax,[pah+si]
+        add  ax,64
+        push si
+        push di
+        call SINQ
+        mov  [mcos],ax
+        pop  di
+        pop  si
+        ; ---- per face: centroid -> world position + velocity + corners ----
+        mov  word ptr [tpi],0   ; face index
+@@bf:   ; centroid = avg of the face's 4 vertices (model space)
+        xor  ax,ax
+        mov  [ctx],ax
+        mov  [cty],ax
+        mov  [ctz],ax
+        mov  word ptr [wcc],0
+@@bc:   mov  bx,[tpi]
+        add  bx,bx
+        add  bx,bx
+        mov  ax,[tpi]
+        add  bx,ax              ; MFACE record = f*5
+        mov  ax,[wcc]
+        add  bx,ax
+        mov  al,[MFACE+bx]
+        xor  ah,ah
+        mov  bx,ax
+        add  bx,bx
+        add  bx,ax
+        add  bx,bx              ; vertex id * 6
+        mov  ax,[MVERT+bx]
+        add  [ctx],ax
+        mov  ax,[MVERT+bx+2]
+        add  [cty],ax
+        mov  ax,[MVERT+bx+4]
+        add  [ctz],ax
+        inc  word ptr [wcc]
+        cmp  word ptr [wcc],4
+        jb   @@bc
+        mov  ax,[ctx]
+        sar  ax,1
+        sar  ax,1
+        mov  [ctx],ax
+        mov  ax,[cty]
+        sar  ax,1
+        sar  ax,1
+        mov  [cty],ax
+        mov  ax,[ctz]
+        sar  ax,1
+        sar  ax,1
+        mov  [ctz],ax
+        ; face record base = di + WFP + f*12
+        mov  bx,[tpi]
+        add  bx,bx
+        add  bx,bx
+        mov  ax,[tpi]
+        add  ax,ax
+        add  ax,ax
+        add  ax,ax
+        add  bx,ax              ; f*12
+        add  bx,di
+        add  bx,WFP
+        push bx
+        mov  ax,[ctx]           ; world position = plane + rot(centroid)
+        mov  dx,[ctz]
+        call ROTMS
+        pop  bx
+        add  ax,[pax+si]
+        mov  [bx],ax            ; fx
+        add  dx,[paz+si]
+        mov  [bx+4],dx          ; fz
+        mov  ax,[cty]
+        add  ax,[pay+si]
+        mov  [bx+2],ax          ; fy
+        push bx                 ; scatter velocities
+        call RND16
+        pop  bx
+        and  ax,31
+        sub  ax,16
+        mov  [bx+6],ax          ; vx
+        push bx
+        call RND16
+        pop  bx
+        and  ax,15
+        add  ax,6
+        mov  [bx+8],ax          ; vy: pops up, gravity brings it down
+        push bx
+        call RND16
+        pop  bx
+        and  ax,31
+        sub  ax,16
+        mov  [bx+10],ax         ; vz
+        ; ---- corners: pre-rotated offsets from the face centre ----
+        mov  word ptr [wcc],0
+@@bo:   mov  bx,[tpi]
+        add  bx,bx
+        add  bx,bx
+        mov  ax,[tpi]
+        add  bx,ax              ; f*5
+        mov  ax,[wcc]
+        add  bx,ax
+        mov  al,[MFACE+bx]
+        xor  ah,ah
+        mov  bx,ax
+        add  bx,bx
+        add  bx,ax
+        add  bx,bx              ; vid*6
+        mov  ax,[MVERT+bx]
+        sub  ax,[ctx]
+        push word ptr [MVERT+bx+2]
+        mov  dx,[MVERT+bx+4]
+        sub  dx,[ctz]
+        call ROTMS              ; AX/DX = rotated x/z offsets
+        mov  bx,[tpi]           ; corner slot = di + WCO + f*24 + c*6
+        push ax
+        mov  ax,bx
+        add  bx,bx
+        add  bx,ax              ; f*3
+        mov  cl,3
+        shl  bx,cl              ; f*24
+        mov  ax,[wcc]
+        add  bx,ax
+        add  bx,ax
+        add  bx,ax
+        add  bx,ax
+        add  bx,ax
+        add  bx,ax              ; + c*6
+        add  bx,di
+        add  bx,WCO
+        pop  ax
+        mov  [bx],ax            ; ox
+        mov  [bx+4],dx          ; oz
+        pop  ax                 ; raw model y
+        sub  ax,[cty]
+        mov  [bx+2],ax          ; oy
+        inc  word ptr [wcc]
+        cmp  word ptr [wcc],4
+        jb   @@bo
+        inc  word ptr [tpi]
+        cmp  word ptr [tpi],NFACE
+        jb   @@bf
+        ret
+
+; ---------------------------------------------------------------------------
+;  ROTMS - rotate (AX=x, DX=z) by msin/mcos:
+;  x' = (x*mcos + z*msin)/256 ; z' = (z*mcos - x*msin)/256.
+; ---------------------------------------------------------------------------
+ROTMS:  mov  [dsx],ax
+        mov  [dsy],dx
+        imul word ptr [mcos]
+        mov  bx,ax
+        mov  ax,[dsy]
+        imul word ptr [msin]
+        add  ax,bx
+        cwd
+        mov  bx,256
+        idiv bx
+        push ax
+        mov  ax,[dsx]
+        imul word ptr [msin]
+        mov  bx,ax
+        mov  ax,[dsy]
+        imul word ptr [mcos]
+        sub  ax,bx
+        cwd
+        mov  bx,256
+        idiv bx
+        mov  dx,ax
+        pop  ax
+        ret
+
+; ---------------------------------------------------------------------------
+;  WRECKUPD - one tick of the debris: fly apart, fall (gravity 3/tick),
+;  stop on the ground. Landed pieces zero their velocities and stay.
+; ---------------------------------------------------------------------------
+WRECKUPD:
+        mov  di,offset WRK
+        mov  word ptr [tpi],4   ; wreck slots
+@@ww:   cmp  word ptr [di],0
+        je   @@wn
+        cmp  word ptr [di],30000
+        jae  @@wf
+        inc  word ptr [di]      ; age (burns while < 600)
+@@wf:   mov  bx,WFP
+@@wp:   mov  ax,[bx+di+6]       ; fx += vx
+        add  [bx+di],ax
+        mov  ax,[bx+di+10]      ; fz += vz
+        add  [bx+di+4],ax
+        mov  ax,[bx+di+8]
+        sub  ax,3               ; gravity
+        mov  [bx+di+8],ax
+        add  [bx+di+2],ax       ; fy += vy
+        mov  ax,[di+2]          ; wgy
+        cmp  [bx+di+2],ax
+        jg   @@wg
+        mov  [bx+di+2],ax       ; grounded: rest and stop
+        xor  ax,ax
+        mov  [bx+di+6],ax
+        mov  [bx+di+8],ax
+        mov  [bx+di+10],ax
+@@wg:   add  bx,12
+        cmp  bx,WFP+8*12
+        jb   @@wp
+@@wn:   add  di,WRKSZ
+        dec  word ptr [tpi]
+        jnz  @@ww
+        ret
+
+; ---------------------------------------------------------------------------
+;  WRECKDRAW - the fallen jets: each face is a quad at its debris position
+;  (pre-rotated corner offsets), plus flickering fire (glow 94) and rising
+;  smoke dots while the wreck still burns (wtim < 600).
+; ---------------------------------------------------------------------------
+WRECKDRAW:
+        mov  word ptr [pidx],0  ; wreck slot index 0..3
+@@wd:   mov  ax,WRKSZ
+        imul word ptr [pidx]
+        mov  di,ax
+        add  di,offset WRK
+        cmp  word ptr [di],0
+        je   @@wdn
+        mov  ax,[di+WFP]        ; reject by the first face's position
+        sub  ax,[camx]
+        jns  @@wq1
+        neg  ax
+@@wq1:  cmp  ax,9000
+        jge  @@wdn
+        mov  ax,[di+WFP+4]
+        sub  ax,[camz]
+        jns  @@wq2
+        neg  ax
+@@wq2:  cmp  ax,9000
+        jge  @@wdn
+        ; ---- the eight faces ----
+        mov  word ptr [pfc],0
+@@wface:
+        mov  bx,[pfc]
+        add  bx,bx
+        add  bx,bx
+        mov  ax,[pfc]
+        add  ax,ax
+        add  ax,ax
+        add  ax,ax
+        add  bx,ax              ; f*12
+        add  bx,di
+        add  bx,WFP
+        mov  [ctx],bx           ; -> face record
+        mov  bx,[pfc]           ; colour from the model table
+        add  bx,bx
+        add  bx,bx
+        mov  ax,[pfc]
+        add  bx,ax              ; f*5
+        mov  al,[MFACE+bx+4]
+        mov  [COLOR],al
+        mov  word ptr [wcc],0   ; four corners -> IX/IY/IZ
+@@wc:   mov  bx,[pfc]
+        mov  ax,bx
+        add  bx,bx
+        add  bx,ax              ; f*3
+        mov  cl,3
+        shl  bx,cl              ; f*24
+        mov  ax,[wcc]
+        add  bx,ax
+        add  bx,ax
+        add  bx,ax
+        add  bx,ax
+        add  bx,ax
+        add  bx,ax              ; + c*6
+        add  bx,di
+        add  bx,WCO
+        mov  si,[ctx]           ; face record
+        mov  ax,[si]            ; fx + ox
+        add  ax,[bx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[si+4]          ; fz + oz
+        add  ax,[bx+4]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        mov  ax,[si+2]          ; fy + oy
+        add  ax,[bx+2]
+        sub  ax,[camy]
+        push ax
+        push di
+        call ROTXZ
+        pop  di
+        pop  ax
+        mov  si,[wcc]
+        add  si,si
+        mov  [IY+si],ax
+        mov  ax,[rcx]
+        mov  [IX+si],ax
+        mov  ax,[rcz]
+        mov  [IZ+si],ax
+        inc  word ptr [wcc]
+        cmp  word ptr [wcc],4
+        jb   @@wc
+        push di
+        call FACEFILL
+        pop  di
+        inc  word ptr [pfc]
+        cmp  word ptr [pfc],NFACE
+        jb   @@wface
+        ; ---- fire and smoke while it burns ----
+        cmp  word ptr [di],600
+        jae  @@wdn
+        mov  word ptr [wcc],0   ; three plumes on faces 0, 3 and 6
+@@wsm:  mov  ax,[wcc]
+        mov  bx,36
+        imul bx                 ; face k*3 record = k*36 bytes
+        mov  bx,ax
+        add  bx,di
+        add  bx,WFP             ; -> face record
+        ; fire: flickering glow block right at the piece
+        mov  ax,[lasttk]
+        test ax,2
+        jz   @@wfm
+        mov  ax,[bx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[bx+4]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        mov  ax,[bx+2]
+        sub  ax,[camy]
+        add  ax,6
+        mov  [ctz],ax           ; ry for later
+        push bx
+        push di
+        call ROTXZ
+        mov  dx,[ctz]
+        mov  ax,[rcx]
+        mov  cx,[rcz]
+        call PPOINT
+        pop  di
+        pop  bx
+        jc   @@wfm
+        cmp  ax,0
+        jl   @@wfm
+        cmp  ax,318
+        jg   @@wfm
+        cmp  dx,0
+        jl   @@wfm
+        cmp  dx,190
+        jg   @@wfm
+        push bx
+        push di
+        mov  [dsx],ax
+        mov  ax,dx
+        call ROW320
+        add  di,[dsx]
+        mov  al,94              ; palette-cycled fire
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+        pop  di
+        pop  bx
+@@wfm:  ; smoke: a grey dot climbing out of the same piece
+        mov  ax,[wcc]
+        mov  cx,40
+        imul cx
+        mov  cx,[lasttk]
+        add  cx,cx
+        add  ax,cx
+        and  ax,127             ; rising phase 0..127
+        mov  [ctz],ax
+        mov  ax,[bx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[bx+4]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        mov  ax,[bx+2]
+        sub  ax,[camy]
+        add  ax,10
+        add  ax,[ctz]
+        mov  [ctz],ax
+        push di
+        call ROTXZ
+        mov  dx,[ctz]
+        mov  ax,[rcx]
+        mov  cx,[rcz]
+        call PPOINT
+        pop  di
+        jc   @@wsn
+        cmp  ax,0
+        jl   @@wsn
+        cmp  ax,319
+        jg   @@wsn
+        cmp  dx,0
+        jl   @@wsn
+        cmp  dx,191
+        jg   @@wsn
+        push di
+        mov  [dsx],ax
+        mov  ax,dx
+        call ROW320
+        add  di,[dsx]
+        mov  al,25              ; smoke grey
+        mov  es:[di],al
+        pop  di
+@@wsn:  inc  word ptr [wcc]
+        cmp  word ptr [wcc],3
+        jb   @@wsm
+@@wdn:  inc  word ptr [pidx]
+        cmp  word ptr [pidx],4
+        jb   @@wd
+        ret
+
+; ---------------------------------------------------------------------------
+;  MSLDRAW - the missile in flight: a burning 2x2 dot (glow 94) and a
+;  little grey exhaust puff at its previous position.
+; ---------------------------------------------------------------------------
+MSLDRAW:
+        cmp  byte ptr [msact],0
+        je   @@no
+        mov  ax,[msx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[msz]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        call ROTXZ
+        mov  dx,[msy]
+        sub  dx,[camy]
+        mov  ax,[rcx]
+        mov  cx,[rcz]
+        call PPOINT
+        jc   @@puff
+        cmp  ax,0
+        jl   @@puff
+        cmp  ax,318
+        jg   @@puff
+        cmp  dx,0
+        jl   @@puff
+        cmp  dx,190
+        jg   @@puff
+        mov  [dsx],ax
+        mov  ax,dx
+        call ROW320
+        add  di,[dsx]
+        mov  al,94              ; the motor burns with the engine palette
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+@@puff: mov  ax,[mpx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[mpz]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        call ROTXZ
+        mov  dx,[mpy]
+        sub  dx,[camy]
+        mov  ax,[rcx]
+        mov  cx,[rcz]
+        call PPOINT
+        jc   @@no
+        cmp  ax,0
+        jl   @@no
+        cmp  ax,319
+        jg   @@no
+        cmp  dx,0
+        jl   @@no
+        cmp  dx,191
+        jg   @@no
+        mov  [dsx],ax
+        mov  ax,dx
+        call ROW320
+        add  di,[dsx]
+        mov  al,25              ; exhaust puff
+        mov  es:[di],al
+@@no:   ret

@@ -298,7 +298,11 @@ INPUT:
         mov  word ptr [locki],0FFFFh
         mov  word ptr [lockd],7FFFh
         xor  si,si
-@@lks:  mov  ax,[pax+si]
+@@lks:  mov  bx,si              ; cannot lock a dead jet
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        jne  @@lkn
+        mov  ax,[pax+si]
         sub  ax,[camx]
         mov  [wdx],ax
         mov  ax,[paz+si]
@@ -412,7 +416,81 @@ INPUT:
         mov  bx,256
         idiv bx
         add  [camz],ax
+        ; --- Space: fire a missile (edge). Homing on the lock, straight
+        ; down the nose otherwise. One in the air at a time.
+        mov  al,[KEYS+SC_SP]
+        cmp  al,[prevf]
+        je   @@nfr
+        mov  [prevf],al
+        test al,al
+        jz   @@nfr
+        cmp  byte ptr [msact],0
+        jne  @@nfr
+        cmp  byte ptr [pammo],0
+        je   @@nfr
+        dec  byte ptr [pammo]
+        mov  byte ptr [msact],1
+        mov  ax,[locki]
+        mov  [mstgt],ax
+        mov  word ptr [mlife],140
+        mov  ax,[hsin]          ; spawn 100 ahead, 20 below the sightline
+        mov  bx,100
+        imul bx
+        mov  bx,256
+        idiv bx
+        add  ax,[camx]
+        mov  [msx],ax
+        mov  [mpx],ax
+        mov  ax,[hcos]
+        mov  bx,100
+        imul bx
+        mov  bx,256
+        idiv bx
+        add  ax,[camz]
+        mov  [msz],ax
+        mov  [mpz],ax
+        mov  ax,[camy]
+        sub  ax,20
+        mov  [msy],ax
+        mov  [mpy],ax
+        ; straight-flight velocity: 64/tick along heading and pitch
+        mov  ax,[pcos]
+        mov  bx,64
+        imul bx
+        mov  bx,256
+        idiv bx
+        mov  bx,ax              ; horizontal component
+        mov  ax,[hsin]
+        imul bx
+        push bx
+        mov  bx,256
+        idiv bx
+        pop  bx
+        mov  [mvx],ax
+        mov  ax,[hcos]
+        imul bx
+        mov  bx,256
+        idiv bx
+        mov  [mvz],ax
+        mov  ax,[psin]
+        mov  bx,64
+        imul bx
+        mov  bx,256
+        idiv bx
+        mov  [mvy],ax
+@@nfr:
+        ; --- reload: one missile back on the rails every ~20 s ---
+        cmp  byte ptr [pammo],4
+        jae  @@nrl
+        inc  word ptr [mrel]
+        cmp  word ptr [mrel],360
+        jb   @@nrl
+        mov  word ptr [mrel],0
+        inc  byte ptr [pammo]
+@@nrl:
         call PLANESUPD          ; AI traffic flies on the same clock
+        call MSLUPD             ; the missile chases on the same clock
+        call WRECKUPD           ; debris falls on the same clock
         ret
 
 ; ============================================================================
@@ -528,6 +606,8 @@ CRASHHANDLE:
         mov  word ptr [pitch],0     ; wings level, nose on the horizon
         mov  word ptr [throt],64    ; military power
         mov  byte ptr [abon],0
+        mov  byte ptr [pammo],4     ; fresh rails, no missile in flight
+        mov  byte ptr [msact],0
 @@w2:   cmp  byte ptr [KEYS+SC_SP],0
         jne  @@w2
         ret

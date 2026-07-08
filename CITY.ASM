@@ -294,6 +294,18 @@ MAIN:
         jb   @@seek
 @@sdone:
         mov  word ptr [camy],1450 ; start high above everything (peaks ~1110)
+        ; ---- wreck pool lives in BSS: zero it (memory past the image
+        ; is not guaranteed clean) ----
+        push es
+        mov  ax,cs
+        mov  es,ax
+        mov  di,offset WRK
+        xor  ax,ax
+        mov  cx,(WRKSZ*4)/2
+        cld
+        rep  stosw
+        pop  es
+
         ; ---- AI traffic: scatter the squadron around the player ----
         xor  si,si
 @@aspn: call RND16              ; preserves SI
@@ -449,7 +461,14 @@ FONTBUF equ  BSS+19959              ; 246 bytes: font from CITY.DAT (untyped:
 PSPAN   equ  BSS+20215              ; 6400 bytes: cockpit blit span table,
                                     ;  (buffer offset, length) pairs, 0FFFFh
                                     ;  terminated; built once at startup
-BSSEND  equ  BSS+26615
+WRK     equ  BSS+26615              ; wreck pool: 4 slots of WRKSZ bytes.
+                                    ;  +0 wtim, +2 wgy, +4 faces (8 x 12b:
+                                    ;  x,y,z,vx,vy,vz), +100 corner offsets
+                                    ;  (8 faces x 4 x 6b: x,y,z, prerotated)
+WRKSZ   equ  292
+WFP     equ  4                      ; face records offset inside a slot
+WCO     equ  100                    ; corner offsets offset inside a slot
+BSSEND  equ  BSS+27783
 
 CODE    ENDS
         END START

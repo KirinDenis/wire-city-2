@@ -907,7 +907,11 @@ PANELBMP:
         mov  es:[di],al
         mov  es:[di-320],al
         xor  si,si
-@@rdr:  mov  ax,[pax+si]
+@@rdr:  mov  bx,si              ; the dead do not paint on the radar
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        jne  @@rn
+        mov  ax,[pax+si]
         sub  ax,[camx]
         mov  [wdx],ax
         mov  ax,[paz+si]
@@ -953,6 +957,31 @@ PANELBMP:
 @@rn:   add  si,2
         cmp  si,NPLANE*2
         jb   @@rdr
+        ; missile pips along the radar's bottom edge
+        xor  si,si
+@@amo:  mov  ax,si
+        cmp  al,[pammo]
+        jae  @@amn
+        mov  ax,184
+        call ROW320
+        add  di,55
+        mov  ax,si
+        add  ax,ax
+        add  ax,ax
+        add  ax,ax              ; k*8
+        add  di,ax
+        mov  al,5
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+2],al
+        mov  es:[di+3],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+        mov  es:[di+322],al
+        mov  es:[di+323],al
+@@amn:  inc  si
+        cmp  si,4
+        jb   @@amo
         ; ---- readouts right of the map: S/T/F/H rows ----
         mov  byte ptr [COLOR],5
         mov  word ptr [ftx],242
