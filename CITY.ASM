@@ -107,7 +107,9 @@ SC_N    equ 31h                 ; N key: toggle day/night palette
 SC_W    equ 11h                 ; W: throttle up
 SC_S    equ 1Fh                 ; S: throttle down
 SC_A    equ 1Eh                 ; A: afterburner (hold)
-SC_C    equ 2Eh                 ; C: toggle cockpit panel
+SC_C    equ 2Eh
+SC_Q    equ 10h                 ; rudder left
+SC_E    equ 12h                 ; rudder right                 ; C: toggle cockpit panel
 
 CODE    SEGMENT
         ASSUME  CS:CODE, DS:CODE, ES:CODE, SS:CODE

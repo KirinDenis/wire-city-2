@@ -140,6 +140,22 @@ INPUT:
         xor  ax,ax
 @@rlu2: mov  [roll],ax
 @@rlp:
+        ; --- RUDDER: Q/E yaw the nose flat, no bank. Slow like a real
+        ; rudder: 1 unit/tick = a full circle in ~14 s. Good for lining
+        ; up a runway or a gun run without dropping a wing.
+        cmp  byte ptr [KEYS+SC_Q],0
+        je   @@rdq
+        mov  ax,[heading]
+        dec  ax
+        and  ax,255
+        mov  [heading],ax
+@@rdq:  cmp  byte ptr [KEYS+SC_E],0
+        je   @@rde
+        mov  ax,[heading]
+        inc  ax
+        and  ax,255
+        mov  [heading],ax
+@@rde:
         ; --- PITCH: real fighter controls. Pull (DOWN key) rotates the nose
         ; through the roll plane: pitch_rate = q*cos(roll), yaw = q*sin(roll).
         ; Wings level -> loop; knife-edge -> flat turn; inverted -> split-S.
