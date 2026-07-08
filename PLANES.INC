@@ -15,17 +15,11 @@
 PLANESUPD:
         xor  si,si              ; plane offset (words)
 @@pl:
-        mov  bx,si              ; dead jets sit out their respawn timer
+        mov  bx,si              ; the dead stay dead - attrition war
         shr  bx,1
-        mov  al,[pst+bx]
-        test al,al
-        jz   @@fly
-        dec  al
-        mov  [pst+bx],al
-        jz   @@reborn
+        cmp  byte ptr [pst+bx],0
+        je   @@fly
         jmp  @@next
-@@reborn:
-        jmp  @@resp             ; timer over: come back somewhere nearby
 @@fly:
         ; gentle circle: nudge the heading on every 4th tick
         mov  ax,[lasttk]
@@ -148,7 +142,38 @@ PLANESUPD:
         jb   @@th2
         xor  ax,ax
 @@th2:  mov  [tlh],ax
-@@nth:  ret
+@@nth:  ; ---- attrition: when a team is wiped, run the victory banner,
+        ; then field two fresh squadrons (scores carry over) ----
+        cmp  word ptr [rndovr],0
+        je   @@rchk
+        dec  word ptr [rndovr]
+        jnz  @@rret
+        call RESPAWNALL
+        jmp  @@rret
+@@rchk: xor  cx,cx              ; cl = friendlies alive, ch = hostiles
+        xor  si,si
+@@rc:   mov  bx,si
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        jne  @@rcn
+        test si,2
+        jnz  @@rch
+        inc  cl
+        jmp  @@rcn
+@@rch:  inc  ch
+@@rcn:  add  si,2
+        cmp  si,NPLANE*2
+        jb   @@rc
+        test cl,cl
+        jnz  @@rc2
+        mov  byte ptr [rwin],1  ; the hostiles hold the sky
+        mov  word ptr [rndovr],160
+        jmp  @@rret
+@@rc2:  test ch,ch
+        jnz  @@rret
+        mov  byte ptr [rwin],0
+        mov  word ptr [rndovr],160
+@@rret: ret
 
 ; ---------------------------------------------------------------------------
 ;  PLANESDRAW - render the AI jets (called after BUILDINGS: they own the
@@ -710,7 +735,25 @@ LOCKHUD:
         mov  word ptr [ftx],142
         mov  word ptr [fty],132
         call CSDRAW
-@@done: ret
+@@done: cmp  word ptr [rndovr],0
+        je   @@nob
+        mov  ax,[lasttk]        ; the victory banner blinks
+        test ax,4
+        jz   @@nob
+        cmp  byte ptr [rwin],0
+        jne  @@bw
+        mov  byte ptr [COLOR],95
+        mov  word ptr [ftx],140
+        mov  word ptr [fty],44
+        mov  si,offset MSGVWIN
+        call FDRAW
+        jmp  @@nob
+@@bw:   mov  byte ptr [COLOR],96
+        mov  word ptr [ftx],138
+        mov  word ptr [fty],44
+        mov  si,offset MSGBWIN
+        call FDRAW
+@@nob:  ret
 
 ; ---------------------------------------------------------------------------
 ;  CSDRAW - print the callsign of plane SI (offset) at ftx/fty in the
@@ -961,7 +1004,7 @@ MSLUPD: cmp  byte ptr [msact],0
 ; ---------------------------------------------------------------------------
 BOOM:   mov  bx,si
         shr  bx,1
-        mov  byte ptr [pst+bx],180 ; ~10 s until a fresh jet takes the slot
+        mov  byte ptr [pst+bx],1 ; down for good (attrition war)
         mov  ax,[locki]
         cmp  ax,si
         jne  @@bk1
@@ -2020,3 +2063,59 @@ AIGUN:  cmp  word ptr [aigt],0
         mov  si,di              ; the last hit: BOOM wants SI
         call BOOM
 @@no2:  ret
+
+; ---------------------------------------------------------------------------
+;  RESPAWNALL - field two fresh squadrons: every slot alive, scattered
+;  around the player, new callsigns and armour, trails reseeded. Used at
+;  startup and at the start of every round. Drops any lock.
+; ---------------------------------------------------------------------------
+RESPAWNALL:
+        mov  word ptr [locki],0FFFFh
+        xor  si,si
+@@rs:   mov  bx,si
+        shr  bx,1
+        mov  byte ptr [pst+bx],0
+        call RND16              ; preserves SI/BX
+        and  ax,16383
+        sub  ax,8192
+        add  ax,[camx]
+        mov  [pax+si],ax
+        call RND16
+        and  ax,16383
+        sub  ax,8192
+        add  ax,[camz]
+        mov  [paz+si],ax
+        call RND16
+        and  ax,1023
+        add  ax,700
+        mov  [pay+si],ax
+        call RND16
+        and  ax,255
+        mov  [pah+si],ax
+        call RND16
+        and  ax,3
+        mov  [pcs+bx],al
+        call RND16
+        and  ax,31
+        inc  ax
+        mov  [pnum+bx],al
+        call RND16
+        and  ax,3
+        add  ax,2
+        mov  [php+bx],al
+        mov  bx,si              ; seed the contrail at the spawn point
+        mov  cl,4
+        shl  bx,cl
+        mov  cx,TLN
+@@rsf:  mov  ax,[pax+si]
+        mov  [TLX+bx],ax
+        mov  ax,[pay+si]
+        mov  [TLY+bx],ax
+        mov  ax,[paz+si]
+        mov  [TLZ+bx],ax
+        add  bx,2
+        loop @@rsf
+        add  si,2
+        cmp  si,NPLANE*2
+        jb   @@rs
+        ret

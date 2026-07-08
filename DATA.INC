@@ -144,6 +144,10 @@ amlife  dw NAMSL dup(0)         ; self-destruct timer
 aifire  dw 90                   ; cooldown until somebody opens fire
 aigt    dw 60                   ; cooldown until somebody strafes
 pdam    db 0                    ; player damage taken (8 = shot down)
+rndovr  dw 0                    ; round-over countdown (0 = fighting)
+rwin    db 0                    ; who wiped whom: 0 = friendlies won
+MSGVWIN db 'VIPERS WIN',0
+MSGBWIN db 'BANDITS WIN',0
 phit    dw 0                    ; player hit flash timer
 tscf    dw 0                    ; team score: hostiles downed
 tsch    dw 0                    ; team score: friendlies downed

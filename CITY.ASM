@@ -318,53 +318,8 @@ MAIN:
         rep  stosw
         pop  es
 
-        ; ---- AI traffic: scatter the squadron around the player ----
-        xor  si,si
-@@aspn: call RND16              ; preserves SI
-        and  ax,16383
-        sub  ax,8192
-        add  ax,[camx]
-        mov  [pax+si],ax
-        call RND16
-        and  ax,16383
-        sub  ax,8192
-        add  ax,[camz]
-        mov  [paz+si],ax
-        call RND16
-        and  ax,1023
-        add  ax,700             ; altitude 700..1723
-        mov  [pay+si],ax
-        call RND16
-        and  ax,255
-        mov  [pah+si],ax
-        call RND16              ; callsign: name + number
-        mov  bx,si
-        shr  bx,1
-        and  ax,3
-        mov  [pcs+bx],al
-        call RND16
-        and  ax,31
-        inc  ax
-        mov  [pnum+bx],al
-        call RND16
-        and  ax,3
-        add  ax,2               ; 2..5 cannon hits to bring one down
-        mov  [php+bx],al
-        mov  bx,si              ; seed the contrail at the spawn point
-        mov  cl,4
-        shl  bx,cl              ; slot base = plane*TLN*2 (TLN=16)
-        mov  cx,TLN
-@@tlf:  mov  ax,[pax+si]
-        mov  [TLX+bx],ax
-        mov  ax,[pay+si]
-        mov  [TLY+bx],ax
-        mov  ax,[paz+si]
-        mov  [TLZ+bx],ax
-        add  bx,2
-        loop @@tlf
-        add  si,2
-        cmp  si,NPLANE*2
-        jb   @@aspn
+        ; ---- AI traffic: two squadrons scattered around the player ----
+        call RESPAWNALL
         mov  word ptr [heading],0
         mov  word ptr [roll],0
         call SETTRIG            ; seed hsin/hcos before the first physics tick
