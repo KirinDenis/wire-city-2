@@ -269,33 +269,51 @@ INPUT:
         add  ax,WINDZ
         mov  [camz],ax
 
-        ; --- turbulence: random bumps so the air feels alive. Vertical
-        ; jolt -3..+3 every tick; over water ([lgnd] < 440 = sea level)
-        ; the pockets are twice as deep and pull down a little. Roll and
-        ; pitch get a +-1 rock on ~1/4 of the ticks each.
-        call RND16              ; AX = noise, BX-safe bits reused below
-        mov  bx,ax
-        and  ax,6               ; 0,2,4,6
+        ; --- turbulence, graded by the terrain below ([lgnd]):
+        ; mountains (>= 700) rough -3..+3, open water (< 440) -2/+2 with
+        ; an occasional sinking pull, plains a gentle -1/+1. Roll/pitch
+        ; rocking: 1-in-4 ticks in rough air, 1-in-8 in calm (CX = gate).
+        call RND16
+        mov  bx,ax              ; noise bits, reused below
+        mov  cx,0700h           ; calm rocking gate (3 bits = 1-in-8)
+        mov  ax,[lgnd]
+        cmp  ax,700
+        jl   @@t1
+        mov  ax,bx              ; mountain rotor
+        and  ax,6
         sub  ax,3               ; -3,-1,+1,+3
-        cmp  word ptr [lgnd],440
-        jge  @@tb1
-        add  ax,ax              ; air pocket over open water...
-        dec  ax                 ; ...with a sinking bias
-@@tb1:  add  [camy],ax
-        test bx,0300h           ; both bits clear: 1-in-4 roll rock
+        mov  cx,0300h           ; and lively rocking
+        jmp  @@tap
+@@t1:   cmp  ax,440
+        jge  @@t2
+        mov  ax,bx              ; air pockets over open water
+        and  ax,4
+        sub  ax,2               ; -2/+2
+        test bx,0C00h
+        jnz  @@tap
+        dec  ax                 ; 1-in-4: the pocket pulls down
+        jmp  @@tap
+@@t2:   mov  ax,bx              ; calm air over the plains
+        and  ax,2
+        dec  ax                 ; -1/+1
+@@tap:  add  [camy],ax
+        test bx,cx              ; roll rock gate
         jnz  @@tb2
         mov  ax,[roll]
-        test bx,0400h
+        test bx,8000h
         jz   @@tbl
         inc  ax
         jmp  @@tbr
 @@tbl:  dec  ax
 @@tbr:  and  ax,255
         mov  [roll],ax
-@@tb2:  test bx,1800h           ; other bits: 1-in-4 pitch bump
+@@tb2:  mov  dx,cx              ; pitch gate = roll gate, other bits
+        mov  cl,3
+        shl  dx,cl
+        test bx,dx
         jnz  @@tb3
         mov  ax,[pitch]
-        test bx,2000h
+        test bx,4000h
         jz   @@tbd
         inc  ax
         jmp  @@tbu

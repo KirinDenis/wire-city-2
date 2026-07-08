@@ -51,15 +51,19 @@ def blobs(target, tol=30, minpx=15):
     return out
 
 SCREEN_DARK = (10, 14, 20)
+# colour, max blobs to take, flatten to dark glass (False = the artwork
+# already draws the background; the game only overlays content there)
 MARKERS = {
-    'RADAR (red)':  ((237, 28, 36),   1),   # colour, max blobs to take
-    'ADI (blue)':   ((0, 162, 232),   1),
-    'MAP (green)':  ((34, 177, 76),   1),
-    'TEXT (cyan)':  ((153, 217, 234), 99),
+    'RADAR (red)':  ((237, 28, 36),   1,  True),
+    'ADI (blue)':   ((0, 162, 232),   1,  True),
+    'MAP (green)':  ((34, 177, 76),   1,  True),
+    'TEXT (cyan)':  ((153, 217, 234), 99, False),
 }
-for name, (col, take) in MARKERS.items():
+for name, (col, take, paint) in MARKERS.items():
     for n, x0, y0, x1, y1 in blobs(col)[:take]:
         print(f'{name}: x {x0}..{x1}  y {y0}..{y1}  ({x1-x0+1}x{y1-y0+1})')
+        if not paint:
+            continue
         for y in range(max(0, y0 - 1), min(h, y1 + 2)):
             for x in range(max(0, x0 - 1), min(w, x1 + 2)):
                 apx[x, y] = SCREEN_DARK

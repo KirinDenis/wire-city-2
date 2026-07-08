@@ -865,14 +865,13 @@ PANELBMP:
         xor  si,si              ; segment index
 @@tb:   cmp  si,12
         jae  @@tbd
+        cmp  si,dx
+        jae  @@tbd              ; above the setting: the artwork shows through
         mov  ax,[dsx]
         call ROW320
         add  di,44
-        mov  al,29              ; dark segment...
-        cmp  si,dx
-        jae  @@tbc
-        mov  al,5               ; ...lit amber up to the throttle setting
-@@tbc:  mov  cx,5
+        mov  al,5               ; lit amber segment
+        mov  cx,5
         rep  stosb
         sub  word ptr [dsx],2
         inc  si
@@ -886,7 +885,7 @@ PANELBMP:
         call FDRAW
         ; ---- readouts right of the map: S/T/F/H rows ----
         mov  byte ptr [COLOR],6
-        mov  word ptr [ftx],242
+        mov  word ptr [ftx],244
         mov  word ptr [fty],157
         mov  si,offset MSGS2
         call FDRAW
@@ -895,7 +894,7 @@ PANELBMP:
         mov  ax,[vel]
         call FNUM
         mov  byte ptr [COLOR],6
-        mov  word ptr [ftx],242
+        mov  word ptr [ftx],244
         mov  word ptr [fty],165
         mov  si,offset MSGT2
         call FDRAW
@@ -916,7 +915,7 @@ PANELBMP:
         cmp  word ptr [fuel],1200
         jge  @@fok
         mov  byte ptr [COLOR],19
-@@fok:  mov  word ptr [ftx],242
+@@fok:  mov  word ptr [ftx],244
         mov  word ptr [fty],173
         mov  si,offset MSGF2
         call FDRAW
@@ -927,7 +926,7 @@ PANELBMP:
         div  bx
         call FNUM
         mov  byte ptr [COLOR],6
-        mov  word ptr [ftx],242
+        mov  word ptr [ftx],244
         mov  word ptr [fty],181
         mov  si,offset MSGH2
         call FDRAW
@@ -1035,15 +1034,15 @@ PANELBMP:
 ; ============================================================================
 ;  LAMP2 - small caution light. in: [lampx]/[lampy] = top-left corner,
 ;  [dsx]/[dsy] = width/height, CX = lit colour (0 = off), SI -> one-letter
-;  label. Lit lamps blink on the BIOS tick like the classic panel LAMP.
+;  label. Draws ONLY when lit and on the bright blink phase - the artwork
+;  provides the lamp socket, so an off lamp is pure art.
 ; ============================================================================
-LAMP2:  mov  [dsac],cx          ; body colour
-        jcxz @@dk
+LAMP2:  jcxz @@no
         mov  ax,[lasttk]
-        test ax,2               ; blink phase
-        jnz  @@ck
-@@dk:   mov  word ptr [dsac],29 ; dark body
-@@ck:   mov  ax,[lampy]
+        test ax,2               ; blink: dark phase shows the artwork
+        jz   @@no
+        mov  [dsac],cx
+        mov  ax,[lampy]
         call ROW320
         add  di,[lampx]
         mov  dx,[dsy]
@@ -1067,8 +1066,5 @@ LAMP2:  mov  [dsac],cx          ; body colour
         add  ax,bx
         mov  [fty],ax
         mov  byte ptr [COLOR],8
-        cmp  word ptr [dsac],29
-        jne  @@fd
-        mov  byte ptr [COLOR],30 ; off/blink-dark: dim label
-@@fd:   call FDRAW
-        ret
+        call FDRAW
+@@no:   ret
