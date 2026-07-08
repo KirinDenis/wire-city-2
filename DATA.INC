@@ -165,6 +165,16 @@ ctx     dw 0                    ; BOOM scratch: face centroid
 cty     dw 0
 ctz     dw 0
 wcc     dw 0                    ; BOOM scratch: corner counter
+hbsx    dw 0                    ; HUD tapes: speed spine x
+hbslb   dw 0                    ; speed labels/value x
+hbst1   dw 0                    ; speed major tick x
+hbst2   dw 0                    ; speed minor tick x
+hbcx    dw 0                    ; speed critical mark x
+hbax    dw 0                    ; altitude spine x
+hbalb   dw 0                    ; altitude labels/value x
+hbat1   dw 0                    ; altitude major tick x
+hbat2   dw 0                    ; altitude minor tick x
+hbacx   dw 0                    ; altitude critical mark x
 ftx     dw 0                    ; font cursor x
 fty     dw 0                    ; font cursor y
 NB      db 6 dup(0)             ; number->text scratch for FNUM

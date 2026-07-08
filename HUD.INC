@@ -1236,10 +1236,11 @@ LAMP2:  jcxz @@no
 @@no:   ret
 
 ; ============================================================================
-;  HUD tapes (F-15 style, projected on the glass - they do NOT ride the
-;  view sway). Compass on top (ticks every 8 units, numbers every 45 deg),
-;  speed tape on the left, altitude tape on the right. Critical marks in
-;  red: stall speed, the terrain below us, the service ceiling.
+;  HUD tapes (F-15 style, projected on the glass). Compass on top, speed
+;  tape left, altitude right - all white, classic; critical marks in red
+;  (stall speed, the terrain below us, the ceiling). Two layouts: the F2
+;  view uses the full screen, the cockpit tucks the tapes and numbers
+;  inside the windshield (ticks flip to the glass side of the spine).
 ; ============================================================================
 ; VLINE2 - vertical line: AX=y0, [dsx]=x, CX=len, BL=colour
 VLINE2: call ROW320
@@ -1276,10 +1277,35 @@ FNUM3:  xor  dx,dx
 
 HUDBARS:
         cld
+        ; ---- pick the layout ----
+        cmp  byte ptr [cockpit],0
+        je   @@f2l
+        mov  word ptr [hbsx],84   ; cockpit: inside the windshield
+        mov  word ptr [hbslb],94
+        mov  word ptr [hbst1],85  ; ticks grow INTO the glass
+        mov  word ptr [hbst2],85
+        mov  word ptr [hbcx],85
+        mov  word ptr [hbax],236
+        mov  word ptr [hbalb],206
+        mov  word ptr [hbat1],228
+        mov  word ptr [hbat2],232
+        mov  word ptr [hbacx],227
+        jmp  @@lay
+@@f2l:  mov  word ptr [hbsx],68   ; F2: the full pane
+        mov  word ptr [hbslb],38
+        mov  word ptr [hbst1],60
+        mov  word ptr [hbst2],64
+        mov  word ptr [hbcx],59
+        mov  word ptr [hbax],252
+        mov  word ptr [hbalb],263
+        mov  word ptr [hbat1],253
+        mov  word ptr [hbat2],253
+        mov  word ptr [hbacx],253
+@@lay:
         ; ================= compass tape: top centre =================
         mov  ax,[heading]
-        add  ax,223             ; heading-40, +7 to round, +256 bias
-        and  ax,0FFF8h          ; first tick: multiple of 8
+        add  ax,219             ; heading-40, +3 to round, +256 bias
+        and  ax,0FFFCh          ; first tick: multiple of 4
         mov  [ctx],ax
 @@cp:   mov  ax,[ctx]
         sub  ax,256
@@ -1300,7 +1326,7 @@ HUDBARS:
         and  ax,31              ; every 32 units = 45 degrees: major
         jnz  @@cmin
         mov  ax,18
-        mov  cx,6
+        mov  cx,7
         mov  bl,8
         call VLINE2
         mov  ax,[ctx]
@@ -1312,37 +1338,38 @@ HUDBARS:
         mov  bx,[dsx]
         sub  bx,6
         mov  [ftx],bx
-        mov  word ptr [fty],26
+        mov  word ptr [fty],27
         mov  byte ptr [COLOR],8
         call FNUM3
         jmp  @@cpn
-@@cmin: mov  ax,20
+@@cmin: mov  ax,18
         mov  cx,3
         mov  bl,8
         call VLINE2
-@@cpn:  add  word ptr [ctx],8
+@@cpn:  add  word ptr [ctx],4
         jmp  @@cp
-@@cpd:  mov  ax,35              ; the caret under the tape
+@@cpd:  mov  ax,36              ; the caret under the tape
         call ROW320
         add  di,160
-        mov  al,96
+        mov  al,8
         mov  es:[di],al
         mov  es:[di-321],al
         mov  es:[di-319],al
 
         ; ================= speed tape: left =================
         mov  ax,60              ; the spine
-        mov  word ptr [dsx],68
+        mov  bx,[hbsx]
+        mov  [dsx],bx
         mov  cx,71
         mov  bl,8
         call VLINE2
-        mov  ax,[vel]           ; first tick: multiple of 50 >= vel-140
+        mov  ax,[vel]           ; first tick: multiple of 25 >= vel-140
         sub  ax,140
         jns  @@s0
         xor  ax,ax
-@@s0:   add  ax,49
+@@s0:   add  ax,24
         xor  dx,dx
-        mov  bx,50
+        mov  bx,25
         div  bx
         mul  bx
         mov  [ctx],ax
@@ -1366,8 +1393,9 @@ HUDBARS:
         div  bx
         test dx,dx
         jnz  @@smin
-        mov  ax,[cty]
-        mov  word ptr [dsx],60
+        mov  ax,[cty]           ; major: long divider, flush at the spine
+        mov  bx,[hbst1]
+        mov  [dsx],bx
         mov  cx,8
         mov  bl,8
         call HLINE2
@@ -1379,17 +1407,19 @@ HUDBARS:
 @@slb:  mov  ax,[cty]
         sub  ax,2
         mov  [fty],ax
-        mov  word ptr [ftx],38
+        mov  ax,[hbslb]
+        mov  [ftx],ax
         mov  byte ptr [COLOR],8
         mov  ax,[ctx]
         call FNUM
         jmp  @@spn
-@@smin: mov  ax,[cty]
-        mov  word ptr [dsx],64
+@@smin: mov  ax,[cty]           ; minor: same anchor, shorter
+        mov  bx,[hbst2]
+        mov  [dsx],bx
         mov  cx,4
         mov  bl,8
         call HLINE2
-@@spn:  add  word ptr [ctx],50
+@@spn:  add  word ptr [ctx],25
         jmp  @@sp
 @@spd:  mov  ax,VSTALL          ; the stall line, red
         sub  ax,[vel]
@@ -1406,36 +1436,40 @@ HUDBARS:
         cmp  bx,130
         jg   @@snc
         mov  ax,bx
-        mov  word ptr [dsx],59
+        mov  bx,[hbcx]
+        mov  [dsx],bx
         mov  cx,9
         mov  bl,19
         call HLINE2
-@@snc:  mov  ax,95              ; caret + live speed
+@@snc:  mov  ax,95              ; caret + live speed (white, classic)
         call ROW320
-        add  di,69
-        mov  al,96
+        add  di,[hbsx]
+        inc  di
+        mov  al,8
         mov  es:[di],al
         mov  es:[di+1-320],al
         mov  es:[di+1+320],al
-        mov  word ptr [ftx],38
+        mov  ax,[hbslb]
+        mov  [ftx],ax
         mov  word ptr [fty],92
-        mov  byte ptr [COLOR],96
+        mov  byte ptr [COLOR],8
         mov  ax,[vel]
         call FNUM
 
         ; ================= altitude tape: right =================
         mov  ax,60              ; the spine
-        mov  word ptr [dsx],252
+        mov  bx,[hbax]
+        mov  [dsx],bx
         mov  cx,71
         mov  bl,8
         call VLINE2
-        mov  ax,[camy]          ; first tick: multiple of 100 >= camy-280
+        mov  ax,[camy]          ; first tick: multiple of 50 >= camy-280
         sub  ax,280
         jns  @@a0
         xor  ax,ax
-@@a0:   add  ax,99
+@@a0:   add  ax,49
         xor  dx,dx
-        mov  bx,100
+        mov  bx,50
         div  bx
         mul  bx
         mov  [ctx],ax
@@ -1460,8 +1494,9 @@ HUDBARS:
         div  bx
         test dx,dx
         jnz  @@amin
-        mov  ax,[cty]
-        mov  word ptr [dsx],253
+        mov  ax,[cty]           ; major divider
+        mov  bx,[hbat1]
+        mov  [dsx],bx
         mov  cx,8
         mov  bl,8
         call HLINE2
@@ -1473,17 +1508,19 @@ HUDBARS:
 @@alb:  mov  ax,[cty]
         sub  ax,2
         mov  [fty],ax
-        mov  word ptr [ftx],263
+        mov  ax,[hbalb]
+        mov  [ftx],ax
         mov  byte ptr [COLOR],8
         mov  ax,[ctx]
         call FNUM
         jmp  @@apn
-@@amin: mov  ax,[cty]
-        mov  word ptr [dsx],253
+@@amin: mov  ax,[cty]           ; minor divider
+        mov  bx,[hbat2]
+        mov  [dsx],bx
         mov  cx,4
         mov  bl,8
         call HLINE2
-@@apn:  add  word ptr [ctx],100
+@@apn:  add  word ptr [ctx],50
         jmp  @@ap
 @@apd:  mov  ax,[lgnd]          ; the ground below us, red on the tape
         sub  ax,[camy]
@@ -1501,7 +1538,8 @@ HUDBARS:
         cmp  bx,130
         jg   @@anc
         mov  ax,bx
-        mov  word ptr [dsx],252
+        mov  bx,[hbacx]
+        mov  [dsx],bx
         mov  cx,9
         mov  bl,19
         call HLINE2
@@ -1517,20 +1555,23 @@ HUDBARS:
         cmp  bx,60
         jl   @@anc2
         mov  ax,bx
-        mov  word ptr [dsx],252
+        mov  bx,[hbacx]
+        mov  [dsx],bx
         mov  cx,9
         mov  bl,19
         call HLINE2
-@@anc2: mov  ax,95              ; caret + live altitude
+@@anc2: mov  ax,95              ; caret + live altitude (white)
         call ROW320
-        add  di,250
-        mov  al,96
+        add  di,[hbax]
+        sub  di,2
+        mov  al,8
         mov  es:[di],al
         mov  es:[di-1-320],al
         mov  es:[di-1+320],al
-        mov  word ptr [ftx],263
+        mov  ax,[hbalb]
+        mov  [ftx],ax
         mov  word ptr [fty],92
-        mov  byte ptr [COLOR],96
+        mov  byte ptr [COLOR],8
         mov  ax,[camy]
         call FNUM
         ret
