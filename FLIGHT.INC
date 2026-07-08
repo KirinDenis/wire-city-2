@@ -252,6 +252,15 @@ INPUT:
         xor  byte ptr [daymode],1
         call APPLYPAL
 @@nn:
+        ; --- C key: cockpit panel on/off (edge-triggered) ---
+        mov  al,[KEYS+SC_C]
+        cmp  al,[prevc]
+        je   @@ncp
+        mov  [prevc],al
+        test al,al
+        jz   @@ncp
+        xor  byte ptr [cockpit],1
+@@ncp:
         ; --- wind drift (world space, constant breeze) ---
         mov  ax,[camx]
         add  ax,WINDX
@@ -302,6 +311,7 @@ COLLIDE:
         mov  [gj],ax
         ; --- terrain collision first: bilinear ground height under camera ---
         call TERRH              ; AX = ground height at (camx,camz)
+        mov  [lgnd],ax          ; remembered for the TERR caution light
         add  ax,14              ; hull clearance above the slope
         cmp  [camy],ax
         jge  @@terok

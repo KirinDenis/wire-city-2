@@ -23,6 +23,16 @@ pcos    dw 256                  ; cos(pitch)*256
 pofs    dw 0                    ; background horizon shift = tan(pitch)*FOCAL
 throt   dw 64                   ; throttle 0..64 (64 = military power)
 abon    db 0                    ; afterburner active this tick
+cockpit db 1                    ; 1 = instrument panel shown (C toggles)
+prevc   db 0                    ; previous C-key state (edge detect)
+mapt    dw 123                  ; minimap top row (rises above the panel)
+resseg  dw 0                    ; segment CITY.DAT is loaded into (CS+2000h)
+pimgo   dw 0                    ; cockpit bitmap offset in resseg (0 = none)
+ftx     dw 0                    ; font cursor x
+fty     dw 0                    ; font cursor y
+NB      db 6 dup(0)             ; number->text scratch for FNUM
+FNAME   db 'CITY.DAT',0
+RESMSG  db 'CITY.DAT not found - keep it next to CITY.COM',13,10,'$'
 daymode db 1                    ; 1 = day palette, 0 = night (N key toggles)
 prevn   db 0                    ; previous N-key state (edge detect)
 bcol    db 0                    ; terrain patch colour chosen by HBLD
@@ -43,9 +53,8 @@ dsx     dw 0                    ; DS: loop x / scratch
 dsy     dw 0                    ; DS: loop y / scratch
 dsamp   dw 0                    ; DS: noise amplitude (power of two)
 dsac    dw 0                    ; DS: accumulator
-HMAP    db 4096 dup(0)          ; heights 0..255, addr = (x&63)*64 + (y&63)
-MMAP    db 4096 dup(0)          ; minimap pixels, baked once from HMAP; row-
-                                ; major screen layout, row = 63-nodeZ (north up)
+; HMAP/MMAP live in the BSS block past the file image (see CITY.ASM): they
+; are fully generated at startup, so shipping 8K of zeroes was pure waste.
 
 ; ---- 3D terrain mesh state (one node = 4 cells = 1024 world units) ---------
 NR      equ 20                  ; terrain draw radius in nodes around camera
@@ -318,10 +327,7 @@ wallL   db 0                    ; current lit wall colour (N/S faces)
 wallS   db 16                   ; current shaded wall colour (E/W faces)
 WSCH    db 0,16, 20,21, 22,23, 24,25 ; scheme pairs: grey/blue/red/white
 thmax   dw 0                    ; max raw H of the quad corners (colour pick)
-TRX     dw 1681 dup(0)          ; rotated node X (camera space), a*41+b
-TRZ     dw 1681 dup(0)          ; rotated node Z
-TWH     dw 1681 dup(0)          ; world height of node (after WORLDH mapping)
-TH      db 1681 dup(0)          ; raw map height of node (for colours/water)
+; TRX/TRZ/TWH/TH: per-frame caches, in BSS past the image (see CITY.ASM)
 
 ; terrain quad draw order: (di,dj) pairs, di,dj in [-20..19], sorted by
 ; squared distance of the quad centre DESCENDING (painter, far -> near)
@@ -617,7 +623,7 @@ HCOL    db 8
 ;            8 HUD       9 sky band    10 ground     11 field/ground band
 ;            12 haze     13 mountains  14 water      15 forest
 ;            16 wall E/W (shade)       17 roof
-NPALC   equ 29
+NPALC   equ 94                  ; 31 game colours + 63 photo cockpit colours
 PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db 30,32,36          ;1  far stroke (fades to haze)
         db 22,24,28          ;2  mid stroke
@@ -647,6 +653,9 @@ PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db 24,38,60          ;26 sky step 2 (F-15 gradient)
         db 42,51,63          ;27 sky step 4, next to the haze
         db 14,26,12          ;28 dark far ground at the horizon
+        db 10,10,12          ;29 cockpit panel (dark)
+        db 20,20,23          ;30 cockpit panel trim
+        include PALPNL.INC   ; 31..93 photo cockpit (generated)
 
 PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db 12,18,40          ;1  far stroke
@@ -677,6 +686,9 @@ PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db  8,12,30          ;26 sky step 2
         db 14,19,44          ;27 sky step 4, next to the haze
         db  2, 4,10          ;28 dark far ground at the horizon
+        db  6, 6, 8          ;29 cockpit panel (dark)
+        db 12,12,15          ;30 cockpit panel trim
+        include PALPNL.INC   ; 31..93 photo cockpit (same lamps at night)
 
 STARN   equ 16                  ; star coords as words (X can exceed 255)
 STARTAB dw 20,18, 60,30, 110,12, 150,40, 200,22, 250,15, 300,35, 40,52
@@ -689,6 +701,23 @@ MSGT     db 'T ',0
 MSGSPD   db '  SPD ',0
 MSGFUE   db '  FUEL ',0
 MSGTHR   db '  THR ',0
+MSGSPD2  db 'SPD',0
+MSGTHR2  db 'THR',0
+MSGFUE2  db 'FUEL',0
+MSGHDG2  db 'HDG',0
+MSGAB    db '+',0
+MSGSTL   db 'STALL',0
+MSGTER   db 'TERR',0
+MSGAB2   db 'AB',0
+MSGT2    db 'T',0
+MSGF2    db 'F',0
+MSGD20   db '20',0
+MSGD0    db '0',0
+MSGRDR   db 'RDR OFF',0
+lampx    dw 0                   ; lamp/bar scratch: x or lit-count
+lampy    dw 0                   ; lamp y / bar x
+lampc    db 0                   ; current lamp/segment colour
+lgnd     dw 0                   ; last ground height under the jet (TERR lamp)
 MSGHELP  db ' ESC',0
 MSGCRASH db '*** CRASH ***',0
 MSGREST  db 'SPACE = RESTART',0

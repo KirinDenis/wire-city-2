@@ -2,7 +2,12 @@
 ; ============================================================================
 ;  HUD (BIOS text overlay on top of the frame)
 ; ============================================================================
-HUD:    mov  byte ptr [HCOL],8
+HUD:    cmp  byte ptr [cockpit],0
+        je   @@hgo
+        cmp  word ptr [pimgo],0
+        je   @@hgo
+        ret                     ; photo cockpit covers the BIOS text rows
+@@hgo:  mov  byte ptr [HCOL],8
         mov  ah,02h
         mov  bh,0
         mov  dh,0
@@ -24,6 +29,8 @@ HUD:    mov  byte ptr [HCOL],8
         mov  dh,24
         mov  dl,0
         int  10h
+        cmp  byte ptr [cockpit],0
+        jne  @@pantxt
         mov  si,offset MSGHDG
         call PRSTR
         mov  ax,[heading]
@@ -51,7 +58,9 @@ HUD:    mov  byte ptr [HCOL],8
         je   @@nab
         mov  al,'+'
         call PRCH
-@@nab:
+@@nab:  jmp  @@toprow
+@@pantxt:                       ; panel text is drawn by PANEL (font)
+@@toprow:
         ; real-time seconds (BIOS tick, 18.2 Hz) - compare against a stopwatch
         mov  ah,02h
         mov  bh,0
@@ -97,4 +106,783 @@ PRNUM:  mov  cx,0
         mov  al,dl
         call PRCH
         loop @@p
+        ret
+
+; ============================================================================
+;  PANEL - the cockpit. Three-tier stepped deck (uneven top reads as a real
+;  dash): left pult y146+ (readouts + caution lights), centre console y132+
+;  (the ADI ball), right tower y130+ (minimap + vertical LED bars).
+;  ES=bufseg. Text uses the CITY.DAT 4x6 font. MINIMAP lands on the tower.
+; ============================================================================
+PANEL:  cmp  word ptr [pimgo],0
+        je   @@classic
+        jmp  PANELBMP           ; photo cockpit from CITY.DAT
+@@classic:
+        cld
+        ; ---- deck fills, back to front ----
+        mov  ax,147             ; left pult 0..115 x 147..199
+        call ROW320
+        mov  cx,53
+@@lf:   push cx
+        mov  al,29
+        mov  cx,116
+        rep  stosb
+        add  di,320-116
+        pop  cx
+        loop @@lf
+        mov  ax,134             ; centre console 116..212 x 134..199
+        call ROW320
+        add  di,116
+        mov  cx,66
+@@cf:   push cx
+        mov  al,29
+        mov  cx,97
+        rep  stosb
+        add  di,320-97
+        pop  cx
+        loop @@cf
+        mov  ax,132             ; right tower 213..319 x 132..199
+        call ROW320
+        add  di,213
+        mov  cx,68
+@@rf:   push cx
+        mov  al,29
+        mov  cx,107
+        rep  stosb
+        add  di,320-107
+        pop  cx
+        loop @@rf
+        ; ---- stepped rim: bright top edge + dark trim under it ----
+        mov  ax,146             ; left step
+        call ROW320
+        mov  al,8
+        mov  cx,116
+        rep  stosb
+        mov  ax,147
+        call ROW320
+        mov  al,30
+        mov  cx,116
+        rep  stosb
+        mov  ax,132             ; centre step
+        call ROW320
+        add  di,116
+        mov  al,8
+        mov  cx,97
+        rep  stosb
+        mov  ax,133
+        call ROW320
+        add  di,116
+        mov  al,30
+        mov  cx,97
+        rep  stosb
+        mov  ax,130             ; tower step
+        call ROW320
+        add  di,213
+        mov  al,8
+        mov  cx,107
+        rep  stosb
+        mov  ax,131
+        call ROW320
+        add  di,213
+        mov  al,30
+        mov  cx,107
+        rep  stosb
+        ; ---- vertical joins between tiers ----
+        mov  byte ptr [COLOR],8
+        mov  word ptr [sx0],116
+        mov  word ptr [sy0],132
+        mov  word ptr [sx1],116
+        mov  word ptr [sy1],146
+        call CLIPLINE
+        jc   @@j1
+        call LINE
+@@j1:   mov  word ptr [sx0],213
+        mov  word ptr [sy0],130
+        mov  word ptr [sx1],213
+        mov  word ptr [sy1],133
+        call CLIPLINE
+        jc   @@j2
+        call LINE
+@@j2:   ; bevel cuts on the console shoulders (the "uneven" detail)
+        mov  word ptr [sx0],116
+        mov  word ptr [sy0],132
+        mov  word ptr [sx1],124
+        mov  word ptr [sy1],140
+        call CLIPLINE
+        jc   @@j3
+        call LINE
+@@j3:   mov  word ptr [sx0],212
+        mov  word ptr [sy0],132
+        mov  word ptr [sx1],204
+        mov  word ptr [sy1],140
+        call CLIPLINE
+        jc   @@j4
+        call LINE
+@@j4:
+        ; ================= left pult: readouts =================
+        mov  byte ptr [COLOR],30
+        mov  word ptr [ftx],6
+        mov  word ptr [fty],152
+        mov  si,offset MSGSPD2
+        call FDRAW
+        mov  word ptr [ftx],6
+        mov  word ptr [fty],164
+        mov  si,offset MSGTHR2
+        call FDRAW
+        mov  word ptr [ftx],6
+        mov  word ptr [fty],176
+        mov  si,offset MSGFUE2
+        call FDRAW
+        mov  word ptr [ftx],6
+        mov  word ptr [fty],188
+        mov  si,offset MSGHDG2
+        call FDRAW
+        mov  byte ptr [COLOR],8
+        mov  word ptr [ftx],34
+        mov  word ptr [fty],152
+        mov  ax,[vel]
+        call FNUM
+        mov  word ptr [ftx],34
+        mov  word ptr [fty],164
+        mov  ax,[throt]
+        mov  bx,100
+        imul bx
+        mov  bx,64
+        idiv bx
+        call FNUM
+        mov  word ptr [ftx],34
+        mov  word ptr [fty],176
+        cmp  word ptr [fuel],1200
+        jae  @@fw
+        mov  byte ptr [COLOR],19
+@@fw:   mov  ax,[fuel]
+        xor  dx,dx
+        mov  bx,60
+        div  bx
+        call FNUM
+        mov  byte ptr [COLOR],8
+        mov  word ptr [ftx],34
+        mov  word ptr [fty],188
+        mov  ax,[heading]
+        call FNUM
+        ; ================= caution lights (blink via BIOS tick) ==========
+        ; light 1: STALL (red)  - vel below stall speed
+        mov  word ptr [lampx],66
+        mov  word ptr [lampy],150
+        mov  si,offset MSGSTL
+        xor  cx,cx
+        cmp  word ptr [vel],VSTALL
+        jge  @@l1
+        mov  cx,19
+@@l1:   call LAMP
+        ; light 2: FUEL (amber, red-blinking when nearly dry)
+        mov  word ptr [lampx],66
+        mov  word ptr [lampy],162
+        mov  si,offset MSGFUE2
+        xor  cx,cx
+        cmp  word ptr [fuel],1200
+        jae  @@l2
+        mov  cx,5
+        cmp  word ptr [fuel],600
+        jae  @@l2
+        mov  cx,19
+@@l2:   call LAMP
+        ; light 3: TERR (red) - ground closer than 120 under the jet
+        mov  word ptr [lampx],66
+        mov  word ptr [lampy],174
+        mov  si,offset MSGTER
+        xor  cx,cx
+        mov  ax,[camy]
+        sub  ax,[lgnd]
+        cmp  ax,120
+        jge  @@l3
+        mov  cx,19
+@@l3:   call LAMP
+        ; light 4: AB (amber) - afterburner lit
+        mov  word ptr [lampx],66
+        mov  word ptr [lampy],186
+        mov  si,offset MSGAB2
+        xor  cx,cx
+        cmp  byte ptr [abon],0
+        je   @@l4
+        mov  cx,5
+@@l4:   call LAMP
+        ; ============ centre console: square ADI, LHX style ============
+        ; frame 136..192 x 139..195, dark glass face, roll-rotated pitch
+        ; ladder inside, fixed degree scale on the left, roll scale on top.
+        mov  ax,139             ; glass face
+        call ROW320
+        add  di,136
+        mov  cx,57
+@@glass:
+        push cx
+        mov  al,3
+        mov  cx,57
+        rep  stosb
+        add  di,320-57
+        pop  cx
+        loop @@glass
+        mov  ax,139             ; frame: top and bottom
+        call ROW320
+        add  di,136
+        mov  al,30
+        mov  cx,57
+        rep  stosb
+        mov  ax,195
+        call ROW320
+        add  di,136
+        mov  al,30
+        mov  cx,57
+        rep  stosb
+        mov  byte ptr [COLOR],30 ; frame: sides
+        mov  word ptr [sx0],136
+        mov  word ptr [sy0],139
+        mov  word ptr [sx1],136
+        mov  word ptr [sy1],195
+        call CLIPLINE
+        jc   @@fs1
+        call LINE
+@@fs1:  mov  word ptr [sx0],192
+        mov  word ptr [sy0],139
+        mov  word ptr [sx1],192
+        mov  word ptr [sy1],195
+        call CLIPLINE
+        jc   @@fs2
+        call LINE
+@@fs2:
+        ; ---- pitch ladder: 7 roll-rotated rungs at every 10 degrees ----
+        ; rung k (-3..3): angle = k*7 units; offset = (pitch - k*7)*2/3,
+        ; sky rungs light blue, ground rungs dark, horizon long and white.
+        mov  word ptr [tmpi],-3
+@@lad:  mov  ax,[tmpi]
+        mov  bx,7
+        imul bx                 ; k*7 (10-degree steps in angle units)
+        mov  bx,[pitch]
+        sub  bx,ax
+        mov  ax,bx
+        add  ax,ax              ; *2
+        mov  bx,3
+        cwd
+        idiv bx                 ; offset = (pitch-k*7)*2/3
+        cmp  ax,26              ; outside the glass: skip the rung
+        jg   @@ladn
+        cmp  ax,-26
+        jl   @@ladn
+        mov  [dsx],ax
+        mov  ax,[rsin]          ; rung centre = C + perp*offset
+        imul word ptr [dsx]
+        mov  bx,256
+        idiv bx
+        neg  ax
+        add  ax,164
+        mov  [dsy],ax           ; cx
+        mov  ax,[rcos]
+        imul word ptr [dsx]
+        mov  bx,256
+        idiv bx
+        add  ax,167
+        mov  [dsac],ax          ; cy
+        mov  bx,9               ; short rung...
+        cmp  word ptr [tmpi],0
+        jne  @@len
+        mov  bx,24              ; ...long horizon bar
+@@len:  mov  ax,[rcos]
+        imul bx
+        push bx
+        mov  bx,256
+        idiv bx
+        pop  bx
+        mov  cx,ax              ; dx = rcos*len/256
+        mov  ax,[rsin]
+        imul bx
+        mov  bx,256
+        idiv bx                 ; dy = rsin*len/256
+        mov  bx,[dsy]
+        sub  bx,cx
+        mov  [sx0],bx
+        mov  bx,[dsac]
+        sub  bx,ax
+        mov  [sy0],bx
+        mov  bx,[dsy]
+        add  bx,cx
+        mov  [sx1],bx
+        mov  bx,[dsac]
+        add  bx,ax
+        mov  [sy1],bx
+        mov  bl,8               ; horizon: white
+        cmp  word ptr [tmpi],0
+        je   @@col
+        mov  bl,27              ; sky rungs: light blue
+        jg   @@col
+        mov  bl,28              ; ground rungs: dark earth
+@@col:  mov  [COLOR],bl
+        call CLIPLINE
+        jc   @@ladn
+        call LINE
+@@ladn: inc  word ptr [tmpi]
+        cmp  word ptr [tmpi],3
+        jle  @@lad
+        ; ---- fixed red aircraft symbol in the centre of the glass ----
+        mov  ax,167
+        call ROW320
+        add  di,164
+        mov  al,19
+        mov  es:[di],al         ; nose dot
+        mov  es:[di-320],al
+        mov  cx,6               ; left and right wing bars
+        push di
+        sub  di,12
+@@wngl: mov  es:[di],al
+        inc  di
+        loop @@wngl
+        pop  di
+        mov  cx,6
+        add  di,7
+@@wngr: mov  es:[di],al
+        inc  di
+        loop @@wngr
+        ; ---- fixed pitch scale, left of the frame, with degree numbers ----
+        mov  byte ptr [COLOR],30
+        mov  word ptr [ftx],122
+        mov  word ptr [fty],148
+        mov  si,offset MSGD20   ; '20' above
+        call FDRAW
+        mov  word ptr [ftx],122
+        mov  word ptr [fty],181
+        mov  si,offset MSGD20   ; '20' below
+        call FDRAW
+        mov  word ptr [ftx],122
+        mov  word ptr [fty],164
+        mov  si,offset MSGD0    ; '0' at the horizon
+        call FDRAW
+        ; tick marks on the left frame every 10 degrees (offset step ~5px)
+        mov  word ptr [sy0],167-19
+        mov  word ptr [sy1],167-19
+        call @@tick
+        mov  word ptr [sy0],167-9
+        mov  word ptr [sy1],167-9
+        call @@tick
+        mov  word ptr [sy0],167
+        mov  word ptr [sy1],167
+        call @@tick
+        mov  word ptr [sy0],167+9
+        mov  word ptr [sy1],167+9
+        call @@tick
+        mov  word ptr [sy0],167+19
+        mov  word ptr [sy1],167+19
+        call @@tick
+        ; amber pitch bug riding the left frame: y = 167 + pitch*2/3
+        mov  ax,[pitch]
+        add  ax,ax
+        mov  bx,3
+        cwd
+        idiv bx
+        cmp  ax,26
+        jle  @@pb1
+        mov  ax,26
+@@pb1:  cmp  ax,-26
+        jge  @@pb2
+        mov  ax,-26
+@@pb2:  add  ax,167
+        call ROW320
+        add  di,133
+        mov  al,5
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+2],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+        mov  es:[di-320],al
+        mov  es:[di-319],al
+        ; ---- roll scale on top: ticks at 0/45/90, amber roll bug ----
+        mov  ax,137
+        call ROW320
+        mov  al,30
+        mov  byte ptr es:[di+138],al ; -90
+        mov  byte ptr es:[di+151],al ; -45
+        mov  al,8
+        mov  byte ptr es:[di+164],al ; wings level
+        mov  al,30
+        mov  byte ptr es:[di+177],al ; +45
+        mov  byte ptr es:[di+190],al ; +90
+        mov  ax,[roll]          ; signed roll: >128 means negative
+        cmp  ax,128
+        jl   @@rs1
+        sub  ax,256
+@@rs1:  mov  bx,24
+        imul bx
+        mov  bx,64
+        idiv bx                 ; -48..48 -> clamp to the scale
+        cmp  ax,26
+        jle  @@rs2
+        mov  ax,26
+@@rs2:  cmp  ax,-26
+        jge  @@rs3
+        mov  ax,-26
+@@rs3:  add  ax,164
+        mov  [dsx],ax           ; ROW320 clobbers BX: park x in memory
+        mov  ax,136
+        call ROW320
+        add  di,[dsx]
+        mov  al,5               ; amber roll bug (2x2)
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+        jmp  @@adidone
+@@tick: mov  word ptr [sx0],131 ; small tick crossing the left frame
+        mov  word ptr [sx1],136
+        mov  byte ptr [COLOR],30
+        call CLIPLINE
+        jc   @@tk
+        call LINE
+@@tk:   ret
+@@adidone:
+        ; ================= tower: vertical LED bars ======================
+        ; THR bar at x=218 (amber), FUEL bar at x=232 (blue/red). Twelve
+        ; 4-row segments from y=192 upward, lit bottom-up.
+        mov  ax,[throt]
+        mov  bx,12
+        imul bx
+        mov  bx,64
+        idiv bx                 ; lit segments 0..12
+        mov  [lampx],ax
+        mov  word ptr [lampy],218 ; bar x (reuse scratch)
+        mov  bl,5
+        call LEDBAR
+        mov  ax,[fuel]
+        xor  dx,dx
+        mov  bx,500
+        div  bx                 ; 0..12
+        mov  [lampx],ax
+        mov  word ptr [lampy],232
+        mov  bl,14
+        cmp  word ptr [fuel],1200
+        jae  @@fb
+        mov  bl,19
+@@fb:   call LEDBAR
+        ; bar captions
+        mov  byte ptr [COLOR],30
+        mov  word ptr [ftx],218
+        mov  word ptr [fty],135
+        mov  si,offset MSGT2
+        call FDRAW
+        mov  word ptr [ftx],232
+        mov  word ptr [fty],135
+        mov  si,offset MSGF2
+        call FDRAW
+        ret
+
+; ---- LAMP: caution light at [lampx],[lampy]; SI=label, CX=lit colour (0=off)
+;  27x10 box: dim frame, dark face when off, coloured when lit (blink fast
+;  colours by the BIOS tick so a stall really shouts).
+LAMP:   push cx
+        mov  ax,[lampy]         ; top border
+        call ROW320
+        add  di,[lampx]
+        mov  al,30
+        mov  cx,27
+        rep  stosb
+        mov  ax,[lampy]
+        add  ax,9
+        call ROW320
+        add  di,[lampx]
+        mov  al,30
+        mov  cx,27
+        rep  stosb
+        pop  cx
+        ; face fill: off = near-black, on = CX colour (blinking)
+        mov  al,3
+        jcxz @@face
+        push es                 ; blink: swap colour/dark at ~4.5 Hz
+        mov  ax,40h
+        mov  es,ax
+        mov  ax,es:[6Ch]
+        pop  es
+        test ax,2
+        jz   @@dark
+        mov  ax,cx
+        jmp  @@face
+@@dark: mov  al,3
+@@face: mov  [lampc],al
+        mov  ax,[lampy]
+        inc  ax
+        call ROW320
+        add  di,[lampx]
+        mov  cx,8
+@@lrow: push cx
+        mov  al,[lampc]
+        mov  cx,27
+        rep  stosb
+        add  di,320-27
+        pop  cx
+        loop @@lrow
+        ; label text, centred-ish
+        mov  ax,[lampx]
+        add  ax,3
+        mov  [ftx],ax
+        mov  ax,[lampy]
+        add  ax,2
+        mov  [fty],ax
+        mov  byte ptr [COLOR],8
+        call FDRAW
+        ret
+
+; ---- LEDBAR: vertical 12-segment bar. [lampx]=lit count, [lampy]=x, BL=colour
+LEDBAR: mov  [lampc],bl
+        mov  word ptr [tmpi],0
+@@seg:  mov  ax,192             ; segment k top row = 192 - k*5
+        mov  bx,[tmpi]
+        mov  cx,bx
+        add  bx,bx
+        add  bx,bx
+        add  bx,cx              ; *5
+        sub  ax,bx
+        call ROW320
+        add  di,[lampy]
+        mov  al,30              ; unlit slot colour
+        mov  bx,[tmpi]
+        cmp  bx,[lampx]
+        jae  @@dim
+        mov  al,[lampc]
+@@dim:  mov  cx,10              ; 10 wide x 4 tall
+        push ax
+        rep  stosb
+        pop  ax
+        add  di,320-10
+        mov  cx,10
+        push ax
+        rep  stosb
+        pop  ax
+        add  di,320-10
+        mov  cx,10
+        push ax
+        rep  stosb
+        pop  ax
+        add  di,320-10
+        mov  cx,10
+        rep  stosb
+        inc  word ptr [tmpi]
+        cmp  word ptr [tmpi],12
+        jl   @@seg
+        ret
+
+; ============================================================================
+;  FDRAW - draw an ASCIIZ string with the 4x6 CITY.DAT font into the back
+;  buffer. in: SI -> string (DS), [ftx]/[fty] = position, COLOR = colour.
+;  ES=bufseg. Advances ftx by 4 per glyph. Supports 0-9 A-Z + - : % . space.
+; ============================================================================
+FDRAW:  cld
+@@ch:   lodsb
+        test al,al
+        jz   @@done
+        cmp  al,' '
+        je   @@adv
+        cmp  al,'9'
+        ja   @@alpha
+        cmp  al,'0'
+        jb   @@punct
+        sub  al,'0'             ; digits -> glyph 0..9
+        jmp  @@draw
+@@alpha:
+        cmp  al,'A'
+        jb   @@punct
+        cmp  al,'Z'
+        ja   @@adv
+        sub  al,'A'-10          ; letters -> glyph 10..35
+        jmp  @@draw
+@@punct:
+        mov  ah,36              ; '+'
+        cmp  al,'+'
+        je   @@pg
+        inc  ah                 ; '-'
+        cmp  al,'-'
+        je   @@pg
+        inc  ah                 ; ':'
+        cmp  al,':'
+        je   @@pg
+        inc  ah                 ; '%'
+        cmp  al,'%'
+        je   @@pg
+        inc  ah                 ; '.'
+        cmp  al,'.'
+        je   @@pg
+        jmp  @@adv              ; unknown: just advance
+@@pg:   mov  al,ah
+@@draw: push si
+        xor  ah,ah              ; glyph base = FONTBUF + idx*6
+        mov  bx,ax
+        add  ax,ax
+        add  ax,ax
+        add  ax,bx
+        add  ax,bx              ; *6
+        mov  si,offset FONTBUF  ; offset strips the label type -> plain number
+        add  si,ax
+        mov  ax,[fty]           ; screen base = fty*320 + ftx
+        call ROW320
+        add  di,[ftx]
+        mov  cx,6               ; six rows
+@@row:  mov  al,[si]
+        mov  ah,[COLOR]
+        test al,80h
+        jz   @@p1
+        mov  es:[di],ah
+@@p1:   test al,40h
+        jz   @@p2
+        mov  es:[di+1],ah
+@@p2:   test al,20h
+        jz   @@p3
+        mov  es:[di+2],ah
+@@p3:   inc  si
+        add  di,320
+        loop @@row
+        pop  si
+@@adv:  add  word ptr [ftx],4
+        jmp  @@ch
+@@done: ret
+
+; FNUM - draw AX as an unsigned decimal with FDRAW at [ftx]/[fty].
+FNUM:   mov  di,offset NB+5
+        mov  byte ptr [di],0
+        mov  bx,10
+@@d:    xor  dx,dx
+        div  bx
+        add  dl,'0'
+        dec  di
+        mov  [di],dl
+        test ax,ax
+        jnz  @@d
+        mov  si,di
+        call FDRAW
+        ret
+
+; ============================================================================
+;  PANELBMP - the photo cockpit (CITY.DAT resource 2) over the rendered
+;  world: rep movsb the precomputed span table from resseg, then draw the
+;  instruments onto the dark MFD screens the converter left in the image.
+;  Zones (from res\mkpanel.py): radar 46..131 x 123..154, ADI 137..203 x
+;  121..153 (centre 170,137), map 214..288 x 119..156. ES=bufseg, DS=CS.
+; ============================================================================
+PANELBMP:
+        cld
+        mov  si,offset PSPAN
+@@sp:   mov  ax,[si]            ; span start (0FFFFh = end of table)
+        cmp  ax,0FFFFh
+        je   @@spd
+        mov  cx,[si+2]          ; span length
+        mov  di,ax              ; dest = same offset in the back buffer
+        add  ax,[pimgo]
+        push si
+        push ds
+        mov  si,ax
+        mov  ax,[resseg]
+        mov  ds,ax              ; DS:SI = pixels inside CITY.DAT image
+        rep  movsb
+        pop  ds
+        pop  si
+        add  si,4
+        jmp  @@sp
+@@spd:
+        call MINIMAP2           ; squeezed map on the right MFD
+        ; ---- compact ADI on the centre MFD: roll-rotated pitch ladder ----
+        ; rung k = -2..2 at 10-degree steps; offset = (pitch-k*7)/2, +-10.
+        mov  word ptr [tmpi],-2
+@@cl:   mov  ax,[tmpi]
+        mov  bx,7
+        imul bx
+        mov  bx,[pitch]
+        sub  bx,ax
+        mov  ax,bx
+        cwd
+        mov  bx,2
+        idiv bx                 ; offset from the screen centre
+        cmp  ax,10
+        jg   @@cn
+        cmp  ax,-10
+        jl   @@cn
+        mov  [dsx],ax
+        mov  ax,[rsin]          ; rung centre = C + perp*offset
+        imul word ptr [dsx]
+        mov  bx,256
+        idiv bx
+        neg  ax
+        add  ax,170
+        mov  [dsy],ax
+        mov  ax,[rcos]
+        imul word ptr [dsx]
+        mov  bx,256
+        idiv bx
+        add  ax,137
+        mov  [dsac],ax
+        mov  bx,6               ; short rung...
+        cmp  word ptr [tmpi],0
+        jne  @@cln
+        mov  bx,[rsin]          ; ...horizon: 24 - |rsin|/16 keeps it on
+        test bx,bx              ; the glass at any bank angle
+        jns  @@cp
+        neg  bx
+@@cp:   mov  cl,4
+        shr  bx,cl
+        neg  bx
+        add  bx,24
+@@cln:  mov  ax,[rcos]
+        imul bx
+        push bx
+        mov  bx,256
+        idiv bx
+        pop  bx
+        mov  cx,ax              ; dx = rcos*len/256
+        mov  ax,[rsin]
+        imul bx
+        mov  bx,256
+        idiv bx                 ; dy = rsin*len/256
+        mov  bx,[dsy]
+        sub  bx,cx
+        mov  [sx0],bx
+        mov  bx,[dsac]
+        sub  bx,ax
+        mov  [sy0],bx
+        mov  bx,[dsy]
+        add  bx,cx
+        mov  [sx1],bx
+        mov  bx,[dsac]
+        add  bx,ax
+        mov  [sy1],bx
+        mov  bl,8               ; horizon: white
+        cmp  word ptr [tmpi],0
+        je   @@cc
+        mov  bl,27              ; sky rungs: light blue
+        jg   @@cc
+        mov  bl,28              ; ground rungs: dark earth
+@@cc:   mov  [COLOR],bl
+        call CLIPLINE
+        jc   @@cn
+        call LINE
+@@cn:   inc  word ptr [tmpi]
+        cmp  word ptr [tmpi],2
+        jle  @@cl
+        ; fixed red wings in the middle of the glass
+        mov  ax,137
+        call ROW320
+        add  di,170
+        mov  al,19
+        mov  es:[di],al         ; nose dot
+        push di
+        sub  di,8
+        mov  cx,4
+@@wl:   mov  es:[di],al
+        inc  di
+        loop @@wl
+        pop  di
+        add  di,5
+        mov  cx,4
+@@wr:   mov  es:[di],al
+        inc  di
+        loop @@wr
+        ; ---- radar MFD is not fitted yet ----
+        mov  byte ptr [COLOR],6
+        mov  word ptr [ftx],75
+        mov  word ptr [fty],136
+        mov  si,offset MSGRDR
+        call FDRAW
         ret

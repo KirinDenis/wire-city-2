@@ -105,6 +105,7 @@ SC_N    equ 31h                 ; N key: toggle day/night palette
 SC_W    equ 11h                 ; W: throttle up
 SC_S    equ 1Fh                 ; S: throttle down
 SC_A    equ 1Eh                 ; A: afterburner (hold)
+SC_C    equ 2Eh                 ; C: toggle cockpit panel
 
 CODE    SEGMENT
         ASSUME  CS:CODE, DS:CODE, ES:CODE, SS:CODE
@@ -133,6 +134,109 @@ MAIN:
         int  21h                ; DS=CS already -> vector to CS:KBINT
 
         ; (no PIT reprogram, no INT 8 hook - we only read the stock BIOS tick)
+
+        ; ---- load CITY.DAT into its own segment (resources: font, ...) ----
+        mov  ax,cs
+        add  ax,2000h           ; past the back-buffer at CS+1000h
+        mov  [resseg],ax
+        mov  dx,offset FNAME
+        mov  ax,3D00h           ; open read-only
+        int  21h
+        jnc  @@ropn
+        mov  dx,offset RESMSG   ; no resource file: say so and exit cleanly
+        mov  ah,9
+        int  21h
+        mov  dx,[oldoff]        ; restore INT 9 before leaving
+        mov  ax,[oldseg]
+        push ds
+        mov  ds,ax
+        mov  ax,2509h
+        int  21h
+        pop  ds
+        mov  ax,4C01h
+        int  21h
+@@ropn: mov  bx,ax              ; read the whole file into resseg:0
+        mov  ax,[resseg]
+        push ds
+        mov  ds,ax
+        xor  dx,dx
+        mov  cx,0FFF0h
+        mov  ah,3Fh
+        int  21h
+        pop  ds
+        mov  ah,3Eh             ; close
+        int  21h
+        ; find resource id 1 (font) in the directory and copy it local
+        push es
+        mov  ax,[resseg]
+        mov  es,ax
+        mov  cl,es:[3]          ; entry count
+        xor  ch,ch
+        mov  bx,4               ; first directory entry
+@@rfind:
+        cmp  byte ptr es:[bx],1 ; font id
+        je   @@rgot
+        add  bx,5
+        loop @@rfind
+        pop  es
+        jmp  @@rdone            ; no font in file: panel text stays blank
+@@rgot: mov  si,es:[bx+1]       ; resource offset
+        mov  cx,es:[bx+3]       ; resource length
+        cmp  cx,256
+        jbe  @@rcl
+        mov  cx,256
+@@rcl:  push ds
+        mov  ax,[resseg]
+        mov  ds,ax              ; DS:SI = resource data
+        mov  ax,cs
+        mov  es,ax
+        mov  di,offset FONTBUF  ; ES:DI = local font buffer
+        cld
+        rep  movsb
+        pop  ds
+        pop  es
+@@rdone:
+        ; ---- resource 2: the photo cockpit. Remember where it sits and ----
+        ; ---- precompute the blit spans (runs of non-transparent bytes) ----
+        push es
+        mov  ax,[resseg]
+        mov  es,ax
+        mov  cl,es:[3]          ; entry count
+        xor  ch,ch
+        mov  bx,4
+@@pf:   cmp  byte ptr es:[bx],2
+        je   @@pg
+        add  bx,5
+        loop @@pf
+        jmp  @@pn               ; no cockpit bitmap: drawn panel fallback
+@@pg:   mov  ax,es:[bx+1]
+        mov  [pimgo],ax
+        mov  si,ax              ; walk the 64000 image bytes once
+        xor  bx,bx              ; pixel index
+        mov  di,offset PSPAN
+@@sc:   cmp  bx,64000
+        jae  @@sd
+        cmp  byte ptr es:[si],255
+        jne  @@sr
+        inc  si
+        inc  bx
+        jmp  @@sc
+@@sr:   mov  [di],bx            ; span start = buffer offset
+        xor  cx,cx
+@@s2:   cmp  bx,64000
+        jae  @@se
+        cmp  byte ptr es:[si],255
+        je   @@se
+        inc  si
+        inc  bx
+        inc  cx
+        jmp  @@s2
+@@se:   mov  [di+2],cx          ; span length
+        add  di,4
+        cmp  di,offset PSPAN+6396 ; keep room for the terminator
+        jb   @@sc
+@@sd:   mov  word ptr [di],0FFFFh
+@@pn:   pop  es
 
         push es                 ; seed the world from the clock: new map
         mov  ax,40h             ; every run (the map lives in HMAP after this,
@@ -260,6 +364,24 @@ QUIT:
 ;  Key-state table (at the very end)
 ; ============================================================================
 KEYS    db 128 dup(0)
+
+; ---- BSS: buffers that live past the .COM image ----------------------------
+; A COM program owns the whole segment, and everything below is fully written
+; before first read (DSGEN/MMAPGEN at startup, TERRPREP every frame, the font
+; copy at load), so shipping ~20K of zeroes in the file was pure waste.
+BSS     label byte
+HMAP    equ  byte ptr BSS           ; 4096 bytes: world heightmap
+MMAP    equ  byte ptr BSS+4096      ; 4096 bytes: baked minimap pixels
+TRX     equ  word ptr BSS+8192      ; 1681 words: rotated node X
+TRZ     equ  word ptr BSS+11554     ; 1681 words: rotated node Z
+TWH     equ  word ptr BSS+14916     ; 1681 words: node world heights
+TH      equ  byte ptr BSS+18278     ; 1681 bytes: node raw heights
+FONTBUF equ  BSS+19959              ; 246 bytes: font from CITY.DAT (untyped:
+                                    ;  used as an immediate address only)
+PSPAN   equ  BSS+20215              ; 6400 bytes: cockpit blit span table,
+                                    ;  (buffer offset, length) pairs, 0FFFFh
+                                    ;  terminated; built once at startup
+BSSEND  equ  BSS+26615
 
 CODE    ENDS
         END START

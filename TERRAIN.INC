@@ -608,17 +608,38 @@ MMAPGEN:
 ;  with a white frame, and stamp the plane: white 2x2 blip + red course tick.
 ;  ES=bufseg. Our shared debug eye on what DSGEN actually built.
 ; ============================================================================
+; ROW320 - DI = AX*320 (row start offset). Clobbers BX.
+ROW320: mov  di,ax
+        mov  bx,ax
+        mov  cl,8
+        shl  di,cl              ; *256
+        mov  cl,6
+        shl  bx,cl              ; *64
+        add  di,bx
+        ret
+
 MINIMAP:
         cld
         ; white frame so the map does not blend into the terrain
+        mov  ax,[mapt]
+        dec  ax
+        call ROW320
+        add  di,251             ; top edge
         mov  al,8
-        mov  di,122*320+251     ; top edge
         mov  cx,66
         rep  stosb
-        mov  di,187*320+251     ; bottom edge (clear of the HUD text row)
+        mov  ax,[mapt]
+        add  ax,64
+        call ROW320
+        add  di,251             ; bottom edge
+        mov  al,8
         mov  cx,66
         rep  stosb
-        mov  di,122*320+251     ; side edges
+        mov  ax,[mapt]
+        dec  ax
+        call ROW320
+        add  di,251             ; side edges
+        mov  al,8
         mov  cx,66
 @@fr:   mov  es:[di],al
         mov  es:[di+65],al
@@ -626,7 +647,9 @@ MINIMAP:
         loop @@fr
         ; blit the baked map
         mov  si,offset MMAP
-        mov  di,123*320+252
+        mov  ax,[mapt]
+        call ROW320
+        add  di,252
         mov  cx,64
 @@row:  push cx
         mov  cx,32
@@ -653,14 +676,11 @@ MINIMAP:
         mov  dx,63
         sub  dx,ax              ; row = 63 - node z
         mov  ax,dx
-        add  ax,123
-        mov  di,ax              ; di = row*320 (=*256+*64)
-        mov  cl,8
-        shl  di,cl
-        mov  cl,6
-        shl  ax,cl
-        add  di,ax
-        add  di,252
+        add  ax,[mapt]
+        push bx
+        call ROW320             ; di = row*320
+        pop  bx
+        add  di,252             ; map column
         add  di,bx
         mov  al,8               ; white 2x2 blip
         mov  es:[di],al
@@ -768,4 +788,76 @@ TERRH:  mov  ax,[camx]
         mov  bx,64
         idiv bx
         add  ax,[x0]
+        ret
+
+; ============================================================================
+;  MINIMAP2 - the baked map squeezed to 64x32 (every other row) onto the
+;  right MFD of the photo cockpit at (219,122). White plane blip and red
+;  course tick, same math as MINIMAP with the row halved. ES=bufseg.
+; ============================================================================
+MINIMAP2:
+        cld
+        mov  si,offset MMAP
+        mov  ax,122
+        call ROW320
+        add  di,219
+        mov  cx,32
+@@row:  push cx
+        mov  cx,32
+        rep  movsw              ; one 64-byte map row
+        pop  cx
+        add  si,64              ; skip the odd source row
+        add  di,320-64
+        loop @@row
+        ; plane blip at node (camx,camz)
+        mov  ax,[camx]
+        add  ax,BIAS
+        mov  cl,2
+        shr  ax,cl
+        mov  cl,8
+        shr  ax,cl
+        and  ax,63
+        mov  bx,ax              ; col = node x
+        mov  ax,[camz]
+        add  ax,BIAS
+        mov  cl,2
+        shr  ax,cl
+        mov  cl,8
+        shr  ax,cl
+        and  ax,63
+        mov  dx,63
+        sub  dx,ax              ; row = 63 - node z
+        shr  dx,1               ; squeezed to 32 rows
+        mov  ax,dx
+        add  ax,122
+        push bx
+        call ROW320
+        pop  bx
+        add  di,219
+        add  di,bx
+        mov  al,8               ; white 2x1 blip (rows are half-height)
+        mov  es:[di],al
+        mov  es:[di+1],al
+        ; heading tick: dxn - (dzn/2) rows, +Z is up on the map
+        mov  ax,[hsin]
+        add  ax,ax
+        add  ax,[hsin]          ; hsin*3
+        mov  bx,256
+        cwd
+        idiv bx                 ; dxn = -3..3
+        mov  si,ax
+        mov  ax,[hcos]
+        add  ax,ax
+        add  ax,[hcos]
+        cwd
+        idiv bx                 ; dzn = -3..3
+        sar  ax,1               ; halve for the squeezed rows
+        mov  cx,320
+        imul cx
+        mov  cx,ax
+        mov  ax,si
+        sub  ax,cx              ; pixel offset = dxn - (dzn/2)*320
+        add  di,ax
+        mov  al,19              ; red course tick
+        mov  es:[di],al
         ret

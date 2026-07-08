@@ -19,7 +19,16 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
 @@day:  call TERRPREP           ; rotate + cache the terrain nodes
         call TERRAIN            ; real 3D relief, far -> near
         call BUILDINGS          ; real buildings to the horizon (BORD walk)
-        call MINIMAP            ; bottom-right world map + plane marker
+        mov  word ptr [mapt],123
+        cmp  byte ptr [cockpit],0
+        je   @@nopan
+        call PANEL              ; instrument panel over the bottom rows
+        cmp  word ptr [pimgo],0
+        jne  @@pdone            ; photo cockpit has the map on its own MFD
+        mov  word ptr [mapt],133 ; minimap sits IN the right tower
+@@nopan:
+        call MINIMAP            ; world map + plane marker
+@@pdone:
         ret
 
 ; ----- stars (sky background; horizon is the sky/ground colour split) -------

@@ -26,3 +26,9 @@ docs/city.zip
 *token*
 *password*
 credentials*
+
+# generated at build time (RESDAT.COM image copied to CITY.DAT)
+CITY.DAT
+BUILD.LOG
+stdout.txt
+stderr.txt
