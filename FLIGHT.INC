@@ -269,78 +269,47 @@ INPUT:
         add  ax,WINDZ
         mov  [camz],ax
 
-        ; --- turbulence as a slow swell: vertical speed and roll/pitch
-        ; wobble follow ~4.7s / ~7s sines of the BIOS tick, so the plane
-        ; breathes instead of rattling. Amplitude grows over water and
-        ; mountains; only mountain rotor adds an occasional sharp kick.
-        mov  ax,[lasttk]
-        mov  bx,ax
-        add  ax,ax
-        add  ax,bx              ; phase = tick*3 (~4.7 s cycle)
-        call SINQ               ; AX = sin*256
-        mov  cx,1               ; calm-air amplitude
+        ; --- sway: the whole VIEW floats on a slow sine (screen-space,
+        ; so it is per-pixel smooth - pitch steps are 5 px and jerk).
+        ; Every full cycle rolls a new amplitude (3..6 px, more over
+        ; mountains/water) and a new period (~7..13 s). The cockpit
+        ; stays put; the world breathes behind the glass.
+        mov  ax,[swph]
+        add  ax,[swspd]
+        mov  [swph],ax
+        jnc  @@sw1              ; carry = full circle: re-roll the dice
+        call RND16
+        and  ax,3
+        add  ax,3               ; amplitude 3..6 px
         mov  bx,[lgnd]
         cmp  bx,700
-        jl   @@t1
-        mov  cx,3               ; mountain waves
-        jmp  @@t2
-@@t1:   cmp  bx,440
-        jge  @@t2
-        mov  cx,2               ; long swell over open water
-@@t2:   imul cx
-        mov  cx,256
-        idiv cx                 ; vertical speed -amp..+amp this tick
-        add  [camy],ax
-        ; roll sway: roll tracks wobble = sin(tick*2)*3/256 via deltas,
-        ; so it cannot drift - the sine integrates back to zero itself
-        mov  ax,[lasttk]
-        add  ax,ax              ; phase = tick*2 (~7 s cycle)
-        call SINQ
-        mov  cx,3
-        imul cx
-        mov  cx,256
-        idiv cx                 ; wobble -3..3
-        mov  bx,ax
-        sub  ax,[wobr]          ; delta since the previous tick
-        mov  [wobr],bx
-        add  ax,[roll]
-        and  ax,255
-        mov  [roll],ax
-        ; pitch sway: opposite phase, smaller
-        mov  ax,[lasttk]
-        add  ax,ax
-        add  ax,128
-        call SINQ
-        mov  cx,2
-        imul cx
-        mov  cx,256
-        idiv cx                 ; wobble -2..2
-        mov  bx,ax
-        sub  ax,[wobp]
-        mov  [wobp],bx
-        add  [pitch],ax
-        ; mountain rotor: a sharp little kick now and then
-        cmp  word ptr [lgnd],700
-        jl   @@t3
+        jl   @@swm
+        add  ax,3               ; mountain waves run higher
+        jmp  @@swa
+@@swm:  cmp  bx,440
+        jge  @@swa
+        inc  ax                 ; a little extra over open water
+@@swa:  mov  [swamp],ax
         call RND16
-        test ax,0700h           ; 1-in-8 ticks
-        jnz  @@t3
-        mov  bx,ax
-        and  ax,2
-        dec  ax                 ; -1/+1
-        add  [pitch],ax
-        test bx,0800h
-        jz   @@t4
-        mov  ax,[roll]
-        inc  ax
         and  ax,255
-        mov  [roll],ax
-        jmp  @@t3
-@@t4:   mov  ax,[roll]
-        dec  ax
-        and  ax,255
-        mov  [roll],ax
-@@t3:
+        add  ax,278             ; phase step 278..533 = ~13..7 s cycle
+        mov  [swspd],ax
+@@sw1:  mov  ax,[swph]
+        mov  cl,8
+        shr  ax,cl              ; angle 0..255
+        push ax
+        call SINQ               ; sin*256
+        imul word ptr [swamp]
+        mov  cx,256
+        idiv cx
+        mov  [swayy],ax         ; vertical float -amp..+amp
+        pop  ax
+        add  ax,64              ; X leads by a quarter turn (lazy circle)
+        call SINQ
+        imul word ptr [swamp]
+        mov  cx,512
+        idiv cx                 ; half amplitude sideways
+        mov  [swayx],ax
 @@tb3:
         ; --- advance: split vel/16 into horizontal (cos p) and climb (sin p)
         mov  ax,[vel]

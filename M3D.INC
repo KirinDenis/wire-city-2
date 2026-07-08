@@ -180,7 +180,8 @@ SETTRIG:
         cmp  word ptr [psin],0
         jge  @@pset
         neg  ax
-@@pset: mov  [pofs],ax
+@@pset: add  ax,[swayy]         ; sky bands ride the view float too
+        mov  [pofs],ax
         ret
 
 ; ============================================================================
@@ -295,6 +296,7 @@ PROJPT: push dx                 ; save ry
         idiv cx                 ; AX = rx*FOCAL/rz
 @@sxadd:
         add  ax,160             ; sx_raw (screen centre x = 160)
+        add  ax,[swayx]         ; view float
         call CLAMPAX            ; clamp BEFORE roll so APPLYROLL can't overflow
         mov  [ptmp],ax
         pop  ax                 ; ry
@@ -322,6 +324,7 @@ PROJPT: push dx                 ; save ry
         idiv cx
 @@syadd:
         mov  bx,[horiz]
+        add  bx,[swayy]         ; view float
         sub  bx,ax              ; sy_raw = horiz - ry*FOCAL/rz
         mov  ax,bx
         call CLAMPAX

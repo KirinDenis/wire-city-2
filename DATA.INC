@@ -28,8 +28,11 @@ prevc   db 0                    ; previous C-key state (edge detect)
 mapt    dw 123                  ; minimap top row (rises above the panel)
 resseg  dw 0                    ; segment CITY.DAT is loaded into (CS+2000h)
 pimgo   dw 0                    ; cockpit bitmap offset in resseg (0 = none)
-wobr    dw 0                    ; turbulence: previous roll wobble value
-wobp    dw 0                    ; turbulence: previous pitch wobble value
+swph    dw 0                    ; sway: phase, full circle = 65536
+swspd   dw 360                  ; sway: phase step per tick (~10 s cycle)
+swamp   dw 4                    ; sway: current amplitude, screen pixels
+swayx   dw 0                    ; sway: this tick's X shift (screen px)
+swayy   dw 0                    ; sway: this tick's Y shift (screen px)
 ftx     dw 0                    ; font cursor x
 fty     dw 0                    ; font cursor y
 NB      db 6 dup(0)             ; number->text scratch for FNUM
