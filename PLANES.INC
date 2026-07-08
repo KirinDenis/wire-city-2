@@ -1434,3 +1434,253 @@ MSLDRAW:
         mov  al,25              ; exhaust puff
         mov  es:[di],al
 @@no:   ret
+
+; ---------------------------------------------------------------------------
+;  AMSLUPD - the AI's war: every couple of seconds a random living jet
+;  fires a homing missile (pool of NAMSL) at the first living enemy in
+;  ~7000 range. Missiles chase at 56/tick and pop the target via BOOM.
+;  Nobody shoots at the player - yet.
+; ---------------------------------------------------------------------------
+AMSLUPD:
+        cmp  word ptr [aifire],0
+        je   @@try
+        dec  word ptr [aifire]
+        jmp  @@fly
+@@try:  mov  word ptr [aifire],48
+        xor  bx,bx              ; a free launch rail?
+@@fs:   cmp  byte ptr [amact+bx],0
+        je   @@have
+        inc  bx
+        cmp  bx,NAMSL
+        jb   @@fs
+        jmp  @@fly
+@@have: mov  [wcc],bx           ; slot index
+        call RND16              ; random shooter
+        and  ax,31
+        cmp  ax,NPLANE
+        jae  @@fly
+        add  ax,ax
+        mov  si,ax              ; shooter offset
+        mov  bx,si
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        jne  @@fly
+        mov  dx,si              ; hunt the OTHER team
+        and  dx,2
+        xor  dx,2
+        xor  di,di
+@@tg:   mov  bx,di
+        and  bx,2
+        cmp  bx,dx
+        jne  @@tgn
+        mov  bx,di
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        jne  @@tgn
+        mov  ax,[pax+di]
+        sub  ax,[pax+si]
+        jns  @@g1
+        neg  ax
+@@g1:   mov  bx,ax
+        cmp  bx,7000
+        jge  @@tgn
+        mov  ax,[paz+di]
+        sub  ax,[paz+si]
+        jns  @@g2
+        neg  ax
+@@g2:   add  bx,ax
+        cmp  bx,7000
+        jl   @@shoot
+@@tgn:  add  di,2
+        cmp  di,NPLANE*2
+        jb   @@tg
+        jmp  @@fly
+@@shoot:
+        mov  bx,[wcc]
+        mov  byte ptr [amact+bx],1
+        add  bx,bx              ; word offset
+        mov  ax,[pax+si]
+        mov  [amx+bx],ax
+        mov  [ampx+bx],ax
+        mov  ax,[pay+si]
+        sub  ax,10
+        mov  [amy+bx],ax
+        mov  [ampy+bx],ax
+        mov  ax,[paz+si]
+        mov  [amz+bx],ax
+        mov  [ampz+bx],ax
+        mov  [amtgt+bx],di
+        mov  word ptr [amlife+bx],160
+@@fly:  ; ---- fly the pool ----
+        mov  word ptr [wcc],0
+@@ml:   mov  bx,[wcc]
+        cmp  byte ptr [amact+bx],0
+        je   @@mn
+        add  bx,bx
+        dec  word ptr [amlife+bx]
+        jnz  @@go
+@@fiz:  mov  bx,[wcc]           ; burned out (or the target died)
+        mov  byte ptr [amact+bx],0
+        jmp  @@mn
+@@go:   mov  ax,[amx+bx]        ; old spot for the puff
+        mov  [ampx+bx],ax
+        mov  ax,[amy+bx]
+        mov  [ampy+bx],ax
+        mov  ax,[amz+bx]
+        mov  [ampz+bx],ax
+        mov  si,[amtgt+bx]
+        mov  di,si
+        shr  di,1
+        cmp  byte ptr [pst+di],0
+        jne  @@fiz
+        ; chase at 56/tick, dominant-axis normalised
+        mov  ax,[pax+si]
+        sub  ax,[amx+bx]
+        mov  [ctx],ax
+        mov  ax,[pay+si]
+        sub  ax,[amy+bx]
+        mov  [cty],ax
+        mov  ax,[paz+si]
+        sub  ax,[amz+bx]
+        mov  [ctz],ax
+        mov  di,[ctx]           ; m = max of the absolutes
+        or   di,di
+        jns  @@a1
+        neg  di
+@@a1:   mov  ax,[cty]
+        or   ax,ax
+        jns  @@a2
+        neg  ax
+@@a2:   cmp  ax,di
+        jle  @@a3
+        mov  di,ax
+@@a3:   mov  ax,[ctz]
+        or   ax,ax
+        jns  @@a4
+        neg  ax
+@@a4:   cmp  ax,di
+        jle  @@a5
+        mov  di,ax
+@@a5:   test di,di
+        jnz  @@a6
+        inc  di
+@@a6:   ; proximity fuse first: manhattan < 160
+        mov  ax,[ctx]
+        or   ax,ax              ; mov sets no flags
+        jns  @@b1
+        neg  ax
+@@b1:   mov  dx,ax
+        mov  ax,[cty]
+        or   ax,ax
+        jns  @@b2
+        neg  ax
+@@b2:   add  dx,ax
+        mov  ax,[ctz]
+        or   ax,ax
+        jns  @@b3
+        neg  ax
+@@b3:   add  dx,ax
+        cmp  dx,160
+        jge  @@step
+        push word ptr [wcc]     ; BOOM reuses this scratch
+        call BOOM               ; SI = the target
+        pop  word ptr [wcc]
+        jmp  @@fiz
+@@step: mov  ax,[ctx]
+        mov  cx,56
+        imul cx
+        idiv di
+        add  [amx+bx],ax
+        mov  ax,[cty]
+        mov  cx,56
+        imul cx
+        idiv di
+        add  [amy+bx],ax
+        mov  ax,[ctz]
+        mov  cx,56
+        imul cx
+        idiv di
+        add  [amz+bx],ax
+@@mn:   inc  word ptr [wcc]
+        cmp  word ptr [wcc],NAMSL
+        jb   @@ml
+        ret
+
+; ---------------------------------------------------------------------------
+;  AMSLDRAW - the AI missiles: glow dots with exhaust puffs.
+; ---------------------------------------------------------------------------
+AMSLDRAW:
+        mov  word ptr [tpi],0
+@@dl:   mov  bx,[tpi]
+        cmp  byte ptr [amact+bx],0
+        je   @@dn
+        add  bx,bx
+        mov  ax,[amx+bx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[amz+bx]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        push bx
+        call ROTXZ
+        pop  bx
+        mov  dx,[amy+bx]
+        sub  dx,[camy]
+        mov  ax,[rcx]
+        mov  cx,[rcz]
+        push bx
+        call PPOINT
+        pop  bx
+        jc   @@puff
+        cmp  ax,0
+        jl   @@puff
+        cmp  ax,318
+        jg   @@puff
+        cmp  dx,0
+        jl   @@puff
+        cmp  dx,190
+        jg   @@puff
+        push bx
+        mov  [dsx],ax
+        mov  ax,dx
+        call ROW320
+        add  di,[dsx]
+        mov  al,94
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+        pop  bx
+@@puff: mov  ax,[ampx+bx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[ampz+bx]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        push bx
+        call ROTXZ
+        pop  bx
+        mov  dx,[ampy+bx]
+        sub  dx,[camy]
+        mov  ax,[rcx]
+        mov  cx,[rcz]
+        call PPOINT
+        jc   @@dn
+        cmp  ax,0
+        jl   @@dn
+        cmp  ax,319
+        jg   @@dn
+        cmp  dx,0
+        jl   @@dn
+        cmp  dx,191
+        jg   @@dn
+        mov  [dsx],ax
+        mov  ax,dx
+        call ROW320
+        add  di,[dsx]
+        mov  al,25
+        mov  es:[di],al
+@@dn:   inc  word ptr [tpi]
+        cmp  word ptr [tpi],NAMSL
+        jb   @@dl
+        ret

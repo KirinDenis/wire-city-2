@@ -22,6 +22,7 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
         call WRECKDRAW          ; fallen jets burn on the ground
         call PLANESDRAW         ; AI jets own the sky
         call MSLDRAW            ; the missile dot and its puff
+        call AMSLDRAW           ; the AI's missiles too
         call LOCKHUD            ; aiming ring, lock pointer, callsign
         mov  word ptr [mapt],123
         cmp  byte ptr [cockpit],0

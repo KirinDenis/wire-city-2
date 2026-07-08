@@ -129,6 +129,18 @@ mvz     dw 0
 mstgt   dw 0FFFFh               ; homing target (plane offset)
 mlife   dw 0                    ; ticks to self-destruct
 wnext   dw 0                    ; wreck pool: next slot byte offset
+; ---- AI missile pool (the war fights itself) --------------------------------
+NAMSL   equ 4
+amact   db NAMSL dup(0)         ; slot in flight?
+amx     dw NAMSL dup(0)         ; position
+amy     dw NAMSL dup(0)
+amz     dw NAMSL dup(0)
+ampx    dw NAMSL dup(0)         ; previous position (exhaust puff)
+ampy    dw NAMSL dup(0)
+ampz    dw NAMSL dup(0)
+amtgt   dw NAMSL dup(0)         ; target plane offset
+amlife  dw NAMSL dup(0)         ; self-destruct timer
+aifire  dw 90                   ; cooldown until somebody opens fire
 ctx     dw 0                    ; BOOM scratch: face centroid
 cty     dw 0
 ctz     dw 0

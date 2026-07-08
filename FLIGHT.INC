@@ -490,6 +490,7 @@ INPUT:
 @@nrl:
         call PLANESUPD          ; AI traffic flies on the same clock
         call MSLUPD             ; the missile chases on the same clock
+        call AMSLUPD            ; the AI shoots its own war
         call WRECKUPD           ; debris falls on the same clock
         ret
 
