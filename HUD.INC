@@ -877,12 +877,49 @@ PANELBMP:
         inc  si
         jmp  @@tb
 @@tbd:
-        ; ---- radar MFD is not fitted yet ----
-        mov  byte ptr [COLOR],6
-        mov  word ptr [ftx],73
-        mov  word ptr [fty],168
-        mov  si,offset MSGRDR
-        call FDRAW
+        ; ---- radar: heading-up PPI, centre (87,171), 1 px = 512 world
+        ; units (~7.7k range). Own ship = 2 px tick, traffic = 2x1 blips.
+        mov  ax,172
+        call ROW320
+        add  di,87
+        mov  al,8
+        mov  es:[di],al
+        mov  es:[di-320],al
+        xor  si,si
+@@rdr:  mov  ax,[pax+si]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[paz+si]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        push si
+        call ROTXZ              ; rcx = right of the nose, rcz = ahead
+        pop  si
+        mov  ax,[rcx]
+        cmp  ax,7680
+        jge  @@rn
+        cmp  ax,-7680
+        jle  @@rn
+        mov  bx,[rcz]
+        cmp  bx,7680
+        jge  @@rn
+        cmp  bx,-7680
+        jle  @@rn
+        mov  cl,9
+        sar  ax,cl              ; -15..15 px
+        sar  bx,cl
+        add  ax,87
+        mov  [dsx],ax           ; blip column
+        mov  ax,171
+        sub  ax,bx              ; ahead = up the screen
+        call ROW320
+        add  di,[dsx]
+        mov  al,8
+        mov  es:[di],al
+        mov  es:[di+1],al
+@@rn:   add  si,2
+        cmp  si,NPLANE*2
+        jb   @@rdr
         ; ---- readouts right of the map: S/T/F/H rows ----
         mov  byte ptr [COLOR],5
         mov  word ptr [ftx],242

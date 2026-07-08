@@ -20,8 +20,8 @@ PLANESUPD:
         and  ax,3
         jnz  @@mv
         mov  ax,[pah+si]
-        cmp  si,2               ; the middle plane circles the other way
-        je   @@ccw
+        test si,2               ; alternate circling directions
+        jnz  @@ccw
         inc  ax
         jmp  @@turn
 @@ccw:  dec  ax

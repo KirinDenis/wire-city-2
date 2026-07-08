@@ -292,31 +292,28 @@ MAIN:
         jb   @@seek
 @@sdone:
         mov  word ptr [camy],1450 ; start high above everything (peaks ~1110)
-        ; ---- AI traffic initial spots (leash respawn adjusts later) ----
-        mov  ax,[camx]
-        add  ax,3000
-        mov  [pax],ax
-        mov  ax,[camz]
-        add  ax,4000
-        mov  [paz],ax
-        mov  word ptr [pay],900
-        mov  word ptr [pah],32
-        mov  ax,[camx]
-        sub  ax,4000
-        mov  [pax+2],ax
-        mov  ax,[camz]
-        add  ax,6000
-        mov  [paz+2],ax
-        mov  word ptr [pay+2],1100
-        mov  word ptr [pah+2],200
-        mov  ax,[camx]
-        add  ax,1000
-        mov  [pax+4],ax
-        mov  ax,[camz]
-        add  ax,8000
-        mov  [paz+4],ax
-        mov  word ptr [pay+4],1300
-        mov  word ptr [pah+4],128
+        ; ---- AI traffic: scatter the squadron around the player ----
+        xor  si,si
+@@aspn: call RND16              ; preserves SI
+        and  ax,16383
+        sub  ax,8192
+        add  ax,[camx]
+        mov  [pax+si],ax
+        call RND16
+        and  ax,16383
+        sub  ax,8192
+        add  ax,[camz]
+        mov  [paz+si],ax
+        call RND16
+        and  ax,1023
+        add  ax,700             ; altitude 700..1723
+        mov  [pay+si],ax
+        call RND16
+        and  ax,255
+        mov  [pah+si],ax
+        add  si,2
+        cmp  si,NPLANE*2
+        jb   @@aspn
         mov  word ptr [heading],0
         mov  word ptr [roll],0
         call SETTRIG            ; seed hsin/hcos before the first physics tick

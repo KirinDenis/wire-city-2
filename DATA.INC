@@ -35,7 +35,7 @@ swayx   dw 0                    ; sway: this tick's X shift (screen px)
 swayy   dw 0                    ; sway: this tick's Y shift (screen px)
 
 ; ---- AI traffic: low-poly jets (see PLANES.INC) ----------------------------
-NPLANE  equ 3
+NPLANE  equ 20
 pax     dw NPLANE dup(0)        ; world position
 pay     dw NPLANE dup(0)
 paz     dw NPLANE dup(0)
