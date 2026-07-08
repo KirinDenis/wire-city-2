@@ -77,29 +77,8 @@ for y in range(h):
             transparent[y * w + x] = 1
 print(f'transparent pixels: {sum(transparent)}')
 
-# defringe: anti-aliased half-white pixels hugging the glass edge become
-# glass too, so the frame border stays crisp against the moving world.
-# Only near-NEUTRAL light pixels qualify (white fades to grey); tinted
-# highlights like the lilac console edge are artwork and must survive.
-for _ in range(2):
-    grow = []
-    for y in range(h):
-        for x in range(w):
-            i = y * w + x
-            if transparent[i]:
-                continue
-            p = apx[x, y]
-            if min(p) < 180 or max(p) - min(p) > 16:
-                continue
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1),
-                           (1, 1), (1, -1), (-1, 1), (-1, -1)):
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < w and 0 <= ny < h and transparent[ny * w + nx]:
-                    grow.append(i)
-                    break
-    for i in grow:
-        transparent[i] = 1
-print(f'transparent after defringe: {sum(transparent)}')
+# (defringe removed: the artist cleans the glass edges in Photoshop -
+# dark frame layer + hard white fill with anti-aliasing off)
 
 q = art.quantize(colors=63, dither=Image.Dither.FLOYDSTEINBERG)
 qpx = q.load()
