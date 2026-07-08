@@ -81,10 +81,33 @@ PLANESUPD:
         and  ax,511
         add  ax,800             ; altitude 800..1311
         mov  [pay+si],ax
+        ; drop a contrail point every 8th tick
+        mov  ax,[lasttk]
+        and  ax,7
+        jnz  @@next
+        mov  bx,si
+        mov  cl,3
+        shl  bx,cl              ; slot base = plane*TLN*2
+        add  bx,[tlh]
+        mov  ax,[pax+si]
+        mov  [TLX+bx],ax
+        mov  ax,[pay+si]
+        mov  [TLY+bx],ax
+        mov  ax,[paz+si]
+        mov  [TLZ+bx],ax
 @@next: add  si,2
         cmp  si,NPLANE*2
         jb   @@pl
-        ret
+        mov  ax,[lasttk]        ; advance the shared ring head
+        and  ax,7
+        jnz  @@nth
+        mov  ax,[tlh]
+        add  ax,2
+        cmp  ax,TLN*2
+        jb   @@th2
+        xor  ax,ax
+@@th2:  mov  [tlh],ax
+@@nth:  ret
 
 ; ---------------------------------------------------------------------------
 ;  PLANESDRAW - render the AI jets (called after BUILDINGS: they own the
@@ -127,6 +150,47 @@ PLANESDRAW:
         mov  ax,[pay+si]
         sub  ax,[camy]
         mov  [pdy],ax
+        ; ---- contrail: TLN dots behind the jet (haze colour) ----
+        mov  bx,si
+        mov  cl,3
+        shl  bx,cl
+        mov  [pfc],bx           ; slot base
+        mov  word ptr [tpi],0
+@@tr:   mov  bx,[pfc]
+        add  bx,[tpi]
+        mov  ax,[TLX+bx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[TLZ+bx]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        push bx
+        call ROTXZ
+        pop  bx
+        mov  dx,[TLY+bx]
+        sub  dx,[camy]
+        mov  ax,[rcx]
+        mov  cx,[rcz]
+        call PPOINT
+        jc   @@trn
+        cmp  ax,0
+        jl   @@trn
+        cmp  ax,319
+        jg   @@trn
+        cmp  dx,0
+        jl   @@trn
+        cmp  dx,199
+        jg   @@trn
+        mov  [dsx],ax
+        mov  ax,dx
+        call ROW320
+        add  di,[dsx]
+        mov  al,12              ; haze: reads as vapour day and night
+        mov  es:[di],al
+@@trn:  add  word ptr [tpi],2
+        cmp  word ptr [tpi],TLN*2
+        jb   @@tr
+        mov  si,[pidx]          ; PROJPT inside PPOINT clobbers SI
         ; model yaw relative to the camera: A = plane heading - heading
         mov  ax,[pah+si]
         sub  ax,[heading]
@@ -271,8 +335,172 @@ PLANESDRAW:
         inc  word ptr [pfc]
         cmp  word ptr [pfc],NFACE
         jb   @@df
+        ; ---- IFF marker: friendly = green square, hostile = yellow
+        ; diamond, sized to the wingspan (11440/rz px half-size) ----
+        mov  ax,[pdz]
+        cmp  ax,NEARZ
+        jle  @@nomk
+        mov  ax,[pdx]
+        mov  dx,[pdy]
+        mov  cx,[pdz]
+        call PPOINT
+        jc   @@nomk
+        mov  [dsx],ax           ; marker centre on screen
+        mov  [dsy],dx
+        mov  bx,[pdz]
+        mov  ax,11440
+        cwd
+        idiv bx
+        add  ax,3
+        cmp  ax,24
+        jle  @@mr1
+        mov  ax,24
+@@mr1:  mov  [dsac],ax          ; half-size
+        test word ptr [pidx],2
+        jnz  @@hst
+        ; friendly: green square
+        mov  byte ptr [COLOR],95
+        mov  ax,[dsx]
+        sub  ax,[dsac]
+        mov  [sx0],ax
+        mov  ax,[dsx]
+        add  ax,[dsac]
+        mov  [sx1],ax
+        mov  ax,[dsy]
+        sub  ax,[dsac]
+        mov  [sy0],ax
+        mov  [sy1],ax
+        call @@mln              ; top
+        mov  ax,[dsx]
+        sub  ax,[dsac]
+        mov  [sx0],ax
+        mov  ax,[dsx]
+        add  ax,[dsac]
+        mov  [sx1],ax
+        mov  ax,[dsy]
+        add  ax,[dsac]
+        mov  [sy0],ax
+        mov  [sy1],ax
+        call @@mln              ; bottom
+        mov  ax,[dsx]
+        sub  ax,[dsac]
+        mov  [sx0],ax
+        mov  [sx1],ax
+        mov  ax,[dsy]
+        sub  ax,[dsac]
+        mov  [sy0],ax
+        mov  ax,[dsy]
+        add  ax,[dsac]
+        mov  [sy1],ax
+        call @@mln              ; left
+        mov  ax,[dsx]
+        add  ax,[dsac]
+        mov  [sx0],ax
+        mov  [sx1],ax
+        mov  ax,[dsy]
+        sub  ax,[dsac]
+        mov  [sy0],ax
+        mov  ax,[dsy]
+        add  ax,[dsac]
+        mov  [sy1],ax
+        call @@mln              ; right
+        jmp  @@nomk
+@@hst:  ; hostile: yellow diamond
+        mov  byte ptr [COLOR],96
+        mov  ax,[dsx]
+        mov  [sx0],ax
+        mov  ax,[dsy]
+        sub  ax,[dsac]
+        mov  [sy0],ax
+        mov  ax,[dsx]
+        add  ax,[dsac]
+        mov  [sx1],ax
+        mov  ax,[dsy]
+        mov  [sy1],ax
+        call @@mln              ; top -> right
+        mov  ax,[dsx]
+        add  ax,[dsac]
+        mov  [sx0],ax
+        mov  ax,[dsy]
+        mov  [sy0],ax
+        mov  ax,[dsx]
+        mov  [sx1],ax
+        mov  ax,[dsy]
+        add  ax,[dsac]
+        mov  [sy1],ax
+        call @@mln              ; right -> bottom
+        mov  ax,[dsx]
+        mov  [sx0],ax
+        mov  ax,[dsy]
+        add  ax,[dsac]
+        mov  [sy0],ax
+        mov  ax,[dsx]
+        sub  ax,[dsac]
+        mov  [sx1],ax
+        mov  ax,[dsy]
+        mov  [sy1],ax
+        call @@mln              ; bottom -> left
+        mov  ax,[dsx]
+        sub  ax,[dsac]
+        mov  [sx0],ax
+        mov  ax,[dsy]
+        mov  [sy0],ax
+        mov  ax,[dsx]
+        mov  [sx1],ax
+        mov  ax,[dsy]
+        sub  ax,[dsac]
+        mov  [sy1],ax
+        call @@mln              ; left -> top
+        jmp  @@nomk
+@@mln:  call CLIPLINE
+        jc   @@mlx
+        call LINE
+@@mlx:  ret
+@@nomk:
 @@skip:
         add  word ptr [pidx],2
         cmp  word ptr [pidx],NPLANE*2
         jb   @@pd
+        ret
+
+; ---------------------------------------------------------------------------
+;  PPOINT - project one camera-space point (yaw-rotated, not yet pitched).
+;  in: AX=rx, DX=ry, CX=rz. Applies the PITCH4 rotation, then PROJPT
+;  (bank + sway + clamps). out: AX=sx, DX=sy; carry set = behind camera.
+;  Clobbers everything PROJPT does, plus dsx/dsy/dsac.
+; ---------------------------------------------------------------------------
+PPOINT: mov  [dsx],ax           ; rx
+        mov  [dsy],dx           ; ry
+        mov  [dsac],cx          ; rz
+        mov  ax,dx              ; y' = (ry*pcos - rz*psin)/256
+        imul word ptr [pcos]
+        mov  bx,256
+        idiv bx
+        mov  cx,ax
+        mov  ax,[dsac]
+        imul word ptr [psin]
+        mov  bx,256
+        idiv bx
+        sub  cx,ax
+        push cx                 ; y'
+        mov  ax,[dsy]           ; z' = (ry*psin + rz*pcos)/256
+        imul word ptr [psin]
+        mov  bx,256
+        idiv bx
+        mov  cx,ax
+        mov  ax,[dsac]
+        imul word ptr [pcos]
+        mov  bx,256
+        idiv bx
+        add  ax,cx
+        pop  dx                 ; y'
+        cmp  ax,NEARZ
+        jl   @@behind
+        mov  cx,ax
+        mov  ax,[dsx]
+        call PROJPT             ; AX=sx, DX=sy
+        clc
+        ret
+@@behind:
+        stc
         ret

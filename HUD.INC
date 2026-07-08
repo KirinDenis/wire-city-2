@@ -914,9 +914,21 @@ PANELBMP:
         sub  ax,bx              ; ahead = up the screen
         call ROW320
         add  di,[dsx]
-        mov  al,8
-        mov  es:[di],al
+        mov  al,95              ; friendly: green
+        test si,2
+        jz   @@fr
+        mov  al,96              ; hostile: yellow
+@@fr:   mov  es:[di],al
         mov  es:[di+1],al
+        mov  bx,[pay+si]        ; altitude tick: above = higher, below =
+        sub  bx,[camy]          ; lower than us (dead band +-200)
+        cmp  bx,200
+        jle  @@ral
+        mov  es:[di-320],al
+        jmp  @@rn
+@@ral:  cmp  bx,-200
+        jge  @@rn
+        mov  es:[di+320],al
 @@rn:   add  si,2
         cmp  si,NPLANE*2
         jb   @@rdr

@@ -80,6 +80,12 @@ pdy     dw 0
 pdz     dw 0
 pidx    dw 0                    ; draw loop: plane offset
 pfc     dw 0                    ; draw loop: face counter
+tpi     dw 0                    ; draw loop: trail point counter
+TLN     equ 8                   ; contrail points per plane
+TLX     dw NPLANE*TLN dup(0)    ; contrail ring buffers (world coords)
+TLY     dw NPLANE*TLN dup(0)
+TLZ     dw NPLANE*TLN dup(0)
+tlh     dw 0                    ; shared ring head (byte offset, step 2)
 ftx     dw 0                    ; font cursor x
 fty     dw 0                    ; font cursor y
 NB      db 6 dup(0)             ; number->text scratch for FNUM
@@ -675,7 +681,7 @@ HCOL    db 8
 ;            8 HUD       9 sky band    10 ground     11 field/ground band
 ;            12 haze     13 mountains  14 water      15 forest
 ;            16 wall E/W (shade)       17 roof
-NPALC   equ 94                  ; 31 game colours + 63 photo cockpit colours
+NPALC   equ 97                  ; 31 game + 63 cockpit + glow + 2 IFF colours
 PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db 30,32,36          ;1  far stroke (fades to haze)
         db 22,24,28          ;2  mid stroke
@@ -708,6 +714,9 @@ PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db 10,10,12          ;29 cockpit panel (dark)
         db 20,20,23          ;30 cockpit panel trim
         include PALPNL.INC   ; 31..93 photo cockpit (generated)
+        db 63,34, 6          ;94 engine glow (GAMELOOP cycles this DAC slot)
+        db 16,63,16          ;95 IFF friendly (bright green)
+        db 63,63, 8          ;96 IFF hostile (bright yellow)
 
 PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db 12,18,40          ;1  far stroke
@@ -741,6 +750,9 @@ PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db  6, 6, 8          ;29 cockpit panel (dark)
         db 12,12,15          ;30 cockpit panel trim
         include PALPNL.INC   ; 31..93 photo cockpit (same lamps at night)
+        db 63,34, 6          ;94 engine glow (GAMELOOP cycles this DAC slot)
+        db 16,63,16          ;95 IFF friendly (bright green)
+        db 63,63, 8          ;96 IFF hostile (bright yellow)
 
 STARN   equ 16                  ; star coords as words (X can exceed 255)
 STARTAB dw 20,18, 60,30, 110,12, 150,40, 200,22, 250,15, 300,35, 40,52

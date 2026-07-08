@@ -311,6 +311,18 @@ MAIN:
         call RND16
         and  ax,255
         mov  [pah+si],ax
+        mov  bx,si              ; seed the contrail at the spawn point
+        mov  cl,3
+        shl  bx,cl              ; slot base = plane*TLN*2
+        mov  cx,TLN
+@@tlf:  mov  ax,[pax+si]
+        mov  [TLX+bx],ax
+        mov  ax,[pay+si]
+        mov  [TLY+bx],ax
+        mov  ax,[paz+si]
+        mov  [TLZ+bx],ax
+        add  bx,2
+        loop @@tlf
         add  si,2
         cmp  si,NPLANE*2
         jb   @@aspn
