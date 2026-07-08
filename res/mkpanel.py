@@ -78,7 +78,9 @@ for y in range(h):
 print(f'transparent pixels: {sum(transparent)}')
 
 # defringe: anti-aliased half-white pixels hugging the glass edge become
-# glass too, so the frame border stays crisp against the moving world
+# glass too, so the frame border stays crisp against the moving world.
+# Only near-NEUTRAL light pixels qualify (white fades to grey); tinted
+# highlights like the lilac console edge are artwork and must survive.
 for _ in range(2):
     grow = []
     for y in range(h):
@@ -86,7 +88,8 @@ for _ in range(2):
             i = y * w + x
             if transparent[i]:
                 continue
-            if min(apx[x, y]) < 180:
+            p = apx[x, y]
+            if min(p) < 180 or max(p) - min(p) > 16:
                 continue
             for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1),
                            (1, 1), (1, -1), (-1, 1), (-1, -1)):
