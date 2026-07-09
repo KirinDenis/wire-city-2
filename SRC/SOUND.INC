@@ -134,8 +134,24 @@ SNDENG: cmp  byte ptr [sbok],0
 @@live: mov  ax,[throt]         ; spool: TC 120..184 = 7.3..13.9 kHz
         add  ax,120             ; (the sample's native pitch ~ 2/3 throttle)
         cmp  byte ptr [abon],0
-        je   @@wr
+        je   @@mn1
         add  ax,10              ; the burner leans on the pitch
+@@mn1:  mov  bx,[mlvl]          ; manoeuvre loading: the airflow works the
+        mov  cl,3               ; intake - the note sags under g...
+        shr  bx,cl
+        sub  ax,bx
+        push ax
+        mov  ax,[lasttk]        ; ...and wavers at ~2 Hz while it lasts
+        add  ax,ax
+        and  ax,7
+        sub  ax,4
+        imul word ptr [mlvl]
+        mov  bx,64
+        cwd
+        idiv bx
+        mov  bx,ax
+        pop  ax
+        add  ax,bx
 @@wr:   cmp  ax,[sbtc]
         je   @@r
         mov  [sbtc],ax

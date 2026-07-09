@@ -174,6 +174,9 @@ MSGM2   db 'M',0
 sbok    db 0                    ; Blaster found AND ENGINE.RAW loaded?
 sbmsk   db 0                    ; saved IRQ7 mask bit
 sbtc    dw 0                    ; current DSP time constant
+mlvl    dw 0                    ; manoeuvre loading (smoothed, 0..48)
+mprvp   dw 0                    ; previous pitch (for the delta)
+mprvr   dw 0                    ; previous roll
 sndseg  dw 0                    ; sample loop segment (64K-aligned)
 ENGFN   db 'ENGINE.RAW',0
 tgti    dw 0                    ; orbited plane (kept past the lock)

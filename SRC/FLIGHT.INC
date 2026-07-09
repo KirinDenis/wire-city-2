@@ -791,6 +791,41 @@ INPUT:
         mov  word ptr [gunreg],0
         inc  word ptr [gunam]
 @@gnf:
+        ; --- manoeuvre loading for the engine sound: how hard is the
+        ; airframe working the air? Attitude deltas, plus stall buffet;
+        ; rises instantly, decays over ~a second.
+        mov  ax,[pitch]
+        sub  ax,[mprvp]
+        jns  @@md1
+        neg  ax
+@@md1:  mov  bx,ax              ; |dpitch|
+        mov  ax,[roll]
+        sub  ax,[mprvr]
+        and  ax,255
+        cmp  ax,128
+        jb   @@md2
+        neg  ax
+        add  ax,256             ; |droll| the short way round
+@@md2:  add  bx,ax
+        add  bx,bx              ; scale the kick
+        mov  ax,[vel]
+        cmp  ax,VSTALL
+        jge  @@md3
+        add  bx,4               ; stall buffet shakes the engine note
+@@md3:  mov  ax,[mlvl]          ; decay 1/16 per tick, add the kick
+        mov  dx,ax
+        mov  cl,4
+        shr  dx,cl
+        sub  ax,dx
+        add  ax,bx
+        cmp  ax,48
+        jle  @@md4
+        mov  ax,48
+@@md4:  mov  [mlvl],ax
+        mov  ax,[pitch]
+        mov  [mprvp],ax
+        mov  ax,[roll]
+        mov  [mprvr],ax
         ; --- the black box: record every 2nd tick for the flashback ---
         mov  ax,[lasttk]
         test ax,1
