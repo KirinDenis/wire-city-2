@@ -145,6 +145,10 @@ aifire  dw 90                   ; cooldown until somebody opens fire
 aigt    dw 60                   ; cooldown until somebody strafes
 pdam    db 0                    ; player damage taken (8 = shot down)
 chsview db 0                    ; F3 chase camera on?
+tgtcam  db 0                    ; F4 orbit camera on the locked target
+prevt4  db 0                    ; F4 edge detector
+tgaz    dw 0                    ; orbit azimuth (0..255)
+tgel    dw 12                   ; orbit elevation (-30..56)
 dying   db 0                    ; player down: cinematic fall running
 dytick  dw 0                    ; ...for how long (Space works after 1 s)
 flbh    dw 0                    ; black box: ring head (next write)

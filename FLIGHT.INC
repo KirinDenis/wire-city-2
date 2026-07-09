@@ -138,6 +138,8 @@ INPUT:
 
         ; --- ROLL: left/right arrows spin the ailerons, full 360 degrees ---
         mov  word ptr [tmpi],0
+        cmp  byte ptr [tgtcam],0
+        jne  @@nr               ; F4: hands off, dihedral takes over
         cmp  byte ptr [KEYS+SC_LF],0
         je   @@nl
         mov  ax,[roll]
@@ -202,6 +204,8 @@ INPUT:
         ; through the roll plane: pitch_rate = q*cos(roll), yaw = q*sin(roll).
         ; Wings level -> loop; knife-edge -> flat turn; inverted -> split-S.
         xor  cx,cx              ; q = elevator input
+        cmp  byte ptr [tgtcam],0
+        jne  @@nopq             ; F4: the stick is centred
         cmp  byte ptr [KEYS+SC_DN],0
         je   @@q1
         mov  cx,2               ; pull: nose up
@@ -328,6 +332,57 @@ INPUT:
         jz   @@nf3
         xor  byte ptr [chsview],1
 @@nf3:
+        ; --- F4: orbit camera around the locked target (edge) ---
+        mov  al,[KEYS+SC_F4]
+        cmp  al,[prevt4]
+        je   @@nf4
+        mov  [prevt4],al
+        test al,al
+        jz   @@nf4
+        cmp  byte ptr [tgtcam],0
+        jne  @@f4off
+        mov  si,[locki]
+        cmp  si,0FFFFh
+        je   @@nf4              ; nothing locked: nothing to orbit
+        mov  ax,[pah+si]
+        mov  [tgaz],ax          ; start right behind the target
+        mov  word ptr [tgel],12
+        mov  byte ptr [tgtcam],1
+        jmp  @@nf4
+@@f4off:
+        mov  byte ptr [tgtcam],0
+@@nf4:  cmp  word ptr [locki],0FFFFh ; the lock died: so does the view
+        jne  @@lkok
+        mov  byte ptr [tgtcam],0
+@@lkok:
+        ; --- F4 active: the arrows steer the camera, not the jet ---
+        cmp  byte ptr [tgtcam],0
+        je   @@ntc
+        cmp  byte ptr [KEYS+SC_LF],0
+        je   @@tc1
+        sub  word ptr [tgaz],2
+        and  word ptr [tgaz],255
+@@tc1:  cmp  byte ptr [KEYS+SC_RT],0
+        je   @@tc2
+        add  word ptr [tgaz],2
+        and  word ptr [tgaz],255
+@@tc2:  cmp  byte ptr [KEYS+SC_UP],0
+        je   @@tc3
+        mov  ax,[tgel]
+        inc  ax
+        cmp  ax,56
+        jle  @@tcu
+        mov  ax,56
+@@tcu:  mov  [tgel],ax
+@@tc3:  cmp  byte ptr [KEYS+SC_DN],0
+        je   @@ntc
+        mov  ax,[tgel]
+        dec  ax
+        cmp  ax,-30
+        jge  @@tcd
+        mov  ax,-30
+@@tcd:  mov  [tgel],ax
+@@ntc:
         ; --- M key: right MFD mode, map <-> target camera (edge) ---
         mov  al,[KEYS+SC_M]
         cmp  al,[prevm]

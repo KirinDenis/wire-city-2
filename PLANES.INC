@@ -623,6 +623,8 @@ PPOINT: mov  [dsx],ax           ; rx
 LOCKHUD:
         cmp  byte ptr [chsview],0
         jne  @@lkoff
+        cmp  byte ptr [tgtcam],0
+        jne  @@lkoff
         cmp  byte ptr [dying],0
         je   @@lkh
 @@lkoff:
@@ -2158,6 +2160,8 @@ RESPAWNALL:
 CHASESET:
         cmp  byte ptr [dying],0
         jne  @@go2
+        cmp  byte ptr [tgtcam],0
+        jne  @@go2
         cmp  byte ptr [chsview],0
         je   @@r
 @@go2:  mov  ax,[camx]
@@ -2198,6 +2202,8 @@ CHASESET:
         mov  [camz],ax
         jmp  @@level
 @@livecam:
+        cmp  byte ptr [tgtcam],0
+        jne  @@tcam
         mov  ax,[hsin]          ; 400 back along the heading
         mov  bx,400
         imul bx
@@ -2215,9 +2221,65 @@ CHASESET:
         mov  word ptr [pitch],0
         mov  word ptr [roll],0
 @@r:    ret
+@@tcam: ; ---- orbit the locked target: azimuth/elevation from the arrows
+        mov  si,[locki]
+        mov  ax,[tgel]          ; H = sin(el)*400/256
+        and  ax,255
+        push si
+        call SINQ
+        pop  si
+        mov  bx,400
+        imul bx
+        mov  bx,256
+        idiv bx
+        mov  [cty],ax
+        mov  ax,[tgel]          ; R = cos(el)*400/256
+        add  ax,64
+        and  ax,255
+        push si
+        call SINQ
+        pop  si
+        mov  bx,400
+        imul bx
+        mov  bx,256
+        idiv bx
+        mov  [ctx],ax
+        mov  ax,[tgaz]          ; cam = target - dir(az)*R + (0,H,0)
+        push si
+        call SINQ
+        pop  si
+        imul word ptr [ctx]
+        mov  bx,256
+        idiv bx
+        mov  bx,[pax+si]
+        sub  bx,ax
+        mov  [camx],bx
+        mov  ax,[tgaz]
+        add  ax,64
+        push si
+        call SINQ
+        pop  si
+        imul word ptr [ctx]
+        mov  bx,256
+        idiv bx
+        mov  bx,[paz+si]
+        sub  bx,ax
+        mov  [camz],bx
+        mov  ax,[pay+si]
+        add  ax,[cty]
+        mov  [camy],ax
+        mov  ax,[tgaz]          ; look at the target
+        mov  [heading],ax
+        mov  ax,[tgel]
+        neg  ax
+        mov  [pitch],ax
+        mov  word ptr [roll],0
+        jmp  @@r
 
 CHASERST:
         cmp  byte ptr [dying],0
+        jne  @@go2
+        cmp  byte ptr [tgtcam],0
         jne  @@go2
         cmp  byte ptr [chsview],0
         je   @@r
