@@ -38,7 +38,7 @@ PLANESUPD:
         mov  ax,[pah+si]
         push si
         call SINQ
-        mov  bx,7
+        mov  bx,15
         imul bx
         mov  bx,256
         idiv bx
@@ -48,7 +48,7 @@ PLANESUPD:
         add  ax,64
         push si
         call SINQ
-        mov  bx,7
+        mov  bx,15
         imul bx
         mov  bx,256
         idiv bx
@@ -1114,7 +1114,7 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         mov  ax,[mvz]
         add  [msz],ax
         jmp  @@prox
-@@home: ; chase at 16/tick, direction normalised by the dominant axis
+@@home: ; chase at 32/tick, direction normalised by the dominant axis
         mov  ax,[pax+si]
         sub  ax,[msx]
         mov  [wdx],ax           ; dx
@@ -1147,17 +1147,17 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         inc  bx
 @@m6:   mov  [cty],bx           ; m
         mov  ax,[wdx]
-        mov  cx,16
+        mov  cx,32
         imul cx
         idiv word ptr [cty]
         add  [msx],ax
         mov  ax,[wdz]
-        mov  cx,16
+        mov  cx,32
         imul cx
         idiv word ptr [cty]
         add  [msy],ax
         mov  ax,[ctx]
-        mov  cx,16
+        mov  cx,32
         imul cx
         idiv word ptr [cty]
         add  [msz],ax
@@ -1948,7 +1948,7 @@ AMSLUPD:
         mov  [amz+bx],ax
         mov  [ampz+bx],ax
         mov  [amtgt+bx],di
-        mov  word ptr [amlife+bx],640
+        mov  word ptr [amlife+bx],320
 @@fly:  ; ---- fly the pool ----
         mov  word ptr [wcc],0
 @@ml:   mov  bx,[wcc]
@@ -2025,17 +2025,17 @@ AMSLUPD:
         pop  word ptr [wcc]
         jmp  @@fiz
 @@step: mov  ax,[ctx]
-        mov  cx,14
+        mov  cx,28
         imul cx
         idiv di
         add  [amx+bx],ax
         mov  ax,[cty]
-        mov  cx,14
+        mov  cx,28
         imul cx
         idiv di
         add  [amy+bx],ax
         mov  ax,[ctz]
-        mov  cx,14
+        mov  cx,28
         imul cx
         idiv di
         add  [amz+bx],ax
@@ -2426,7 +2426,7 @@ AIGUN:  cmp  word ptr [aigt],0
         and  word ptr [trnext],NTRC-1
         mov  byte ptr [trcact+bx],1
         add  bx,bx
-        mov  word ptr [trlif+bx],96
+        mov  word ptr [trlif+bx],48
         mov  ax,[pax+si]
         mov  [tcx+bx],ax
         mov  ax,[pay+si]
@@ -2434,18 +2434,18 @@ AIGUN:  cmp  word ptr [aigt],0
         mov  [tcy+bx],ax
         mov  ax,[paz+si]
         mov  [tcz+bx],ax
-        mov  ax,[ctx]           ; velocity = dir*37/m + spread
-        mov  cx,37
+        mov  ax,[ctx]           ; velocity = dir*75/m + spread
+        mov  cx,75
         imul cx
         idiv word ptr [wcc]
         mov  [trvx+bx],ax
         mov  ax,[cty]
-        mov  cx,37
+        mov  cx,75
         imul cx
         idiv word ptr [wcc]
         mov  [trvy+bx],ax
         mov  ax,[ctz]
-        mov  cx,37
+        mov  cx,75
         imul cx
         idiv word ptr [wcc]
         mov  [trvz+bx],ax

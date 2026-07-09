@@ -536,8 +536,9 @@ INPUT:
 @@tb3:
         ; --- advance: split vel/16 into horizontal (cos p) and climb (sin p)
         mov  ax,[vel]
-        mov  cl,6
-        shr  ax,cl              ; total speed, units per tick (quarter scale)
+        mov  cl,5
+        shr  ax,cl              ; total speed: the world is x4, the speed
+                                ; only x2 down - a jet still moves like one
         push ax
         imul word ptr [psin]    ; climb component
         mov  bx,256
@@ -574,7 +575,7 @@ INPUT:
         mov  byte ptr [msact],1
         mov  ax,[locki]
         mov  [mstgt],ax
-        mov  word ptr [mlife],560
+        mov  word ptr [mlife],280
         cmp  byte ptr [mslcam],0
         je   @@nomc
         mov  byte ptr [mcact],1 ; armed: the camera rides this one
@@ -601,9 +602,9 @@ INPUT:
         sub  ax,5
         mov  [msy],ax
         mov  [mpy],ax
-        ; straight-flight velocity: 16/tick along heading and pitch
+        ; straight-flight velocity: 32/tick along heading and pitch
         mov  ax,[pcos]
-        mov  bx,16
+        mov  bx,32
         imul bx
         mov  bx,256
         idiv bx
@@ -621,7 +622,7 @@ INPUT:
         idiv bx
         mov  [mvz],ax
         mov  ax,[psin]
-        mov  bx,16
+        mov  bx,32
         imul bx
         mov  bx,256
         idiv bx
@@ -660,7 +661,7 @@ INPUT:
         mov  di,bx
         add  di,di              ; word offset
         mov  byte ptr [trcact+bx],1
-        mov  word ptr [trlif+di],120
+        mov  word ptr [trlif+di],60
         mov  ax,[hcos]          ; muzzle: wing-root offset, gun alternates
         mov  cx,10
         imul cx
@@ -685,8 +686,8 @@ INPUT:
         mov  ax,[camy]
         sub  ax,3
         mov  [tcy+di],ax
-        mov  ax,[pcos]          ; 37/tick along the nose
-        mov  cx,37
+        mov  ax,[pcos]          ; 75/tick along the nose
+        mov  cx,75
         imul cx
         mov  cx,256
         idiv cx
@@ -702,7 +703,7 @@ INPUT:
         idiv cx
         mov  [trvz+di],ax
         mov  ax,[psin]
-        mov  cx,37
+        mov  cx,75
         imul cx
         mov  cx,256
         idiv cx
