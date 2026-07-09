@@ -2213,13 +2213,27 @@ CHASESET:
         mov  word ptr [pitch],0
         mov  word ptr [roll],0
 @@r:    ret
-@@tcam: ; ---- orbit the locked target: azimuth/elevation from the arrows
-        mov  si,[locki]
-        mov  ax,[tgel]          ; H = sin(el)*400/256
+@@tcam: ; ---- orbit the target (mode 1: the jet; mode 2: its debris) ----
+        cmp  byte ptr [tgtcam],2
+        je   @@twrk
+        mov  si,[tgti]
+        mov  ax,[pax+si]
+        mov  [pdx],ax
+        mov  ax,[pay+si]
+        mov  [pdy],ax
+        mov  ax,[paz+si]
+        mov  [pdz],ax
+        jmp  @@torb
+@@twrk: mov  bx,[tcws]          ; follow the first piece as it falls
+        mov  ax,[bx+WFP]
+        mov  [pdx],ax
+        mov  ax,[bx+WFP+2]
+        mov  [pdy],ax
+        mov  ax,[bx+WFP+4]
+        mov  [pdz],ax
+@@torb: mov  ax,[tgel]          ; H = sin(el)*400/256
         and  ax,255
-        push si
         call SINQ
-        pop  si
         mov  bx,400
         imul bx
         mov  bx,256
@@ -2228,36 +2242,30 @@ CHASESET:
         mov  ax,[tgel]          ; R = cos(el)*400/256
         add  ax,64
         and  ax,255
-        push si
         call SINQ
-        pop  si
         mov  bx,400
         imul bx
         mov  bx,256
         idiv bx
         mov  [ctx],ax
-        mov  ax,[tgaz]          ; cam = target - dir(az)*R + (0,H,0)
-        push si
+        mov  ax,[tgaz]          ; cam = centre - dir(az)*R + (0,H,0)
         call SINQ
-        pop  si
         imul word ptr [ctx]
         mov  bx,256
         idiv bx
-        mov  bx,[pax+si]
+        mov  bx,[pdx]
         sub  bx,ax
         mov  [camx],bx
         mov  ax,[tgaz]
         add  ax,64
-        push si
         call SINQ
-        pop  si
         imul word ptr [ctx]
         mov  bx,256
         idiv bx
-        mov  bx,[paz+si]
+        mov  bx,[pdz]
         sub  bx,ax
         mov  [camz],bx
-        mov  ax,[pay+si]
+        mov  ax,[pdy]
         add  ax,[cty]
         mov  [camy],ax
         mov  ax,[tgaz]          ; look at the target

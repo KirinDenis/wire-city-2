@@ -347,6 +347,7 @@ INPUT:
         mov  si,[locki]
         cmp  si,0FFFFh
         je   @@nf4              ; nothing locked: nothing to orbit
+        mov  [tgti],si          ; remember the star of the show
         mov  ax,[pah+si]
         mov  [tgaz],ax          ; start right behind the target
         mov  word ptr [tgel],12
@@ -354,9 +355,25 @@ INPUT:
         jmp  @@nf4
 @@f4off:
         mov  byte ptr [tgtcam],0
-@@nf4:  cmp  word ptr [locki],0FFFFh ; the lock died: so does the view
+@@nf4:  cmp  byte ptr [tgtcam],1
+        jne  @@wchk
+        cmp  word ptr [locki],0FFFFh
+        jne  @@lkok             ; lock alive: keep orbiting the jet
+        mov  byte ptr [tgtcam],2 ; target died: stay with the debris -
+        mov  ax,[wnext]         ; the freshest wreck slot is the show
+        sub  ax,WRKSZ
+        jns  @@wok
+        add  ax,WRKSZ*4
+@@wok:  add  ax,offset WRK
+        mov  [tcws],ax
+        jmp  @@lkok
+@@wchk: cmp  byte ptr [tgtcam],2
         jne  @@lkok
-        mov  byte ptr [tgtcam],0
+        cmp  word ptr [locki],0FFFFh
+        je   @@lkok             ; still at the funeral
+        mov  byte ptr [tgtcam],1 ; a new lock: swing to the new target
+        mov  ax,[locki]
+        mov  [tgti],ax
 @@lkok:
         ; --- F4 active: the arrows steer the camera, not the jet ---
         cmp  byte ptr [tgtcam],0

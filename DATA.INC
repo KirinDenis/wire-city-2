@@ -147,6 +147,8 @@ pdam    db 0                    ; player damage taken (8 = shot down)
 chsview db 0                    ; F3 chase camera on?
 tgtcam  db 0                    ; F4 orbit camera on the locked target
 prevt4  db 0                    ; F4 edge detector
+tgti    dw 0                    ; orbited plane (kept past the lock)
+tcws    dw 0                    ; wreck slot the camera follows (mode 2)
 tgaz    dw 0                    ; orbit azimuth (0..255)
 tgel    dw 12                   ; orbit elevation (-30..56)
 dying   db 0                    ; player down: cinematic fall running
