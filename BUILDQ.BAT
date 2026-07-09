@@ -1,19 +1,26 @@
 @echo off
-REM Quiet build: same steps as BUILD.BAT, output captured to BUILD.LOG
+REM Quiet build (run INSIDE DOSBox, usually via MAKE.BAT): assembles the
+REM sources in SRC, installs CITY.COM + CITY.DAT into INSTALL, and logs
+REM everything to BUILD.LOG in the repo root.
 set PATH=c:\bp\bin;d:\bin;%PATH%
 echo BUILD START > BUILD.LOG
-TASM /T RESDAT.ASM >> BUILD.LOG
+cd SRC
+TASM /T RESDAT.ASM >> ..\BUILD.LOG
 if errorlevel 1 goto err
-TLINK /t RESDAT.OBJ >> BUILD.LOG
+TLINK /t RESDAT.OBJ >> ..\BUILD.LOG
 if errorlevel 1 goto err
-copy /y RESDAT.COM CITY.DAT >> BUILD.LOG
+copy /y RESDAT.COM ..\INSTALL\CITY.DAT >> ..\BUILD.LOG
 del RESDAT.COM
-TASM /T CITY.ASM >> BUILD.LOG
+TASM /T CITY.ASM >> ..\BUILD.LOG
 if errorlevel 1 goto err
-TLINK /t CITY.OBJ >> BUILD.LOG
+TLINK /t CITY.OBJ >> ..\BUILD.LOG
 if errorlevel 1 goto err
+copy /y CITY.COM ..\INSTALL\CITY.COM >> ..\BUILD.LOG
+del CITY.COM
+cd ..
 echo BUILD OK >> BUILD.LOG
 goto end
 :err
+cd ..
 echo BUILD FAILED >> BUILD.LOG
 :end

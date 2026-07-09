@@ -17,17 +17,17 @@ Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $root  = Split-Path -Parent $PSScriptRoot      # repo root (parent of docs)
-$com   = Join-Path $root "CITY.COM"
-$dat   = Join-Path $root "CITY.DAT"                # resources (font, cockpit)
+$com   = Join-Path $root "INSTALL\CITY.COM"
+$dat   = Join-Path $root "INSTALL\CITY.DAT"       # resources (font, cockpit)
 $conf  = Join-Path $root "docs\dosbox.conf"        # full machine config + autoexec
 $rconf = Join-Path $root "docs\dosbox-root.conf"   # root override (cycles)
 $out   = Join-Path $root "docs\city.jsdos"
 
 if (-not (Test-Path $com)) {
-    throw "CITY.COM not found in $root - build it first (see BUILD.BAT)."
+    throw "INSTALL\CITY.COM not found - build it first (see MAKE.BAT)."
 }
 if (-not (Test-Path $dat)) {
-    throw "CITY.DAT not found in $root - build it first (see BUILD.BAT)."
+    throw "INSTALL\CITY.DAT not found - build it first (see MAKE.BAT)."
 }
 
 if (Test-Path $out) { Remove-Item -Force $out }

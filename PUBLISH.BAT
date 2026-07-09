@@ -1,7 +1,7 @@
 @echo off
 REM ============================================================================
 REM PUBLISH.BAT - deploy the current build to GitHub Pages. Run it from
-REM Windows AFTER building CITY.COM in DOSBox (BUILD.BAT) and checking it.
+REM Windows AFTER building via MAKE.BAT and checking INSTALL\CITY.COM.
 REM
 REM   PUBLISH "message"   - commit message for git (optional)
 REM
@@ -12,8 +12,8 @@ REM ============================================================================
 setlocal
 cd /d %~dp0
 
-if not exist CITY.COM (
-  echo ERROR: CITY.COM not found - build it in DOSBox first ^(BUILD.BAT^)
+if not exist INSTALL\CITY.COM (
+  echo ERROR: INSTALL\CITY.COM not found - build it first ^(MAKE.BAT^)
   exit /b 1
 )
 
