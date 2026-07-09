@@ -38,7 +38,7 @@ PLANESUPD:
         mov  ax,[pah+si]
         push si
         call SINQ
-        mov  bx,30
+        mov  bx,15
         imul bx
         mov  bx,256
         idiv bx
@@ -48,7 +48,7 @@ PLANESUPD:
         add  ax,64
         push si
         call SINQ
-        mov  bx,30
+        mov  bx,15
         imul bx
         mov  bx,256
         idiv bx
@@ -200,7 +200,7 @@ PLANESUPD:
         sub  ax,[camx]
         jns  @@rm1
         neg  ax
-@@rm1:  cmp  ax,110
+@@rm1:  cmp  ax,55
         jge  @@nram
         mov  bx,ax
         mov  ax,[pay+si]
@@ -213,7 +213,7 @@ PLANESUPD:
         jns  @@rm3
         neg  ax
 @@rm3:  add  bx,ax
-        cmp  bx,110
+        cmp  bx,55
         jge  @@nram
         push si
         call BOOM               ; the jet shatters...
@@ -272,7 +272,7 @@ PLANESUPD:
         sub  ax,[pax+si]
         jns  @@mc1
         neg  ax
-@@mc1:  cmp  ax,110
+@@mc1:  cmp  ax,55
         jge  @@mcn
         mov  bx,ax
         mov  ax,[pay+di]
@@ -285,7 +285,7 @@ PLANESUPD:
         jns  @@mc3
         neg  ax
 @@mc3:  add  bx,ax
-        cmp  bx,110
+        cmp  bx,55
         jge  @@mcn
         push di                 ; a midair: both come apart
         call BOOM
@@ -609,7 +609,7 @@ PLANESDRAW:
         mov  es:[di-319],al
         mov  es:[di+319],al
 @@nfl:  mov  bx,[pdz]
-        mov  ax,11440
+        mov  ax,5720
         cwd
         idiv bx
         add  ax,3
@@ -1030,7 +1030,7 @@ TGTVIEW:
         cwd
         mov  bx,256
         idiv bx
-        add  ax,300
+        add  ax,150
         mov  [dsac],ax
         mov  ax,[dsx]           ; sx = 217 + vx*64/vz
         mov  bx,64
@@ -1114,7 +1114,7 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         mov  ax,[mvz]
         add  [msz],ax
         jmp  @@prox
-@@home: ; chase at 64/tick, direction normalised by the dominant axis
+@@home: ; chase at 32/tick, direction normalised by the dominant axis
         mov  ax,[pax+si]
         sub  ax,[msx]
         mov  [wdx],ax           ; dx
@@ -1147,17 +1147,17 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         inc  bx
 @@m6:   mov  [cty],bx           ; m
         mov  ax,[wdx]
-        mov  cx,64
+        mov  cx,32
         imul cx
         idiv word ptr [cty]
         add  [msx],ax
         mov  ax,[wdz]
-        mov  cx,64
+        mov  cx,32
         imul cx
         idiv word ptr [cty]
         add  [msy],ax
         mov  ax,[ctx]
-        mov  cx,64
+        mov  cx,32
         imul cx
         idiv word ptr [cty]
         add  [msz],ax
@@ -1255,7 +1255,7 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         sub  ax,[msx]
         jns  @@p1
         neg  ax
-@@p1:   cmp  ax,160
+@@p1:   cmp  ax,80
         jge  @@pxn
         mov  bx,ax
         mov  ax,[pay+si]
@@ -1268,7 +1268,7 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         jns  @@p3
         neg  ax
 @@p3:   add  bx,ax
-        cmp  bx,160
+        cmp  bx,80
         jge  @@pxn
         call BOOM               ; direct hit: SI = the unlucky jet
         inc  word ptr [psc]     ; chalk one on the canopy
@@ -1423,23 +1423,23 @@ WRKFILL:
         mov  ax,[cty]
         add  ax,[bpy]
         mov  [bx+2],ax          ; fy
-        push bx                 ; scatter velocities
+        push bx                 ; scatter velocities (half scale)
         call RND16
         pop  bx
-        and  ax,31
-        sub  ax,16
+        and  ax,15
+        sub  ax,8
         mov  [bx+6],ax          ; vx
         push bx
         call RND16
         pop  bx
-        and  ax,15
-        add  ax,6
+        and  ax,7
+        add  ax,3
         mov  [bx+8],ax          ; vy: pops up, gravity brings it down
         push bx
         call RND16
         pop  bx
-        and  ax,31
-        sub  ax,16
+        and  ax,15
+        sub  ax,8
         mov  [bx+10],ax         ; vz
         ; the face colour rides in the slot (jets AND buildings)
         mov  bx,[tpi]
@@ -1948,7 +1948,7 @@ AMSLUPD:
         mov  [amz+bx],ax
         mov  [ampz+bx],ax
         mov  [amtgt+bx],di
-        mov  word ptr [amlife+bx],160
+        mov  word ptr [amlife+bx],320
 @@fly:  ; ---- fly the pool ----
         mov  word ptr [wcc],0
 @@ml:   mov  bx,[wcc]
@@ -2018,24 +2018,24 @@ AMSLUPD:
         jns  @@b3
         neg  ax
 @@b3:   add  dx,ax
-        cmp  dx,160
+        cmp  dx,80
         jge  @@step
         push word ptr [wcc]     ; BOOM reuses this scratch
         call BOOM               ; SI = the target
         pop  word ptr [wcc]
         jmp  @@fiz
 @@step: mov  ax,[ctx]
-        mov  cx,56
+        mov  cx,28
         imul cx
         idiv di
         add  [amx+bx],ax
         mov  ax,[cty]
-        mov  cx,56
+        mov  cx,28
         imul cx
         idiv di
         add  [amy+bx],ax
         mov  ax,[ctz]
-        mov  cx,56
+        mov  cx,28
         imul cx
         idiv di
         add  [amz+bx],ax
@@ -2422,7 +2422,7 @@ AIGUN:  cmp  word ptr [aigt],0
         and  word ptr [trnext],NTRC-1
         mov  byte ptr [trcact+bx],1
         add  bx,bx
-        mov  word ptr [trlif+bx],24
+        mov  word ptr [trlif+bx],48
         mov  ax,[pax+si]
         mov  [tcx+bx],ax
         mov  ax,[pay+si]
@@ -2430,18 +2430,18 @@ AIGUN:  cmp  word ptr [aigt],0
         mov  [tcy+bx],ax
         mov  ax,[paz+si]
         mov  [tcz+bx],ax
-        mov  ax,[ctx]           ; velocity = dir*150/m + spread
-        mov  cx,150
+        mov  ax,[ctx]           ; velocity = dir*75/m + spread
+        mov  cx,75
         imul cx
         idiv word ptr [wcc]
         mov  [trvx+bx],ax
         mov  ax,[cty]
-        mov  cx,150
+        mov  cx,75
         imul cx
         idiv word ptr [wcc]
         mov  [trvy+bx],ax
         mov  ax,[ctz]
-        mov  cx,150
+        mov  cx,75
         imul cx
         idiv word ptr [wcc]
         mov  [trvz+bx],ax
@@ -2605,19 +2605,19 @@ CHASESET:
         jne  @@mcam
         cmp  byte ptr [tgtcam],0
         jne  @@tcam
-        mov  ax,[hsin]          ; 400 back along the heading
-        mov  bx,400
+        mov  ax,[hsin]          ; 200 back along the heading
+        mov  bx,200
         imul bx
         mov  bx,256
         idiv bx
         sub  [camx],ax
         mov  ax,[hcos]
-        mov  bx,400
+        mov  bx,200
         imul bx
         mov  bx,256
         idiv bx
         sub  [camz],ax
-        add  word ptr [camy],60
+        add  word ptr [camy],30
 @@level:
         mov  word ptr [pitch],0
         mov  word ptr [roll],0
@@ -2638,9 +2638,9 @@ CHASESET:
         je   @@mm3
         mov  ax,[mimz]
 @@mm3:  mov  [pdz],ax
-        mov  ax,[mch]           ; 260 behind along the camera course
+        mov  ax,[mch]           ; 130 behind along the camera course
         call SINQ
-        mov  bx,260
+        mov  bx,130
         imul bx
         mov  bx,256
         idiv bx
@@ -2650,7 +2650,7 @@ CHASESET:
         mov  ax,[mch]
         add  ax,64
         call SINQ
-        mov  bx,260
+        mov  bx,130
         imul bx
         mov  bx,256
         idiv bx
@@ -2658,7 +2658,7 @@ CHASESET:
         sub  bx,ax
         mov  [camz],bx
         mov  ax,[pdy]
-        add  ax,50
+        add  ax,25
         mov  [camy],ax
         mov  ax,[mch]
         mov  [heading],ax
@@ -2684,19 +2684,19 @@ CHASESET:
         mov  [pdy],ax
         mov  ax,[bx+WFP+4]
         mov  [pdz],ax
-@@torb: mov  ax,[tgel]          ; H = sin(el)*400/256
+@@torb: mov  ax,[tgel]          ; H = sin(el)*200/256
         and  ax,255
         call SINQ
-        mov  bx,400
+        mov  bx,200
         imul bx
         mov  bx,256
         idiv bx
         mov  [cty],ax
-        mov  ax,[tgel]          ; R = cos(el)*400/256
+        mov  ax,[tgel]          ; R = cos(el)*200/256
         add  ax,64
         and  ax,255
         call SINQ
-        mov  bx,400
+        mov  bx,200
         imul bx
         mov  bx,256
         idiv bx
@@ -2807,7 +2807,7 @@ PLAYERDRAW:
         cwd
         mov  bx,256
         idiv bx
-        sub  ax,60
+        sub  ax,30
         mov  [PVY+di],ax
         mov  ax,[pdz]           ; z'' = (z*pc - y'*ps)/256 + 400
         imul word ptr [pdx]
@@ -2818,7 +2818,7 @@ PLAYERDRAW:
         cwd
         mov  bx,256
         idiv bx
-        add  ax,400
+        add  ax,200
         mov  [PVZ+di],ax
         add  si,6
         add  di,2
