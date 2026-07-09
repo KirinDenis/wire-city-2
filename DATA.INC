@@ -145,6 +145,17 @@ aifire  dw 90                   ; cooldown until somebody opens fire
 aigt    dw 60                   ; cooldown until somebody strafes
 pdam    db 0                    ; player damage taken (8 = shot down)
 chsview db 0                    ; F3 chase camera on?
+dying   db 0                    ; player down: cinematic fall running
+dytick  dw 0                    ; ...for how long (Space works after 1 s)
+dcx     dw 0                    ; frozen death-camera position
+dcy     dw 0
+dcz     dw 0
+bpx     dw 0                    ; WRKFILL input: breakup position
+bpy     dw 0
+bpz     dw 0
+bph     dw 0                    ; WRKFILL input: breakup heading
+MSGCR2  db 'CRASH',0
+MSGPS2  db 'PRESS SPACE',0
 prevv   db 0                    ; F3 edge detector
 svx     dw 0                    ; pilot's world, saved during the chase
 svy     dw 0

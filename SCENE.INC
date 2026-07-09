@@ -23,6 +23,8 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
         call PLANESDRAW         ; AI jets own the sky
         cmp  byte ptr [chsview],0
         je   @@nochs
+        cmp  byte ptr [dying],0
+        jne  @@nochs            ; the jet IS the wreck now
         call PLAYERDRAW         ; our own jet, banking for real
 @@nochs:
         call MSLDRAW            ; the missile dot and its puff
@@ -31,6 +33,8 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
         call GUNDRAW            ; cannon tracers
         call HUDBARS            ; glass HUD: compass, speed, altitude
         mov  word ptr [mapt],123
+        cmp  byte ptr [dying],0
+        jne  @@pdone            ; falling: cinema only
         cmp  byte ptr [chsview],0
         jne  @@pdone            ; chase view: clean cinema, no panel
         cmp  byte ptr [cockpit],0
@@ -42,6 +46,7 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
 @@nopan:
         call MINIMAP            ; world map + plane marker
 @@pdone:
+        call DEATHTXT           ; CRASH - PRESS SPACE while falling
         ret
 
 ; ----- stars (sky background; horizon is the sky/ground colour split) -------

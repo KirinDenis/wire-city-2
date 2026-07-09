@@ -622,7 +622,10 @@ PPOINT: mov  [dsx],ax           ; rx
 ; ---------------------------------------------------------------------------
 LOCKHUD:
         cmp  byte ptr [chsview],0
+        jne  @@lkoff
+        cmp  byte ptr [dying],0
         je   @@lkh
+@@lkoff:
         ret                     ; no glass to project the ring on
 @@lkh:  mov  word ptr [dsac],8
         cmp  word ptr [phit],0  ; taking fire: the ring flashes red
@@ -1017,7 +1020,34 @@ BOOM:   mov  bx,si
         inc  word ptr [tsch]    ; a friendly fell
         jmp  @@bsd
 @@bsc:  inc  word ptr [tscf]    ; a hostile fell
-@@bsd:  mov  di,[wnext]         ; claim a wreck slot
+@@bsd:  mov  ax,[pax+si]        ; hand the breakup spot to WRKFILL
+        mov  [bpx],ax
+        mov  ax,[pay+si]
+        mov  [bpy],ax
+        mov  ax,[paz+si]
+        mov  [bpz],ax
+        mov  ax,[pah+si]
+        mov  [bph],ax
+        jmp  WRKFILL
+
+; PBOOM - the PLAYER breaks apart (cinematic death).
+PBOOM:  mov  ax,[camx]
+        mov  [bpx],ax
+        mov  ax,[camy]
+        mov  [bpy],ax
+        mov  ax,[camz]
+        mov  [bpz],ax
+        mov  ax,[heading]
+        mov  [bph],ax
+        jmp  WRKFILL
+
+; ---------------------------------------------------------------------------
+;  WRKFILL - break a jet at (bpx,bpy,bpz) heading bph into a wreck slot:
+;  ground height, per-face world positions with random scatter velocities,
+;  pre-rotated corner offsets. Shared by BOOM (AI) and PBOOM (player).
+; ---------------------------------------------------------------------------
+WRKFILL:
+        mov  di,[wnext]         ; claim a wreck slot
         add  word ptr [wnext],WRKSZ
         cmp  word ptr [wnext],WRKSZ*4
         jb   @@bk2
@@ -1027,35 +1057,29 @@ BOOM:   mov  bx,si
         ; ground height under the kill (TERRH reads camx/camz: swap in)
         push word ptr [camx]
         push word ptr [camz]
-        mov  ax,[pax+si]
+        mov  ax,[bpx]
         mov  [camx],ax
-        mov  ax,[paz+si]
+        mov  ax,[bpz]
         mov  [camz],ax
-        push si
         push di
         call TERRH
         pop  di
-        pop  si
         pop  word ptr [camz]
         pop  word ptr [camx]
         add  ax,6               ; debris rests a touch above the slope
         mov  [di+2],ax          ; wgy
         ; the dying jet's orientation
-        mov  ax,[pah+si]
-        push si
+        mov  ax,[bph]
         push di
         call SINQ
         mov  [msin],ax
         pop  di
-        pop  si
-        mov  ax,[pah+si]
+        mov  ax,[bph]
         add  ax,64
-        push si
         push di
         call SINQ
         mov  [mcos],ax
         pop  di
-        pop  si
         ; ---- per face: centroid -> world position + velocity + corners ----
         mov  word ptr [tpi],0   ; face index
 @@bf:   ; centroid = avg of the face's 4 vertices (model space)
@@ -1110,16 +1134,16 @@ BOOM:   mov  bx,si
         add  bx,di
         add  bx,WFP
         push bx
-        mov  ax,[ctx]           ; world position = plane + rot(centroid)
+        mov  ax,[ctx]           ; world position = jet + rot(centroid)
         mov  dx,[ctz]
         call ROTMS
         pop  bx
-        add  ax,[pax+si]
+        add  ax,[bpx]
         mov  [bx],ax            ; fx
-        add  dx,[paz+si]
+        add  dx,[bpz]
         mov  [bx+4],dx          ; fz
         mov  ax,[cty]
-        add  ax,[pay+si]
+        add  ax,[bpy]
         mov  [bx+2],ax          ; fy
         push bx                 ; scatter velocities
         call RND16
@@ -1908,6 +1932,8 @@ AIGUN:  cmp  word ptr [aigt],0
         jne  @@no
         test si,2               ; hostiles check the player first
         jz   @@ai
+        cmp  byte ptr [dying],0
+        jne  @@ai               ; the player is already falling
         mov  ax,[camx]
         sub  ax,[pax+si]
         jns  @@p1
@@ -2130,9 +2156,11 @@ RESPAWNALL:
 ;  pilot's world back before physics touches psin/pcos again.
 ; ---------------------------------------------------------------------------
 CHASESET:
+        cmp  byte ptr [dying],0
+        jne  @@go2
         cmp  byte ptr [chsview],0
         je   @@r
-        mov  ax,[camx]
+@@go2:  mov  ax,[camx]
         mov  [svx],ax
         mov  ax,[camy]
         mov  [svy],ax
@@ -2142,6 +2170,16 @@ CHASESET:
         mov  [svp],ax
         mov  ax,[roll]
         mov  [svr],ax
+        cmp  byte ptr [dying],0
+        je   @@livecam
+        mov  ax,[dcx]           ; frozen on the spot where we fell
+        mov  [camx],ax
+        mov  ax,[dcy]
+        mov  [camy],ax
+        mov  ax,[dcz]
+        mov  [camz],ax
+        jmp  @@level
+@@livecam:
         mov  ax,[hsin]          ; 400 back along the heading
         mov  bx,400
         imul bx
@@ -2155,13 +2193,17 @@ CHASESET:
         idiv bx
         sub  [camz],ax
         add  word ptr [camy],60
+@@level:
         mov  word ptr [pitch],0
         mov  word ptr [roll],0
 @@r:    ret
 
 CHASERST:
+        cmp  byte ptr [dying],0
+        jne  @@go2
         cmp  byte ptr [chsview],0
         je   @@r
+@@go2:
         mov  ax,[svx]
         mov  [camx],ax
         mov  ax,[svy]
@@ -2341,3 +2383,26 @@ PLAYERDRAW:
         cmp  word ptr [pfc],NFACE
         jb   @@df
         ret
+
+; ---------------------------------------------------------------------------
+;  DEATHTXT - CRASH (blinking red) and PRESS SPACE over the falling wreck.
+; ---------------------------------------------------------------------------
+DEATHTXT:
+        cmp  byte ptr [dying],0
+        je   @@no
+        mov  ax,[lasttk]
+        test ax,4
+        jz   @@ps
+        mov  byte ptr [COLOR],19
+        mov  word ptr [ftx],150
+        mov  word ptr [fty],80
+        mov  si,offset MSGCR2
+        call FDRAW
+@@ps:   cmp  word ptr [dytick],18
+        jb   @@no               ; the prompt waits out the first second
+        mov  byte ptr [COLOR],8
+        mov  word ptr [ftx],138
+        mov  word ptr [fty],92
+        mov  si,offset MSGPS2
+        call FDRAW
+@@no:   ret

@@ -10,6 +10,23 @@
 ;  costs it) -> stall -> altitude clamp -> wind drift -> advance along heading.
 ; ============================================================================
 INPUT:
+        cmp  byte ptr [dying],0
+        je   @@alive2
+        ; the fall: the world keeps turning, we just watch the wreck
+        inc  word ptr [dytick]
+        cmp  word ptr [dytick],18
+        jb   @@dwar             ; ignore Space for the first second
+        cmp  byte ptr [KEYS+SC_SP],0
+        je   @@dwar
+        call PLAYERRESET
+@@dwar: call PLANESUPD
+        call MSLUPD
+        call TRCUPD
+        call AMSLUPD
+        call AIGUN
+        call WRECKUPD
+        ret
+@@alive2:
         ; --- air density: rho = 256 - camy/8, clamped to 64..256 ---
         mov  ax,[camy]
         mov  bx,ax
@@ -679,6 +696,10 @@ INPUT:
 ;  COLLISION
 ; ============================================================================
 COLLIDE:
+        cmp  byte ptr [dying],0
+        je   @@live3
+        ret                     ; the wreck cannot crash twice
+@@live3:
         mov  ax,[camx]          ; camera cell
         add  ax,BIAS
         mov  cl,8
@@ -756,42 +777,48 @@ COLLIDE:
         ret
 
 CRASHHANDLE:
-        ; fill screen dark (index 1) -> white BIOS text renders cleanly on it
-        mov  ax,0A000h
-        mov  es,ax
-        xor  di,di
-        mov  ax,0101h
-        mov  cx,32000
-        rep  stosw
-        ; messages (white text)
-        mov  byte ptr [HCOL],8
-        mov  ah,02h
-        mov  bh,0
-        mov  dh,11
-        mov  dl,13
-        int  10h
-        mov  si,offset MSGCRASH
-        call PRSTR
-        mov  ah,02h
-        mov  bh,0
-        mov  dh,13
-        mov  dl,12
-        int  10h
-        mov  si,offset MSGREST
-        call PRSTR
-@@w1:   cmp  byte ptr [KEYS+SC_SP],0
-        je   @@w1
-        mov  word ptr [camy],1450   ; respawn above everything (peaks ~1110)
-        mov  word ptr [roll],0      ; so we don't reappear inside the same tower
+        ; cinematic death: our jet becomes a wreck (same breakup as the
+        ; AI), the camera freezes on the chase spot and watches it fall.
+        ; INPUT switches to the spectator branch until PLAYERRESET.
+        cmp  byte ptr [dying],0
+        jne  @@cr               ; already falling
+        mov  byte ptr [dying],1
+        mov  word ptr [dytick],0
+        call PBOOM
+        mov  ax,[hsin]          ; freeze the camera behind the wreck
+        mov  bx,400
+        imul bx
+        mov  bx,256
+        idiv bx
+        mov  bx,[camx]
+        sub  bx,ax
+        mov  [dcx],bx
+        mov  ax,[hcos]
+        mov  bx,400
+        imul bx
+        mov  bx,256
+        idiv bx
+        mov  bx,[camz]
+        sub  bx,ax
+        mov  [dcz],bx
+        mov  ax,[camy]
+        add  ax,60
+        mov  [dcy],ax
+@@cr:   ret
+
+; PLAYERRESET - Space pressed during the fall: take a fresh jet.
+PLAYERRESET:
+        mov  byte ptr [dying],0
+        mov  word ptr [dytick],0
+        mov  word ptr [camy],1450   ; respawn above everything
+        mov  word ptr [roll],0
         mov  word ptr [vel],CRUISE  ; fresh jet: cruise speed + full tank
         mov  word ptr [fuel],FUELMAX
-        mov  word ptr [pitch],0     ; wings level, nose on the horizon
-        mov  word ptr [throt],42    ; 65% power (100% outruns the AI)
+        mov  word ptr [pitch],0
+        mov  word ptr [throt],42    ; 65% power
         mov  byte ptr [abon],0
-        mov  byte ptr [pammo],4     ; fresh rails, no missile in flight
+        mov  byte ptr [pammo],4
         mov  byte ptr [msact],0
-        mov  word ptr [gunam],250   ; and a full cannon belt
-        mov  byte ptr [pdam],0      ; patched up
-@@w2:   cmp  byte ptr [KEYS+SC_SP],0
-        jne  @@w2
+        mov  word ptr [gunam],250
+        mov  byte ptr [pdam],0
         ret
