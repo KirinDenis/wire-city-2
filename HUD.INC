@@ -1249,7 +1249,9 @@ LAMP2:  jcxz @@no
 ;  inside the windshield (ticks flip to the glass side of the spine).
 ; ============================================================================
 ; VLINE2 - vertical line: AX=y0, [dsx]=x, CX=len, BL=colour
-VLINE2: call ROW320
+VLINE2: push bx                 ; ROW320 clobbers BX (the colour!)
+        call ROW320
+        pop  bx
         add  di,[dsx]
         mov  al,bl
 @@v:    mov  es:[di],al
@@ -1257,7 +1259,9 @@ VLINE2: call ROW320
         loop @@v
         ret
 ; HLINE2 - horizontal line: AX=y, [dsx]=x, CX=len, BL=colour
-HLINE2: call ROW320
+HLINE2: push bx                 ; ROW320 clobbers BX (the colour!)
+        call ROW320
+        pop  bx
         add  di,[dsx]
         mov  al,bl
         rep  stosb
@@ -1332,7 +1336,7 @@ HUDBARS:
         and  ax,31              ; every 32 units = 45 degrees: major
         jnz  @@cmin
         mov  ax,18
-        mov  cx,4
+        mov  cx,2
         mov  bl,8
         call VLINE2
         mov  ax,[ctx]
@@ -1349,7 +1353,7 @@ HUDBARS:
         call FNUM3
         jmp  @@cpn
 @@cmin: mov  ax,18
-        mov  cx,2
+        mov  cx,1
         mov  bl,8
         call VLINE2
 @@cpn:  add  word ptr [ctx],4
