@@ -907,11 +907,11 @@ PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db 63,34, 6          ;94 engine glow (GAMELOOP cycles this DAC slot)
         db 16,63,16          ;95 IFF friendly (bright green)
         db 63,63, 8          ;96 IFF hostile (bright yellow)
-        db 63,44, 6          ;97 UI amber
+        db 44,30, 4          ;97 UI amber (dimmed for the night)
 
-STARN   equ 16                  ; star coords as words (X can exceed 255)
-STARTAB dw 20,18, 60,30, 110,12, 150,40, 200,22, 250,15, 300,35, 40,52
-        dw 90,60, 175,55, 230,48, 285,58, 130,70, 70,8, 260,70, 310,28
+STARN   equ 16                  ; stars as DIRECTIONS: azimuth, elevation
+STARTAB dw 10,18, 35,40, 60,12, 85,55, 110,30, 135,60, 160,22, 185,45
+        dw 210,15, 235,58, 5,35, 50,28, 75,56, 100,10, 200,50, 150,38
 
 MSGTITLE db 'WIRE CITY',0
 MSGALT   db 'ALT ',0

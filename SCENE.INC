@@ -59,22 +59,70 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
         ret
 
 ; ----- stars (sky background; horizon is the sky/ground colour split) -------
-STARS:  mov  byte ptr [COLOR],8
-        mov  si,offset STARTAB
-        mov  cx,STARN
-@@s:    push cx
-        mov  ax,[si]            ; star X (word)
-        mov  [tmpsx],ax
-        mov  ax,[si+2]          ; star Y (word)
-        mov  [tmpsy],ax
-        mov  bx,[tmpsy]
-        cmp  bx,[horiz]         ; skip stars below the pitched horizon
-        jge  @@sk
-        mov  ax,[tmpsx]
-        call PUTPIXEL
-@@sk:   pop  cx
-        add  si,4
-        loop @@s
+STARS:  ; a real celestial sphere: each star is a DIRECTION (azimuth,
+        ; elevation) projected as an infinitely distant point - it turns
+        ; with the heading, pitches, banks and rides the sway like the
+        ; world does. Radius ~7000 puts them past everything.
+        mov  word ptr [tpi],0
+@@st:   mov  bx,[tpi]
+        add  bx,bx
+        add  bx,bx              ; entry = 2 words
+        mov  ax,[STARTAB+bx+2]  ; rh = cos(el)*27  (~7000 horizontal)
+        add  ax,64
+        call SINQ
+        mov  cx,27
+        imul cx
+        mov  [ctx],ax
+        mov  bx,[tpi]
+        add  bx,bx
+        add  bx,bx
+        mov  ax,[STARTAB+bx+2]  ; y = sin(el)*27
+        call SINQ
+        mov  cx,27
+        imul cx
+        mov  [cty],ax
+        mov  bx,[tpi]
+        add  bx,bx
+        add  bx,bx
+        mov  ax,[STARTAB+bx]    ; x = sin(az)*rh/256
+        call SINQ
+        imul word ptr [ctx]
+        mov  bx,256
+        idiv bx
+        mov  [wdx],ax
+        mov  bx,[tpi]
+        add  bx,bx
+        add  bx,bx
+        mov  ax,[STARTAB+bx]    ; z = cos(az)*rh/256
+        add  ax,64
+        call SINQ
+        imul word ptr [ctx]
+        mov  bx,256
+        idiv bx
+        mov  [wdz],ax
+        call ROTXZ
+        mov  dx,[cty]
+        mov  ax,[rcx]
+        mov  cx,[rcz]
+        call PPOINT
+        jc   @@sn
+        cmp  ax,0
+        jl   @@sn
+        cmp  ax,319
+        jg   @@sn
+        cmp  dx,0
+        jl   @@sn
+        cmp  dx,191
+        jg   @@sn
+        mov  [dsx],ax
+        mov  ax,dx
+        call ROW320
+        add  di,[dsx]
+        mov  al,8
+        mov  es:[di],al
+@@sn:   inc  word ptr [tpi]
+        cmp  word ptr [tpi],STARN
+        jb   @@st
         ret
 ; fill the visible vertical faces with the CURRENT colour (no per-side tint)
 MEGAFILL:
