@@ -21,12 +21,18 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
         call BUILDINGS          ; real buildings to the horizon (BORD walk)
         call WRECKDRAW          ; fallen jets burn on the ground
         call PLANESDRAW         ; AI jets own the sky
+        cmp  byte ptr [chsview],0
+        je   @@nochs
+        call PLAYERDRAW         ; our own jet, banking for real
+@@nochs:
         call MSLDRAW            ; the missile dot and its puff
         call AMSLDRAW           ; the AI's missiles too
         call LOCKHUD            ; aiming ring, lock pointer, callsign
         call GUNDRAW            ; cannon tracers
         call HUDBARS            ; glass HUD: compass, speed, altitude
         mov  word ptr [mapt],123
+        cmp  byte ptr [chsview],0
+        jne  @@pdone            ; chase view: clean cinema, no panel
         cmp  byte ptr [cockpit],0
         je   @@nopan
         call PANEL              ; instrument panel over the bottom rows

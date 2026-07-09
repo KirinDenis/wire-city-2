@@ -113,6 +113,7 @@ SC_E    equ 12h                 ; rudder right
 SC_ENT  equ 1Ch                 ; target lock
 SC_M    equ 32h                 ; right MFD mode toggle
 SC_BS   equ 0Eh                 ; missile launch (Backspace, above Enter)
+SC_F3   equ 3Dh                 ; chase camera toggle
 SC_Z    equ 2Ch                 ; rudder left
 SC_F2   equ 3Ch                 ; cockpit view toggle
 SC_NP7  equ 47h                 ; numpad 7: rudder left
@@ -355,11 +356,13 @@ GAMELOOP:
         call COLLIDE
 
         ; --- render (runs as fast as it can; speed no longer tied to it) ---
+        call CHASESET           ; F3: swap in the chase camera
         call SETTRIG            ; heading/roll -> sin/cos for this frame
         mov  ax,[bufseg]        ; draw into back-buffer
         mov  es,ax
         call CLEARBUF
         call RENDER
+        call CHASERST           ; give the pilot's world back to physics
         call CROSS
         call BLIT               ; to video memory
         ; nozzle fire: re-write DAC entry 94 (the F-15 SE II trick - the

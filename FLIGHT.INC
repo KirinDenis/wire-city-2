@@ -293,6 +293,15 @@ INPUT:
         jz   @@ncp
         xor  byte ptr [cockpit],1
 @@ncp:
+        ; --- F3: chase camera (edge) ---
+        mov  al,[KEYS+SC_F3]
+        cmp  al,[prevv]
+        je   @@nf3
+        mov  [prevv],al
+        test al,al
+        jz   @@nf3
+        xor  byte ptr [chsview],1
+@@nf3:
         ; --- M key: right MFD mode, map <-> target camera (edge) ---
         mov  al,[KEYS+SC_M]
         cmp  al,[prevm]

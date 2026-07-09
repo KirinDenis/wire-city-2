@@ -144,6 +144,13 @@ amlife  dw NAMSL dup(0)         ; self-destruct timer
 aifire  dw 90                   ; cooldown until somebody opens fire
 aigt    dw 60                   ; cooldown until somebody strafes
 pdam    db 0                    ; player damage taken (8 = shot down)
+chsview db 0                    ; F3 chase camera on?
+prevv   db 0                    ; F3 edge detector
+svx     dw 0                    ; pilot's world, saved during the chase
+svy     dw 0
+svz     dw 0
+svp     dw 0                    ; saved pitch
+svr     dw 0                    ; saved roll
 rndovr  dw 0                    ; round-over countdown (0 = fighting)
 rwin    db 0                    ; who wiped whom: 0 = friendlies won
 MSGVWIN db 'VIPERS WIN',0

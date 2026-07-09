@@ -1286,7 +1286,10 @@ FNUM3:  xor  dx,dx
         ret
 
 HUDBARS:
-        cld
+        cmp  byte ptr [chsview],0
+        je   @@hbon
+        ret                     ; tapes live on the glass, not in the sky
+@@hbon: cld
         ; ---- pick the layout ----
         cmp  byte ptr [cockpit],0
         je   @@f2l

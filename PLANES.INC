@@ -621,7 +621,10 @@ PPOINT: mov  [dsx],ax           ; rx
 ;  printed under the ring.
 ; ---------------------------------------------------------------------------
 LOCKHUD:
-        mov  word ptr [dsac],8
+        cmp  byte ptr [chsview],0
+        je   @@lkh
+        ret                     ; no glass to project the ring on
+@@lkh:  mov  word ptr [dsac],8
         cmp  word ptr [phit],0  ; taking fire: the ring flashes red
         je   @@lh0
         mov  word ptr [dsac],19
@@ -2118,4 +2121,223 @@ RESPAWNALL:
         add  si,2
         cmp  si,NPLANE*2
         jb   @@rs
+        ret
+
+; ---------------------------------------------------------------------------
+;  CHASESET / CHASERST - the F3 chase camera. For the render only: park
+;  the camera 400 behind the jet along the heading and 60 above, wings
+;  level (pitch=roll=0 - the classic steady chase); afterwards hand the
+;  pilot's world back before physics touches psin/pcos again.
+; ---------------------------------------------------------------------------
+CHASESET:
+        cmp  byte ptr [chsview],0
+        je   @@r
+        mov  ax,[camx]
+        mov  [svx],ax
+        mov  ax,[camy]
+        mov  [svy],ax
+        mov  ax,[camz]
+        mov  [svz],ax
+        mov  ax,[pitch]
+        mov  [svp],ax
+        mov  ax,[roll]
+        mov  [svr],ax
+        mov  ax,[hsin]          ; 400 back along the heading
+        mov  bx,400
+        imul bx
+        mov  bx,256
+        idiv bx
+        sub  [camx],ax
+        mov  ax,[hcos]
+        mov  bx,400
+        imul bx
+        mov  bx,256
+        idiv bx
+        sub  [camz],ax
+        add  word ptr [camy],60
+        mov  word ptr [pitch],0
+        mov  word ptr [roll],0
+@@r:    ret
+
+CHASERST:
+        cmp  byte ptr [chsview],0
+        je   @@r
+        mov  ax,[svx]
+        mov  [camx],ax
+        mov  ax,[svy]
+        mov  [camy],ax
+        mov  ax,[svz]
+        mov  [camz],ax
+        mov  ax,[svp]
+        mov  [pitch],ax
+        mov  ax,[svr]
+        mov  [roll],ax
+        call SETTRIG            ; physics needs the real trig back
+@@r:    ret
+
+; ---------------------------------------------------------------------------
+;  PLAYERDRAW - our own jet in the chase view: the model rolls about the
+;  nose axis and pitches about the wings (the camera is level, so the
+;  banking is real on screen), parked at (0,-60,400) in camera space.
+; ---------------------------------------------------------------------------
+PLAYERDRAW:
+        mov  ax,[svr]           ; roll sin/cos
+        call SINQ
+        mov  [msin],ax
+        mov  ax,[svr]
+        add  ax,64
+        call SINQ
+        mov  [mcos],ax
+        mov  ax,[svp]           ; pitch sin/cos
+        and  ax,255
+        call SINQ
+        mov  [pdx],ax
+        mov  ax,[svp]
+        add  ax,64
+        and  ax,255
+        call SINQ
+        mov  [pdy],ax
+        ; ---- transform the 13 vertices ----
+        xor  si,si
+        xor  di,di
+@@tv:   mov  ax,[MVERT+si]      ; x' = (x*rc + y*rs)/256
+        imul word ptr [mcos]
+        mov  bx,ax
+        mov  ax,[MVERT+si+2]
+        imul word ptr [msin]
+        add  ax,bx
+        cwd
+        mov  bx,256
+        idiv bx
+        mov  [PVX+di],ax
+        mov  ax,[MVERT+si]      ; y' = (y*rc - x*rs)/256
+        imul word ptr [msin]
+        mov  cx,ax
+        mov  ax,[MVERT+si+2]
+        imul word ptr [mcos]
+        sub  ax,cx
+        cwd
+        mov  bx,256
+        idiv bx
+        mov  [pdz],ax           ; y' scratch
+        imul word ptr [pdy]     ; y'' = (y'*pc + z*ps)/256 - 60
+        mov  bx,ax
+        mov  ax,[MVERT+si+4]
+        imul word ptr [pdx]
+        add  ax,bx
+        cwd
+        mov  bx,256
+        idiv bx
+        sub  ax,60
+        mov  [PVY+di],ax
+        mov  ax,[pdz]           ; z'' = (z*pc - y'*ps)/256 + 400
+        imul word ptr [pdx]
+        mov  cx,ax
+        mov  ax,[MVERT+si+4]
+        imul word ptr [pdy]
+        sub  ax,cx
+        cwd
+        mov  bx,256
+        idiv bx
+        add  ax,400
+        mov  [PVZ+di],ax
+        add  si,6
+        add  di,2
+        cmp  si,13*6
+        jb   @@tv
+        ; ---- face depths, painter sort, draw (as PLANESDRAW does) ----
+        xor  si,si
+@@fd:   mov  bx,si
+        add  bx,bx
+        add  bx,bx
+        add  bx,si
+        push si
+        mov  al,[MFACE+bx]
+        xor  ah,ah
+        add  ax,ax
+        mov  si,ax
+        mov  cx,[PVZ+si]
+        mov  al,[MFACE+bx+1]
+        xor  ah,ah
+        add  ax,ax
+        mov  si,ax
+        add  cx,[PVZ+si]
+        sar  cx,1
+        mov  al,[MFACE+bx+2]
+        xor  ah,ah
+        add  ax,ax
+        mov  si,ax
+        mov  dx,[PVZ+si]
+        mov  al,[MFACE+bx+3]
+        xor  ah,ah
+        add  ax,ax
+        mov  si,ax
+        add  dx,[PVZ+si]
+        sar  dx,1
+        add  cx,dx
+        sar  cx,1
+        pop  si
+        mov  bx,si
+        add  bx,bx
+        mov  [FCD+bx],cx
+        mov  ax,si
+        mov  bx,si
+        mov  [FCO+bx],al
+        inc  si
+        cmp  si,NFACE
+        jb   @@fd
+        mov  cx,NFACE-1
+@@bs:   push cx
+        xor  si,si
+@@bi:   mov  bx,si
+        add  bx,bx
+        mov  ax,[FCD+bx]
+        cmp  ax,[FCD+bx+2]
+        jge  @@nsw
+        xchg ax,[FCD+bx+2]
+        mov  [FCD+bx],ax
+        mov  al,[FCO+si]
+        xchg al,[FCO+si+1]
+        mov  [FCO+si],al
+@@nsw:  inc  si
+        cmp  si,NFACE-1
+        jb   @@bi
+        pop  cx
+        loop @@bs
+        mov  word ptr [pfc],0
+@@df:   mov  si,[pfc]
+        mov  al,[FCO+si]
+        xor  ah,ah
+        mov  bx,ax
+        add  bx,bx
+        add  bx,bx
+        add  ax,bx
+        mov  bx,ax
+        mov  al,[MFACE+bx+4]
+        mov  [COLOR],al
+        xor  cx,cx
+@@dc:   push bx
+        push cx
+        mov  si,cx
+        mov  al,[MFACE+bx+si]
+        xor  ah,ah
+        add  ax,ax
+        mov  si,ax
+        mov  di,cx
+        add  di,di
+        mov  ax,[PVX+si]
+        mov  [IX+di],ax
+        mov  ax,[PVY+si]
+        mov  [IY+di],ax
+        mov  ax,[PVZ+si]
+        mov  [IZ+di],ax
+        pop  cx
+        pop  bx
+        inc  cx
+        cmp  cx,4
+        jb   @@dc
+        call FACEFILL
+        inc  word ptr [pfc]
+        cmp  word ptr [pfc],NFACE
+        jb   @@df
         ret
