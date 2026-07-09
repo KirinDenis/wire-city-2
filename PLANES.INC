@@ -499,7 +499,7 @@ PLANESDRAW:
         add  ax,[dsac]
         mov  [sy1],ax
         call @@mln              ; right
-        jmp  @@nomk
+        jmp  @@mlbl
 @@hst:  ; hostile: yellow diamond (red when locked)
         mov  byte ptr [COLOR],96
         mov  ax,[locki]
@@ -551,6 +551,27 @@ PLANESDRAW:
         sub  ax,[dsac]
         mov  [sy1],ax
         call @@mln              ; left -> top
+@@mlbl: ; ---- the callsign under the marker (close targets only) ----
+        cmp  word ptr [dsac],6
+        jl   @@nomk             ; a distant dot stays a dot
+        mov  ax,[dsx]
+        cmp  ax,20              ; FDRAW has no clipping: stay on screen
+        jl   @@nomk
+        cmp  ax,299
+        jg   @@nomk
+        mov  ax,[dsy]
+        add  ax,[dsac]
+        add  ax,3
+        cmp  ax,2
+        jl   @@nomk
+        cmp  ax,185
+        jg   @@nomk
+        mov  [fty],ax
+        mov  ax,[dsx]
+        sub  ax,14
+        mov  [ftx],ax
+        mov  si,[pidx]
+        call CSDRAW             ; marker colour carries over (red = locked)
         jmp  @@nomk
 @@mln:  call CLIPLINE
         jc   @@mlx
