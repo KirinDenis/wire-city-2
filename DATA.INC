@@ -144,6 +144,21 @@ amlife  dw NAMSL dup(0)         ; self-destruct timer
 aifire  dw 90                   ; cooldown until somebody opens fire
 aigt    dw 60                   ; cooldown until somebody strafes
 pdam    db 0                    ; player damage taken (8 = shot down)
+; ---- tick interpolation: physics is 18.2 Hz, frames are faster ----
+ocx     dw 0                    ; camera state before the physics burst
+ocy     dw 0
+ocz     dw 0
+ohd     dw 0
+opt     dw 0
+orl     dw 0
+lvx     dw 0                    ; true state parked during the lerped frame
+lvy     dw 0
+lvz     dw 0
+lvh     dw 0
+lvp     dw 0
+lvr     dw 0
+fcnt    dw 0                    ; frames since the last physics burst
+fprev   dw 0                    ; frames the previous interval lasted
 chsview db 0                    ; F3 chase camera on?
 tgtcam  db 0                    ; F4 orbit camera on the locked target
 prevt4  db 0                    ; F4 edge detector

@@ -3150,3 +3150,99 @@ BWRECK: mov  di,[wnext]         ; claim a wreck slot
         cmp  word ptr [tpi],NFACE
         jb   @@bp
         ret
+
+; ---------------------------------------------------------------------------
+;  LERPSET / LERPRST - render-side interpolation between physics ticks.
+;  Physics is welded to the 18.2 Hz BIOS tick while frames render faster:
+;  drawing the raw state repeats a frame, then jumps a whole tick. The
+;  frame instead shows old + (new-old)*fcnt/fprev (frames counted per
+;  interval) - half a tick of latency, silk in return. Angles take the
+;  short way around the circle. Physics never sees the lerped state:
+;  LERPRST restores everything and rebuilds the trig.
+; ---------------------------------------------------------------------------
+LERPSET:
+        mov  ax,[fprev]
+        test ax,ax
+        jz   @@r                ; a tick every frame: nothing to smooth
+        cmp  ax,[fcnt]
+        jbe  @@r                ; interval over: show the real state
+        mov  ax,[camx]          ; park the truth
+        mov  [lvx],ax
+        mov  ax,[camy]
+        mov  [lvy],ax
+        mov  ax,[camz]
+        mov  [lvz],ax
+        mov  ax,[heading]
+        mov  [lvh],ax
+        mov  ax,[pitch]
+        mov  [lvp],ax
+        mov  ax,[roll]
+        mov  [lvr],ax
+        mov  ax,[camx]          ; positions: plain lerp
+        sub  ax,[ocx]
+        imul word ptr [fcnt]
+        idiv word ptr [fprev]
+        add  ax,[ocx]
+        mov  [camx],ax
+        mov  ax,[camy]
+        sub  ax,[ocy]
+        imul word ptr [fcnt]
+        idiv word ptr [fprev]
+        add  ax,[ocy]
+        mov  [camy],ax
+        mov  ax,[camz]
+        sub  ax,[ocz]
+        imul word ptr [fcnt]
+        idiv word ptr [fprev]
+        add  ax,[ocz]
+        mov  [camz],ax
+        mov  ax,[heading]       ; heading: shortest way around
+        sub  ax,[ohd]
+        and  ax,255
+        cmp  ax,128
+        jb   @@h1
+        sub  ax,256
+@@h1:   imul word ptr [fcnt]
+        idiv word ptr [fprev]
+        add  ax,[ohd]
+        and  ax,255
+        mov  [heading],ax
+        mov  ax,[roll]          ; roll: same circle
+        sub  ax,[orl]
+        and  ax,255
+        cmp  ax,128
+        jb   @@r1
+        sub  ax,256
+@@r1:   imul word ptr [fcnt]
+        idiv word ptr [fprev]
+        add  ax,[orl]
+        and  ax,255
+        mov  [roll],ax
+        mov  ax,[pitch]         ; pitch: linear (-64..64, no wrap)
+        sub  ax,[opt]
+        imul word ptr [fcnt]
+        idiv word ptr [fprev]
+        add  ax,[opt]
+        mov  [pitch],ax
+@@r:    ret
+
+LERPRST:
+        mov  ax,[fprev]
+        test ax,ax
+        jz   @@r
+        cmp  ax,[fcnt]
+        jbe  @@r
+        mov  ax,[lvx]
+        mov  [camx],ax
+        mov  ax,[lvy]
+        mov  [camy],ax
+        mov  ax,[lvz]
+        mov  [camz],ax
+        mov  ax,[lvh]
+        mov  [heading],ax
+        mov  ax,[lvp]
+        mov  [pitch],ax
+        mov  ax,[lvr]
+        mov  [roll],ax
+        call SETTRIG            ; physics gets its true trig back
+@@r:    ret

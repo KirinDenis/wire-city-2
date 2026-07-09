@@ -352,6 +352,24 @@ GAMELOOP:
         mov  bx,MAXSTEP
 @@pcl:  test bx,bx
         jz   @@pdone
+        mov  ax,[camx]          ; interpolation: keep the pre-burst state
+        mov  [ocx],ax
+        mov  ax,[camy]
+        mov  [ocy],ax
+        mov  ax,[camz]
+        mov  [ocz],ax
+        mov  ax,[heading]
+        mov  [ohd],ax
+        mov  ax,[pitch]
+        mov  [opt],ax
+        mov  ax,[roll]
+        mov  [orl],ax
+        mov  ax,[fcnt]          ; how many frames the last interval took
+        cmp  ax,8
+        jbe  @@fp1
+        mov  ax,8
+@@fp1:  mov  [fprev],ax
+        mov  word ptr [fcnt],0
 @@ploop:
         push bx                 ; INPUT clobbers BX (leaves BX=256 from idiv)
         call INPUT              ; one fixed physics step
@@ -359,9 +377,11 @@ GAMELOOP:
         dec  bx
         jnz  @@ploop
 @@pdone:
+        inc  word ptr [fcnt]
         call COLLIDE
 
         ; --- render (runs as fast as it can; speed no longer tied to it) ---
+        call LERPSET            ; draw BETWEEN the ticks: silk, not jerks
         call CHASESET           ; F3: swap in the chase camera
         call SETTRIG            ; heading/roll -> sin/cos for this frame
         mov  ax,[bufseg]        ; draw into back-buffer
@@ -369,6 +389,7 @@ GAMELOOP:
         call CLEARBUF
         call RENDER
         call CHASERST           ; give the pilot's world back to physics
+        call LERPRST            ; ...and the true un-lerped state too
         call CROSS
         call BLIT               ; to video memory
         ; nozzle fire: re-write DAC entry 94 (the F-15 SE II trick - the
