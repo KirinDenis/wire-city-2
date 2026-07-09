@@ -6,22 +6,25 @@
 <title>WIRE CITY 86</title>
 <link rel="stylesheet" href="jsdos/js-dos.css">
 <style>
-  html,body{margin:0;height:100%;background:#04060f;color:#bcd;
-            font-family:monospace}
-  #wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;
+  html{background:#04060f}
+  body{margin:0;min-height:100vh;background:#04060f;color:#bcd;
+       font-family:monospace}
+  #wrap{display:flex;flex-direction:column;align-items:center;
         justify-content:flex-start;gap:10px;padding:12px;box-sizing:border-box}
   h1{font-weight:bold;letter-spacing:3px;color:#bcf;margin:4px;
      text-shadow:0 0 8px #46c}
   h2{color:#9bf;letter-spacing:2px;margin:14px 0 6px;font-size:15px}
-  #dos{width:min(96vw,720px);aspect-ratio:4/3;background:#000;
+  #dos{width:min(96vw,1080px);aspect-ratio:16/10;background:#000;
        box-shadow:0 0 24px #1330}
   .hint{font-size:13px;color:#89b;text-align:center}
   a{color:#9bf}
-  #manual{width:min(96vw,720px);font-size:13px;line-height:1.5;color:#abc}
-  table{border-collapse:collapse;width:100%}
-  td{padding:2px 8px;border-bottom:1px solid #123;vertical-align:top}
+  #manual{width:min(96vw,1080px);font-size:13px;line-height:1.5;color:#abc;
+          background:#04060f}
+  table{border-collapse:collapse;width:100%;background:#04060f}
+  td{padding:2px 8px;border-bottom:1px solid #123;vertical-align:top;
+     background:#04060f;color:#abc}
   td.k{color:#dfe;white-space:nowrap;width:14em}
-  .grn{color:#5f5}.yel{color:#ff5}.red{color:#f66}
+  .grn{color:#5f5}.yel{color:#ff5}.red{color:#f66}.amb{color:#fb4}
 </style>
 </head>
 <body>
@@ -29,31 +32,9 @@
   <h1>W I R E&nbsp;&nbsp;C I T Y&nbsp;&nbsp;8 6</h1>
   <div class="hint">click the screen first to grab the keyboard</div>
   <div id="dos"></div>
-  <div class="hint">8086 / TASM polygon flight sim, running in DOSBox (WASM) via <a href="https://js-dos.com" target="_blank" rel="noopener">js-dos</a> &middot; <a href="https://github.com/KirinDenis/wire-city-2" target="_blank" rel="noopener">source</a></div>
+  <div class="hint">a combat flight sim in pure 8086 assembly (36 KB), running in DOSBox (WASM) via <a href="https://js-dos.com" target="_blank" rel="noopener">js-dos</a> &middot; <a href="https://github.com/KirinDenis/wire-city-2" target="_blank" rel="noopener">source</a></div>
 
   <div id="manual">
-    <h2>THE WAR</h2>
-    <p>
-      Two squadrons fight an attrition war over a procedurally generated
-      island: <span class="grn">VIPERS</span> (your side, green squares)
-      against <span class="yel">BANDITS</span> (yellow diamonds).
-      The dead stay dead. When one team is wiped out the winner banner
-      lights up and two fresh squadrons take the sky &mdash; the
-      scoreboard on the radar carries over:
-      <span class="grn">green</span> = bandits downed,
-      <span class="yel">yellow</span> = vipers lost,
-      white = your personal kills.
-    </p>
-    <p>
-      A jet takes <b>2&ndash;5 cannon hits</b> or <b>one missile</b>;
-      the wreck breaks into its polygons, falls, and burns on the ground.
-      You can soak <b>8 hits</b> &mdash; the aiming ring flashes
-      <span class="red">red</span> and the damage counter on the radar
-      climbs. Watch the tapes: the <span class="red">red line</span> on
-      the speed tape is the stall, the one on the altitude tape is the
-      terrain right below you.
-    </p>
-
     <h2>FLYING</h2>
     <table>
       <tr><td class="k">&larr; / &rarr; (num 4/6)</td><td>bank left / right (roll through 360&deg; &mdash; loops and barrel rolls work)</td></tr>
@@ -68,25 +49,59 @@
     <table>
       <tr><td class="k">Enter</td><td>lock the jet inside the aiming ring (TARGET / FRIEND + callsign); Enter on empty sky drops the lock</td></tr>
       <tr><td class="k">Backspace</td><td>missile &mdash; 4 rails, homing on the lock, dumb-fire without one; one reloads every ~20&nbsp;s</td></tr>
-      <tr><td class="k">Space (hold)</td><td>cannon &mdash; hits whatever sits inside the ring, ~4500 reach; the belt refills while you hold fire</td></tr>
-      <tr><td class="k">M</td><td>right MFD: map &harr; sensor view of the locked target</td></tr>
+      <tr><td class="k">Space (hold)</td><td>cannon &mdash; real tracer rounds; hits land on whatever sits inside the ring; the belt refills while you hold fire</td></tr>
+      <tr><td class="k">M</td><td>right MFD: island map &harr; sensor view of the locked target</td></tr>
     </table>
 
-    <h2>VIEW</h2>
+    <h2>CAMERAS</h2>
     <table>
-      <tr><td class="k">F2</td><td>cockpit on / off</td></tr>
-      <tr><td class="k">N</td><td>day / night palette</td></tr>
-      <tr><td class="k">Space</td><td>after a crash: take a fresh jet</td></tr>
+      <tr><td class="k">F2</td><td>cockpit on / off (the HUD tapes stay)</td></tr>
+      <tr><td class="k">F3</td><td>chase view: your own jet from behind, banking for real</td></tr>
+      <tr><td class="k">F4</td><td>orbit the locked target &mdash; the arrows steer the camera; if the target dies, the camera follows the debris down</td></tr>
+      <tr><td class="k">F5</td><td>arm the missile camera (<span class="amb">M</span> on the panel): the next launch is ridden to impact, 3 s of aftermath, then back</td></tr>
+      <tr><td class="k">N</td><td>day / night &mdash; the stars are a real celestial sphere</td></tr>
+      <tr><td class="k">Space</td><td>after GAME OVER: take a fresh jet</td></tr>
       <tr><td class="k">ESC</td><td>quit to DOS</td></tr>
     </table>
 
+    <h2>THE WAR</h2>
+    <p>
+      Two squadrons in an attrition war over a procedural island:
+      <span class="grn">VIPERS</span> &mdash; you plus 19 green squares &mdash;
+      against 20 <span class="yel">BANDIT</span> yellow diamonds. The dead
+      stay dead; when a team is wiped out the winner banner lights up and two
+      fresh squadrons take the sky. The radar scoreboard shows this round's
+      kills per team (tagged with the team's marker shape); the white number
+      is your personal log and survives across rounds.
+    </p>
+    <p>
+      A jet soaks <b>2&ndash;5 cannon hits</b> or <b>one missile</b> &mdash;
+      and so do the <b>buildings</b>: a levelled block breaks into wall slabs,
+      burns where it falls and stays a ruin forever. Falling wreckage can
+      bring the neighbours down in a chain. Everything collides: jets with
+      jets, jets with towers, wrecks with everything. Ramming works. Once.
+    </p>
+    <p>
+      You take <b>5 hits</b> &mdash; the aiming ring flashes
+      <span class="red">red</span> and pips light up on the radar. The fifth,
+      or a hillside, replays your last five seconds as a flashback, then the
+      camera watches your jet come apart. GAME OVER &mdash; Space &mdash; again.
+    </p>
+    <p>
+      Watch the tapes: the <span class="red">red line</span> on the speed tape
+      is the stall, the one on the altitude tape is the terrain right below
+      you. The gunsight bar always stays level with the horizon and its tick
+      points at the sky; lose the horizon in a loop and a standby horizon
+      appears at the ring.
+    </p>
+
     <h2>THE PANEL</h2>
     <p>
-      Left MFD &mdash; radar (heading-up): you are the centre tick, blips
-      are jets (IFF-coloured, a dot above/below = higher/lower than you),
-      amber sparks are missiles in the air, pips are your rails, the amber
-      number is the cannon belt. Centre MFD &mdash; artificial horizon.
-      Right MFD &mdash; the island map, or the target camera (M).
+      Left MFD &mdash; radar (heading-up): you are the centre tick, blips are
+      jets (IFF-coloured, a dot above/below = higher/lower than you), amber
+      sparks are missiles in the air, pips are your rails, the amber number is
+      the cannon belt, red pips are your damage. Centre MFD &mdash; artificial
+      horizon. Right MFD &mdash; the island map, or the target camera (M).
       Caution letters on the struts: <b>F</b>uel, <b>S</b>tall,
       <b>T</b>errain, <b>L</b>ock.
     </p>
@@ -103,12 +118,13 @@
   // Self-hosted js-dos runtime (the js-dos CDN 503s cross-origin hotlinks).
   // pathPrefix points at our local folder holding emulators.js + dosbox wasm.
   Dos(document.getElementById("dos"), {
-    url: "city.jsdos?v=26",
-    pathPrefix: "jsdos/emulators/"
+    url: "city.jsdos?v=24",
+    pathPrefix: "jsdos/emulators/",
+    theme: "dark",
+    renderAspect: "16/10",
+    imageRendering: "pixelated",
+    scaleControls: 0.2
   });
 </script>
 </body>
 </html>
-
-
-
