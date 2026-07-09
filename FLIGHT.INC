@@ -881,6 +881,8 @@ COLLIDE:
         add  ax,[bhgt2]
         cmp  [camy],ax
         jge  @@nocol            ; above roof -> safe
+        call BSET               ; the building comes down with us
+        call BWRECK
         call CRASHHANDLE
 @@nocol:
         ret

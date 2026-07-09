@@ -123,6 +123,104 @@ PLANESUPD:
         mov  [TLZ+bx],ax
         add  bx,2
         loop @@rtf
+        ; ---- flying into a building kills both (1 tick in 4) ----
+        mov  ax,[lasttk]
+        add  ax,si
+        and  ax,3
+        jnz  @@nbld
+        push si
+        mov  ax,[pax+si]
+        add  ax,BIAS
+        mov  cl,8
+        shr  ax,cl
+        mov  [gi],ax
+        mov  ax,[paz+si]
+        add  ax,BIAS
+        mov  cl,8
+        shr  ax,cl
+        mov  [gj],ax
+        call BCHK
+        jnz  @@bldok            ; a ruin: fly through the smoke
+        call HBLD
+        cmp  word ptr [bstreet],0
+        jne  @@bldok
+        pop  si
+        push si
+        mov  ax,[gi]
+        mov  bx,[gj]
+        call GETH
+        call WORLDH
+        pop  si
+        push si
+        mov  bx,[pay+si]
+        sub  bx,ax
+        js   @@bldok
+        cmp  bx,[bhgt2]
+        jg   @@bldok
+        mov  ax,[gi]            ; inside the footprint?
+        mov  cl,8
+        shl  ax,cl
+        add  ax,128
+        sub  ax,BIAS
+        pop  si
+        push si
+        mov  bx,[pax+si]
+        sub  bx,ax
+        jns  @@pb1
+        neg  bx
+@@pb1:  cmp  bx,[bhw]
+        jge  @@bldok
+        mov  ax,[gj]
+        mov  cl,8
+        shl  ax,cl
+        add  ax,128
+        sub  ax,BIAS
+        pop  si
+        push si
+        mov  bx,[paz+si]
+        sub  bx,ax
+        jns  @@pb2
+        neg  bx
+@@pb2:  cmp  bx,[bhd]
+        jge  @@bldok
+        call BSET               ; both die: the block...
+        call BWRECK
+        pop  si
+        push si
+        call BOOM               ; ...and the jet
+        pop  si
+        jmp  @@next
+@@bldok:
+        pop  si
+@@nbld:
+        ; ---- ramming the player: both go down ----
+        cmp  byte ptr [dying],0
+        jne  @@nram
+        mov  ax,[pax+si]
+        sub  ax,[camx]
+        jns  @@rm1
+        neg  ax
+@@rm1:  cmp  ax,110
+        jge  @@nram
+        mov  bx,ax
+        mov  ax,[pay+si]
+        sub  ax,[camy]
+        jns  @@rm2
+        neg  ax
+@@rm2:  add  bx,ax
+        mov  ax,[paz+si]
+        sub  ax,[camz]
+        jns  @@rm3
+        neg  ax
+@@rm3:  add  bx,ax
+        cmp  bx,110
+        jge  @@nram
+        push si
+        call BOOM               ; the jet shatters...
+        call CRASHHANDLE        ; ...and so do we
+        pop  si
+        jmp  @@next
+@@nram:
 @@trl:  ; drop a contrail point every 8th tick
         mov  ax,[lasttk]
         and  ax,7
@@ -152,7 +250,53 @@ PLANESUPD:
         jb   @@th2
         xor  ax,ax
 @@th2:  mov  [tlh],ax
-@@nth:  ; ---- attrition: when a team is wiped, run the victory banner,
+@@nth:  ; ---- midair collisions: one candidate jet per tick vs all ----
+        mov  ax,[lasttk]
+        xor  dx,dx
+        mov  bx,NPLANE
+        div  bx
+        mov  si,dx
+        add  si,si              ; the candidate's offset
+        mov  bx,si
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        jne  @@mce
+        xor  di,di
+@@mc:   cmp  di,si
+        je   @@mcn
+        mov  bx,di
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        jne  @@mcn
+        mov  ax,[pax+di]
+        sub  ax,[pax+si]
+        jns  @@mc1
+        neg  ax
+@@mc1:  cmp  ax,110
+        jge  @@mcn
+        mov  bx,ax
+        mov  ax,[pay+di]
+        sub  ax,[pay+si]
+        jns  @@mc2
+        neg  ax
+@@mc2:  add  bx,ax
+        mov  ax,[paz+di]
+        sub  ax,[paz+si]
+        jns  @@mc3
+        neg  ax
+@@mc3:  add  bx,ax
+        cmp  bx,110
+        jge  @@mcn
+        push di                 ; a midair: both come apart
+        call BOOM
+        pop  si
+        call BOOM
+        jmp  @@mce
+@@mcn:  add  di,2
+        cmp  di,NPLANE*2
+        jb   @@mc
+@@mce:
+        ; ---- attrition: when a team is wiped, run the victory banner,
         ; then field two fresh squadrons (scores carry over) ----
         cmp  word ptr [rndovr],0
         je   @@rchk
@@ -1367,12 +1511,55 @@ WRECKUPD:
         add  [bx+di+2],ax       ; fy += vy
         mov  ax,[di+2]          ; wgy
         cmp  [bx+di+2],ax
-        jg   @@wg
+        jg   @@air
         mov  [bx+di+2],ax       ; grounded: rest and stop
         xor  ax,ax
         mov  [bx+di+6],ax
         mov  [bx+di+8],ax
         mov  [bx+di+10],ax
+        jmp  @@wg
+@@air:  ; ---- a falling piece can bring a building down (1 in 4) ----
+        mov  ax,[lasttk]
+        and  ax,3
+        jnz  @@wg
+        mov  ax,[bx+di+6]       ; only pieces still moving
+        or   ax,[bx+di+8]
+        or   ax,[bx+di+10]
+        jz   @@wg
+        push bx
+        push di
+        mov  ax,[bx+di]         ; the piece's cell
+        add  ax,BIAS
+        mov  cl,8
+        shr  ax,cl
+        mov  [gi],ax
+        mov  ax,[bx+di+4]
+        add  ax,BIAS
+        mov  cl,8
+        shr  ax,cl
+        mov  [gj],ax
+        mov  ax,[bx+di+2]
+        mov  [ctz],ax           ; the piece's height
+        call BCHK
+        jnz  @@wbn
+        call HBLD
+        cmp  word ptr [bstreet],0
+        jne  @@wbn
+        mov  ax,[gi]
+        mov  bx,[gj]
+        call GETH
+        call WORLDH
+        mov  bx,[ctz]
+        sub  bx,ax
+        js   @@wbn
+        cmp  bx,[bhgt2]
+        jg   @@wbn
+        push word ptr [tpi]     ; BWRECK reuses the slot counter
+        call BSET               ; dominoes: the wreck takes it down
+        call BWRECK
+        pop  word ptr [tpi]
+@@wbn:  pop  di
+        pop  bx
 @@wg:   add  bx,12
         cmp  bx,WFP+8*12
         jb   @@wp

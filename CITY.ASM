@@ -257,7 +257,7 @@ MAIN:
         jmp  @@s2
 @@se:   mov  [di+2],cx          ; span length
         add  di,4
-        cmp  di,offset PSPAN+2396 ; keep room for the terminator
+        cmp  di,offset PSPAN+1796 ; keep room for the terminator
         jb   @@sc
 @@sd:   mov  word ptr [di],0FFFFh
 @@pn:   pop  es
@@ -441,21 +441,21 @@ FONTBUF equ  BSS+19959              ; 246 bytes: font from CITY.DAT (untyped:
 ; NB: the COM image + this BSS + the stack ALL share one 64K segment.
 ; Keep BSSEND + image size under ~63.5K or the black box eats the stack
 ; (that was the grey-screen hang of 2026-07-09).
-PSPAN   equ  BSS+20215              ; 2400 bytes: cockpit blit span table,
+PSPAN   equ  BSS+20215              ; 1800 bytes: cockpit blit span table,
                                     ;  (buffer offset, length) pairs, 0FFFFh
-                                    ;  terminated (599 spans max; the real
+                                    ;  terminated (449 spans max; the real
                                     ;  panel uses ~400)
-WRK     equ  BSS+22615              ; wreck pool: 4 slots of WRKSZ bytes
+WRK     equ  BSS+22015              ; wreck pool: 4 slots of WRKSZ bytes
                                     ;  (+0 wtim, +2 wgy, +WFP faces 8x12b,
                                     ;  +WCO corners 8x4x6b, +WCL colours 8b)
-FLB     equ  word ptr BSS+23815     ; black box ring: FLBN samples of
+FLB     equ  word ptr BSS+23215     ; black box ring: FLBN samples of
                                     ;  (camx,camy,camz,heading,pitch,roll)
-TLX     equ  word ptr BSS+24391     ; contrail rings: NPLANE*TLN words each
-TLY     equ  word ptr BSS+25351     ;  (moved out of the image: generated
-TLZ     equ  word ptr BSS+26311     ;  at spawn, never shipped as zeros)
-DSTB    equ  byte ptr BSS+27271     ; ruins bitmap: 1 bit per world cell
+TLX     equ  word ptr BSS+23791     ; contrail rings: NPLANE*TLN words each
+TLY     equ  word ptr BSS+24751     ;  (moved out of the image: generated
+TLZ     equ  word ptr BSS+25711     ;  at spawn, never shipped as zeros)
+DSTB    equ  byte ptr BSS+26671     ; ruins bitmap: 1 bit per world cell
                                     ;  (64x64), set = the building is down
-BSSEND  equ  BSS+27783
+BSSEND  equ  BSS+27183
 
 CODE    ENDS
         END START
