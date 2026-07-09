@@ -1,16 +1,14 @@
-# pack.ps1 - build the js-dos bundle  docs/city.jsdos
+# pack.ps1 - build the js-dos bundle as docs/city_vN.jsdos
 #
-# Run from anywhere, e.g. from the repo root:
-#     powershell -ExecutionPolicy Bypass -File docs\pack.ps1
+# js-dos caches extracted bundles in the browser's IndexedDB keyed by the
+# bundle PATH - a ?v= query does NOT bust it (Ctrl+Shift+R won't help).
+# So every release gets a NEW FILENAME: this script reads the current
+# city_vN.jsdos from index.html, packs v(N+1), deletes the older bundles
+# and patches index.html. Run it via PUBLISH.BAT.
 #
-# A .jsdos bundle is a ZIP holding the program files plus .jsdos/dosbox.conf.
-# We build it with .NET ZipArchive (NOT Compress-Archive): Windows PowerShell
-# 5.1's Compress-Archive writes BACKSLASH entry names, which violate the ZIP
-# spec and break js-dos's unzip in the browser. .NET lets us force "/".
-#
-# NOTE: if the page still fails to start, the bundle layout for your js-dos
-# release may differ - build it with the online studio at https://js-dos.com
-# (drop in CITY.COM, set command CITY.COM, export .jsdos).
+# Built with .NET ZipArchive (NOT Compress-Archive): Windows PowerShell
+# 5.1's Compress-Archive writes BACKSLASH entry names, which violate the
+# ZIP spec and break js-dos's unzip in the browser.
 
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.IO.Compression
@@ -21,7 +19,7 @@ $com   = Join-Path $root "INSTALL\CITY.COM"
 $dat   = Join-Path $root "INSTALL\CITY.DAT"       # resources (font, cockpit)
 $conf  = Join-Path $root "docs\dosbox.conf"        # full machine config + autoexec
 $rconf = Join-Path $root "docs\dosbox-root.conf"   # root override (cycles)
-$out   = Join-Path $root "docs\city.jsdos"
+$idx   = Join-Path $root "docs\index.html"
 
 if (-not (Test-Path $com)) {
     throw "INSTALL\CITY.COM not found - build it first (see MAKE.BAT)."
@@ -30,8 +28,14 @@ if (-not (Test-Path $dat)) {
     throw "INSTALL\CITY.DAT not found - build it first (see MAKE.BAT)."
 }
 
-if (Test-Path $out) { Remove-Item -Force $out }
+# next version = the one referenced in index.html + 1
+$s = Get-Content $idx -Raw
+$m = [regex]::Match($s, 'city_v(\d+)\.jsdos')
+if ($m.Success) { $n = [int]$m.Groups[1].Value + 1 } else { $n = 27 }
+$name = "city_v$n.jsdos"
+$out  = Join-Path $root "docs\$name"
 
+if (Test-Path $out) { Remove-Item -Force $out }
 $fs  = [System.IO.File]::Open($out, [System.IO.FileMode]::CreateNew)
 $zip = New-Object System.IO.Compression.ZipArchive($fs, [System.IO.Compression.ZipArchiveMode]::Create)
 
@@ -50,4 +54,15 @@ Add-ZipEntry $zip $rconf "dosbox.conf"             # root override, matches js-d
 
 $zip.Dispose()
 $fs.Close()
-Write-Host "Created docs/city.jsdos"
+
+# retire the older bundles (the query-string era one too)
+Get-ChildItem (Join-Path $root "docs") -Filter "city_v*.jsdos" |
+    Where-Object { $_.Name -ne $name } | Remove-Item -Force
+$legacy = Join-Path $root "docs\city.jsdos"
+if (Test-Path $legacy) { Remove-Item -Force $legacy }
+
+# point index.html at the new bundle (handles the old ?v= form as well)
+$s = $s -replace 'city(_v\d+)?\.jsdos(\?v=\d+)?', $name
+Set-Content -Encoding ascii $idx $s
+
+Write-Host "Created docs/$name and updated index.html"

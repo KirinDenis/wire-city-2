@@ -17,21 +17,13 @@ if not exist INSTALL\CITY.COM (
   exit /b 1
 )
 
-echo [1/3] Packing docs\city.jsdos ...
+echo [1/2] Packing a fresh versioned bundle (city_vN.jsdos) ...
+REM the new FILENAME each release busts js-dos's IndexedDB bundle cache
+REM (a ?v= query does not - pack.ps1 renames it and patches index.html)
 powershell -NoProfile -ExecutionPolicy Bypass -File docs\pack.ps1
 if errorlevel 1 goto fail
 
-echo [2/3] Bumping cache version in docs\index.html ...
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$p='docs/index.html'; $s=Get-Content $p -Raw;" ^
-  "$m=[regex]::Match($s,'city\.jsdos\?v=(\d+)');" ^
-  "if(-not $m.Success){ Write-Error 'version tag not found'; exit 1 };" ^
-  "$n=[int]$m.Groups[1].Value+1;" ^
-  "$s=$s -replace 'city\.jsdos\?v=\d+',('city.jsdos?v='+$n);" ^
-  "Set-Content -Encoding ascii $p $s; Write-Host ('  -> v='+$n)"
-if errorlevel 1 goto fail
-
-echo [3/3] Commit + push ...
+echo [2/2] Commit + push ...
 echo.
 echo --- files that will be committed to the PUBLIC repo: ---
 git status --short
