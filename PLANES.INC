@@ -2094,8 +2094,8 @@ AIGUN:  cmp  word ptr [aigt],0
         cmp  di,0FFFFh
         jne  @@hai
         inc  byte ptr [pdam]    ; the player takes one
-        mov  word ptr [phit],6
-        cmp  byte ptr [pdam],8
+        mov  word ptr [phit],9
+        cmp  byte ptr [pdam],5  ; five hits bring the player down
         jb   @@no2
         call CRASHHANDLE        ; shot down (resets pdam itself)
         ret

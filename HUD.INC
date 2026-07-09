@@ -1025,12 +1025,28 @@ PANELBMP:
         mov  word ptr [fty],182
         mov  ax,[psc]
         call FNUM
-        mov  byte ptr [COLOR],19 ; damage taken, red, top centre
-        mov  word ptr [ftx],84
-        mov  word ptr [fty],155
-        mov  al,[pdam]
-        xor  ah,ah
-        call FNUM
+        ; damage pips, red, top centre: one per hit taken, five = down
+        xor  si,si
+@@dmp:  mov  ax,si
+        cmp  al,[pdam]
+        jae  @@dmn
+        mov  ax,155
+        call ROW320
+        add  di,78
+        mov  ax,si
+        add  ax,ax
+        add  ax,ax              ; k*4
+        add  di,ax
+        mov  al,19
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+2],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+        mov  es:[di+322],al
+@@dmn:  inc  si
+        cmp  si,5
+        jb   @@dmp
         mov  byte ptr [COLOR],5 ; cannon rounds, amber
         mov  word ptr [ftx],92
         mov  word ptr [fty],182
