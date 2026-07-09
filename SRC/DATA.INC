@@ -178,6 +178,9 @@ sbwa    dw 0                    ; whine amplitude (grows with the spool)
 sbga    dw 0                    ; growl amplitude (the 120..300 Hz hump)
 sbwm    db 0                    ; white hiss mask
 sbacc   dw 0                    ; sample accumulator (clamped to 8 bits)
+sbbr    db 0                    ; brown walker, persists across refills
+sbph    db 0                    ; whine phase, persists (no frame clicks)
+sbgp    db 0                    ; growl phase, persists
 sbmsk   db 0                    ; saved IRQ7 mask bit
 sbtc    dw 0                    ; current DSP time constant
 sndseg  dw 0                    ; waveform loop segment (CS+3000h)

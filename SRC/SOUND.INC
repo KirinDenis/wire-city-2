@@ -161,8 +161,10 @@ SNDKEY: mov  [sbkey],al
         mov  es,[sndseg]
         mov  di,[sndofs]
         cld
-        xor  bx,bx              ; bl = brown walker, bh = whine phase
-        xor  dx,dx              ; dl = noise bits,  dh = growl phase
+        mov  bl,[sbbr]          ; continue where the last refill stopped:
+        mov  bh,[sbph]          ; the components stay continuous, so the
+        mov  dh,[sbgp]          ; per-frame refills produce no clicks
+        xor  dl,dl
         mov  cx,SNDN
 @@f:    push cx
         push dx
@@ -194,9 +196,12 @@ SNDKEY: mov  [sbkey],al
         ; growl: jittered triangle at rate/64 (the 120..300 Hz hump)
         mov  al,dh
         add  dh,4
-        test dl,64              ; phase jitter makes it a growl, not a hum
-        jz   @@g1
+        test dl,64              ; symmetric phase jitter: a rough BAND of
+        jz   @@g0               ; sound, not an organ note
         inc  dh
+@@g0:   test dl,128
+        jz   @@g1
+        dec  dh
 @@g1:   cmp  al,128
         jb   @@g2
         neg  al
@@ -215,7 +220,13 @@ SNDKEY: mov  [sbkey],al
         ; whine: triangle at rate/8 (the 1..2.4 kHz turbine tone)
         mov  al,bh
         add  bh,32
-        cmp  al,128
+        test dl,8               ; a breath of jitter widens the tone
+        jz   @@w0
+        inc  bh
+@@w0:   test dl,16
+        jz   @@w1
+        dec  bh
+@@w1:   cmp  al,128
         jb   @@t1
         neg  al
 @@t1:   sub  al,64
@@ -257,7 +268,10 @@ SNDKEY: mov  [sbkey],al
         mov  es:[di],al
         inc  di
         loop @@f
-@@done: pop  es
+@@done: mov  [sbbr],bl
+        mov  [sbph],bh
+        mov  [sbgp],dh
+        pop  es
         ret
 
 ; ---- SNDENG: once per frame - waveform state + pitch ----------------------
@@ -278,16 +292,9 @@ SNDENG: cmp  byte ptr [sbok],0
         mov  cl,4
         shr  bx,cl              ; band 0..4
         add  ah,bl
-        cmp  ah,[sbkey]
-        je   @@keep
-        mov  al,ah
-        call SNDKEY
-        jmp  @@tc
-@@keep: cmp  byte ptr [sbkey],16
-        jb   @@tc
-        mov  al,[sbkey]         ; the fall crackles: fresh static
-        call SNDKEY
-@@tc:   cmp  byte ptr [dying],0 ; pitch = the whole spectrum spools
+        mov  al,ah              ; refill every frame: a frozen loop of
+        call SNDKEY             ; noise reads as an organ timbre - fresh
+@@tc:                           ; dirt is what makes it a JET   cmp  byte ptr [dying],0 ; pitch = the whole spectrum spools
         je   @@live
         mov  bx,[dytick]        ; the whine falls with the jet
         mov  cl,2
