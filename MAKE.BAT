@@ -13,8 +13,10 @@ if exist LOCAL.BAT call .\LOCAL.BAT
 if "%DOSBOX%"=="" set DOSBOX=dosbox.exe
 if "%TASMDIR%"=="" set TASMDIR=c:\bp
 
-echo === 1/2 panel converter ===
+echo === 1/2 panel + engine sample converters ===
 python res\mkpanel.py
+if errorlevel 1 goto err
+python res\mkengine.py
 if errorlevel 1 goto err
 echo === 2/2 DOSBox build ===
 REM stale logs lie: kill it first, so a failed DOSBox run cannot pass

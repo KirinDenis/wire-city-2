@@ -49,6 +49,8 @@ function Add-ZipEntry($zip, $path, $name) {
 
 Add-ZipEntry $zip $com   "CITY.COM"
 Add-ZipEntry $zip $dat   "CITY.DAT"                # must sit next to CITY.COM
+$eng = Join-Path $root "INSTALL\ENGINE.RAW"
+if (Test-Path $eng) { Add-ZipEntry $zip $eng "ENGINE.RAW" }  # the real engine
 Add-ZipEntry $zip $conf  ".jsdos/dosbox.conf"      # full config (mounts c:, runs CITY.COM)
 Add-ZipEntry $zip $rconf "dosbox.conf"             # root override, matches js-dos studio layout
 
