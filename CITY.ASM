@@ -123,7 +123,9 @@ SC_NPP  equ 4Eh                 ; numpad +: throttle up
 SC_NPM  equ 4Ah                 ; numpad -: throttle down
 SC_EQ   equ 0Dh                 ; main-row =/+: throttle up
 SC_MIN  equ 0Ch                 ; main-row -: throttle down
-WRKSZ   equ 292                 ; wreck slot size (see the BSS block)
+WRKSZ   equ 300                 ; wreck slot size (see the BSS block)
+WCL     equ 292                 ; face colours offset inside a slot
+BSSCLR  equ 2584                ; (BSSEND-WRK)/2 - keep in sync with BSS!
 FLBN    equ 48                  ; black box: samples (every 2nd tick, ~5.3 s)
 FLBSZ   equ 576                 ; FLBN * 12 bytes (x,y,z,hdg,pitch,roll)
 WFP     equ 4                   ; face records offset inside a slot
@@ -315,9 +317,9 @@ MAIN:
         push es
         mov  ax,cs
         mov  es,ax
-        mov  di,offset WRK
-        xor  ax,ax
-        mov  cx,(WRKSZ*4)/2
+        mov  di,offset WRK      ; zero WRK..BSSEND: wrecks, black box,
+        xor  ax,ax              ; trails (reseeded anyway) and the ruins
+        mov  cx,BSSCLR          ; bitmap
         cld
         rep  stosw
         pop  es
@@ -445,13 +447,15 @@ PSPAN   equ  BSS+20215              ; 2400 bytes: cockpit blit span table,
                                     ;  panel uses ~400)
 WRK     equ  BSS+22615              ; wreck pool: 4 slots of WRKSZ bytes
                                     ;  (+0 wtim, +2 wgy, +WFP faces 8x12b,
-                                    ;  +WCO corner offsets 8x4x6b)
-FLB     equ  word ptr BSS+23783     ; black box ring: FLBN samples of
+                                    ;  +WCO corners 8x4x6b, +WCL colours 8b)
+FLB     equ  word ptr BSS+23815     ; black box ring: FLBN samples of
                                     ;  (camx,camy,camz,heading,pitch,roll)
-TLX     equ  word ptr BSS+24359     ; contrail rings: NPLANE*TLN words each
-TLY     equ  word ptr BSS+25639     ;  (moved out of the image: generated
-TLZ     equ  word ptr BSS+26919     ;  at spawn, never shipped as zeros)
-BSSEND  equ  BSS+28199
+TLX     equ  word ptr BSS+24391     ; contrail rings: NPLANE*TLN words each
+TLY     equ  word ptr BSS+25351     ;  (moved out of the image: generated
+TLZ     equ  word ptr BSS+26311     ;  at spawn, never shipped as zeros)
+DSTB    equ  byte ptr BSS+27271     ; ruins bitmap: 1 bit per world cell
+                                    ;  (64x64), set = the building is down
+BSSEND  equ  BSS+27783
 
 CODE    ENDS
         END START

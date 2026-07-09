@@ -222,6 +222,10 @@ RENDERCELL:
         mov  ax,[bstreet]
         cmp  ax,1
         je   @@ret              ; plain street cell -> nothing to draw
+        call BCHK
+        jz   @@stands
+        jmp  @@ret              ; a ruin: rubble and smoke, no walls
+@@stands:
         ; cell centre world coords:  gi*256 + 128 - BIAS   (shl = *CELL)
         mov  ax,[gi]
         mov  cl,8

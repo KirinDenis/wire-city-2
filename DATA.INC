@@ -83,7 +83,7 @@ pdz     dw 0
 pidx    dw 0                    ; draw loop: plane offset
 pfc     dw 0                    ; draw loop: face counter
 tpi     dw 0                    ; draw loop: trail point counter
-TLN     equ 16                  ; contrail points per plane
+TLN     equ 12                  ; contrail points per plane
 ; TLX/TLY/TLZ live in BSS now (see CITY.ASM): spawn-generated, and the
 ; segment budget is too tight to ship 3.8K of zeroes in the image
 tlh     dw 0                    ; shared ring head (byte offset, step 2)
@@ -175,6 +175,10 @@ svp     dw 0                    ; saved pitch
 svr     dw 0                    ; saved roll
 rndovr  dw 0                    ; round-over countdown (0 = fighting)
 rwin    db 0                    ; who wiped whom: 0 = friendlies won
+bhpc    dw 4 dup(0FFFFh)        ; wounded buildings: cell keys
+bhph    db 4 dup(0)             ; ...and their remaining hits
+bhnext  dw 0                    ; round robin for fresh victims
+MASK8   db 1,2,4,8,16,32,64,128 ; bit masks for the ruins bitmap
 MSGVWIN db 'VIPERS WIN',0
 MSGBWIN db 'BANDITS WIN',0
 phit    dw 0                    ; player hit flash timer

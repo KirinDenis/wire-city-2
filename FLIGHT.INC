@@ -845,6 +845,8 @@ COLLIDE:
         mov  ax,[bstreet]
         cmp  ax,0
         jne  @@nocol            ; street / patch -> free air
+        call BCHK
+        jnz  @@nocol            ; a ruin: fly through the smoke
         ; --- building: inside footprint AND below rooftop (base+height)? ---
         mov  ax,[gi]
         mov  cl,8

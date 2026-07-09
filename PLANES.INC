@@ -109,8 +109,11 @@ PLANESUPD:
         add  ax,800             ; altitude 800..1311
         mov  [pay+si],ax
         mov  bx,si              ; a teleported jet must not leave its old
-        mov  cl,4               ; contrail hanging in the sky: reseed the
-        shl  bx,cl              ; whole ring at the new position
+        add  bx,bx              ; contrail must not hang in the sky:
+        add  bx,bx              ; reseed the whole ring (si*12 base,
+        mov  ax,bx              ; TLN=12)
+        add  ax,ax
+        add  bx,ax
         mov  cx,TLN
 @@rtf:  mov  ax,[pax+si]
         mov  [TLX+bx],ax
@@ -125,8 +128,11 @@ PLANESUPD:
         and  ax,7
         jnz  @@next
         mov  bx,si
-        mov  cl,4
-        shl  bx,cl              ; slot base = plane*TLN*2 (TLN=16)
+        add  bx,bx
+        add  bx,bx              ; si*4
+        mov  ax,bx
+        add  ax,ax
+        add  bx,ax              ; si*12: ring = TLN(12)*2 bytes per jet              ; slot base = plane*TLN*2 (TLN=16)
         add  bx,[tlh]
         mov  ax,[pax+si]
         mov  [TLX+bx],ax
@@ -229,8 +235,11 @@ PLANESDRAW:
         mov  [pdy],ax
         ; ---- contrail: TLN dots behind the jet (haze colour) ----
         mov  bx,si
-        mov  cl,4
-        shl  bx,cl
+        add  bx,bx
+        add  bx,bx              ; si*4
+        mov  ax,bx
+        add  ax,ax
+        add  bx,ax              ; si*12: ring = TLN(12)*2 bytes per jet
         mov  [pfc],bx           ; slot base (TLN=16)
         mov  word ptr [tpi],0
 @@tr:   mov  bx,[pfc]
@@ -1000,7 +1009,58 @@ MSLUPD: cmp  byte ptr [msact],0
         imul cx
         idiv word ptr [cty]
         add  [msz],ax
-@@prox: ; proximity fuse: |dx|+|dy|+|dz| < 160 pops any living jet
+@@prox: ; ---- a building in the way eats the missile whole ----
+        mov  ax,[msx]
+        add  ax,BIAS
+        mov  cl,8
+        shr  ax,cl
+        mov  [gi],ax
+        mov  ax,[msz]
+        add  ax,BIAS
+        mov  cl,8
+        shr  ax,cl
+        mov  [gj],ax
+        call BCHK
+        jnz  @@mbn              ; a ruin cannot die twice
+        call HBLD
+        cmp  word ptr [bstreet],0
+        jne  @@mbn
+        mov  ax,[gi]
+        mov  bx,[gj]
+        call GETH
+        call WORLDH
+        mov  bx,[msy]
+        sub  bx,ax
+        js   @@mbn
+        cmp  bx,[bhgt2]
+        jg   @@mbn
+        mov  ax,[gi]
+        mov  cl,8
+        shl  ax,cl
+        add  ax,128
+        sub  ax,BIAS
+        mov  bx,[msx]
+        sub  bx,ax
+        jns  @@mb1
+        neg  bx
+@@mb1:  cmp  bx,[bhw]
+        jge  @@mbn
+        mov  ax,[gj]
+        mov  cl,8
+        shl  ax,cl
+        add  ax,128
+        sub  ax,BIAS
+        mov  bx,[msz]
+        sub  bx,ax
+        jns  @@mb2
+        neg  bx
+@@mb2:  cmp  bx,[bhd]
+        jge  @@mbn
+        call BSET               ; one missile levels the block
+        call BWRECK
+        mov  byte ptr [msact],0
+        ret
+@@mbn:  ; proximity fuse: |dx|+|dy|+|dz| < 160 pops any living jet
         xor  si,si
 @@px:   mov  bx,si
         shr  bx,1
@@ -1195,6 +1255,16 @@ WRKFILL:
         and  ax,31
         sub  ax,16
         mov  [bx+10],ax         ; vz
+        ; the face colour rides in the slot (jets AND buildings)
+        mov  bx,[tpi]
+        add  bx,bx
+        add  bx,bx
+        mov  ax,[tpi]
+        add  bx,ax              ; f*5
+        mov  al,[MFACE+bx+4]
+        mov  bx,[tpi]
+        add  bx,di
+        mov  [bx+WCL],al
         ; ---- corners: pre-rotated offsets from the face centre ----
         mov  word ptr [wcc],0
 @@bo:   mov  bx,[tpi]
@@ -1350,12 +1420,9 @@ WRECKDRAW:
         add  bx,di
         add  bx,WFP
         mov  [ctx],bx           ; -> face record
-        mov  bx,[pfc]           ; colour from the model table
-        add  bx,bx
-        add  bx,bx
-        mov  ax,[pfc]
-        add  bx,ax              ; f*5
-        mov  al,[MFACE+bx+4]
+        mov  bx,[pfc]           ; colour stored in the slot
+        add  bx,di
+        mov  al,[bx+WCL]
         mov  [COLOR],al
         mov  word ptr [wcc],0   ; four corners -> IX/IY/IZ
 @@wc:   mov  bx,[pfc]
@@ -1847,6 +1914,70 @@ TRCUPD: xor  bx,bx
         dec  word ptr [trvy+di] ; the round droops as it flies
         mov  ax,[trvz+di]
         add  [tcz+di],ax
+        ; ---- did it meet a building? ----
+        mov  ax,[tcx+di]
+        add  ax,BIAS
+        mov  cl,8
+        shr  ax,cl
+        mov  [gi],ax
+        mov  ax,[tcz+di]
+        add  ax,BIAS
+        mov  cl,8
+        shr  ax,cl
+        mov  [gj],ax
+        push bx
+        push di
+        call BCHK
+        jnz  @@thn              ; already rubble: sail through
+        call HBLD
+        cmp  word ptr [bstreet],0
+        jne  @@thn
+        pop  di
+        push di
+        mov  ax,[tcy+di]
+        mov  [ctz],ax
+        mov  ax,[gi]
+        mov  bx,[gj]
+        call GETH
+        call WORLDH
+        mov  bx,[ctz]
+        sub  bx,ax              ; height above the base
+        js   @@thn
+        cmp  bx,[bhgt2]
+        jg   @@thn              ; sailed over the roof
+        mov  ax,[gi]            ; inside the footprint?
+        mov  cl,8
+        shl  ax,cl
+        add  ax,128
+        sub  ax,BIAS
+        pop  di
+        push di
+        mov  bx,[tcx+di]
+        sub  bx,ax
+        jns  @@ta1
+        neg  bx
+@@ta1:  cmp  bx,[bhw]
+        jge  @@thn
+        mov  ax,[gj]
+        mov  cl,8
+        shl  ax,cl
+        add  ax,128
+        sub  ax,BIAS
+        pop  di
+        push di
+        mov  bx,[tcz+di]
+        sub  bx,ax
+        jns  @@ta2
+        neg  bx
+@@ta2:  cmp  bx,[bhd]
+        jge  @@thn
+        call BDAMAGE            ; a shell in the wall
+        pop  di
+        pop  bx
+        mov  byte ptr [trcact+bx],0 ; the round is spent
+        jmp  @@n
+@@thn:  pop  di
+        pop  bx
 @@n:    inc  bx
         cmp  bx,NTRC
         jb   @@t
@@ -2168,8 +2299,11 @@ RESPAWNALL:
         add  ax,2
         mov  [php+bx],al
         mov  bx,si              ; seed the contrail at the spawn point
-        mov  cl,4
-        shl  bx,cl
+        add  bx,bx
+        add  bx,bx              ; si*4
+        mov  ax,bx
+        add  ax,ax
+        add  bx,ax              ; si*12: ring = TLN(12)*2 bytes per jet
         mov  cx,TLN
 @@rsf:  mov  ax,[pax+si]
         mov  [TLX+bx],ax
@@ -2553,4 +2687,279 @@ FLBSEED:
         cmp  bx,FLBSZ
         jb   @@f
         mov  word ptr [flbh],0
+        ret
+
+; ---------------------------------------------------------------------------
+;  Destructible buildings. The world is procedural, so a building has no
+;  object - its death is one bit in the DSTB ruins bitmap (checked by the
+;  renderer and the collider) plus a wreck slot full of wall slabs.
+; ---------------------------------------------------------------------------
+; BCHK - ZF=1 while the building at (gi,gj) still stands. Clobbers AX,BX,CL,SI.
+BCHK:   mov  ax,[gj]
+        and  ax,63
+        mov  cl,6
+        shl  ax,cl
+        mov  bx,[gi]
+        and  bx,63
+        add  bx,ax              ; cell index 0..4095
+        mov  ax,bx
+        and  ax,7
+        mov  si,ax
+        mov  cl,3
+        shr  bx,cl
+        mov  al,[DSTB+bx]
+        test al,[MASK8+si]
+        ret
+
+; BSET - mark the building at (gi,gj) as rubble.
+BSET:   mov  ax,[gj]
+        and  ax,63
+        mov  cl,6
+        shl  ax,cl
+        mov  bx,[gi]
+        and  bx,63
+        add  bx,ax
+        mov  ax,bx
+        and  ax,7
+        mov  si,ax
+        mov  cl,3
+        shr  bx,cl
+        mov  al,[MASK8+si]
+        or   [DSTB+bx],al
+        ret
+
+; ---------------------------------------------------------------------------
+;  BDAMAGE - one cannon hit on the building at (gi,gj). Buildings soak
+;  2..5 hits like the jets do; the walking wounded live in a tiny table
+;  (4 slots, round robin - an old wound may be forgotten, war is hazy).
+;  Needs HBLD data valid. The last hit calls BSET + BWRECK.
+; ---------------------------------------------------------------------------
+BDAMAGE:
+        mov  ax,[gj]            ; cell key
+        and  ax,63
+        mov  cl,6
+        shl  ax,cl
+        mov  bx,[gi]
+        and  bx,63
+        add  ax,bx
+        xor  bx,bx
+@@s:    cmp  ax,[bhpc+bx]
+        je   @@hit
+        add  bx,2
+        cmp  bx,8
+        jb   @@s
+        mov  bx,[bhnext]        ; a fresh victim: this hit counted, it
+        add  word ptr [bhnext],2 ; takes 1..4 more
+        and  word ptr [bhnext],6
+        mov  [bhpc+bx],ax
+        push bx
+        call RND16
+        pop  bx
+        and  ax,3
+        inc  ax
+        mov  si,bx
+        shr  si,1
+        mov  [bhph+si],al
+        ret
+@@hit:  mov  si,bx
+        shr  si,1
+        dec  byte ptr [bhph+si]
+        jnz  @@out
+        mov  word ptr [bhpc+bx],0FFFFh
+        call BSET               ; down it goes
+        call BWRECK
+@@out:  ret
+
+; ---------------------------------------------------------------------------
+;  BWRECK - blow the building at (gi,gj) into a wreck slot: eight wall
+;  slabs in this building's colours, blown outward and up from the
+;  inside, falling under the usual wreck physics, burning and smoking.
+;  Needs HBLD data valid (bhgt2, bschm). Clobbers everything.
+; ---------------------------------------------------------------------------
+BWRECK: mov  di,[wnext]         ; claim a wreck slot
+        add  word ptr [wnext],WRKSZ
+        cmp  word ptr [wnext],WRKSZ*4
+        jb   @@w1
+        mov  word ptr [wnext],0
+@@w1:   add  di,offset WRK
+        mov  word ptr [di],1
+        mov  ax,[gi]            ; cell centre world coords
+        mov  cl,8
+        shl  ax,cl
+        add  ax,128
+        sub  ax,BIAS
+        mov  [bpx],ax
+        mov  ax,[gj]
+        mov  cl,8
+        shl  ax,cl
+        add  ax,128
+        sub  ax,BIAS
+        mov  [bpz],ax
+        push word ptr [camx]    ; ground height (TERRH reads camx/camz)
+        push word ptr [camz]
+        mov  ax,[bpx]
+        mov  [camx],ax
+        mov  ax,[bpz]
+        mov  [camz],ax
+        push di
+        call TERRH
+        pop  di
+        pop  word ptr [camz]
+        pop  word ptr [camx]
+        add  ax,6
+        mov  [di+2],ax          ; wgy
+        mov  [bpy],ax
+        ; ---- eight wall slabs ----
+        mov  word ptr [tpi],0
+@@bp:   call RND16              ; slab yaw
+        and  ax,255
+        push ax
+        call SINQ
+        mov  [msin],ax
+        pop  ax
+        add  ax,64
+        call SINQ
+        mov  [mcos],ax
+        call RND16              ; slab extents
+        mov  bx,ax
+        and  ax,31
+        add  ax,24              ; half-width 24..55
+        mov  [ctx],ax
+        mov  ax,bx
+        mov  cl,5
+        shr  ax,cl
+        and  ax,15
+        add  ax,14              ; half-height 14..29
+        mov  [cty],ax
+        mov  bx,[tpi]           ; face record = di + WFP + f*12
+        add  bx,bx
+        add  bx,bx
+        mov  ax,[tpi]
+        add  ax,ax
+        add  ax,ax
+        add  ax,ax
+        add  bx,ax
+        add  bx,di
+        add  bx,WFP
+        call RND16              ; position: around the centre, up the wall
+        mov  dx,ax
+        and  ax,63
+        sub  ax,32
+        add  ax,[bpx]
+        mov  [bx],ax
+        mov  ax,dx
+        mov  cl,6
+        shr  ax,cl
+        and  ax,63
+        sub  ax,32
+        add  ax,[bpz]
+        mov  [bx+4],ax
+        call RND16
+        and  ax,127
+        add  ax,20
+        add  ax,[bpy]
+        mov  [bx+2],ax
+        mov  ax,[bx]            ; velocity: radial out (blast from inside)
+        sub  ax,[bpx]
+        sar  ax,1
+        mov  [ctz],ax
+        call RND16
+        mov  dx,ax
+        and  ax,7
+        sub  ax,3
+        add  ax,[ctz]
+        mov  [bx+6],ax          ; vx
+        mov  ax,[bx+4]
+        sub  ax,[bpz]
+        sar  ax,1
+        mov  [ctz],ax
+        mov  ax,dx
+        mov  cl,3
+        shr  ax,cl
+        and  ax,7
+        sub  ax,3
+        add  ax,[ctz]
+        mov  [bx+10],ax         ; vz
+        mov  ax,dx
+        mov  cl,6
+        shr  ax,cl
+        and  ax,7
+        add  ax,5
+        mov  [bx+8],ax          ; vy: up and out
+        ; colour: this building's walls, one roof, one glass sheet
+        mov  ax,[tpi]
+        cmp  ax,6
+        jb   @@bcw
+        cmp  ax,7
+        jne  @@bc6
+        mov  al,4               ; slab 7: a sheet of glass
+        jmp  @@bcs
+@@bc6:  mov  al,17              ; slab 6: a piece of roof
+        jmp  @@bcs
+@@bcw:  push bx
+        mov  bx,[bschm]
+        add  bx,bx
+        mov  al,[WSCH+bx]       ; lit wall
+        mov  cx,[tpi]
+        test cx,1
+        jz   @@bcl
+        mov  al,[WSCH+bx+1]     ; shaded wall
+@@bcl:  pop  bx
+@@bcs:  push bx
+        mov  bx,[tpi]
+        add  bx,di
+        mov  [bx+WCL],al
+        pop  bx
+        ; corners: a vertical slab, rotated by the slab yaw
+        mov  ax,[ctx]
+        imul word ptr [mcos]
+        mov  cx,256
+        idiv cx
+        mov  [ctz],ax           ; offx = w*cos
+        mov  ax,[ctx]
+        imul word ptr [msin]
+        mov  cx,256
+        idiv cx
+        mov  [wcc],ax           ; offz = w*sin
+        mov  bx,[tpi]           ; corner slots = di + WCO + f*24
+        mov  ax,bx
+        add  bx,bx
+        add  bx,ax
+        mov  cl,3
+        shl  bx,cl
+        add  bx,di
+        add  bx,WCO
+        mov  ax,[ctz]
+        neg  ax
+        mov  [bx],ax
+        mov  ax,[cty]
+        neg  ax
+        mov  [bx+2],ax
+        mov  ax,[wcc]
+        neg  ax
+        mov  [bx+4],ax
+        mov  ax,[ctz]
+        mov  [bx+6],ax
+        mov  ax,[cty]
+        neg  ax
+        mov  [bx+8],ax
+        mov  ax,[wcc]
+        mov  [bx+10],ax
+        mov  ax,[ctz]
+        mov  [bx+12],ax
+        mov  ax,[cty]
+        mov  [bx+14],ax
+        mov  ax,[wcc]
+        mov  [bx+16],ax
+        mov  ax,[ctz]
+        neg  ax
+        mov  [bx+18],ax
+        mov  ax,[cty]
+        mov  [bx+20],ax
+        mov  ax,[wcc]
+        neg  ax
+        mov  [bx+22],ax
+        inc  word ptr [tpi]
+        cmp  word ptr [tpi],NFACE
+        jb   @@bp
         ret
