@@ -1293,13 +1293,13 @@ HUDBARS:
         mov  word ptr [hbcx],85
         mov  word ptr [hbax],236
         mov  word ptr [hbalb],206
-        mov  word ptr [hbat1],228
+        mov  word ptr [hbat1],230
         mov  word ptr [hbat2],232
         mov  word ptr [hbacx],227
         jmp  @@lay
 @@f2l:  mov  word ptr [hbsx],68   ; F2: the full pane
         mov  word ptr [hbslb],38
-        mov  word ptr [hbst1],60
+        mov  word ptr [hbst1],62
         mov  word ptr [hbst2],64
         mov  word ptr [hbcx],59
         mov  word ptr [hbax],252
@@ -1332,7 +1332,7 @@ HUDBARS:
         and  ax,31              ; every 32 units = 45 degrees: major
         jnz  @@cmin
         mov  ax,18
-        mov  cx,7
+        mov  cx,4
         mov  bl,8
         call VLINE2
         mov  ax,[ctx]
@@ -1349,7 +1349,7 @@ HUDBARS:
         call FNUM3
         jmp  @@cpn
 @@cmin: mov  ax,18
-        mov  cx,3
+        mov  cx,2
         mov  bl,8
         call VLINE2
 @@cpn:  add  word ptr [ctx],4
@@ -1399,10 +1399,10 @@ HUDBARS:
         div  bx
         test dx,dx
         jnz  @@smin
-        mov  ax,[cty]           ; major: long divider, flush at the spine
-        mov  bx,[hbst1]
+        mov  ax,[cty]           ; major: a touch longer (it carries the
+        mov  bx,[hbst1]         ; number), still flush at the spine
         mov  [dsx],bx
-        mov  cx,8
+        mov  cx,6
         mov  bl,8
         call HLINE2
         mov  ax,[dsac]          ; the centre shows the live value
@@ -1500,10 +1500,10 @@ HUDBARS:
         div  bx
         test dx,dx
         jnz  @@amin
-        mov  ax,[cty]           ; major divider
+        mov  ax,[cty]           ; major divider (a touch longer)
         mov  bx,[hbat1]
         mov  [dsx],bx
-        mov  cx,8
+        mov  cx,6
         mov  bl,8
         call HLINE2
         mov  ax,[dsac]
