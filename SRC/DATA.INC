@@ -181,6 +181,10 @@ sfdec   dw 0                    ; SFX: amplitude decay per sample
 lastbp  dw 0                    ; last tick a lamp beeped on
 mprvp   dw 0                    ; previous pitch (for the delta)
 mprvr   dw 0                    ; previous roll
+qramp   dw 0                    ; elevator ramp: a tap is a feather (2/8
+                                ;  unit), a hold builds to 16/8 in ~0.4 s
+pfrac   dw 0                    ; pitch fraction accumulator (eighths)
+hfrac   dw 0                    ; heading fraction accumulator (eighths)
 sndseg  dw 0
 scrseg  dw 0                    ; far scratch segment (holds the minimap)                    ; sample loop segment (64K-aligned)
 ENGFN   db 'ENGINE.RAW',0

@@ -210,16 +210,29 @@ INPUT:
         ; --- PITCH: real fighter controls. Pull (DOWN key) rotates the nose
         ; through the roll plane: pitch_rate = q*cos(roll), yaw = q*sin(roll).
         ; Wings level -> loop; knife-edge -> flat turn; inverted -> split-S.
-        xor  cx,cx              ; q = elevator input
+        xor  cx,cx              ; q = elevator direction
         cmp  byte ptr [tgtcam],0
         jne  @@nopq             ; F4: the stick is centred
         cmp  byte ptr [KEYS+SC_DN],0
         je   @@q1
-        mov  cx,2               ; pull: nose up
+        mov  cx,1               ; pull: nose up
 @@q1:   cmp  byte ptr [KEYS+SC_UP],0
         je   @@q2
-        sub  cx,2               ; push: nose down
+        sub  cx,1               ; push: nose down
 @@q2:   jcxz @@nopq
+        ; the stick ramps: a tap nudges the nose a third of a degree
+        ; (aiming), a hold builds to the full combat rate in ~0.4 s.
+        ; q is in EIGHTHS of a unit; pfrac/hfrac carry the remainders.
+        mov  ax,[qramp]
+        add  ax,2
+        cmp  ax,16
+        jle  @@qr1
+        mov  ax,16
+@@qr1:  mov  [qramp],ax
+        or   cx,cx
+        jns  @@qr2
+        neg  ax
+@@qr2:  mov  cx,ax              ; q, signed, in eighths
         mov  ax,[vel]           ; turning bleeds a bit of airspeed
         sub  ax,TURNDRG
         jns  @@qd
@@ -231,9 +244,14 @@ INPUT:
         call SINQ
         pop  cx
         push cx
-        imul cx                 ; q*cos(roll)*256
+        imul cx                 ; q*cos(roll)*256 (32-bit)
         mov  bx,256
-        idiv bx
+        idiv bx                 ; = q*cos in eighths/tick
+        add  ax,[pfrac]
+        cwd
+        mov  bx,8
+        idiv bx                 ; whole units carry into pitch...
+        mov  [pfrac],dx         ; ...the remainder waits for the next tick
         add  [pitch],ax
         mov  ax,[roll]          ; sr = sin(roll)
         call SINQ
@@ -241,11 +259,17 @@ INPUT:
         imul cx                 ; q*sin(roll)*256
         mov  bx,256
         idiv bx
+        add  ax,[hfrac]
+        cwd
+        mov  bx,8
+        idiv bx
+        mov  [hfrac],dx
         add  ax,[heading]
         and  ax,255
         mov  [heading],ax
         jmp  @@gflip            ; active stick: skip the self-trim
-@@nopq: ; stick released: no auto-trim in free air - the attitude holds.
+@@nopq: mov  word ptr [qramp],0 ; stick centred: the ramp lets go
+        ; no auto-trim in free air - the attitude holds.
         ; Near the ground the cushion pushes a dropped nose back level,
         ; so a gentle descent surfs the terrain instead of meeting it.
         mov  ax,[camy]
