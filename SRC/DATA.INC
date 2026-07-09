@@ -171,6 +171,15 @@ mimx    dw 0                    ; where the missile ended (the grave)
 mimy    dw 0
 mimz    dw 0
 MSGM2   db 'M',0
+sbok    db 0                    ; Sound Blaster found at 220h?
+sbmode  db 0FFh                 ; current waveform (0FFh = fill me)
+sbfill  db 0                    ; SBWAVE scratch
+sbmsk   db 0                    ; saved IRQ7 mask bit
+sbtc    dw 0                    ; current DSP time constant
+sndseg  dw 0                    ; waveform loop segment (CS+3000h)
+sndofs  dw 0
+sbdma   dw 0                    ; DMA offset within the page
+sbpag   dw 0                    ; DMA page
 tgti    dw 0                    ; orbited plane (kept past the lock)
 tcws    dw 0                    ; wreck slot the camera follows (mode 2)
 tgaz    dw 0                    ; orbit azimuth (0..255)

@@ -325,6 +325,8 @@ MAIN:
         rep  stosw
         pop  es
 
+        call SBINIT             ; the engine hums if a Blaster is home
+
         ; ---- AI traffic: two squadrons scattered around the player ----
         call RESPAWNALL
         mov  word ptr [heading],0
@@ -410,12 +412,14 @@ GAMELOOP:
         out  dx,al
         mov  al,[GLOWT+bx+2]
         out  dx,al
+        call SNDENG             ; the engine follows the throttle
         call HUD                ; text overlay (BIOS)
         call WAITV              ; tearing guard only (does not gate physics)
         cmp  byte ptr [KEYS+SC_ESC],0
         je   GAMELOOP
 
 QUIT:
+        call SBOFF              ; silence before we leave
         mov  ax,0003h
         int  10h
         ; restore INT 9 vector
@@ -439,6 +443,7 @@ QUIT:
         INCLUDE FLIGHT.INC      ; physics, collisions, crash screen
         INCLUDE HUD.INC         ; text HUD and world minimap blit
         INCLUDE PLANES.INC      ; AI jets in the sky
+        INCLUDE SOUND.INC       ; Sound Blaster engine noise
 
 
 ; ============================================================================
