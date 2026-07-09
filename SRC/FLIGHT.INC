@@ -157,8 +157,12 @@ INPUT:
         and  ax,255
         mov  [roll],ax
         mov  word ptr [tmpi],1
-@@nr:   cmp  word ptr [tmpi],0  ; hands off: dihedral stability rights the
-        jne  @@rlp              ; plane, rolling the SHORT way back to level
+@@nr:   cmp  word ptr [tmpi],0  ; hands off: the jet HOLDS its bank in free
+        jne  @@rlp              ; air (real handling at the big scale) - only
+        mov  ax,[camy]          ; the ground cushion rights the wings, and at
+        sub  ax,[lgnd]          ; 2/tick it cannot save a heavy bank in time
+        cmp  ax,90
+        jge  @@rlp
         mov  ax,[roll]
         test ax,ax
         jz   @@rlp
@@ -241,15 +245,18 @@ INPUT:
         and  ax,255
         mov  [heading],ax
         jmp  @@gflip            ; active stick: skip the self-trim
-@@nopq: ; stick released: longitudinal stability eases the nose back level
+@@nopq: ; stick released: no auto-trim in free air - the attitude holds.
+        ; Near the ground the cushion pushes a dropped nose back level,
+        ; so a gentle descent surfs the terrain instead of meeting it.
+        mov  ax,[camy]
+        sub  ax,[lgnd]
+        cmp  ax,90
+        jge  @@gflip
         mov  ax,[pitch]
         test ax,ax
-        jz   @@gflip
-        jg   @@tr1
+        jns  @@gflip            ; nose level or up: nothing to push
         inc  ax
-        jmp  @@tr2
-@@tr1:  dec  ax
-@@tr2:  mov  [pitch],ax
+        mov  [pitch],ax
 @@gflip:
         ; --- gimbal flip at the vertical (the classic Euler trick): going
         ; over the top swaps to inverted flight so the loop closes smoothly
@@ -846,8 +853,8 @@ COLLIDE:
         jl   @@gfx
         mov  ax,62
         sub  ax,bx              ; cushion grows as the gap shrinks
-        mov  cl,4
-        shr  ax,cl              ; up to ~15 units of lift per tick
+        mov  cl,3
+        shr  ax,cl              ; strong: up to ~7 units of lift per tick
         add  [camy],ax
 @@gfx:  mov  ax,[lgnd]
         add  ax,14              ; hull clearance above the slope
