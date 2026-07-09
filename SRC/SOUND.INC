@@ -1,19 +1,24 @@
 ; SOUND.INC - part of WIRE CITY (included from CITY.ASM)
 ; ============================================================================
-;  Sound Blaster engine noise. A 256-byte waveform loops forever through
-;  8-bit auto-init DMA (channel 1, base 220h - the DOSBox default); the
-;  game only touches two knobs per frame:
-;    - the DSP time constant (40h): the sample rate IS the engine pitch,
-;      so the rumble follows the throttle, rises on the afterburner and
-;      falls with the dying jet;
-;    - the waveform itself on a state change: clean-ish square for the
-;      engine, dirty wide noise for the burner, pure static (refilled
-;      every frame, so it crackles) for the fall.
-;  IRQ 7 is masked at the PIC - auto-init DMA needs no servicing in
-;  DOSBox, and we would rather not host another interrupt handler (the
-;  PIT/INT8 saga taught humility). No Blaster detected = silence, the
-;  game runs on.  The buffer lives in the free segment CS+3000h.
+;  Sound Blaster engine noise, tuned to the real thing. A jet is not a
+;  tone: it is BROADBAND noise (exhaust rumble, energy at the bottom)
+;  plus a tonal turbine WHINE at the blade-passing frequency that rises
+;  with the spool. Synthesis here:
+;    - a 2048-byte loop (long enough that the loop period, 4..10 Hz, is
+;      inaudible) through 8-bit auto-init DMA at base 220h;
+;    - the rumble is BROWNIAN noise (a bounded random walk - red
+;      spectrum, just like exhaust turbulence);
+;    - the whine is a triangle at sampleRate/8: 1.1..2.4 kHz, and its
+;      AMPLITUDE grows with the throttle (baked per throttle band);
+;    - the DSP time constant scales the whole spectrum with the
+;      throttle - both rumble and whine spool up together, like a real
+;      BPF does; the afterburner adds 16 and a crackling roar;
+;    - the fall is pure static, refilled every frame so it crackles,
+;      with the pitch dropping as the jet goes down.
+;  IRQ 7 stays masked (auto-init DMA needs no servicing in DOSBox). No
+;  Blaster found = silence, the game runs on. The loop lives at CS+3000h.
 ; ============================================================================
+SNDN    equ 2048                ; loop length (bytes)
 
 ; ---- SBWR: write AH to the DSP (port 22Ch), with a patience limit --------
 SBWR:   push cx
@@ -34,7 +39,7 @@ SBWR:   push cx
 SBINIT: mov  dx,226h            ; DSP reset pulse
         mov  al,1
         out  dx,al
-        in   al,dx              ; a few microseconds of patience
+        in   al,dx
         in   al,dx
         in   al,dx
         in   al,dx
@@ -52,7 +57,7 @@ SBINIT: mov  dx,226h            ; DSP reset pulse
 @@nx:   loop @@rst
         ret                     ; no Blaster: [sbok] stays 0, all quiet
 @@got:  mov  byte ptr [sbok],1
-        ; ---- the waveform buffer sits in the free segment CS+3000h ----
+        ; ---- the waveform loop sits in the free segment CS+3000h ----
         mov  ax,cs
         add  ax,3000h
         mov  [sndseg],ax
@@ -62,7 +67,7 @@ SBINIT: mov  dx,226h            ; DSP reset pulse
         shl  ax,cl              ; low 16 bits
         mov  cl,12
         shr  bx,cl              ; DMA page (top 4 bits)
-        cmp  ax,0FF00h          ; the loop must not cross a 64K DMA page
+        cmp  ax,10000h-SNDN     ; the loop must not cross a 64K DMA page
         jb   @@fit
         mov  dx,ax
         neg  dx                 ; distance to the page start
@@ -72,9 +77,9 @@ SBINIT: mov  dx,226h            ; DSP reset pulse
 @@fit:  mov  [sbdma],ax         ; DMA offset within the page
         mov  [sbpag],bx
         mov  al,0FFh            ; force the first waveform fill
-        mov  [sbmode],al
-        mov  al,0
-        call SBWAVE
+        mov  [sbkey],al
+        xor  al,al
+        call SNDKEY
         ; ---- 8237 DMA channel 1: auto-init, read from memory ----
         mov  al,05h
         out  0Ah,al             ; mask channel 1
@@ -86,9 +91,9 @@ SBINIT: mov  dx,226h            ; DSP reset pulse
         out  02h,al             ; address low
         mov  al,ah
         out  02h,al             ; address high
-        mov  al,255
-        out  03h,al             ; count low  (256 bytes - 1)
-        xor  al,al
+        mov  ax,SNDN-1
+        out  03h,al             ; count low
+        mov  al,ah
         out  03h,al             ; count high
         mov  ax,[sbpag]
         out  83h,al             ; page
@@ -104,57 +109,114 @@ SBINIT: mov  dx,226h            ; DSP reset pulse
         call SBWR
         mov  ah,40h
         call SBWR
-        mov  ah,150
+        mov  ah,170
         call SBWR
-        mov  ah,48h             ; block size 255 (one full loop)
+        mov  ah,48h             ; block size SNDN-1
         call SBWR
-        mov  ah,255
+        mov  ax,SNDN-1
+        mov  ah,al
         call SBWR
-        mov  ah,0
-        call SBWR
+        mov  ax,SNDN-1
+        call SBWR               ; high byte (in AH already)
         mov  ah,1Ch             ; 8-bit PCM, auto-init, go
         call SBWR
         ret
 
-; ---- SBWAVE: fill the loop. AL = 0 engine, 1 afterburner, 2 the fall -----
-SBWAVE: push es
-        mov  [sbfill],al
+; ---- SNDKEY: bake the loop for state key AL = mode*8 + throttleBand ------
+;  mode 0 engine, 1 afterburner, 2 the fall.
+SNDKEY: mov  [sbkey],al
+        mov  bl,al
+        mov  cl,3
+        shr  bl,cl              ; hmm: key = mode*8+band -> mode
+        push bx
+        ; rumble window and whine amplitude by mode/band
+        mov  al,[sbkey]
+        mov  ah,al
+        mov  cl,3
+        shr  ah,cl              ; mode
+        and  al,7               ; throttle band 0..4
+        cmp  ah,2
+        jne  @@live
+        mov  byte ptr [sbra],0  ; the fall: no structure, pure static
+        mov  byte ptr [sbwa],0
+        jmp  @@fill
+@@live: cmp  ah,1
+        jne  @@eng
+        mov  byte ptr [sbra],52 ; burner: a roar...
+        mov  byte ptr [sbwa],18 ; ...the whine half-buried in it
+        jmp  @@fill
+@@eng:  mov  byte ptr [sbra],26 ; engine: moderate rumble
+        mov  ah,al              ; whine grows with the spool: 6+band*6
+        add  ah,ah
+        add  ah,al              ; band*3
+        add  ah,ah              ; band*6
+        add  ah,6
+        mov  [sbwa],ah
+@@fill: pop  bx
+        ; ---- bake SNDN samples: brown noise + triangle whine ----
+        push es
         mov  es,[sndseg]
         mov  di,[sndofs]
         cld
-        mov  cx,256
+        xor  bx,bx              ; bl = brown walker (signed), bh = phase
+        mov  cx,SNDN
 @@f:    push cx
-        call RND16              ; the dirt component
+        call RND16              ; preserves BX/DX
         pop  cx
-        mov  bl,al              ; noise byte
-        mov  al,128
-        cmp  byte ptr [sbfill],2
-        je   @@sta              ; the fall: pure wide static
-        test cl,32              ; a slow square carries the rumble
-        jz   @@lo
-        add  al,30
-        jmp  @@mix
-@@lo:   sub  al,30
-@@mix:  cmp  byte ptr [sbfill],1
-        jne  @@n0
-        and  bl,63              ; burner: loud dirt on the square
-        sub  al,32
-        add  al,bl
-        jmp  @@put
-@@n0:   and  bl,15              ; engine: just a little texture
-        sub  al,8
-        add  al,bl
-        jmp  @@put
-@@sta:  mov  al,bl              ; static: the noise IS the signal
-@@put:  stosb
+        cmp  byte ptr [sbkey],16 ; mode 2 (key >= 16): the static IS it
+        jb   @@tone
+        mov  es:[di],al
+        inc  di
         loop @@f
-        pop  es
+        jmp  @@done
+@@tone: ; brown walker: += rnd(-7..8), bounded by the rumble window
+        mov  dl,al              ; keep noise bits
+        and  al,15
+        sub  al,7
+        add  bl,al
+        mov  al,[sbra]
+        cmp  bl,al
+        jle  @@b1
+        mov  bl,al
+@@b1:   neg  al
+        cmp  bl,al
+        jge  @@b2
+        mov  bl,al
+@@b2:   ; triangle whine at rate/8: phase += 32 per sample
+        mov  al,bh
+        add  bh,32
+        cmp  al,128
+        jb   @@t1
+        neg  al                 ; fold the ramp into a triangle
+@@t1:   sub  al,64              ; -64..64
+        push bx
+        mov  bl,[sbwa]
+        imul bl                 ; tri(-64..64) * amplitude(<40)
+        sar  ax,1               ; >>6: whine sample up to ~+-38
+        sar  ax,1               ; (CL is the loop counter - shift by 1s)
+        sar  ax,1
+        sar  ax,1
+        sar  ax,1
+        sar  ax,1
+        pop  bx
+        add  al,bl              ; + rumble
+        add  al,128             ; centre
+        ; the burner spits: rare loud crackle
+        cmp  byte ptr [sbkey],8
+        jb   @@put
+        and  dl,63
+        jnz  @@put
+        add  al,45
+@@put:  mov  es:[di],al
+        inc  di
+        loop @@f
+@@done: pop  es
         ret
 
 ; ---- SNDENG: once per frame - waveform state + pitch ----------------------
 SNDENG: cmp  byte ptr [sbok],0
         je   @@r
-        mov  al,0               ; pick the mode
+        mov  al,0               ; mode
         cmp  byte ptr [dying],0
         je   @@m1
         mov  al,2
@@ -162,31 +224,38 @@ SNDENG: cmp  byte ptr [sbok],0
 @@m1:   cmp  byte ptr [abon],0
         je   @@m2
         mov  al,1
-@@m2:   cmp  al,[sbmode]
+@@m2:   mov  ah,al              ; key = mode*8 + throttle band
+        mov  cl,3
+        shl  ah,cl
+        mov  bx,[throt]
+        mov  cl,4
+        shr  bx,cl              ; band 0..4
+        add  ah,bl
+        cmp  ah,[sbkey]
         je   @@keep
-        mov  [sbmode],al
-        call SBWAVE
+        mov  al,ah
+        call SNDKEY
         jmp  @@tc
-@@keep: cmp  byte ptr [sbmode],2
-        jne  @@tc
-        mov  al,2               ; the fall crackles: fresh static each frame
-        call SBWAVE
-@@tc:   cmp  byte ptr [dying],0 ; pitch
+@@keep: cmp  byte ptr [sbkey],16
+        jb   @@tc
+        mov  al,[sbkey]         ; the fall crackles: fresh static
+        call SNDKEY
+@@tc:   cmp  byte ptr [dying],0 ; pitch = the whole spectrum spools
         je   @@live
         mov  bx,[dytick]        ; the whine falls with the jet
         mov  cl,2
         shr  bx,cl
-        mov  ax,164
+        mov  ax,180
         sub  ax,bx
-        cmp  ax,100
+        cmp  ax,120
         jge  @@wr
-        mov  ax,100
+        mov  ax,120
         jmp  @@wr
-@@live: mov  ax,[throt]         ; rumble follows the throttle...
-        add  ax,130
+@@live: mov  ax,[throt]         ; spool: TC 140..204 = 8.6..19.2 kHz
+        add  ax,140
         cmp  byte ptr [abon],0
         je   @@wr
-        add  ax,18              ; ...and the burner screams higher
+        add  ax,16              ; the burner screams higher still
 @@wr:   cmp  ax,[sbtc]
         je   @@r
         mov  [sbtc],ax
