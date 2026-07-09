@@ -43,19 +43,19 @@ pay     dw NPLANE dup(0)
 paz     dw NPLANE dup(0)
 pah     dw NPLANE dup(0)        ; heading 0..255
 ; model vertices (x,y,z), nose +Z, wingspan ~104 world units
-MVERT   dw   0,  2, 32          ; 0 nose        (half scale: the WORLD
-        dw  -4,  5,-22          ; 1 rear top L    reads twice as big)
-        dw   4,  5,-22          ; 2 rear top R
-        dw  -4, -3,-22          ; 3 rear bottom L
-        dw   4, -3,-22          ; 4 rear bottom R
-        dw -26,  1,-17          ; 5 wing tip L
-        dw  26,  1,-17          ; 6 wing tip R
-        dw   0,  1, 13          ; 7 wing root fore
-        dw  -4,  1,-22          ; 8 wing rear L
-        dw   4,  1,-22          ; 9 wing rear R
-        dw   0,  4,-10          ; 10 fin base fore
-        dw   0, 15,-26          ; 11 fin top rear
-        dw   0,  5,-22          ; 12 fin base rear
+MVERT   dw   0,  1, 16          ; 0 nose        (quarter scale: the WORLD
+        dw  -2,  2,-11          ; 1 rear top L    reads four times as big)
+        dw   2,  2,-11          ; 2 rear top R
+        dw  -2, -2,-11          ; 3 rear bottom L
+        dw   2, -2,-11          ; 4 rear bottom R
+        dw -13,  1, -8          ; 5 wing tip L
+        dw  13,  1, -8          ; 6 wing tip R
+        dw   0,  1,  6          ; 7 wing root fore
+        dw  -2,  1,-11          ; 8 wing rear L
+        dw   2,  1,-11          ; 9 wing rear R
+        dw   0,  2, -5          ; 10 fin base fore
+        dw   0,  7,-13          ; 11 fin top rear
+        dw   0,  2,-11          ; 12 fin base rear
 ; faces: 4 corner ids (triangles repeat the first) + colour
 MFACE   db 0,1,2,0, 24          ; body top (sun-lit white)
         db 0,3,4,0, 16          ; body bottom (shade)

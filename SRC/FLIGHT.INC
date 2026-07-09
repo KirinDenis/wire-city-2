@@ -529,8 +529,8 @@ INPUT:
 @@tb3:
         ; --- advance: split vel/16 into horizontal (cos p) and climb (sin p)
         mov  ax,[vel]
-        mov  cl,5
-        shr  ax,cl              ; total speed, units per tick (half scale)
+        mov  cl,6
+        shr  ax,cl              ; total speed, units per tick (quarter scale)
         push ax
         imul word ptr [psin]    ; climb component
         mov  bx,256
@@ -567,15 +567,15 @@ INPUT:
         mov  byte ptr [msact],1
         mov  ax,[locki]
         mov  [mstgt],ax
-        mov  word ptr [mlife],280
+        mov  word ptr [mlife],560
         cmp  byte ptr [mslcam],0
         je   @@nomc
         mov  byte ptr [mcact],1 ; armed: the camera rides this one
         mov  ax,[heading]
         mov  [mch],ax
 @@nomc:
-        mov  ax,[hsin]          ; spawn 50 ahead, 10 below the sightline
-        mov  bx,50
+        mov  ax,[hsin]          ; spawn 25 ahead, 5 below the sightline
+        mov  bx,25
         imul bx
         mov  bx,256
         idiv bx
@@ -583,7 +583,7 @@ INPUT:
         mov  [msx],ax
         mov  [mpx],ax
         mov  ax,[hcos]
-        mov  bx,50
+        mov  bx,25
         imul bx
         mov  bx,256
         idiv bx
@@ -591,12 +591,12 @@ INPUT:
         mov  [msz],ax
         mov  [mpz],ax
         mov  ax,[camy]
-        sub  ax,10
+        sub  ax,5
         mov  [msy],ax
         mov  [mpy],ax
-        ; straight-flight velocity: 32/tick along heading and pitch
+        ; straight-flight velocity: 16/tick along heading and pitch
         mov  ax,[pcos]
-        mov  bx,32
+        mov  bx,16
         imul bx
         mov  bx,256
         idiv bx
@@ -614,7 +614,7 @@ INPUT:
         idiv bx
         mov  [mvz],ax
         mov  ax,[psin]
-        mov  bx,32
+        mov  bx,16
         imul bx
         mov  bx,256
         idiv bx
@@ -653,9 +653,9 @@ INPUT:
         mov  di,bx
         add  di,di              ; word offset
         mov  byte ptr [trcact+bx],1
-        mov  word ptr [trlif+di],60
+        mov  word ptr [trlif+di],120
         mov  ax,[hcos]          ; muzzle: wing-root offset, gun alternates
-        mov  cx,20
+        mov  cx,10
         imul cx
         mov  cx,256
         idiv cx
@@ -665,7 +665,7 @@ INPUT:
 @@gmr:  add  ax,[camx]
         mov  [tcx+di],ax
         mov  ax,[hsin]
-        mov  cx,20
+        mov  cx,10
         imul cx
         mov  cx,256
         idiv cx
@@ -676,10 +676,10 @@ INPUT:
 @@gmz:  add  ax,[camz]
         mov  [tcz+di],ax
         mov  ax,[camy]
-        sub  ax,7
+        sub  ax,3
         mov  [tcy+di],ax
-        mov  ax,[pcos]          ; 75/tick along the nose
-        mov  cx,75
+        mov  ax,[pcos]          ; 37/tick along the nose
+        mov  cx,37
         imul cx
         mov  cx,256
         idiv cx
@@ -695,7 +695,7 @@ INPUT:
         idiv cx
         mov  [trvz+di],ax
         mov  ax,[psin]
-        mov  cx,75
+        mov  cx,37
         imul cx
         mov  cx,256
         idiv cx
@@ -840,11 +840,11 @@ COLLIDE:
         ; Needs airflow (vel >= 150), so a stalled drop still hits dirt.
         mov  bx,[camy]
         sub  bx,ax              ; height above ground
-        cmp  bx,125
+        cmp  bx,62
         jge  @@gfx
         cmp  word ptr [vel],150
         jl   @@gfx
-        mov  ax,125
+        mov  ax,62
         sub  ax,bx              ; cushion grows as the gap shrinks
         mov  cl,4
         shr  ax,cl              ; up to ~15 units of lift per tick
@@ -916,7 +916,7 @@ CRASHHANDLE:
         mov  word ptr [flbcnt],FLBN
         call PBOOM
         mov  ax,[hsin]          ; freeze the camera behind the wreck
-        mov  bx,200
+        mov  bx,100
         imul bx
         mov  bx,256
         idiv bx
@@ -924,7 +924,7 @@ CRASHHANDLE:
         sub  bx,ax
         mov  [dcx],bx
         mov  ax,[hcos]
-        mov  bx,200
+        mov  bx,100
         imul bx
         mov  bx,256
         idiv bx
@@ -932,7 +932,7 @@ CRASHHANDLE:
         sub  bx,ax
         mov  [dcz],bx
         mov  ax,[camy]
-        add  ax,30
+        add  ax,15
         mov  [dcy],ax
 @@cr:   ret
 
