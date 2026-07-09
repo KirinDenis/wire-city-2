@@ -891,6 +891,7 @@ CRASHHANDLE:
         jne  @@cr               ; already falling
         mov  byte ptr [dying],1
         mov  word ptr [dytick],0
+        inc  word ptr [tsch]    ; the player is a green too: his loss
         mov  ax,[flbh]          ; the flashback starts at the oldest tick
         mov  [flbc],ax
         mov  word ptr [flbcnt],FLBN

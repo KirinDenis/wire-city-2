@@ -1009,7 +1009,28 @@ PANELBMP:
         mov  al,5
         mov  es:[di],al
 @@rbx:  ret
-@@rsc:  ; scoreboard on the scope: green team, yellow team, own kills
+@@rsc:  ; scoreboard on the scope: kills by each team, tagged with the
+        ; team's own marker shape (square = yours, diamond = theirs)
+        mov  ax,156             ; tiny green square by the green count
+        call ROW320
+        add  di,47
+        mov  al,95
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+2],al
+        mov  es:[di+320],al
+        mov  es:[di+322],al
+        mov  es:[di+640],al
+        mov  es:[di+641],al
+        mov  es:[di+642],al
+        mov  ax,156             ; tiny yellow diamond by the yellow one
+        call ROW320
+        add  di,104
+        mov  al,96
+        mov  es:[di+1],al
+        mov  es:[di+320],al
+        mov  es:[di+322],al
+        mov  es:[di+641],al
         mov  byte ptr [COLOR],95
         mov  word ptr [ftx],53
         mov  word ptr [fty],155

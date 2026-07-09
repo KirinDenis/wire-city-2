@@ -2114,6 +2114,9 @@ AIGUN:  cmp  word ptr [aigt],0
 ; ---------------------------------------------------------------------------
 RESPAWNALL:
         mov  word ptr [locki],0FFFFh
+        xor  ax,ax              ; a fresh round starts at 0:0 (personal
+        mov  [tscf],ax          ; kills stay - that is the pilot's log)
+        mov  [tsch],ax
         xor  si,si
 @@rs:   mov  bx,si
         shr  bx,1
