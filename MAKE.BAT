@@ -9,7 +9,7 @@ REM Machine-specific paths live in LOCAL.BAT (gitignored), e.g.:
 REM   set DOSBOX=C:\Games\DOSBox\DOSBox.exe
 REM   set TASMDIR=d:\borland\bp
 cd /d %~dp0
-if exist LOCAL.BAT call LOCAL.BAT
+if exist LOCAL.BAT call .\LOCAL.BAT
 if "%DOSBOX%"=="" set DOSBOX=dosbox.exe
 if "%TASMDIR%"=="" set TASMDIR=c:\bp
 
