@@ -534,7 +534,7 @@ CROSS:  cmp  byte ptr [chsview],0
         jne  @@no
         cmp  byte ptr [mslcam],0 ; armed: a little amber M on the glass
         je   @@noarm
-        mov  byte ptr [COLOR],5
+        mov  byte ptr [COLOR],97
         mov  word ptr [ftx],8
         mov  word ptr [fty],14
         mov  si,offset MSGM2

@@ -256,7 +256,7 @@ PANELBMP:
         mov  word ptr [fty],2
         mov  si,offset MSGTITLE
         call FDRAW
-        mov  byte ptr [COLOR],5
+        mov  byte ptr [COLOR],97
         mov  word ptr [ftx],146
         mov  si,offset MSGT2
         call FDRAW
@@ -267,7 +267,7 @@ PANELBMP:
         mov  bx,18
         div  bx
         call FNUM
-        mov  byte ptr [COLOR],5
+        mov  byte ptr [COLOR],97
         mov  word ptr [ftx],178
         mov  si,offset MSGALT
         call FDRAW
@@ -276,7 +276,7 @@ PANELBMP:
         call FNUM
         cmp  byte ptr [mslcam],0 ; missile camera armed: amber M
         je   @@nm5
-        mov  byte ptr [COLOR],5
+        mov  byte ptr [COLOR],97
         mov  word ptr [ftx],216
         mov  word ptr [fty],2
         mov  si,offset MSGM2
@@ -285,7 +285,7 @@ PANELBMP:
         ; ---- afterburner strip ----
         cmp  byte ptr [abon],0
         je   @@ab
-        mov  byte ptr [COLOR],5
+        mov  byte ptr [COLOR],97
         mov  word ptr [ftx],149
         mov  word ptr [fty],15
         mov  si,offset MSGABON
@@ -322,7 +322,7 @@ PANELBMP:
         sub  ax,[lgnd]
         cmp  ax,150
         jge  @@lt
-        mov  cx,5               ; terrain close: amber
+        mov  cx,97              ; terrain close: amber
 @@lt:   mov  si,offset MSGT2
         call LAMP2
         mov  word ptr [lampx],289 ; lock lamp: top right strut square
@@ -355,7 +355,7 @@ PANELBMP:
         mov  ax,[dsx]
         call ROW320
         add  di,44
-        mov  al,5               ; lit amber segment
+        mov  al,97              ; lit amber segment
         mov  cx,5
         rep  stosb
         sub  word ptr [dsx],2
@@ -470,7 +470,7 @@ PANELBMP:
         sub  ax,bx
         call ROW320
         add  di,[dsx]
-        mov  al,5
+        mov  al,97
         mov  es:[di],al
 @@rbx:  ret
 @@rsc:  ; scoreboard on the scope: kills by each team, tagged with the
@@ -532,7 +532,7 @@ PANELBMP:
 @@dmn:  inc  si
         cmp  si,5
         jb   @@dmp
-        mov  byte ptr [COLOR],5 ; cannon rounds, amber
+        mov  byte ptr [COLOR],97 ; cannon rounds, amber
         mov  word ptr [ftx],92
         mov  word ptr [fty],182
         mov  ax,[gunam]
@@ -550,7 +550,7 @@ PANELBMP:
         add  ax,ax
         add  ax,ax              ; k*8
         add  di,ax
-        mov  al,5
+        mov  al,97
         mov  es:[di],al
         mov  es:[di+1],al
         mov  es:[di+2],al
@@ -563,7 +563,7 @@ PANELBMP:
         cmp  si,4
         jb   @@amo
         ; ---- readouts right of the map: S/T/F/H rows ----
-        mov  byte ptr [COLOR],5
+        mov  byte ptr [COLOR],97
         mov  word ptr [ftx],242
         mov  word ptr [fty],157
         mov  si,offset MSGSPD2
@@ -572,7 +572,7 @@ PANELBMP:
         mov  word ptr [ftx],256
         mov  ax,[vel]
         call FNUM
-        mov  byte ptr [COLOR],5
+        mov  byte ptr [COLOR],97
         mov  word ptr [ftx],242
         mov  word ptr [fty],165
         mov  si,offset MSGTHR2
@@ -587,10 +587,10 @@ PANELBMP:
         call FNUM
         cmp  byte ptr [abon],0
         je   @@nab
-        mov  byte ptr [COLOR],5
+        mov  byte ptr [COLOR],97
         mov  si,offset MSGAB    ; '+' right after the percentage
         call FDRAW
-@@nab:  mov  byte ptr [COLOR],5
+@@nab:  mov  byte ptr [COLOR],97
         cmp  word ptr [fuel],1200
         jge  @@fok
         mov  byte ptr [COLOR],19
@@ -608,7 +608,7 @@ PANELBMP:
         mov  bx,60
         div  bx
         call FNUM
-        mov  byte ptr [COLOR],5
+        mov  byte ptr [COLOR],97
         mov  word ptr [ftx],242
         mov  word ptr [fty],181
         mov  si,offset MSGHDG2

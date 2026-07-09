@@ -834,7 +834,7 @@ HCOL    db 8
 ;            8 HUD       9 sky band    10 ground     11 field/ground band
 ;            12 haze     13 mountains  14 water      15 forest
 ;            16 wall E/W (shade)       17 roof
-NPALC   equ 97                  ; 31 game + 63 cockpit + glow + 2 IFF colours
+NPALC   equ 98                  ; 31 game + 63 cockpit + glow + 2 IFF + amber
 PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db 30,32,36          ;1  far stroke (fades to haze)
         db 22,24,28          ;2  mid stroke
@@ -870,6 +870,7 @@ PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db 63,34, 6          ;94 engine glow (GAMELOOP cycles this DAC slot)
         db 16,63,16          ;95 IFF friendly (bright green)
         db 63,63, 8          ;96 IFF hostile (bright yellow)
+        db 63,44, 6          ;97 UI amber (index 5 is glass by day)
 
 PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db 12,18,40          ;1  far stroke
@@ -906,6 +907,7 @@ PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db 63,34, 6          ;94 engine glow (GAMELOOP cycles this DAC slot)
         db 16,63,16          ;95 IFF friendly (bright green)
         db 63,63, 8          ;96 IFF hostile (bright yellow)
+        db 63,44, 6          ;97 UI amber
 
 STARN   equ 16                  ; star coords as words (X can exceed 255)
 STARTAB dw 20,18, 60,30, 110,12, 150,40, 200,22, 250,15, 300,35, 40,52
