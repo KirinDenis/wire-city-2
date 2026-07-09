@@ -67,7 +67,7 @@ SBINIT: mov  dx,226h            ; DSP reset pulse
         shl  ax,cl              ; low 16 bits
         mov  cl,12
         shr  bx,cl              ; DMA page (top 4 bits)
-        cmp  ax,10000h-SNDN     ; the loop must not cross a 64K DMA page
+        cmp  ax,0F800h          ; 65536-SNDN: no 64K DMA page crossing
         jb   @@fit
         mov  dx,ax
         neg  dx                 ; distance to the page start
