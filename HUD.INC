@@ -274,6 +274,14 @@ PANELBMP:
         mov  byte ptr [COLOR],8
         mov  ax,[camy]
         call FNUM
+        cmp  byte ptr [mslcam],0 ; missile camera armed: amber M
+        je   @@nm5
+        mov  byte ptr [COLOR],5
+        mov  word ptr [ftx],216
+        mov  word ptr [fty],2
+        mov  si,offset MSGM2
+        call FDRAW
+@@nm5:
         ; ---- afterburner strip ----
         cmp  byte ptr [abon],0
         je   @@ab
