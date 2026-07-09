@@ -21,7 +21,10 @@ INPUT:
         call PLAYERRESET
 @@dwar: cmp  word ptr [flbcnt],0
         je   @@dwr2
-        dec  word ptr [flbcnt]  ; the flashback rolls one tick forward
+        mov  ax,[lasttk]        ; the recording is half-rate: play it so
+        test ax,1
+        jnz  @@dwr2
+        dec  word ptr [flbcnt]  ; the flashback rolls one sample forward
         mov  ax,[flbc]
         add  ax,12
         cmp  ax,FLBSZ
@@ -748,7 +751,10 @@ INPUT:
         mov  word ptr [gunreg],0
         inc  word ptr [gunam]
 @@gnf:
-        ; --- the black box: record this tick for the death flashback ---
+        ; --- the black box: record every 2nd tick for the flashback ---
+        mov  ax,[lasttk]
+        test ax,1
+        jnz  @@fbskip
         mov  bx,[flbh]
         mov  ax,[camx]
         mov  [FLB+bx],ax
@@ -767,6 +773,7 @@ INPUT:
         jb   @@fbw
         xor  bx,bx
 @@fbw:  mov  [flbh],bx
+@@fbskip:
         call PLANESUPD          ; AI traffic flies on the same clock
         call MSLUPD             ; the missile chases on the same clock
         call TRCUPD             ; tracer rounds fly on the same clock

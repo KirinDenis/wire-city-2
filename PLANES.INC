@@ -71,20 +71,8 @@ PLANESUPD:
         cmp  ax,si
         jne  @@rlk
         mov  word ptr [locki],0FFFFh
-@@rlk:  call RND16              ; a reborn jet flies under a new callsign
-        mov  bx,si
-        shr  bx,1
-        and  ax,3
-        mov  [pcs+bx],al
-        call RND16
-        and  ax,31
-        inc  ax
-        mov  [pnum+bx],al
-        call RND16
-        and  ax,3
-        add  ax,2               ; fresh jet, fresh armour
-        mov  [php+bx],al
-        push si
+@@rlk:  push si                 ; the SAME jet teleports: callsign and
+                                ; armour stay (no fake reincarnation)
         call RND16
         pop  si
         and  ax,8191
@@ -164,7 +152,10 @@ PLANESUPD:
 @@rcn:  add  si,2
         cmp  si,NPLANE*2
         jb   @@rc
-        test cl,cl
+        cmp  byte ptr [dying],0 ; the player is a green too: while he
+        jne  @@rcp              ; fights, the team stands
+        inc  cl
+@@rcp:  test cl,cl
         jnz  @@rc2
         mov  byte ptr [rwin],1  ; the hostiles hold the sky
         mov  word ptr [rndovr],160
@@ -1569,8 +1560,8 @@ AMSLUPD:
         jb   @@fs
         jmp  @@fly
 @@have: mov  [wcc],bx           ; slot index
-        call RND16              ; random shooter (first 16 jets)
-        and  ax,15
+        call RND16              ; random shooter
+        and  ax,31
         add  ax,ax
         mov  si,ax              ; shooter offset
         mov  bx,si
@@ -1925,7 +1916,7 @@ AIGUN:  cmp  word ptr [aigt],0
         ret
 @@go:   mov  word ptr [aigt],14
         call RND16
-        and  ax,15              ; shooter among the first 16
+        and  ax,31              ; shooter among the first 32
         add  ax,ax
         mov  si,ax
         mov  bx,si
@@ -2149,7 +2140,8 @@ RESPAWNALL:
         add  si,2
         cmp  si,NPLANE*2
         jb   @@rs
-        ret
+        mov  byte ptr [pst],1   ; slot 0 never flies: the player is the
+        ret                     ; 20th green
 
 ; ---------------------------------------------------------------------------
 ;  CHASESET / CHASERST - the F3 chase camera. For the render only: park

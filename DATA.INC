@@ -36,7 +36,8 @@ swayx   dw 0                    ; sway: this tick's X shift (screen px)
 swayy   dw 0                    ; sway: this tick's Y shift (screen px)
 
 ; ---- AI traffic: low-poly jets (see PLANES.INC) ----------------------------
-NPLANE  equ 20
+NPLANE  equ 40                  ; 20 v 20 (slot 0 never flies: that seat
+                                ; is the player's - green team = you + 19)
 pax     dw NPLANE dup(0)        ; world position
 pay     dw NPLANE dup(0)
 paz     dw NPLANE dup(0)
@@ -83,9 +84,8 @@ pidx    dw 0                    ; draw loop: plane offset
 pfc     dw 0                    ; draw loop: face counter
 tpi     dw 0                    ; draw loop: trail point counter
 TLN     equ 16                  ; contrail points per plane
-TLX     dw NPLANE*TLN dup(0)    ; contrail ring buffers (world coords)
-TLY     dw NPLANE*TLN dup(0)
-TLZ     dw NPLANE*TLN dup(0)
+; TLX/TLY/TLZ live in BSS now (see CITY.ASM): spawn-generated, and the
+; segment budget is too tight to ship 3.8K of zeroes in the image
 tlh     dw 0                    ; shared ring head (byte offset, step 2)
 locki   dw 0FFFFh               ; locked plane offset (0FFFFh = no lock)
 lockd   dw 0                    ; lock scan: best distance so far
