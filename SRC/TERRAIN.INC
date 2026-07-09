@@ -568,6 +568,9 @@ TERRAIN:
 ;  Colours: water/plain/CITY-BROWN/woods/rock/snow. North (+Z) is up.
 ; ============================================================================
 MMAPGEN:
+        push es                 ; the map is baked into the scratch segment
+        mov  ax,[scrseg]
+        mov  es,ax
         mov  word ptr [dsx],0   ; node i (world X)
 @@i:    mov  word ptr [dsy],0   ; node j (world Z)
 @@j:    mov  bx,[dsx]
@@ -594,13 +597,14 @@ MMAPGEN:
         mov  cl,6
         shl  bx,cl
         add  bx,[dsx]
-        mov  [MMAP+bx],ah
+        mov  es:[bx],ah
         inc  word ptr [dsy]
         cmp  word ptr [dsy],64
         jl   @@j
         inc  word ptr [dsx]
         cmp  word ptr [dsx],64
         jl   @@i
+        pop  es
         ret
 
 ; ============================================================================
@@ -645,11 +649,14 @@ MINIMAP:
         mov  es:[di+65],al
         add  di,320
         loop @@fr
-        ; blit the baked map
-        mov  si,offset MMAP
+        ; blit the baked map (it lives in the far scratch segment)
         mov  ax,[mapt]
         call ROW320
         add  di,252
+        push ds
+        mov  ax,[scrseg]
+        mov  ds,ax
+        xor  si,si
         mov  cx,64
 @@row:  push cx
         mov  cx,32
@@ -657,6 +664,7 @@ MINIMAP:
         pop  cx
         add  di,320-64
         loop @@row
+        pop  ds
         ; plane blip at node (camx,camz)
         mov  ax,[camx]
         add  ax,BIAS
@@ -797,10 +805,13 @@ TERRH:  mov  ax,[camx]
 ; ============================================================================
 MINIMAP2:
         cld
-        mov  si,offset MMAP
         mov  ax,155
         call ROW320
         add  di,202
+        push ds                 ; the map lives in the far scratch segment
+        mov  ax,[scrseg]
+        mov  ds,ax
+        xor  si,si
         mov  dx,32              ; dest rows
 @@row:  mov  cx,32
 @@px:   lodsb                   ; every other source column
@@ -811,6 +822,7 @@ MINIMAP2:
         add  di,320-32
         dec  dx
         jnz  @@row
+        pop  ds
         ; plane blip at node (camx,camz), halved
         mov  ax,[camx]
         add  ax,BIAS

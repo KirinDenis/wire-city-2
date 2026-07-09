@@ -175,9 +175,14 @@ sbok    db 0                    ; Blaster found AND ENGINE.RAW loaded?
 sbmsk   db 0                    ; saved IRQ7 mask bit
 sbtc    dw 0                    ; current DSP time constant
 mlvl    dw 0                    ; manoeuvre loading (smoothed, 0..48)
+sbrst   dw 0                    ; ring-heal cursor (behind the DMA beam)
+sfa16   dw 0                    ; SFX: amplitude, 8.8 fixed point
+sfdec   dw 0                    ; SFX: amplitude decay per sample
+lastbp  dw 0                    ; last tick a lamp beeped on
 mprvp   dw 0                    ; previous pitch (for the delta)
 mprvr   dw 0                    ; previous roll
-sndseg  dw 0                    ; sample loop segment (64K-aligned)
+sndseg  dw 0
+scrseg  dw 0                    ; far scratch segment (holds the minimap)                    ; sample loop segment (64K-aligned)
 ENGFN   db 'ENGINE.RAW',0
 tgti    dw 0                    ; orbited plane (kept past the lock)
 tcws    dw 0                    ; wreck slot the camera follows (mode 2)
@@ -272,8 +277,8 @@ dsx     dw 0                    ; DS: loop x / scratch
 dsy     dw 0                    ; DS: loop y / scratch
 dsamp   dw 0                    ; DS: noise amplitude (power of two)
 dsac    dw 0                    ; DS: accumulator
-; HMAP/MMAP live in the BSS block past the file image (see CITY.ASM): they
-; are fully generated at startup, so shipping 8K of zeroes was pure waste.
+; HMAP lives in the BSS block past the file image (see CITY.ASM); the baked
+; minimap moved out to the far scratch segment [scrseg] to free 4K of BSS.
 
 ; ---- 3D terrain mesh state (one node = 4 cells = 1024 world units) ---------
 NR      equ 20                  ; terrain draw radius in nodes around camera

@@ -270,6 +270,10 @@ MAIN:
         pop  es
         or   ax,1               ; LCG must not start at 0
         mov  [rseed],ax
+        mov  ax,cs              ; far scratch: the 64K page right above
+        add  ax,4FFFh           ; the sample segment - the minimap lives
+        and  ax,0F000h          ; there, not in our crowded 64K
+        mov  [scrseg],ax
         call DSGEN              ; build the Diamond-Square world heightmap
         call MMAPGEN            ; bake the minimap from it
 
@@ -457,31 +461,31 @@ KEYS    db 128 dup(0)
 ; copy at load), so shipping ~20K of zeroes in the file was pure waste.
 BSS     label byte
 HMAP    equ  byte ptr BSS           ; 4096 bytes: world heightmap
-MMAP    equ  byte ptr BSS+4096      ; 4096 bytes: baked minimap pixels
-TRX     equ  word ptr BSS+8192      ; 1681 words: rotated node X
-TRZ     equ  word ptr BSS+11554     ; 1681 words: rotated node Z
-TWH     equ  word ptr BSS+14916     ; 1681 words: node world heights
-TH      equ  byte ptr BSS+18278     ; 1681 bytes: node raw heights
-FONTBUF equ  BSS+19959              ; 246 bytes: font from CITY.DAT (untyped:
+; (the baked minimap lives at [scrseg]:0 - a far 64K page - not here)
+TRX     equ  word ptr BSS+4096      ; 1681 words: rotated node X
+TRZ     equ  word ptr BSS+7458      ; 1681 words: rotated node Z
+TWH     equ  word ptr BSS+10820     ; 1681 words: node world heights
+TH      equ  byte ptr BSS+14182     ; 1681 bytes: node raw heights
+FONTBUF equ  BSS+15863              ; 246 bytes: font from CITY.DAT (untyped:
                                     ;  used as an immediate address only)
 ; NB: the COM image + this BSS + the stack ALL share one 64K segment.
 ; Keep BSSEND + image size under ~63.5K or the black box eats the stack
 ; (that was the grey-screen hang of 2026-07-09).
-PSPAN   equ  BSS+20215              ; 1800 bytes: cockpit blit span table,
+PSPAN   equ  BSS+16119              ; 1800 bytes: cockpit blit span table,
                                     ;  (buffer offset, length) pairs, 0FFFFh
                                     ;  terminated (449 spans max; the real
                                     ;  panel uses ~400)
-WRK     equ  BSS+22015              ; wreck pool: 4 slots of WRKSZ bytes
+WRK     equ  BSS+17919              ; wreck pool: 4 slots of WRKSZ bytes
                                     ;  (+0 wtim, +2 wgy, +WFP faces 8x12b,
                                     ;  +WCO corners 8x4x6b, +WCL colours 8b)
-FLB     equ  word ptr BSS+23215     ; black box ring: FLBN samples of
+FLB     equ  word ptr BSS+19119     ; black box ring: FLBN samples of
                                     ;  (camx,camy,camz,heading,pitch,roll)
-TLX     equ  word ptr BSS+23791     ; contrail rings: NPLANE*TLN words each
-TLY     equ  word ptr BSS+24751     ;  (moved out of the image: generated
-TLZ     equ  word ptr BSS+25711     ;  at spawn, never shipped as zeros)
-DSTB    equ  byte ptr BSS+26671     ; ruins bitmap: 1 bit per world cell
+TLX     equ  word ptr BSS+19695     ; contrail rings: NPLANE*TLN words each
+TLY     equ  word ptr BSS+20655     ;  (moved out of the image: generated
+TLZ     equ  word ptr BSS+21615     ;  at spawn, never shipped as zeros)
+DSTB    equ  byte ptr BSS+22575     ; ruins bitmap: 1 bit per world cell
                                     ;  (64x64), set = the building is down
-BSSEND  equ  BSS+27183
+BSSEND  equ  BSS+23087
 
 CODE    ENDS
         END START

@@ -1306,6 +1306,9 @@ BOOM:   mov  bx,si
         mov  [bpz],ax
         mov  ax,[pah+si]
         mov  [bph],ax
+        mov  dx,[bpx]           ; the bang carries by distance
+        mov  bx,[bpz]
+        call SFXBM2
         jmp  WRKFILL
 
 ; PBOOM - the PLAYER breaks apart (cinematic death).
@@ -3078,6 +3081,9 @@ BWRECK: mov  di,[wnext]         ; claim a wreck slot
         add  ax,128
         sub  ax,BIAS
         mov  [bpz],ax
+        mov  dx,[bpx]           ; a falling house is heard by distance
+        mov  bx,[bpz]
+        call SFXBM2
         push word ptr [camx]    ; ground height (TERRH reads camx/camz)
         push word ptr [camz]
         mov  ax,[bpx]

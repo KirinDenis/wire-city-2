@@ -576,6 +576,7 @@ INPUT:
         mov  ax,[locki]
         mov  [mstgt],ax
         mov  word ptr [mlife],280
+        call SFXHISS            ; off the rail with a sharp hiss
         cmp  byte ptr [mslcam],0
         je   @@nomc
         mov  byte ptr [mcact],1 ; armed: the camera rides this one
@@ -731,6 +732,7 @@ INPUT:
         test ax,1
         jnz  @@gnf              ; volleys on even ticks
         dec  word ptr [gunam]
+        call SFXPOP             ; the deep clap of the cannon
         xor  si,si              ; who is in the ring?
 @@gsc:  mov  bx,si
         shr  bx,1
@@ -791,6 +793,7 @@ INPUT:
         mov  word ptr [gunreg],0
         inc  word ptr [gunam]
 @@gnf:
+        call SNDBEEP            ; the caution lamps sing
         ; --- manoeuvre loading for the engine sound: how hard is the
         ; airframe working the air? Attitude deltas, plus stall buffet;
         ; rises instantly, decays over ~a second.
@@ -958,6 +961,9 @@ CRASHHANDLE:
         mov  [flbc],ax
         mov  word ptr [flbcnt],FLBN
         call PBOOM
+        mov  ah,95              ; OUR bang: the biggest in the game
+        mov  cx,11000
+        call SFXBOOM
         mov  ax,[hsin]          ; freeze the camera behind the wreck
         mov  bx,100
         imul bx

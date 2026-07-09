@@ -73,6 +73,18 @@ SBINIT: mov  dx,226h            ; DSP reset pulse
         pop  ds
         mov  ah,3Eh
         int  21h
+        push ds                 ; pristine copy in the segment's top half:
+        push es                 ; the ring self-heals from it after SFX
+        mov  ax,[sndseg]
+        mov  ds,ax
+        mov  es,ax
+        xor  si,si
+        mov  di,SNDN
+        mov  cx,SNDN/2
+        cld
+        rep  movsw
+        pop  es
+        pop  ds
         mov  byte ptr [sbok],1
         ; ---- 8237 DMA channel 1: auto-init, read from memory ----
         mov  al,05h
@@ -117,9 +129,345 @@ SBINIT: mov  dx,226h            ; DSP reset pulse
         call SBWR
 @@ret:  ret
 
+
+; ============================================================================
+;  ONE-SHOT EFFECTS - mixed straight into the spinning engine ring.
+;  The 8237 tells us where the beam is (current-count register); effects
+;  are added ~60 ms AHEAD of it, play once as the beam sweeps through,
+;  and SNDHEAL erases them BEHIND the beam from the pristine copy kept
+;  in the top half of the sample segment. No second channel, no mixer -
+;  the ring itself is the mixer.
+; ============================================================================
+
+; ---- SFXRAW: BX = the DMA beam position inside the ring -------------------
+SFXRAW: xor  al,al
+        out  0Ch,al             ; clear the flip-flop
+        in   al,03h             ; channel 1 remaining count, low byte...
+        mov  bl,al
+        in   al,03h             ; ...then high
+        mov  bh,al
+        mov  ax,SNDN-1
+        sub  ax,bx              ; played = total - remaining
+        and  ax,SNDN-1
+        mov  bx,ax
+        ret
+
+; ---- SFXMB: add the signed sample in DX to ES:[DI], clamp, advance -------
+SFXMB:  mov  al,es:[di]
+        xor  ah,ah
+        add  ax,dx
+        jns  @@p
+        xor  ax,ax
+@@p:    cmp  ax,255
+        jle  @@q
+        mov  ax,255
+@@q:    mov  es:[di],al
+        inc  di
+        and  di,SNDN-1
+        ret
+
+; ---- SNDHEAL: heal the ring behind the beam from the pristine copy -------
+SNDHEAL:push cx
+        push dx
+        push si
+        push di
+        call SFXRAW
+        mov  ax,bx
+        sub  ax,64              ; stay just behind the beam
+        and  ax,SNDN-1
+        mov  cx,ax
+        sub  cx,[sbrst]
+        and  cx,SNDN-1
+        cmp  cx,4096            ; cap a burst after a long stall
+        jbe  @@n1
+        mov  cx,4096
+@@n1:   jcxz @@done
+        mov  di,[sbrst]
+        mov  ax,di
+        add  ax,cx
+        and  ax,SNDN-1
+        mov  [sbrst],ax
+        push ds
+        push es
+        mov  ax,[sndseg]
+        mov  ds,ax
+        mov  es,ax
+        cld
+@@cp:   mov  si,di
+        add  si,SNDN            ; the clean loop lives in the top half
+        movsb
+        and  di,SNDN-1
+        loop @@cp
+        pop  es
+        pop  ds
+@@done: pop  di
+        pop  si
+        pop  dx
+        pop  cx
+        ret
+
+; ---- SFXPOP: the cannon - a deep thump, almost a clap ---------------------
+SFXPOP: cmp  byte ptr [sbok],0
+        je   @@r
+        push bx
+        push cx
+        push dx
+        push si
+        push di
+        push es
+        mov  ax,[sndseg]
+        mov  es,ax
+        call SFXRAW
+        lea  di,[bx+700]        ; ~60 ms ahead of the beam
+        and  di,SNDN-1
+        mov  bx,84              ; a dying deep square, ~125 Hz
+        xor  si,si
+@@half: mov  cx,44
+        mov  dx,bx
+        test si,1
+        jz   @@go
+        neg  dx
+@@go:   call SFXMB
+        loop @@go
+        inc  si
+        sub  bx,15
+        jg   @@half
+        mov  cx,160             ; and a short breath of smoke
+@@nz:   push cx
+        call RND16
+        pop  cx
+        and  ax,31
+        sub  ax,15
+        mov  dx,ax
+        call SFXMB
+        loop @@nz
+        pop  es
+        pop  di
+        pop  si
+        pop  dx
+        pop  cx
+        pop  bx
+@@r:    ret
+
+; ---- SFXHISS: the missile leaves the rail - a sharp fading hiss -----------
+SFXHISS:cmp  byte ptr [sbok],0
+        je   @@r
+        push bx
+        push cx
+        push dx
+        push si
+        push di
+        push es
+        mov  ax,[sndseg]
+        mov  es,ax
+        call SFXRAW
+        lea  di,[bx+700]
+        and  di,SNDN-1
+        mov  word ptr [sfa16],70*256
+        mov  word ptr [sfdec],6
+        mov  cx,3000
+@@s:    push cx
+        call RND16
+        and  ax,255
+        sub  ax,128
+        mov  cl,byte ptr [sfa16+1]
+        xor  ch,ch
+        imul cx                 ; noise scaled by the fading amplitude
+        mov  cl,7
+        sar  ax,cl
+        mov  dx,ax
+        call SFXMB
+        mov  ax,[sfa16]
+        sub  ax,[sfdec]
+        jns  @@s1
+        xor  ax,ax
+@@s1:   mov  [sfa16],ax
+        pop  cx
+        loop @@s
+        pop  es
+        pop  di
+        pop  si
+        pop  dx
+        pop  cx
+        pop  bx
+@@r:    ret
+
+; ---- SFXBOOM: an explosion. AH = loudness, CX = length in samples ---------
+SFXBOOM:cmp  byte ptr [sbok],0
+        je   @@r
+        push bx
+        push cx
+        push dx
+        push si
+        push di
+        push es
+        mov  al,ah
+        mov  byte ptr [sfa16],0
+        mov  byte ptr [sfa16+1],al
+        push cx
+        mov  bx,cx
+        mov  ax,[sfa16]
+        xor  dx,dx
+        div  bx                 ; amplitude decay per sample
+        or   ax,ax
+        jnz  @@d1
+        inc  ax
+@@d1:   mov  [sfdec],ax
+        pop  cx
+        mov  ax,[sndseg]
+        mov  es,ax
+        call SFXRAW
+        lea  di,[bx+700]
+        and  di,SNDN-1
+        xor  si,si              ; the rumble: a random walk...
+@@b:    push cx
+        call RND16
+        and  ax,63
+        sub  ax,31
+        add  si,ax
+        mov  cl,byte ptr [sfa16+1]
+        xor  ch,ch
+        cmp  si,cx              ; ...fenced by the fading loudness
+        jle  @@b1
+        mov  si,cx
+@@b1:   neg  cx
+        cmp  si,cx
+        jge  @@b2
+        mov  si,cx
+@@b2:   mov  dx,si
+        call SFXMB
+        mov  ax,[sfa16]
+        sub  ax,[sfdec]
+        jns  @@b3
+        xor  ax,ax
+@@b3:   mov  [sfa16],ax
+        pop  cx
+        loop @@b
+        pop  es
+        pop  di
+        pop  si
+        pop  dx
+        pop  cx
+        pop  bx
+@@r:    ret
+
+; ---- SFXBM2: an explosion at world (DX,BX) - loudness falls with range ----
+SFXBM2: cmp  byte ptr [sbok],0
+        je   @@r
+        push ax
+        push bx
+        push cx
+        push dx
+        push si
+        push di
+        mov  ax,dx
+        sub  ax,[camx]
+        jns  @@a1
+        neg  ax
+@@a1:   mov  cl,6
+        shr  ax,cl
+        mov  si,ax
+        mov  ax,bx
+        sub  ax,[camz]
+        jns  @@a2
+        neg  ax
+@@a2:   shr  ax,cl
+        add  si,ax              ; manhattan range / 64
+        mov  ax,92
+        sub  ax,si
+        cmp  ax,14
+        jl   @@done             ; too far off to hear
+        mov  ah,al
+        mov  cx,5500
+        call SFXBOOM
+@@done: pop  di
+        pop  si
+        pop  dx
+        pop  cx
+        pop  bx
+        pop  ax
+@@r:    ret
+
+; ---- SFXBEEP: a caution note. BL = half period in samples ------------------
+SFXBEEP:cmp  byte ptr [sbok],0
+        je   @@r
+        push bx
+        push cx
+        push dx
+        push si
+        push di
+        push es
+        mov  ax,[sndseg]
+        mov  es,ax
+        xor  bh,bh
+        mov  si,bx
+        push si
+        call SFXRAW
+        pop  si
+        lea  di,[bx+700]
+        and  di,SNDN-1
+        mov  cx,480             ; ~45 ms
+        mov  dx,38
+        mov  bx,si
+@@bp:   call SFXMB
+        dec  bx
+        jnz  @@b2
+        neg  dx                 ; the square flips
+        mov  bx,si
+@@b2:   loop @@bp
+        pop  es
+        pop  di
+        pop  si
+        pop  dx
+        pop  cx
+        pop  bx
+@@r:    ret
+
+; ---- SNDBEEP: the caution lamps sing, each its own note (tick-side) -------
+; one lamp per 16-tick slot, so at worst it is a slow round-robin choir:
+; STALL urgent and high, FUEL mid, TERRAIN a low horn, LOCK a top blip
+SNDBEEP:cmp  byte ptr [sbok],0
+        je   @@r
+        mov  ax,[lasttk]
+        cmp  ax,[lastbp]
+        je   @@r
+        mov  bx,ax
+        and  bx,15
+        or   bx,bx
+        jnz  @@f
+        mov  ax,[vel]           ; slot 0: STALL
+        cmp  ax,VSTALL
+        jge  @@r
+        mov  bl,7
+        jmp  @@go
+@@f:    cmp  bx,4               ; slot 4: FUEL
+        jne  @@t
+        cmp  word ptr [fuel],1200
+        jge  @@r
+        mov  bl,12
+        jmp  @@go
+@@t:    cmp  bx,8               ; slot 8: TERRAIN
+        jne  @@l
+        mov  ax,[camy]
+        sub  ax,[lgnd]
+        cmp  ax,150
+        jge  @@r
+        mov  bl,20
+        jmp  @@go
+@@l:    cmp  bx,12              ; slot 12: LOCK
+        jne  @@r
+        cmp  word ptr [locki],0FFFFh
+        je   @@r
+        mov  bl,5
+@@go:   mov  ax,[lasttk]
+        mov  [lastbp],ax
+        call SFXBEEP
+@@r:    ret
+
 ; ---- SNDENG: once per frame - one knob, the pitch --------------------------
 SNDENG: cmp  byte ptr [sbok],0
         je   @@r
+        call SNDHEAL            ; erase spent effects behind the beam
         cmp  byte ptr [dying],0
         je   @@live
         mov  bx,[dytick]        ; the fall: wind down to a slow groan
