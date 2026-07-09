@@ -123,6 +123,8 @@ SC_NPM  equ 4Ah                 ; numpad -: throttle down
 SC_EQ   equ 0Dh                 ; main-row =/+: throttle up
 SC_MIN  equ 0Ch                 ; main-row -: throttle down
 WRKSZ   equ 292                 ; wreck slot size (see the BSS block)
+FLBN    equ 96                  ; black box: ticks recorded (~5.3 s)
+FLBSZ   equ 1152                ; FLBN * 12 bytes (x,y,z,hdg,pitch,roll)
 WFP     equ 4                   ; face records offset inside a slot
 WCO     equ 100                 ; corner offsets offset inside a slot                 ; C: toggle cockpit panel
 
@@ -323,6 +325,7 @@ MAIN:
         call RESPAWNALL
         mov  word ptr [heading],0
         mov  word ptr [roll],0
+        call FLBSEED            ; the black box starts at the spawn point
         call SETTRIG            ; seed hsin/hcos before the first physics tick
         push es                 ; seed lasttk from the BIOS tick
         mov  ax,40h
@@ -440,7 +443,9 @@ WRK     equ  BSS+26615              ; wreck pool: 4 slots of WRKSZ bytes
                                     ;  x,y,z,vx,vy,vz, +WCO corner offsets
                                     ;  8x4x6b; sizes are up in the constants
                                     ;  block - TASM needs them pre-include)
-BSSEND  equ  BSS+27783
+FLB     equ  word ptr BSS+27783     ; black box ring: FLBN samples of
+                                    ;  (camx,camy,camz,heading,pitch,roll)
+BSSEND  equ  BSS+28935
 
 CODE    ENDS
         END START

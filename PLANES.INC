@@ -2170,9 +2170,27 @@ CHASESET:
         mov  [svp],ax
         mov  ax,[roll]
         mov  [svr],ax
+        mov  ax,[heading]
+        mov  [svh],ax
         cmp  byte ptr [dying],0
         je   @@livecam
-        mov  ax,[dcx]           ; frozen on the spot where we fell
+        cmp  word ptr [flbcnt],0
+        je   @@wrk
+        mov  bx,[flbc]          ; flashback: re-fly the recorded tick,
+        mov  ax,[FLB+bx]        ; full attitude - reliving the moment
+        mov  [camx],ax
+        mov  ax,[FLB+bx+2]
+        mov  [camy],ax
+        mov  ax,[FLB+bx+4]
+        mov  [camz],ax
+        mov  ax,[FLB+bx+6]
+        mov  [heading],ax
+        mov  ax,[FLB+bx+8]
+        mov  [pitch],ax
+        mov  ax,[FLB+bx+10]
+        mov  [roll],ax
+        jmp  @@r
+@@wrk:  mov  ax,[dcx]           ; then hold on the burning wreck
         mov  [camx],ax
         mov  ax,[dcy]
         mov  [camy],ax
@@ -2214,6 +2232,8 @@ CHASERST:
         mov  [pitch],ax
         mov  ax,[svr]
         mov  [roll],ax
+        mov  ax,[svh]
+        mov  [heading],ax
         call SETTRIG            ; physics needs the real trig back
 @@r:    ret
 
@@ -2394,9 +2414,9 @@ DEATHTXT:
         test ax,4
         jz   @@ps
         mov  byte ptr [COLOR],19
-        mov  word ptr [ftx],150
+        mov  word ptr [ftx],142
         mov  word ptr [fty],80
-        mov  si,offset MSGCR2
+        mov  si,offset MSGGO
         call FDRAW
 @@ps:   cmp  word ptr [dytick],18
         jb   @@no               ; the prompt waits out the first second
@@ -2406,3 +2426,27 @@ DEATHTXT:
         mov  si,offset MSGPS2
         call FDRAW
 @@no:   ret
+
+; ---------------------------------------------------------------------------
+;  FLBSEED - fill the black box with the current state, so an early death
+;  replays a still frame instead of garbage from a previous life.
+; ---------------------------------------------------------------------------
+FLBSEED:
+        xor  bx,bx
+@@f:    mov  ax,[camx]
+        mov  [FLB+bx],ax
+        mov  ax,[camy]
+        mov  [FLB+bx+2],ax
+        mov  ax,[camz]
+        mov  [FLB+bx+4],ax
+        mov  ax,[heading]
+        mov  [FLB+bx+6],ax
+        mov  ax,[pitch]
+        mov  [FLB+bx+8],ax
+        mov  ax,[roll]
+        mov  [FLB+bx+10],ax
+        add  bx,12
+        cmp  bx,FLBSZ
+        jb   @@f
+        mov  word ptr [flbh],0
+        ret

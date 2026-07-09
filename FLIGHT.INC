@@ -19,7 +19,16 @@ INPUT:
         cmp  byte ptr [KEYS+SC_SP],0
         je   @@dwar
         call PLAYERRESET
-@@dwar: call PLANESUPD
+@@dwar: cmp  word ptr [flbcnt],0
+        je   @@dwr2
+        dec  word ptr [flbcnt]  ; the flashback rolls one tick forward
+        mov  ax,[flbc]
+        add  ax,12
+        cmp  ax,FLBSZ
+        jb   @@dwr1
+        xor  ax,ax
+@@dwr1: mov  [flbc],ax
+@@dwr2: call PLANESUPD
         call MSLUPD
         call TRCUPD
         call AMSLUPD
@@ -684,6 +693,25 @@ INPUT:
         mov  word ptr [gunreg],0
         inc  word ptr [gunam]
 @@gnf:
+        ; --- the black box: record this tick for the death flashback ---
+        mov  bx,[flbh]
+        mov  ax,[camx]
+        mov  [FLB+bx],ax
+        mov  ax,[camy]
+        mov  [FLB+bx+2],ax
+        mov  ax,[camz]
+        mov  [FLB+bx+4],ax
+        mov  ax,[heading]
+        mov  [FLB+bx+6],ax
+        mov  ax,[pitch]
+        mov  [FLB+bx+8],ax
+        mov  ax,[roll]
+        mov  [FLB+bx+10],ax
+        add  bx,12
+        cmp  bx,FLBSZ
+        jb   @@fbw
+        xor  bx,bx
+@@fbw:  mov  [flbh],bx
         call PLANESUPD          ; AI traffic flies on the same clock
         call MSLUPD             ; the missile chases on the same clock
         call TRCUPD             ; tracer rounds fly on the same clock
@@ -784,6 +812,9 @@ CRASHHANDLE:
         jne  @@cr               ; already falling
         mov  byte ptr [dying],1
         mov  word ptr [dytick],0
+        mov  ax,[flbh]          ; the flashback starts at the oldest tick
+        mov  [flbc],ax
+        mov  word ptr [flbcnt],FLBN
         call PBOOM
         mov  ax,[hsin]          ; freeze the camera behind the wreck
         mov  bx,400
@@ -821,4 +852,6 @@ PLAYERRESET:
         mov  byte ptr [msact],0
         mov  word ptr [gunam],250
         mov  byte ptr [pdam],0
+        mov  word ptr [flbcnt],0
+        call FLBSEED            ; a fresh black box for a fresh jet
         ret

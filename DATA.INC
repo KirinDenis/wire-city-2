@@ -147,6 +147,11 @@ pdam    db 0                    ; player damage taken (8 = shot down)
 chsview db 0                    ; F3 chase camera on?
 dying   db 0                    ; player down: cinematic fall running
 dytick  dw 0                    ; ...for how long (Space works after 1 s)
+flbh    dw 0                    ; black box: ring head (next write)
+flbc    dw 0                    ; flashback: playback cursor
+flbcnt  dw 0                    ; flashback: samples left to play
+svh     dw 0                    ; saved heading (flashback swaps it too)
+MSGGO   db 'GAME OVER',0
 dcx     dw 0                    ; frozen death-camera position
 dcy     dw 0
 dcz     dw 0
