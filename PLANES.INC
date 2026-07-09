@@ -72,18 +72,34 @@ PLANESUPD:
         jne  @@rlk
         mov  word ptr [locki],0FFFFh
 @@rlk:  push si                 ; the SAME jet teleports: callsign and
-                                ; armour stay (no fake reincarnation)
-        call RND16
-        pop  si
-        and  ax,8191
-        sub  ax,4096
-        add  ax,[camx]
-        mov  [pax+si],ax
+                                ; armour stay. It re-enters ON THE HORIZON
+        call RND16              ; (a random bearing, 9500..11547 out) so it
+        pop  si                 ; flies IN from beyond the render range -
+        and  ax,255             ; no ghosts popping up on the nose
+        mov  [ctx],ax
         push si
         call RND16
         pop  si
-        and  ax,8191
-        sub  ax,4096
+        and  ax,2047
+        add  ax,9500
+        mov  [cty],ax           ; range
+        mov  ax,[ctx]
+        push si
+        call SINQ
+        pop  si
+        imul word ptr [cty]
+        mov  bx,256
+        idiv bx
+        add  ax,[camx]
+        mov  [pax+si],ax
+        mov  ax,[ctx]
+        add  ax,64
+        push si
+        call SINQ
+        pop  si
+        imul word ptr [cty]
+        mov  bx,256
+        idiv bx
         add  ax,[camz]
         mov  [paz+si],ax
         push si
@@ -192,19 +208,19 @@ PLANESDRAW:
         mov  ax,[wdx]
         jns  @@q1
         neg  ax
-@@q1:   cmp  ax,9000
+@@q1:   cmp  ax,13000
         jge  @@skip
         mov  ax,[wdz]
         jns  @@q2
         neg  ax
-@@q2:   cmp  ax,9000
+@@q2:   cmp  ax,13000
         jge  @@skip
         call ROTXZ              ; -> rcx (right), rcz (depth)
         mov  ax,[rcz]
         cmp  ax,-100
         jl   @@skip             ; fully behind the camera
-        cmp  ax,8500
-        jge  @@skip             ; a pixel-sized dot: not worth the maths
+        cmp  ax,12500
+        jge  @@skip             ; beyond the leash: truly out of sight
         mov  [pdz],ax
         mov  ax,[rcx]
         mov  [pdx],ax
@@ -402,6 +418,8 @@ PLANESDRAW:
         mov  ax,[pdz]
         cmp  ax,NEARZ
         jle  @@nomk
+        cmp  ax,8500            ; the IFF box waits for visual range
+        jg   @@nomk
         mov  ax,[pdx]
         mov  dx,[pdy]
         mov  cx,[pdz]
