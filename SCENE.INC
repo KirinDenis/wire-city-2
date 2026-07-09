@@ -34,6 +34,7 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
         call LOCKHUD            ; aiming ring, lock pointer, callsign
         call GUNDRAW            ; cannon tracers
         call HUDBARS            ; glass HUD: compass, speed, altitude
+        call CROSS              ; levelled gunsight + standby horizon
         mov  word ptr [mapt],123
         cmp  byte ptr [dying],0
         jne  @@pdone            ; falling: cinema only

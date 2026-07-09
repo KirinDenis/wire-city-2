@@ -390,7 +390,6 @@ GAMELOOP:
         call RENDER
         call CHASERST           ; give the pilot's world back to physics
         call LERPRST            ; ...and the true un-lerped state too
-        call CROSS
         call BLIT               ; to video memory
         ; nozzle fire: re-write DAC entry 94 (the F-15 SE II trick - the
         ; engines burn by palette cycling, not by drawing anything)
