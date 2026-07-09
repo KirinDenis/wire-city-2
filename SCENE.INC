@@ -27,6 +27,8 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
         jne  @@nochs            ; the jet IS the wreck now
         cmp  byte ptr [tgtcam],0
         jne  @@nochs            ; orbit camera: we are off-frame
+        cmp  byte ptr [mcact],0
+        jne  @@nochs            ; missile camera: same
         call PLAYERDRAW         ; our own jet, banking for real
 @@nochs:
         call MSLDRAW            ; the missile dot and its puff
@@ -38,6 +40,8 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
         mov  word ptr [mapt],123
         cmp  byte ptr [dying],0
         jne  @@pdone            ; falling: cinema only
+        cmp  byte ptr [mcact],0
+        jne  @@pdone            ; riding the missile: cinema
         cmp  byte ptr [tgtcam],0
         jne  @@pdone            ; orbit view: cinema too
         cmp  byte ptr [chsview],0

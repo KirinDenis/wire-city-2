@@ -806,6 +806,8 @@ PPOINT: mov  [dsx],ax           ; rx
 LOCKHUD:
         cmp  byte ptr [chsview],0
         jne  @@lkoff
+        cmp  byte ptr [mcact],0
+        jne  @@lkoff
         cmp  byte ptr [tgtcam],0
         jne  @@lkoff
         cmp  byte ptr [dying],0
@@ -1079,11 +1081,17 @@ TGTVIEW:
 ;  MSLUPD - one tick of the missile: home on the lock target (or fly
 ;  straight), proximity-fuse against every living jet, die by timer.
 ; ---------------------------------------------------------------------------
-MSLUPD: cmp  byte ptr [msact],0
+MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
+        jne  @@mc0
+        dec  word ptr [mcret]
+        jnz  @@mc0
+        mov  byte ptr [mcact],0 ; and the old view returns
+@@mc0:  cmp  byte ptr [msact],0
         je   @@out
         dec  word ptr [mlife]
         jnz  @@mv
-        mov  byte ptr [msact],0 ; burned out
+        call MCEND              ; burned out: watch the empty sky a bit
+        mov  byte ptr [msact],0
         ret
 @@mv:   mov  ax,[msx]           ; remember the old spot (exhaust puff)
         mov  [mpx],ax
@@ -1153,7 +1161,39 @@ MSLUPD: cmp  byte ptr [msact],0
         imul cx
         idiv word ptr [cty]
         add  [msz],ax
-@@prox: ; ---- a building in the way eats the missile whole ----
+@@prox: ; ---- camera course servo: lean the view after the missile ----
+        cmp  byte ptr [mcact],1
+        jne  @@nsv
+        mov  ax,[mch]
+        call SINQ
+        mov  [ctx],ax           ; sin
+        mov  ax,[mch]
+        add  ax,64
+        call SINQ
+        mov  [cty],ax           ; cos
+        mov  ax,[msx]
+        sub  ax,[mpx]
+        imul word ptr [cty]
+        mov  bx,256
+        idiv bx
+        mov  [ctz],ax           ; dvx*cos
+        mov  ax,[msz]
+        sub  ax,[mpz]
+        imul word ptr [ctx]
+        mov  bx,256
+        idiv bx
+        mov  bx,[ctz]
+        sub  bx,ax              ; err: + = the missile drifts right
+        cmp  bx,4
+        jle  @@sv1
+        add  word ptr [mch],3
+        and  word ptr [mch],255
+        jmp  @@nsv
+@@sv1:  cmp  bx,-4
+        jge  @@nsv
+        sub  word ptr [mch],3
+        and  word ptr [mch],255
+@@nsv:  ; ---- a building in the way eats the missile whole ----
         mov  ax,[msx]
         add  ax,BIAS
         mov  cl,8
@@ -1202,6 +1242,7 @@ MSLUPD: cmp  byte ptr [msact],0
         jge  @@mbn
         call BSET               ; one missile levels the block
         call BWRECK
+        call MCEND
         mov  byte ptr [msact],0
         ret
 @@mbn:  ; proximity fuse: |dx|+|dy|+|dz| < 160 pops any living jet
@@ -1231,6 +1272,7 @@ MSLUPD: cmp  byte ptr [msact],0
         jge  @@pxn
         call BOOM               ; direct hit: SI = the unlucky jet
         inc  word ptr [psc]     ; chalk one on the canopy
+        call MCEND
         mov  byte ptr [msact],0
         ret
 @@pxn:  add  si,2
@@ -2515,6 +2557,8 @@ RESPAWNALL:
 CHASESET:
         cmp  byte ptr [dying],0
         jne  @@go2
+        cmp  byte ptr [mcact],0
+        jne  @@go2
         cmp  byte ptr [tgtcam],0
         jne  @@go2
         cmp  byte ptr [chsview],0
@@ -2557,6 +2601,8 @@ CHASESET:
         mov  [camz],ax
         jmp  @@level
 @@livecam:
+        cmp  byte ptr [mcact],0
+        jne  @@mcam
         cmp  byte ptr [tgtcam],0
         jne  @@tcam
         mov  ax,[hsin]          ; 400 back along the heading
@@ -2576,6 +2622,50 @@ CHASESET:
         mov  word ptr [pitch],0
         mov  word ptr [roll],0
 @@r:    ret
+@@mcam: ; ---- ride the missile (1) or hover at its grave (2) ----
+        mov  ax,[msx]
+        cmp  byte ptr [mcact],1
+        je   @@mm1
+        mov  ax,[mimx]
+@@mm1:  mov  [pdx],ax
+        mov  ax,[msy]
+        cmp  byte ptr [mcact],1
+        je   @@mm2
+        mov  ax,[mimy]
+@@mm2:  mov  [pdy],ax
+        mov  ax,[msz]
+        cmp  byte ptr [mcact],1
+        je   @@mm3
+        mov  ax,[mimz]
+@@mm3:  mov  [pdz],ax
+        mov  ax,[mch]           ; 260 behind along the camera course
+        call SINQ
+        mov  bx,260
+        imul bx
+        mov  bx,256
+        idiv bx
+        mov  bx,[pdx]
+        sub  bx,ax
+        mov  [camx],bx
+        mov  ax,[mch]
+        add  ax,64
+        call SINQ
+        mov  bx,260
+        imul bx
+        mov  bx,256
+        idiv bx
+        mov  bx,[pdz]
+        sub  bx,ax
+        mov  [camz],bx
+        mov  ax,[pdy]
+        add  ax,50
+        mov  [camy],ax
+        mov  ax,[mch]
+        mov  [heading],ax
+        mov  word ptr [pitch],-4
+        mov  word ptr [roll],0
+        jmp  @@r
+
 @@tcam: ; ---- orbit the target (mode 1: the jet; mode 2: its debris) ----
         cmp  byte ptr [tgtcam],2
         je   @@twrk
@@ -2641,6 +2731,8 @@ CHASESET:
 
 CHASERST:
         cmp  byte ptr [dying],0
+        jne  @@go2
+        cmp  byte ptr [mcact],0
         jne  @@go2
         cmp  byte ptr [tgtcam],0
         jne  @@go2
@@ -3245,4 +3337,20 @@ LERPRST:
         mov  ax,[lvr]
         mov  [roll],ax
         call SETTRIG            ; physics gets its true trig back
+@@r:    ret
+
+; ---------------------------------------------------------------------------
+;  MCEND - the ridden missile just ended (hit or burnout): mark the grave
+;  and give the camera ~3 seconds of aftermath before the old view returns.
+; ---------------------------------------------------------------------------
+MCEND:  cmp  byte ptr [mcact],1
+        jne  @@r
+        mov  byte ptr [mcact],2
+        mov  word ptr [mcret],54
+        mov  ax,[msx]
+        mov  [mimx],ax
+        mov  ax,[msy]
+        mov  [mimy],ax
+        mov  ax,[msz]
+        mov  [mimz],ax
 @@r:    ret

@@ -530,6 +530,16 @@ CROSS:  cmp  byte ptr [chsview],0
         jne  @@no
         cmp  byte ptr [dying],0
         jne  @@no
+        cmp  byte ptr [mcact],0
+        jne  @@no
+        cmp  byte ptr [mslcam],0 ; armed: a little amber M on the glass
+        je   @@noarm
+        mov  byte ptr [COLOR],5
+        mov  word ptr [ftx],8
+        mov  word ptr [fty],14
+        mov  si,offset MSGM2
+        call FDRAW
+@@noarm:
         mov  byte ptr [COLOR],8
         ; ---- levelled bar: two segments along (rcos,rsin) ----
         mov  ax,[rcos]

@@ -335,6 +335,15 @@ INPUT:
         jz   @@nf3
         xor  byte ptr [chsview],1
 @@nf3:
+        ; --- F5: arm/disarm the missile camera (edge) ---
+        mov  al,[KEYS+SC_F5]
+        cmp  al,[prevf5]
+        je   @@nf5
+        mov  [prevf5],al
+        test al,al
+        jz   @@nf5
+        xor  byte ptr [mslcam],1
+@@nf5:
         ; --- F4: orbit camera around the locked target (edge) ---
         mov  al,[KEYS+SC_F4]
         cmp  al,[prevt4]
@@ -559,6 +568,12 @@ INPUT:
         mov  ax,[locki]
         mov  [mstgt],ax
         mov  word ptr [mlife],140
+        cmp  byte ptr [mslcam],0
+        je   @@nomc
+        mov  byte ptr [mcact],1 ; armed: the camera rides this one
+        mov  ax,[heading]
+        mov  [mch],ax
+@@nomc:
         mov  ax,[hsin]          ; spawn 100 ahead, 20 below the sightline
         mov  bx,100
         imul bx

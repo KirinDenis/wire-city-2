@@ -115,6 +115,7 @@ SC_M    equ 32h                 ; right MFD mode toggle
 SC_BS   equ 0Eh                 ; missile launch (Backspace, above Enter)
 SC_F3   equ 3Dh                 ; chase camera toggle
 SC_F4   equ 3Eh                 ; orbit camera around the locked target
+SC_F5   equ 3Fh                 ; missile camera arm/disarm
 SC_Z    equ 2Ch                 ; rudder left
 SC_F2   equ 3Ch                 ; cockpit view toggle
 SC_NP7  equ 47h                 ; numpad 7: rudder left

@@ -781,6 +781,8 @@ FNUM3:  xor  dx,dx
 HUDBARS:
         cmp  byte ptr [chsview],0
         jne  @@hboff
+        cmp  byte ptr [mcact],0
+        jne  @@hboff
         cmp  byte ptr [tgtcam],0
         jne  @@hboff
         cmp  byte ptr [dying],0

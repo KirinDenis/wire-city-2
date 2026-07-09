@@ -162,6 +162,15 @@ fprev   dw 0                    ; frames the previous interval lasted
 chsview db 0                    ; F3 chase camera on?
 tgtcam  db 0                    ; F4 orbit camera on the locked target
 prevt4  db 0                    ; F4 edge detector
+mslcam  db 0                    ; F5: ride the next missile?
+prevf5  db 0                    ; F5 edge detector
+mcact   db 0                    ; 0 off, 1 riding, 2 watching the kill
+mcret   dw 0                    ; aftermath timer (~3 s)
+mch     dw 0                    ; camera course (servo-follows the missile)
+mimx    dw 0                    ; where the missile ended (the grave)
+mimy    dw 0
+mimz    dw 0
+MSGM2   db 'M',0
 tgti    dw 0                    ; orbited plane (kept past the lock)
 tcws    dw 0                    ; wreck slot the camera follows (mode 2)
 tgaz    dw 0                    ; orbit azimuth (0..255)
