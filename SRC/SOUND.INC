@@ -123,14 +123,13 @@ SBINIT: mov  dx,226h            ; DSP reset pulse
         ret
 
 ; ---- SNDKEY: bake the loop for state key AL = mode*8 + throttleBand ------
-;  mode 0 engine, 1 afterburner, 2 the fall.
+;  mode 0 engine, 1 afterburner, 2 the fall. The recipe follows a measured
+;  jet spectrum (res\engine.mp3): the energy hump sits at 120..250 Hz -
+;  that is the GROWL, a phase-jittered triangle at rate/64 (134..300 Hz);
+;  under it BROWNIAN bass, over it a WHITE hiss (500..4000 Hz) and a
+;  modest turbine WHINE at rate/8 (1..2.4 kHz, +8..12 dB, like the real
+;  tonal peaks - not a scream).
 SNDKEY: mov  [sbkey],al
-        mov  bl,al
-        mov  cl,3
-        shr  bl,cl              ; hmm: key = mode*8+band -> mode
-        push bx
-        ; rumble window and whine amplitude by mode/band
-        mov  al,[sbkey]
         mov  ah,al
         mov  cl,3
         shr  ah,cl              ; mode
@@ -138,39 +137,46 @@ SNDKEY: mov  [sbkey],al
         cmp  ah,2
         jne  @@live
         mov  byte ptr [sbra],0  ; the fall: no structure, pure static
-        mov  byte ptr [sbwa],0
         jmp  @@fill
 @@live: cmp  ah,1
         jne  @@eng
-        mov  byte ptr [sbra],52 ; burner: a roar...
-        mov  byte ptr [sbwa],18 ; ...the whine half-buried in it
+        mov  byte ptr [sbra],26 ; burner: everything wider and dirtier
+        mov  word ptr [sbga],30
+        mov  word ptr [sbwa],12
+        mov  byte ptr [sbwm],31
         jmp  @@fill
-@@eng:  mov  byte ptr [sbra],26 ; engine: moderate rumble
-        mov  ah,al              ; whine grows with the spool: 6+band*6
+@@eng:  mov  byte ptr [sbra],18 ; engine: bass floor
+        mov  word ptr [sbga],20 ; the 120..300 Hz growl carries the sound
+        mov  byte ptr [sbwm],15 ; light hiss
+        mov  ah,al              ; whine grows with the spool: 4+band*3
         add  ah,ah
         add  ah,al              ; band*3
-        add  ah,ah              ; band*6
-        add  ah,6
-        mov  [sbwa],ah
-@@fill: pop  bx
-        ; ---- bake SNDN samples: brown noise + triangle whine ----
+        add  ah,4
+        mov  al,ah
+        xor  ah,ah
+        mov  [sbwa],ax
+@@fill:
+        ; ---- bake SNDN samples ----
         push es
         mov  es,[sndseg]
         mov  di,[sndofs]
         cld
-        xor  bx,bx              ; bl = brown walker (signed), bh = phase
+        xor  bx,bx              ; bl = brown walker, bh = whine phase
+        xor  dx,dx              ; dl = noise bits,  dh = growl phase
         mov  cx,SNDN
 @@f:    push cx
-        call RND16              ; preserves BX/DX
+        push dx
+        call RND16              ; fresh dirt (preserves BX/DX)
+        pop  dx
         pop  cx
-        cmp  byte ptr [sbkey],16 ; mode 2 (key >= 16): the static IS it
+        mov  dl,al
+        cmp  byte ptr [sbkey],16 ; the fall: the static IS the signal
         jb   @@tone
         mov  es:[di],al
         inc  di
         loop @@f
         jmp  @@done
-@@tone: ; brown walker: += rnd(-7..8), bounded by the rumble window
-        mov  dl,al              ; keep noise bits
+@@tone: ; brown bass: walker += rnd(-7..8), bounded
         and  al,15
         sub  al,7
         add  bl,al
@@ -182,32 +188,73 @@ SNDKEY: mov  [sbkey],al
         cmp  bl,al
         jge  @@b2
         mov  bl,al
-@@b2:   ; triangle whine at rate/8: phase += 32 per sample
+@@b2:   mov  al,bl
+        cbw
+        mov  [sbacc],ax
+        ; growl: jittered triangle at rate/64 (the 120..300 Hz hump)
+        mov  al,dh
+        add  dh,4
+        test dl,64              ; phase jitter makes it a growl, not a hum
+        jz   @@g1
+        inc  dh
+@@g1:   cmp  al,128
+        jb   @@g2
+        neg  al
+@@g2:   sub  al,64
+        cbw
+        push dx
+        imul word ptr [sbga]
+        sar  ax,1
+        sar  ax,1
+        sar  ax,1
+        sar  ax,1
+        sar  ax,1
+        sar  ax,1
+        pop  dx
+        add  [sbacc],ax
+        ; whine: triangle at rate/8 (the 1..2.4 kHz turbine tone)
         mov  al,bh
         add  bh,32
         cmp  al,128
         jb   @@t1
-        neg  al                 ; fold the ramp into a triangle
-@@t1:   sub  al,64              ; -64..64
-        push bx
-        mov  bl,[sbwa]
-        imul bl                 ; tri(-64..64) * amplitude(<40)
-        sar  ax,1               ; >>6: whine sample up to ~+-38
-        sar  ax,1               ; (CL is the loop counter - shift by 1s)
+        neg  al
+@@t1:   sub  al,64
+        cbw
+        push dx
+        imul word ptr [sbwa]
         sar  ax,1
         sar  ax,1
         sar  ax,1
         sar  ax,1
-        pop  bx
-        add  al,bl              ; + rumble
-        add  al,128             ; centre
+        sar  ax,1
+        sar  ax,1
+        pop  dx
+        add  [sbacc],ax
+        ; white hiss: the 500..4000 Hz tail
+        mov  al,dl
+        and  al,[sbwm]
+        cbw
+        add  [sbacc],ax
+        mov  al,[sbwm]
+        shr  al,1
+        cbw
+        sub  [sbacc],ax
         ; the burner spits: rare loud crackle
         cmp  byte ptr [sbkey],8
-        jb   @@put
-        and  dl,63
-        jnz  @@put
-        add  al,45
-@@put:  mov  es:[di],al
+        jb   @@sum
+        mov  al,dl
+        and  al,63
+        jnz  @@sum
+        add  word ptr [sbacc],44
+@@sum:  mov  ax,[sbacc]         ; clamp and centre
+        cmp  ax,100
+        jle  @@c1
+        mov  ax,100
+@@c1:   cmp  ax,-100
+        jge  @@c2
+        mov  ax,-100
+@@c2:   add  al,128
+        mov  es:[di],al
         inc  di
         loop @@f
 @@done: pop  es

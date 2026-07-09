@@ -173,8 +173,11 @@ mimz    dw 0
 MSGM2   db 'M',0
 sbok    db 0                    ; Sound Blaster found at 220h?
 sbkey   db 0FFh                 ; baked waveform key: mode*8+band
-sbra    db 0                    ; rumble window (brown noise bound)
-sbwa    db 0                    ; whine amplitude (grows with the spool)
+sbra    db 0                    ; brown bass bound
+sbwa    dw 0                    ; whine amplitude (grows with the spool)
+sbga    dw 0                    ; growl amplitude (the 120..300 Hz hump)
+sbwm    db 0                    ; white hiss mask
+sbacc   dw 0                    ; sample accumulator (clamped to 8 bits)
 sbmsk   db 0                    ; saved IRQ7 mask bit
 sbtc    dw 0                    ; current DSP time constant
 sndseg  dw 0                    ; waveform loop segment (CS+3000h)
