@@ -47,6 +47,12 @@ ptype   db NPLANE dup(0)        ; 0 fighter / 1 bomber / 2 radar /
 pspd    dw 15                   ; AI speed of the plane being ticked
 mvb     dw MVERT                ; model table of the plane being drawn
 bordz   dw 17 dup(0)            ; the front line: jagged z offsets (BRDGEN)
+TYPN0   db 0                    ; fighters wear no tag
+TYPN1   db 'BOMBER',0
+TYPN2   db 'RADAR',0
+TYPN3   db 'TRANSP',0
+TYPN4   db 'TANKER',0
+TYPTAB  dw TYPN0,TYPN1,TYPN2,TYPN3,TYPN4
 ; model vertices (x,y,z), nose +Z, wingspan ~104 world units
 MVERT   dw   0,  1, 16          ; 0 nose        (quarter scale: the WORLD
         dw  -2,  2,-11          ; 1 rear top L    reads four times as big)

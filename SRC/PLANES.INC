@@ -774,6 +774,17 @@ PLANESDRAW:
         mov  [ftx],ax
         mov  si,[pidx]
         call CSDRAW             ; marker colour carries over (red = locked)
+        mov  ax,[dsy]           ; the type tag on the second line
+        add  ax,[dsac]
+        add  ax,11
+        cmp  ax,185
+        jg   @@nomk
+        mov  [fty],ax
+        mov  ax,[dsx]
+        sub  ax,14
+        mov  [ftx],ax
+        mov  si,[pidx]
+        call TYPDRAW
         jmp  @@nomk
 @@mln:  call CLIPLINE
         jc   @@mlx
@@ -959,6 +970,10 @@ LOCKHUD:
         mov  word ptr [ftx],142
         mov  word ptr [fty],132
         call CSDRAW
+        mov  word ptr [ftx],142
+        mov  word ptr [fty],140
+        mov  si,[locki]
+        call TYPDRAW
 @@done: cmp  word ptr [rndovr],0
         je   @@nob
         mov  ax,[lasttk]        ; the victory banner blinks
@@ -1006,6 +1021,20 @@ CSDRAW: push si
         call FNUM
         ret
 
+; ---- TYPDRAW: the aircraft type tag at ftx/fty. in: SI = plane offset -----
+TYPDRAW:
+        mov  bx,si
+        shr  bx,1
+        mov  al,[ptype+bx]
+        xor  ah,ah
+        add  ax,ax
+        mov  bx,ax
+        mov  si,[TYPTAB+bx]
+        cmp  byte ptr [si],0
+        je   @@r
+        call FDRAW
+@@r:    ret
+
 ; ---------------------------------------------------------------------------
 ;  TGTVIEW - sensor view of the locked target on the green MFD: callsign,
 ;  a wireframe of the jet (aspect follows its heading) and the IFF tag.
@@ -1016,6 +1045,10 @@ TGTVIEW:
         mov  word ptr [ftx],197
         mov  word ptr [fty],155
         call CSDRAW
+        mov  word ptr [ftx],197
+        mov  word ptr [fty],163
+        mov  si,[locki]
+        call TYPDRAW
         mov  si,[locki]
         mov  byte ptr [COLOR],19
         mov  bx,offset MSGTGT
