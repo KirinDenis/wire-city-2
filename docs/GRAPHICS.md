@@ -123,3 +123,10 @@ undefined-symbol errors literally dictate it):
 Build everything with `MAKE.BAT` (see the repo README). The listing
 trick from section 5 — `TASM /T /l`, then grep the crash offset — works
 on any DOS-era binary you'll ever have to rescue.
+
+---
+[Play the game](https://kirindenis.github.io/wire-city-2/) ·
+[README](https://github.com/KirinDenis/wire-city-2#readme) ·
+[ARCHITECTURE](https://github.com/KirinDenis/wire-city-2/blob/main/ARCHITECTURE.md) ·
+[3D for beginners](GRAPHICS-101.md) ·
+[Avionics](AVIONICS-101.md)

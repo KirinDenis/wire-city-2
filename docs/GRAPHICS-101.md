@@ -167,3 +167,9 @@ and every line of it is open:
 [the engine](https://github.com/KirinDenis/wire-city-2/tree/v1.0/ENGINE) ·
 [the examples](https://github.com/KirinDenis/wire-city-2/tree/v1.0/EXAMPLES) ·
 [play it in the browser](https://kirindenis.github.io/wire-city-2/).
+
+---
+[README](https://github.com/KirinDenis/wire-city-2#readme) ·
+[The engineer's version](GRAPHICS.md) ·
+[Avionics](AVIONICS-101.md) ·
+[Community](https://www.facebook.com/groups/OWLOS)

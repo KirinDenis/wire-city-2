@@ -109,4 +109,6 @@ philosophy of this project in one instrument panel.
 
 [GRAPHICS-101.md](GRAPHICS-101.md) — the 3D under the panel ·
 [ARCHITECTURE.md](https://github.com/KirinDenis/wire-city-2/blob/main/ARCHITECTURE.md) —
-the whole machine · [play the game](https://kirindenis.github.io/wire-city-2/).
+the whole machine · [play the game](https://kirindenis.github.io/wire-city-2/). ·
+[README](https://github.com/KirinDenis/wire-city-2#readme) ·
+[Community](https://www.facebook.com/groups/OWLOS)
