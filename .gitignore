@@ -27,11 +27,11 @@ docs/city.zip
 *password*
 credentials*
 
-# generated at build time (RESDAT.COM image copied to CITY.DAT)
-CITY.DAT
+# generated at build time inside SRC (the INSTALL copies ARE committed:
+# they are the playable release)
+SRC/CITY.DAT
 BUILD.LOG
 stdout.txt
 stderr.txt
 /res/panel1.psd
 LOCAL.BAT
-ENGINE.RAW
