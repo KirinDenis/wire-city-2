@@ -153,14 +153,17 @@ PLANESUPD:
         add  ax,ax
         add  bx,ax
         mov  cx,TLN
+        push es                 ; the trails live in the far scratch seg
+        mov  es,[scrseg]
 @@rtf:  mov  ax,[pax+si]
-        mov  [TLX+bx],ax
+        mov  es:[TLX+bx],ax
         mov  ax,[pay+si]
-        mov  [TLY+bx],ax
+        mov  es:[TLY+bx],ax
         mov  ax,[paz+si]
-        mov  [TLZ+bx],ax
+        mov  es:[TLZ+bx],ax
         add  bx,2
         loop @@rtf
+        pop  es
         ; ---- flying into a building kills both (1 tick in 4) ----
         mov  ax,[lasttk]
         add  ax,si
@@ -438,16 +441,19 @@ PLANESDRAW:
         mov  word ptr [tpi],0
 @@tr:   mov  bx,[pfc]
         add  bx,[tpi]
-        mov  ax,[TLX+bx]
+        push es                 ; the trails live in the far scratch seg
+        mov  es,[scrseg]
+        mov  ax,es:[TLX+bx]
         sub  ax,[camx]
         mov  [wdx],ax
-        mov  ax,[TLZ+bx]
+        mov  ax,es:[TLZ+bx]
         sub  ax,[camz]
         mov  [wdz],ax
-        push bx
+        mov  ax,es:[TLY+bx]
+        pop  es
+        push ax
         call ROTXZ
-        pop  bx
-        mov  dx,[TLY+bx]
+        pop  dx
         sub  dx,[camy]
         mov  ax,[rcx]
         mov  cx,[rcz]
@@ -2659,14 +2665,17 @@ RESPAWNALL:
         add  ax,ax
         add  bx,ax              ; si*12: ring = TLN(12)*2 bytes per jet
         mov  cx,TLN
+        push es                 ; the trails live in the far scratch seg
+        mov  es,[scrseg]
 @@rsf:  mov  ax,[pax+si]
-        mov  [TLX+bx],ax
+        mov  es:[TLX+bx],ax
         mov  ax,[pay+si]
-        mov  [TLY+bx],ax
+        mov  es:[TLY+bx],ax
         mov  ax,[paz+si]
-        mov  [TLZ+bx],ax
+        mov  es:[TLZ+bx],ax
         add  bx,2
         loop @@rsf
+        pop  es
         add  si,2
         cmp  si,NPLANE*2
         jb   @@rs
@@ -2761,14 +2770,17 @@ FORMATION:
         add  ax,ax
         add  bx,ax              ; si*12
         mov  cx,TLN
+        push es                 ; the trails live in the far scratch seg
+        mov  es,[scrseg]
 @@ff:   mov  ax,[pax+si]
-        mov  [TLX+bx],ax
+        mov  es:[TLX+bx],ax
         mov  ax,[pay+si]
-        mov  [TLY+bx],ax
+        mov  es:[TLY+bx],ax
         mov  ax,[paz+si]
-        mov  [TLZ+bx],ax
+        mov  es:[TLZ+bx],ax
         add  bx,2
         loop @@ff
+        pop  es
         add  si,2
         cmp  si,NPLANE*2
         jb   @@f
