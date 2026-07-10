@@ -1,6 +1,7 @@
 # WIRE CITY 86
 
 ### ▶ Play online: https://kirindenis.github.io/wire-city-2/
+### 💬 Community: [facebook.com/groups/OWLOS](https://www.facebook.com/groups/OWLOS) — dev stories, bug hunts (the LCG resonance, the flip-book islands, INT 0 under Turbo Debugger), new builds and retro-engineering talk
 
 ![WIRE CITY 86 — cockpit, city and combat](res/screens.png)
 
