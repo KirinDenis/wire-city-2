@@ -44,22 +44,26 @@ DSGEN:  mov  word ptr [dss],32  ; seed anchors on the coarsest grid
         xor  bx,bx
         xor  dx,dx
         call RND16
+        mov  al,ah              ; high byte, same resonance story
         and  al,127
         add  al,64              ; anchors 64..191 (mid range)
         call HPUT
         mov  bx,32
         call RND16
+        mov  al,ah              ; high byte, same resonance story
         and  al,127
         add  al,64
         call HPUT
         xor  bx,bx
         mov  dx,32
         call RND16
+        mov  al,ah              ; high byte, same resonance story
         and  al,127
         add  al,64
         call HPUT
         mov  bx,32
         call RND16
+        mov  al,ah              ; high byte, same resonance story
         and  al,127
         add  al,64
         call HPUT
@@ -220,6 +224,10 @@ DSGEN:  mov  word ptr [dss],32  ; seed anchors on the coarsest grid
         ret
 @@noise:                        ; AX = dsac/4 + (rnd & (amp-1)) - amp/2, 0..255
         call RND16
+        mov  al,ah              ; use the HIGH byte: in a mod-2^16 LCG the
+        xor  ah,ah              ; low k bits cycle every 2^(k+1) draws, and
+                                ; one DSGEN is EXACTLY 4096 draws - a
+                                ; resonance that made every island identical
         mov  bx,[dsamp]
         dec  bx
         and  ax,bx              ; 0..amp-1
