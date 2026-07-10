@@ -5,7 +5,9 @@ twenty aircraft a side — renders at speed on an 8086 with no z-buffer,
 no floating point and no multiply faster than `imul`. Every section
 links into the real code at the [v1.0 tag](https://github.com/KirinDenis/wire-city-2/tree/v1.0),
 so the links never rot. Read with the sources open; that's what they
-are for.
+are for. New to 3D or to assembly? Start with the plain-language
+version: [GRAPHICS-101.md](GRAPHICS-101.md) — same machine, told
+simply, with the same code pasted in.
 
 ## 0. The frame, end to end
 
