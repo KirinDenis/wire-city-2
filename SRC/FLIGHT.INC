@@ -1023,6 +1023,9 @@ PLAYERRESET:
         mov  byte ptr [dying],0
         mov  word ptr [dytick],0
         mov  word ptr [camy],1450   ; respawn above everything
+        mov  word ptr [camx],24576  ; home plate: the southern line
+        mov  word ptr [camz],24576-3400
+        mov  word ptr [heading],0   ; nose at the enemy
         mov  word ptr [roll],0
         mov  word ptr [vel],CRUISE  ; fresh jet: cruise speed + full tank
         mov  word ptr [fuel],FUELMAX

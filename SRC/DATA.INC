@@ -42,6 +42,11 @@ pax     dw NPLANE dup(0)        ; world position
 pay     dw NPLANE dup(0)
 paz     dw NPLANE dup(0)
 pah     dw NPLANE dup(0)        ; heading 0..255
+ptype   db NPLANE dup(0)        ; 0 fighter / 1 bomber / 2 radar /
+                                ;  3 transport / 4 tanker (FORMATION)
+pspd    dw 15                   ; AI speed of the plane being ticked
+mvb     dw MVERT                ; model table of the plane being drawn
+bordz   dw 17 dup(0)            ; the front line: jagged z offsets (BRDGEN)
 ; model vertices (x,y,z), nose +Z, wingspan ~104 world units
 MVERT   dw   0,  1, 16          ; 0 nose        (quarter scale: the WORLD
         dw  -2,  2,-11          ; 1 rear top L    reads four times as big)
@@ -70,6 +75,61 @@ GLOWT   db 63,52,12             ; nozzle DAC cycle: yellow
         db 63,34, 6             ; orange
         db 56,14, 4             ; red
         db 63,34, 6             ; orange again (smooth loop)
+; ---- the rest of the air force (same 13-vertex / 8-face topology,
+; so every drawing / breakup / sorting routine works unchanged) ----
+MVTAB   dw MVERT,MVERT1,MVERT2,MVERT3,MVERT4
+MVERT1  dw   0,  1, 26          ; BOMBER: long, wide, heavy
+        dw  -4,  4,-18
+        dw   4,  4,-18
+        dw  -4, -3,-18
+        dw   4, -3,-18
+        dw -26,  1, -4
+        dw  26,  1, -4
+        dw   0,  1,  8
+        dw  -4,  1,-16
+        dw   4,  1,-16
+        dw   0,  4, -8
+        dw   0, 11,-22
+        dw   0,  4,-18
+MVERT2  dw   0,  2, 20          ; RADAR: fat body, a huge dorsal sail
+        dw  -4,  5,-14
+        dw   4,  5,-14
+        dw  -4, -3,-14
+        dw   4, -3,-14
+        dw -18,  2, -2
+        dw  18,  2, -2
+        dw   0,  2,  6
+        dw  -4,  2,-12
+        dw   4,  2,-12
+        dw   0,  5,  2
+        dw   0, 14, -6
+        dw   0,  5,-10
+MVERT3  dw   0,  2, 18          ; TRANSPORT: fat and slow
+        dw  -5,  6,-14
+        dw   5,  6,-14
+        dw  -5, -4,-14
+        dw   5, -4,-14
+        dw -20,  3, -2
+        dw  20,  3, -2
+        dw   0,  3,  6
+        dw  -5,  3,-12
+        dw   5,  3,-12
+        dw   0,  6, -6
+        dw   0, 12,-16
+        dw   0,  6,-14
+MVERT4  dw   0,  2, 22          ; TANKER: the flying fuel truck
+        dw  -5,  5,-16
+        dw   5,  5,-16
+        dw  -5, -4,-16
+        dw   5, -4,-16
+        dw -19,  2, -3
+        dw  19,  2, -3
+        dw   0,  2,  7
+        dw  -5,  2,-14
+        dw   5,  2,-14
+        dw   0,  5, -7
+        dw   0, 10,-18
+        dw   0,  5,-16
 PVX     dw 13 dup(0)            ; camera-space vertex cache
 PVY     dw 13 dup(0)
 PVZ     dw 13 dup(0)

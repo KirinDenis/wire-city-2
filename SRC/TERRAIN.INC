@@ -4,6 +4,21 @@
 ; standalone examples in EXAMPLES\. This file keeps the game-side parts:
 ; the per-frame 3D mesh cache, the terrain rasterizer and the minimap.
 
+; ---- BRDGEN: the front line - 17 jagged z offsets around the map centre ---
+BRDGEN: xor  si,si
+@@b:    call RND16
+        mov  bl,ah              ; high byte (the TERRA resonance lesson)
+        xor  bh,bh
+        sub  bx,128
+        mov  ax,bx
+        mov  bx,6
+        imul bx                 ; +/-768
+        mov  [bordz+si],ax
+        add  si,2
+        cmp  si,17*2
+        jb   @@b
+        ret
+
 ; ============================================================================
 ;  TERRPREP - once per frame: rotate all NSIDE^2 nodes around the camera into
 ;  camera space (TRX/TRZ) and cache their heights (TWH world, TH raw).
@@ -366,6 +381,31 @@ MINIMAP:
         add  di,320-64
         loop @@row
         pop  ds
+        ; the front line: a jagged red stroke across the map
+        xor  cx,cx
+@@bd:   mov  bx,cx
+        shr  bx,1
+        shr  bx,1               ; band = column/4
+        add  bx,bx
+        mov  ax,[bordz+bx]
+        add  ax,24576+BIAS
+        push cx
+        mov  cl,10
+        shr  ax,cl              ; node j
+        and  ax,63
+        mov  bx,63
+        sub  bx,ax              ; map row (north up)
+        mov  ax,bx
+        add  ax,[mapt]
+        call ROW320
+        pop  cx
+        add  di,252
+        add  di,cx
+        mov  al,19
+        mov  es:[di],al
+        inc  cx
+        cmp  cx,64
+        jb   @@bd
         ; plane blip at node (camx,camz)
         mov  ax,[camx]
         add  ax,BIAS
@@ -524,6 +564,31 @@ MINIMAP2:
         dec  dx
         jnz  @@row
         pop  ds
+        ; the front line, half scale
+        xor  cx,cx
+@@bd2:  mov  bx,cx
+        shr  bx,1               ; band = (col*2)/4
+        add  bx,bx
+        mov  ax,[bordz+bx]
+        add  ax,24576+BIAS
+        push cx
+        mov  cl,10
+        shr  ax,cl
+        and  ax,63
+        mov  bx,63
+        sub  bx,ax
+        shr  bx,1
+        mov  ax,bx
+        add  ax,155
+        call ROW320
+        pop  cx
+        add  di,202
+        add  di,cx
+        mov  al,19
+        mov  es:[di],al
+        inc  cx
+        cmp  cx,32
+        jb   @@bd2
         ; plane blip at node (camx,camz), halved
         mov  ax,[camx]
         add  ax,BIAS

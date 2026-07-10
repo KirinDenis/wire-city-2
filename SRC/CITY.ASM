@@ -278,6 +278,7 @@ MAIN:
         mov  [scrseg],ax
         call DSGEN              ; build the Diamond-Square world heightmap
         call MMAPGEN            ; bake the minimap from it
+        call BRDGEN             ; draw the front line on the war
 
         ; video mode 13h + palette (day by default; N toggles at runtime)
         mov  ax,0013h
