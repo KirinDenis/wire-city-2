@@ -11,22 +11,8 @@
 ;  by construction). No Blaster or no ENGINE.RAW = silence, the game
 ;  runs on. IRQ 7 stays masked: auto-init DMA needs no servicing here.
 ; ============================================================================
-SNDN    equ 8000h               ; loop length: 32768 samples (~3 s)
-
-; ---- SBWR: write AH to the DSP (port 22Ch), with a patience limit --------
-SBWR:   push cx
-        push dx
-        mov  dx,22Ch
-        mov  cx,1000
-@@w:    in   al,dx
-        test al,80h
-        jz   @@go
-        loop @@w
-@@go:   mov  al,ah
-        out  dx,al
-        pop  dx
-        pop  cx
-        ret
+; SNDN, SBWR, SFXRAW and SFXMB live in ENGINE\E_SND.INC (shared with
+; EXAMPLES\RING.ASM); this file builds the game's sound on top of them.
 
 ; ---- SBINIT: find the DSP, load the sample, start the eternal loop -------
 SBINIT: mov  dx,226h            ; DSP reset pulse
@@ -138,33 +124,6 @@ SBINIT: mov  dx,226h            ; DSP reset pulse
 ;  in the top half of the sample segment. No second channel, no mixer -
 ;  the ring itself is the mixer.
 ; ============================================================================
-
-; ---- SFXRAW: BX = the DMA beam position inside the ring -------------------
-SFXRAW: xor  al,al
-        out  0Ch,al             ; clear the flip-flop
-        in   al,03h             ; channel 1 remaining count, low byte...
-        mov  bl,al
-        in   al,03h             ; ...then high
-        mov  bh,al
-        mov  ax,SNDN-1
-        sub  ax,bx              ; played = total - remaining
-        and  ax,SNDN-1
-        mov  bx,ax
-        ret
-
-; ---- SFXMB: add the signed sample in DX to ES:[DI], clamp, advance -------
-SFXMB:  mov  al,es:[di]
-        xor  ah,ah
-        add  ax,dx
-        jns  @@p
-        xor  ax,ax
-@@p:    cmp  ax,255
-        jle  @@q
-        mov  ax,255
-@@q:    mov  es:[di],al
-        inc  di
-        and  di,SNDN-1
-        ret
 
 ; ---- SNDHEAL: heal the ring behind the beam from the pristine copy -------
 SNDHEAL:push cx

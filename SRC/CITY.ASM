@@ -128,6 +128,7 @@ SC_V    equ 2Fh                 ; V: sound mode (all/effects/silence)
 WRKSZ   equ 300                 ; wreck slot size (see the BSS block)
 WCL     equ 292                 ; face colours offset inside a slot
 BSSCLR  equ 2584                ; (BSSEND-WRK)/2 - keep in sync with BSS!
+SNDN    equ 8000h               ; sound ring length (ENGINE\E_SND.INC contract)
 FLBN    equ 48                  ; black box: samples (every 2nd tick, ~5.3 s)
 FLBSZ   equ 576                 ; FLBN * 12 bytes (x,y,z,hdg,pitch,roll)
 WFP     equ 4                   ; face records offset inside a slot
@@ -438,6 +439,9 @@ QUIT:
         mov  ax,4C00h
         int  21h
 
+        INCLUDE ..\ENGINE\E_MATH.INC ; engine: LCG random
+        INCLUDE ..\ENGINE\E_TERR.INC ; engine: Diamond-Square world
+        INCLUDE ..\ENGINE\E_SND.INC  ; engine: DSP write, DMA beam, ring mix
         INCLUDE VIDEO.INC       ; palette DAC, background bands, blit
         INCLUDE M3D.INC         ; trig, rotations, projection
         INCLUDE RASTER.INC      ; polygon clip/fill/stroke, lines
