@@ -34,6 +34,10 @@ TASM /T JET.ASM
 if errorlevel 1 goto err
 TLINK /t JET.OBJ
 if errorlevel 1 goto err
+TASM /T AVIO.ASM
+if errorlevel 1 goto err
+TLINK /t AVIO.OBJ
+if errorlevel 1 goto err
 cd ..
 echo.
 echo OK -- run INSTALL\CITY.COM

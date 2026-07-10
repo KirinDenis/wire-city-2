@@ -30,6 +30,10 @@ TASM /T JET.ASM >> ..\BUILD.LOG
 if errorlevel 1 goto err
 TLINK /t JET.OBJ >> ..\BUILD.LOG
 if errorlevel 1 goto err
+TASM /T AVIO.ASM >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t AVIO.OBJ >> ..\BUILD.LOG
+if errorlevel 1 goto err
 cd ..
 echo BUILD OK >> BUILD.LOG
 goto end
