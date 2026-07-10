@@ -3,6 +3,11 @@
 ### ▶ Play online: https://kirindenis.github.io/wire-city-2/
 ### 💬 Community: [facebook.com/groups/OWLOS](https://www.facebook.com/groups/OWLOS) — dev stories, bug hunts (the LCG resonance, the flip-book islands, INT 0 under Turbo Debugger), new builds and retro-engineering talk
 
+Built by the team behind **[Owlos](https://owlos.sk/)** — keeping and
+modernizing legacy systems (MS-DOS, Turbo Pascal, Clipper, FoxPro, VB6,
+Delphi) is our day job. We write *new* software for MS-DOS for fun;
+imagine what we do for your business.
+
 ![WIRE CITY 86 — cockpit, city and combat](res/screens.png)
 
 A polygon **combat flight sim in pure 8086 assembly** for DOS — VGA mode 13h,
