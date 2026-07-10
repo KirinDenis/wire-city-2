@@ -2,8 +2,10 @@
 
 ### ▶ Play online: https://kirindenis.github.io/wire-city-2/
 
+![WIRE CITY 86 — cockpit, city and combat](res/screens.png)
+
 A polygon **combat flight sim in pure 8086 assembly** for DOS — VGA mode 13h,
-integer math only, no libraries, no engine. The whole game is a **36 KB
+integer math only, no libraries, no engine. The whole game is a **38 KB
 `.COM`** plus a 63 KB resource file (the cockpit art and the font), built with
 Turbo Assembler 3.2 in DOSBox. In the browser it runs on DOSBox compiled to
 WebAssembly ([js-dos](https://js-dos.com)).
