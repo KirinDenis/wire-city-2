@@ -129,7 +129,6 @@ WRKSZ   equ 300                 ; wreck slot size (see the BSS block)
 WCL     equ 292                 ; face colours offset inside a slot
 BSSCLR  equ 2584                ; (BSSEND-WRK)/2 - keep in sync with BSS!
 SNDN    equ 8000h               ; sound ring length (ENGINE\E_SND.INC contract)
-NBOMB   equ 6                   ; bombs in the air at once
 FLBN    equ 48                  ; black box: samples (every 2nd tick, ~5.3 s)
 FLBSZ   equ 576                 ; FLBN * 12 bytes (x,y,z,hdg,pitch,roll)
 WFP     equ 4                   ; face records offset inside a slot

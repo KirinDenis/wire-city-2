@@ -348,26 +348,6 @@ INPUT:
         xor  byte ptr [daymode],1
         call APPLYPAL
 @@nn:
-        ; --- [ / ]: radar zoom out / in (4 steps, 3.8k..30k range) ---
-        mov  al,[KEYS+1Ah]
-        cmp  al,[prevzo]
-        je   @@nzo
-        mov  [prevzo],al
-        test al,al
-        jz   @@nzo
-        cmp  word ptr [rzsh],11
-        jae  @@nzo
-        inc  word ptr [rzsh]
-@@nzo:  mov  al,[KEYS+1Bh]
-        cmp  al,[prevzi]
-        je   @@nzi
-        mov  [prevzi],al
-        test al,al
-        jz   @@nzi
-        cmp  word ptr [rzsh],8
-        jbe  @@nzi
-        dec  word ptr [rzsh]
-@@nzi:
         ; --- V key: sound mode - all / effects only / silence (edge) ---
         mov  al,[KEYS+SC_V]
         cmp  al,[prevsk]
@@ -906,7 +886,6 @@ INPUT:
 @@fbw:  mov  [flbh],bx
 @@fbskip:
         call PLANESUPD          ; AI traffic flies on the same clock
-        call BOMBUPD            ; and the bombs fall on it too
         call MSLUPD             ; the missile chases on the same clock
         call TRCUPD             ; tracer rounds fly on the same clock
         call AMSLUPD            ; the AI shoots its own war
