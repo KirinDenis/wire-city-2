@@ -373,6 +373,12 @@ PLANESDRAW:
         mov  bx,ax
         mov  ax,[MVTAB+bx]
         mov  [mvb],ax
+        mov  ax,[MVNTAB+bx]
+        mov  [mvn],ax
+        mov  ax,[MFTAB+bx]
+        mov  [mfb],ax
+        mov  ax,[NFCTAB+bx]
+        mov  [nfc],ax
         ; centre -> camera space (yaw only; PITCH4 pitches faces later)
         mov  ax,[pax+si]
         sub  ax,[camx]
@@ -498,7 +504,7 @@ PLANESDRAW:
         mov  [PVZ+di],ax
         add  si,6
         add  di,2
-        cmp  si,13*6
+        cmp  si,[mvn]
         jb   @@tv
         ; ---- face depths: FCD = avg z of the face corners ----
         xor  si,si              ; face index
@@ -506,24 +512,25 @@ PLANESDRAW:
         add  bx,bx
         add  bx,bx
         add  bx,si              ; face record = 5 bytes
+        add  bx,[mfb]           ; in THIS type's face table
         push si
-        mov  al,[MFACE+bx]      ; corner ids -> depths, pairwise averaged
+        mov  al,[bx]            ; corner ids -> depths, pairwise averaged
         xor  ah,ah
         add  ax,ax
         mov  si,ax
         mov  cx,[PVZ+si]
-        mov  al,[MFACE+bx+1]
+        mov  al,[bx+1]
         xor  ah,ah
         add  ax,ax
         mov  si,ax
         add  cx,[PVZ+si]
         sar  cx,1               ; (a+b)/2
-        mov  al,[MFACE+bx+2]
+        mov  al,[bx+2]
         xor  ah,ah
         add  ax,ax
         mov  si,ax
         mov  dx,[PVZ+si]
-        mov  al,[MFACE+bx+3]
+        mov  al,[bx+3]
         xor  ah,ah
         add  ax,ax
         mov  si,ax
@@ -539,10 +546,11 @@ PLANESDRAW:
         mov  bx,si
         mov  [FCO+bx],al        ; order starts as identity
         inc  si
-        cmp  si,NFACE
+        cmp  si,[nfc]
         jb   @@fd
         ; ---- bubble far -> near (descending depth) ----
-        mov  cx,NFACE-1
+        mov  cx,[nfc]
+        dec  cx
 @@bs:   push cx
         xor  si,si
 @@bi:   mov  bx,si
@@ -556,7 +564,9 @@ PLANESDRAW:
         xchg al,[FCO+si+1]
         mov  [FCO+si],al
 @@nsw:  inc  si
-        cmp  si,NFACE-1
+        mov  bx,[nfc]
+        dec  bx
+        cmp  si,bx
         jb   @@bi
         pop  cx
         loop @@bs
@@ -570,13 +580,14 @@ PLANESDRAW:
         add  bx,bx
         add  ax,bx              ; *5
         mov  bx,ax              ; face record offset
-        mov  al,[MFACE+bx+4]
+        add  bx,[mfb]           ; in THIS type's face table
+        mov  al,[bx+4]
         mov  [COLOR],al
         xor  cx,cx              ; corner 0..3
 @@dc:   push bx
         push cx
         mov  si,cx
-        mov  al,[MFACE+bx+si]
+        mov  al,[bx+si]
         xor  ah,ah
         add  ax,ax
         mov  si,ax              ; vertex cache offset
@@ -595,7 +606,8 @@ PLANESDRAW:
         jb   @@dc
         call FACEFILL
         inc  word ptr [pfc]
-        cmp  word ptr [pfc],NFACE
+        mov  ax,[nfc]
+        cmp  [pfc],ax
         jb   @@df
         ; ---- IFF marker: friendly = green square, hostile = yellow
         ; diamond, sized to the wingspan (11440/rz px half-size) ----
@@ -1071,6 +1083,8 @@ TGTVIEW:
         mov  bx,ax
         mov  ax,[MVTAB+bx]
         mov  [mvb],ax
+        mov  ax,[MVNTAB+bx]
+        mov  [mvn],ax
         mov  ax,[pah+si]
         sub  ax,[heading]
         and  ax,255
@@ -1124,7 +1138,7 @@ TGTVIEW:
         mov  [PVY+di],bx
         add  si,6
         add  di,2
-        cmp  si,13*6
+        cmp  si,[mvn]
         jb   @@tv2
         xor  si,si              ; sensor-green edges
 @@te:   mov  al,[WEDG+si]
