@@ -187,16 +187,22 @@ SNDHEAL:push cx
         add  ax,cx
         and  ax,SNDN-1
         mov  [sbrst],ax
+        mov  bl,[sndmod]
         push ds
         push es
         mov  ax,[sndseg]
         mov  ds,ax
         mov  es,ax
         cld
-@@cp:   mov  si,di
+@@cp:   cmp  bl,2
+        jne  @@sil
+        mov  si,di
         add  si,SNDN            ; the clean loop lives in the top half
         movsb
-        and  di,SNDN-1
+        jmp  @@nx
+@@sil:  mov  al,80h             ; engine muted: heal to flat silence
+        stosb
+@@nx:   and  di,SNDN-1
         loop @@cp
         pop  es
         pop  ds
@@ -208,6 +214,8 @@ SNDHEAL:push cx
 
 ; ---- SFXPOP: the cannon - a deep thump, almost a clap ---------------------
 SFXPOP: cmp  byte ptr [sbok],0
+        je   @@r
+        cmp  byte ptr [sndmod],0
         je   @@r
         push bx
         push cx
@@ -251,6 +259,8 @@ SFXPOP: cmp  byte ptr [sbok],0
 
 ; ---- SFXHISS: the missile leaves the rail - a sharp fading hiss -----------
 SFXHISS:cmp  byte ptr [sbok],0
+        je   @@r
+        cmp  byte ptr [sndmod],0
         je   @@r
         push bx
         push cx
@@ -354,6 +364,8 @@ SFXBOOM:cmp  byte ptr [sbok],0
 ; ---- SFXBM2: an explosion at world (DX,BX) - loudness falls with range ----
 SFXBM2: cmp  byte ptr [sbok],0
         je   @@r
+        cmp  byte ptr [sndmod],0
+        je   @@r
         push ax
         push bx
         push cx
@@ -390,6 +402,8 @@ SFXBM2: cmp  byte ptr [sbok],0
 
 ; ---- SFXBEEP: a caution note. BL = half period in samples ------------------
 SFXBEEP:cmp  byte ptr [sbok],0
+        je   @@r
+        cmp  byte ptr [sndmod],0
         je   @@r
         push bx
         push cx
@@ -428,6 +442,8 @@ SFXBEEP:cmp  byte ptr [sbok],0
 ; STALL urgent and high, FUEL mid, TERRAIN a low horn, LOCK a top blip
 SNDBEEP:cmp  byte ptr [sbok],0
         je   @@r
+        cmp  byte ptr [sndmod],0
+        je   @@r
         mov  ax,[lasttk]
         cmp  ax,[lastbp]
         je   @@r
@@ -462,6 +478,50 @@ SNDBEEP:cmp  byte ptr [sbok],0
 @@go:   mov  ax,[lasttk]
         mov  [lastbp],ax
         call SFXBEEP
+@@r:    ret
+
+; ---- SNDTOG: V key - all sounds -> effects only -> silence -> all ---------
+; "effects only" flattens the engine bed in the ring at once (effects are
+; still mixed in over silence); "silence" is the DSP speaker switch, the
+; DMA loop keeps spinning underneath so any mode is one keypress away.
+SNDTOG: cmp  byte ptr [sbok],0
+        je   @@r
+        mov  al,[sndmod]
+        dec  al
+        jns  @@m1
+        mov  al,2
+@@m1:   mov  [sndmod],al
+        or   al,al
+        jnz  @@on
+        mov  ah,0D3h            ; mode 0: hardware speaker off
+        call SBWR
+        ret
+@@on:   mov  ah,0D1h            ; speaker back on
+        call SBWR
+        push cx
+        push si
+        push di
+        push es
+        mov  bx,[sndseg]
+        mov  es,bx
+        xor  di,di
+        cld
+        cmp  byte ptr [sndmod],2
+        je   @@cp
+        mov  ax,8080h           ; effects only: flatten the engine bed now
+        mov  cx,SNDN/2
+        rep  stosw
+        jmp  @@fin
+@@cp:   push ds                 ; full sound: bring the engine back at once
+        mov  ds,bx
+        mov  si,SNDN
+        mov  cx,SNDN/2
+        rep  movsw
+        pop  ds
+@@fin:  pop  es
+        pop  di
+        pop  si
+        pop  cx
 @@r:    ret
 
 ; ---- SNDENG: once per frame - one knob, the pitch --------------------------

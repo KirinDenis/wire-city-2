@@ -348,6 +348,15 @@ INPUT:
         xor  byte ptr [daymode],1
         call APPLYPAL
 @@nn:
+        ; --- V key: sound mode - all / effects only / silence (edge) ---
+        mov  al,[KEYS+SC_V]
+        cmp  al,[prevsk]
+        je   @@nv
+        mov  [prevsk],al
+        test al,al
+        jz   @@nv
+        call SNDTOG
+@@nv:
         ; --- F2: cockpit panel on/off (edge-triggered; C is rudder now) ---
         mov  al,[KEYS+SC_F2]
         cmp  al,[prevc]

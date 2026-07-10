@@ -282,6 +282,21 @@ PANELBMP:
         mov  si,offset MSGM2
         call FDRAW
 @@nm5:
+        cmp  byte ptr [sbok],0  ; sound-mode letter: amber = all sounds,
+        je   @@ns5              ; white = effects only, red = silence
+        mov  byte ptr [COLOR],97
+        mov  al,[sndmod]
+        cmp  al,2
+        je   @@sc5
+        mov  byte ptr [COLOR],8
+        cmp  al,1
+        je   @@sc5
+        mov  byte ptr [COLOR],19
+@@sc5:  mov  word ptr [ftx],226
+        mov  word ptr [fty],2
+        mov  si,offset MSGS3
+        call FDRAW
+@@ns5:
         ; ---- afterburner strip ----
         cmp  byte ptr [abon],0
         je   @@ab

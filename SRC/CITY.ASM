@@ -124,6 +124,7 @@ SC_NPP  equ 4Eh                 ; numpad +: throttle up
 SC_NPM  equ 4Ah                 ; numpad -: throttle down
 SC_EQ   equ 0Dh                 ; main-row =/+: throttle up
 SC_MIN  equ 0Ch                 ; main-row -: throttle down
+SC_V    equ 2Fh                 ; V: sound mode (all/effects/silence)
 WRKSZ   equ 300                 ; wreck slot size (see the BSS block)
 WCL     equ 292                 ; face colours offset inside a slot
 BSSCLR  equ 2584                ; (BSSEND-WRK)/2 - keep in sync with BSS!

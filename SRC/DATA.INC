@@ -179,6 +179,10 @@ sbrst   dw 0                    ; ring-heal cursor (behind the DMA beam)
 sfa16   dw 0                    ; SFX: amplitude, 8.8 fixed point
 sfdec   dw 0                    ; SFX: amplitude decay per sample
 lastbp  dw 0                    ; last tick a lamp beeped on
+sndmod  db 2                    ; 2 = all sounds, 1 = effects only
+                                ;  (engine muted), 0 = silence
+prevsk  db 0                    ; V key edge detector (sound)
+MSGS3   db 'S',0                ; panel sound-mode letter
 mprvp   dw 0                    ; previous pitch (for the delta)
 mprvr   dw 0                    ; previous roll
 qramp   dw 0                    ; elevator ramp: a tap is a feather (2/8

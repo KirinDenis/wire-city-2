@@ -29,6 +29,7 @@ photo cockpit with a working radar.
 | **Backspace** | missile — 4 rails, homing on the lock, dumb-fire without one |
 | **Space** (hold) | cannon — hits whatever sits inside the ring |
 | **M** | right MFD: island map ↔ sensor view of the locked target |
+| **V** | sound: all → effects only → silence (the S letter on the panel: amber / white / red) |
 | **F2** | cockpit on / off |
 | **F3** | chase camera (your own jet from behind) |
 | **F4** | orbit camera around the locked target — arrows steer the orbit |
