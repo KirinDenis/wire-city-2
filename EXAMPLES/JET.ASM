@@ -9,6 +9,11 @@
 ;  near-clip -> perspective-project -> scanline-fill. Painter's algorithm:
 ;  no z-buffer anywhere, the near faces simply paint over the far ones.
 ;
+;  SPACE blows the jet apart: each face gets a random kick (sideways,
+;  up and out), rides a straight line bent by gravity every 8th frame,
+;  and ~5 seconds later a fresh jet rolls off the line. The explosion
+;  maths is all in one place - tune the kicks and the gravity below.
+;
 ;  Left / Right arrows change the spin, ESC quits. The nozzle burns by
 ;  DAC cycling: one palette register rewritten every few frames - the
 ;  pixels never change, the COLOUR does.
@@ -18,6 +23,7 @@
 FOCAL   equ 220                 ; the game's lens
 NEARZ   equ 40                  ; near clip plane
 NFACE   equ 8
+ETIME   equ 350                 ; explosion length in frames (~5 s @ 70 Hz)
 
         .8086
         LOCALS
@@ -30,6 +36,13 @@ START:  cld
         mov  ax,cs              ; back buffer: the 64K above the program
         add  ax,1000h
         mov  [bufseg],ax
+        push es
+        mov  ax,40h             ; seed the LCG (explosion kicks) from the
+        mov  es,ax              ; BIOS tick count
+        mov  ax,es:[6Ch]
+        pop  es
+        or   ax,1
+        mov  [rseed],ax
         mov  ax,0013h           ; VGA 320x200, 256 colours
         int  10h
         call SETPAL
@@ -43,6 +56,8 @@ START:  cld
         xor  ax,ax
         mov  cx,32000
         rep  stosw
+        cmp  byte ptr [emode],0
+        jne  @@phys
         ; ---- spin, then model yaw -> msin/mcos ----
         mov  ax,[spd]
         add  [mhead],ax
@@ -90,46 +105,94 @@ START:  cld
         add  di,2
         cmp  si,13*6
         jb   @@tv
-        ; ---- face depths: FCD = avg z of the face corners ----
-        xor  si,si
-@@fd:   mov  bx,si
+        ; ---- deal the corners: CA[face][0..3] <- the vertex cache ----
+        mov  word ptr [pfc],0
+@@cf:   mov  si,[pfc]
+        mov  bx,si
         add  bx,bx
         add  bx,bx
-        add  bx,si              ; face record = 5 bytes
-        push si
-        mov  al,[MFACE+bx]
+        add  bx,si              ; MFACE record = 5 bytes
+        mov  ax,si
+        mov  cl,3
+        shl  ax,cl
+        mov  di,ax              ; corner buffer base = face*8
+        xor  cx,cx
+@@cc:   mov  si,cx
+        mov  al,[MFACE+bx+si]
         xor  ah,ah
         add  ax,ax
         mov  si,ax
-        mov  cx,[PVZ+si]
-        mov  al,[MFACE+bx+1]
-        xor  ah,ah
-        add  ax,ax
-        mov  si,ax
-        add  cx,[PVZ+si]
+        mov  ax,[PVX+si]
+        mov  [CAX+di],ax
+        mov  ax,[PVY+si]
+        mov  [CAY+di],ax
+        mov  ax,[PVZ+si]
+        mov  [CAZ+di],ax
+        add  di,2
+        inc  cx
+        cmp  cx,4
+        jb   @@cc
+        inc  word ptr [pfc]
+        cmp  word ptr [pfc],NFACE
+        jb   @@cf
+        jmp  @@depth
+@@phys: ; ---- the breakup: rigid faces drift apart on their kicks ----
+        mov  word ptr [pfc],0
+@@pf:   mov  si,[pfc]
+        mov  bx,si
+        add  bx,bx              ; velocity index (2 bytes/face)
+        mov  ax,si
+        mov  cl,3
+        shl  ax,cl
+        mov  di,ax              ; corner base (8 bytes/face)
+        mov  cx,4
+@@pc:   mov  ax,[FVX+bx]
+        add  [CAX+di],ax
+        mov  ax,[FVY+bx]
+        add  [CAY+di],ax
+        mov  ax,[FVZ+bx]
+        add  [CAZ+di],ax
+        add  di,2
+        loop @@pc
+        inc  word ptr [pfc]
+        cmp  word ptr [pfc],NFACE
+        jb   @@pf
+        mov  ax,[etim]          ; gravity: a downward tug every 8th frame
+        test ax,7               ; (tune: smaller mask = heavier world)
+        jnz  @@ngv
+        xor  bx,bx
+@@gv:   dec  word ptr [FVY+bx]
+        add  bx,2
+        cmp  bx,NFACE*2
+        jb   @@gv
+@@ngv:  dec  word ptr [etim]
+        jnz  @@depth
+        mov  byte ptr [emode],0 ; ...and a fresh jet rolls off the line
+@@depth:
+        ; ---- face depths: FCD = avg z of the corner buffer ----
+        mov  word ptr [pfc],0
+@@fd:   mov  si,[pfc]
+        mov  ax,si
+        mov  cl,3
+        shl  ax,cl
+        mov  si,ax              ; corner base
+        mov  cx,[CAZ+si]
+        add  cx,[CAZ+si+2]
         sar  cx,1
-        mov  al,[MFACE+bx+2]
-        xor  ah,ah
-        add  ax,ax
-        mov  si,ax
-        mov  dx,[PVZ+si]
-        mov  al,[MFACE+bx+3]
-        xor  ah,ah
-        add  ax,ax
-        mov  si,ax
-        add  dx,[PVZ+si]
+        mov  dx,[CAZ+si+4]
+        add  dx,[CAZ+si+6]
         sar  dx,1
         add  cx,dx
         sar  cx,1               ; face average depth
-        pop  si
+        mov  si,[pfc]
         mov  bx,si
         add  bx,bx
         mov  [FCD+bx],cx
         mov  ax,si
         mov  bx,si
         mov  [FCO+bx],al        ; order starts as identity
-        inc  si
-        cmp  si,NFACE
+        inc  word ptr [pfc]
+        cmp  word ptr [pfc],NFACE
         jb   @@fd
         ; ---- bubble far -> near (descending depth) ----
         mov  cx,NFACE-1
@@ -155,6 +218,7 @@ START:  cld
 @@df:   mov  si,[pfc]
         mov  al,[FCO+si]
         xor  ah,ah
+        mov  si,ax              ; the ordered face id
         mov  bx,ax
         add  bx,bx
         add  bx,bx
@@ -162,26 +226,20 @@ START:  cld
         mov  bx,ax
         mov  al,[MFACE+bx+4]
         mov  [COLOR],al
-        xor  cx,cx
-@@dc:   push bx
-        push cx
-        mov  si,cx
-        mov  al,[MFACE+bx+si]
-        xor  ah,ah
-        add  ax,ax
-        mov  si,ax
-        mov  di,cx
-        add  di,di
-        mov  ax,[PVX+si]
+        mov  ax,si
+        mov  cl,3
+        shl  ax,cl
+        mov  si,ax              ; corner base
+        xor  di,di
+@@dc:   mov  ax,[CAX+si]
         mov  [IX+di],ax
-        mov  ax,[PVY+si]
+        mov  ax,[CAY+si]
         mov  [IY+di],ax
-        mov  ax,[PVZ+si]
+        mov  ax,[CAZ+si]
         mov  [IZ+di],ax
-        pop  cx
-        pop  bx
-        inc  cx
-        cmp  cx,4
+        add  si,2
+        add  di,2
+        cmp  di,8
         jb   @@dc
         call FACEFILL
         inc  word ptr [pfc]
@@ -227,7 +285,44 @@ START:  cld
         int  16h
         cmp  al,27
         je   @@quit
-        or   al,al              ; extended key? AH = scan code
+        cmp  al,' '             ; Space: the jet comes apart
+        jne  @@nsp
+        cmp  byte ptr [emode],0
+        jne  @@frame            ; already in pieces
+        mov  byte ptr [emode],1
+        mov  word ptr [etim],ETIME
+        xor  si,si              ; one kick per face - THE TUNING TABLE:
+@@ev:   push si                 ;   sideways -3..4, up -1..6, out -3..4
+        call RND16              ; (high byte of the LCG - see TERRA's
+        pop  si                 ;  resonance story for why never the low)
+        mov  di,si
+        add  di,di
+        mov  bl,ah
+        xor  bh,bh
+        and  bx,7
+        sub  bx,3               ; sideways kick
+        mov  [FVX+di],bx
+        push si
+        call RND16
+        pop  si
+        mov  bl,ah
+        xor  bh,bh
+        and  bx,7
+        sub  bx,1               ; upward bias: pieces arc before they fall
+        mov  [FVY+di],bx
+        push si
+        call RND16
+        pop  si
+        mov  bl,ah
+        xor  bh,bh
+        and  bx,7
+        sub  bx,3               ; toward / away from the lens
+        mov  [FVZ+di],bx
+        inc  si
+        cmp  si,NFACE
+        jb   @@ev
+        jmp  @@frame
+@@nsp:  or   al,al              ; extended key? AH = scan code
         jnz  @@frame
         cmp  ah,4Bh             ; Left: spin slower / the other way
         jne  @@kr
@@ -313,6 +408,15 @@ GLOWT   db 63,52,12             ; nozzle DAC cycle: yellow
 ; ---- engine contract: E_M3D + E_RAST (see the module headers) --------------
 bufseg  dw 0
 mhead   dw 0                    ; model heading (the spin)
+rseed   dw 1                    ; LCG state (explosion kicks)
+emode   db 0                    ; 0 = flying, 1 = in pieces
+etim    dw 0                    ; explosion frames left
+CAX     dw NFACE*4 dup(0)       ; face corners, absolute camera space
+CAY     dw NFACE*4 dup(0)       ;  (flying refills them from the model,
+CAZ     dw NFACE*4 dup(0)       ;   the breakup just moves them)
+FVX     dw NFACE dup(0)         ; face velocities
+FVY     dw NFACE dup(0)
+FVZ     dw NFACE dup(0)
 spd     dw 1                    ; spin per frame (arrows, -4..4)
 gcnt    dw 0                    ; glow frame counter
 gph     dw 0                    ; glow phase 0..2
@@ -391,6 +495,7 @@ SINT    dw 0,6,13,19,25,31,38,44,50,56,62,68,74,80,86,92,98,104,109,115
         dw 198,202,206,209,213,216,220,223,226,229,231,234,237,239,241,243
         dw 245,247,248,250,251,252,253,254,255,255,256,256,256
 
+        INCLUDE ..\ENGINE\E_MATH.INC
         INCLUDE ..\ENGINE\E_M3D.INC
         INCLUDE ..\ENGINE\E_RAST.INC
 
