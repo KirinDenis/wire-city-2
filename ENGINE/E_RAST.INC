@@ -116,8 +116,31 @@ APPENDISECT:
         mov  [tnum],ax          ; num = NEARZ - z0
         mov  ax,[IZ+di]
         sub  ax,[IZ+si]
-        mov  [tden],ax          ; den = z1 - z0  (nonzero)
-        mov  ax,[IX+di]
+        mov  [tden],ax          ; den = z1 - z0
+        ; ---- harden the divide (found by Turbo Debugger, 2026-07-10):
+        ; INT 0 on the 8086 is BOTH divide-by-zero AND quotient overflow.
+        ; With 0 <= t <= 1 the quotient can never exceed |x1-x0|, so
+        ; normalise den > 0 and clamp t into [0..1] - a garbage face
+        ; (coords wrapped upstream) clips ugly instead of crashing.
+        or   ax,ax
+        jg   @@tok
+        jl   @@tneg
+        mov  word ptr [tden],1  ; degenerate edge: t = 0
+        mov  word ptr [tnum],0
+        jmp  @@tok
+@@tneg: neg  ax
+        mov  [tden],ax
+        neg  word ptr [tnum]
+@@tok:  mov  ax,[tnum]
+        or   ax,ax
+        jns  @@tn1
+        mov  word ptr [tnum],0
+@@tn1:  mov  ax,[tnum]
+        cmp  ax,[tden]
+        jle  @@tn2
+        mov  ax,[tden]
+        mov  [tnum],ax
+@@tn2:  mov  ax,[IX+di]
         sub  ax,[IX+si]
         imul word ptr [tnum]
         idiv word ptr [tden]
