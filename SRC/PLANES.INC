@@ -20,7 +20,23 @@ PLANESUPD:
         cmp  byte ptr [pst+bx],0
         je   @@fly
         jmp  @@next
-@@fly:
+@@fly:  mov  bx,si
+        shr  bx,1
+        mov  word ptr [pspd],15
+        cmp  byte ptr [ptype+bx],0
+        je   @@fgt
+        ; ---- specials: patrol an east-west lane at formation altitude;
+        ; the lane's z never moves, so the border is never crossed
+        mov  word ptr [pspd],10
+        mov  ax,[pax+si]
+        cmp  ax,24576+7000
+        jl   @@sp1
+        mov  word ptr [pah+si],192
+@@sp1:  cmp  ax,24576-7000
+        jg   @@mv
+        mov  word ptr [pah+si],64
+        jmp  @@mv
+@@fgt:
         ; gentle circle: nudge the heading on every 4th tick
         mov  ax,[lasttk]
         and  ax,3
@@ -34,12 +50,11 @@ PLANESUPD:
 @@turn: and  ax,255
         mov  [pah+si],ax
 @@mv:
-        ; advance 30 units along the heading
+        ; advance along the heading (fighters 15, specials 10)
         mov  ax,[pah+si]
         push si
         call SINQ
-        mov  bx,15
-        imul bx
+        imul word ptr [pspd]
         mov  bx,256
         idiv bx
         pop  si
@@ -48,14 +63,19 @@ PLANESUPD:
         add  ax,64
         push si
         call SINQ
-        mov  bx,15
-        imul bx
+        imul word ptr [pspd]
         mov  bx,256
         idiv bx
         pop  si
         add  [paz+si],ax
         ; leash: wandered too far -> respawn in a random spot nearby
-        mov  ax,[pax+si]
+        ; (fighters only: the specials hold their formation lanes)
+        mov  bx,si
+        shr  bx,1
+        cmp  byte ptr [ptype+bx],0
+        je   @@lsh
+        jmp  @@trl
+@@lsh:  mov  ax,[pax+si]
         sub  ax,[camx]
         jns  @@l1
         neg  ax
@@ -347,6 +367,18 @@ PLANESDRAW:
         shr  bx,1
         cmp  byte ptr [pst+bx],0
         jne  @@skip
+        mov  al,[ptype+bx]      ; this slot's silhouette
+        xor  ah,ah
+        add  ax,ax
+        mov  bx,ax
+        mov  ax,[MVTAB+bx]
+        mov  [mvb],ax
+        mov  ax,[MVNTAB+bx]
+        mov  [mvn],ax
+        mov  ax,[MFTAB+bx]
+        mov  [mfb],ax
+        mov  ax,[NFCTAB+bx]
+        mov  [nfc],ax
         ; centre -> camera space (yaw only; PITCH4 pitches faces later)
         mov  ax,[pax+si]
         sub  ax,[camx]
@@ -440,26 +472,31 @@ PLANESDRAW:
         ; ---- transform the 13 model vertices into the PV cache ----
         xor  si,si              ; model table offset (6 bytes/vertex)
         xor  di,di              ; cache offset (2 bytes/vertex)
-@@tv:   mov  ax,[MVERT+si]      ; vx = (mx*mcos + mz*msin)/256 + pdx
+@@tv:   mov  bx,[mvb]           ; the model of THIS type of aircraft
+        mov  ax,[bx+si]         ; vx = (mx*mcos + mz*msin)/256 + pdx
         imul word ptr [mcos]
-        mov  bx,ax
-        mov  ax,[MVERT+si+4]
+        mov  cx,ax
+        mov  bx,[mvb]
+        mov  ax,[bx+si+4]
         imul word ptr [msin]
-        add  ax,bx
+        add  ax,cx
         cwd
         mov  bx,256
         idiv bx
         add  ax,[pdx]
         mov  [PVX+di],ax
-        mov  ax,[MVERT+si+2]    ; vy = my + pdy
+        mov  bx,[mvb]
+        mov  ax,[bx+si+2]       ; vy = my + pdy
         add  ax,[pdy]
         mov  [PVY+di],ax
-        mov  ax,[MVERT+si]      ; vz = (mz*mcos - mx*msin)/256 + pdz
+        mov  bx,[mvb]
+        mov  ax,[bx+si]         ; vz = (mz*mcos - mx*msin)/256 + pdz
         imul word ptr [msin]
-        mov  bx,ax
-        mov  ax,[MVERT+si+4]
+        mov  cx,ax
+        mov  bx,[mvb]
+        mov  ax,[bx+si+4]
         imul word ptr [mcos]
-        sub  ax,bx
+        sub  ax,cx
         cwd
         mov  bx,256
         idiv bx
@@ -467,7 +504,7 @@ PLANESDRAW:
         mov  [PVZ+di],ax
         add  si,6
         add  di,2
-        cmp  si,13*6
+        cmp  si,[mvn]
         jb   @@tv
         ; ---- face depths: FCD = avg z of the face corners ----
         xor  si,si              ; face index
@@ -475,24 +512,25 @@ PLANESDRAW:
         add  bx,bx
         add  bx,bx
         add  bx,si              ; face record = 5 bytes
+        add  bx,[mfb]           ; in THIS type's face table
         push si
-        mov  al,[MFACE+bx]      ; corner ids -> depths, pairwise averaged
+        mov  al,[bx]            ; corner ids -> depths, pairwise averaged
         xor  ah,ah
         add  ax,ax
         mov  si,ax
         mov  cx,[PVZ+si]
-        mov  al,[MFACE+bx+1]
+        mov  al,[bx+1]
         xor  ah,ah
         add  ax,ax
         mov  si,ax
         add  cx,[PVZ+si]
         sar  cx,1               ; (a+b)/2
-        mov  al,[MFACE+bx+2]
+        mov  al,[bx+2]
         xor  ah,ah
         add  ax,ax
         mov  si,ax
         mov  dx,[PVZ+si]
-        mov  al,[MFACE+bx+3]
+        mov  al,[bx+3]
         xor  ah,ah
         add  ax,ax
         mov  si,ax
@@ -508,10 +546,11 @@ PLANESDRAW:
         mov  bx,si
         mov  [FCO+bx],al        ; order starts as identity
         inc  si
-        cmp  si,NFACE
+        cmp  si,[nfc]
         jb   @@fd
         ; ---- bubble far -> near (descending depth) ----
-        mov  cx,NFACE-1
+        mov  cx,[nfc]
+        dec  cx
 @@bs:   push cx
         xor  si,si
 @@bi:   mov  bx,si
@@ -525,7 +564,9 @@ PLANESDRAW:
         xchg al,[FCO+si+1]
         mov  [FCO+si],al
 @@nsw:  inc  si
-        cmp  si,NFACE-1
+        mov  bx,[nfc]
+        dec  bx
+        cmp  si,bx
         jb   @@bi
         pop  cx
         loop @@bs
@@ -539,13 +580,14 @@ PLANESDRAW:
         add  bx,bx
         add  ax,bx              ; *5
         mov  bx,ax              ; face record offset
-        mov  al,[MFACE+bx+4]
+        add  bx,[mfb]           ; in THIS type's face table
+        mov  al,[bx+4]
         mov  [COLOR],al
         xor  cx,cx              ; corner 0..3
 @@dc:   push bx
         push cx
         mov  si,cx
-        mov  al,[MFACE+bx+si]
+        mov  al,[bx+si]
         xor  ah,ah
         add  ax,ax
         mov  si,ax              ; vertex cache offset
@@ -564,7 +606,8 @@ PLANESDRAW:
         jb   @@dc
         call FACEFILL
         inc  word ptr [pfc]
-        cmp  word ptr [pfc],NFACE
+        mov  ax,[nfc]
+        cmp  [pfc],ax
         jb   @@df
         ; ---- IFF marker: friendly = green square, hostile = yellow
         ; diamond, sized to the wingspan (11440/rz px half-size) ----
@@ -743,6 +786,17 @@ PLANESDRAW:
         mov  [ftx],ax
         mov  si,[pidx]
         call CSDRAW             ; marker colour carries over (red = locked)
+        mov  ax,[dsy]           ; the type tag on the second line
+        add  ax,[dsac]
+        add  ax,11
+        cmp  ax,185
+        jg   @@nomk
+        mov  [fty],ax
+        mov  ax,[dsx]
+        sub  ax,14
+        mov  [ftx],ax
+        mov  si,[pidx]
+        call TYPDRAW
         jmp  @@nomk
 @@mln:  call CLIPLINE
         jc   @@mlx
@@ -928,6 +982,10 @@ LOCKHUD:
         mov  word ptr [ftx],142
         mov  word ptr [fty],132
         call CSDRAW
+        mov  word ptr [ftx],142
+        mov  word ptr [fty],140
+        mov  si,[locki]
+        call TYPDRAW
 @@done: cmp  word ptr [rndovr],0
         je   @@nob
         mov  ax,[lasttk]        ; the victory banner blinks
@@ -975,6 +1033,20 @@ CSDRAW: push si
         call FNUM
         ret
 
+; ---- TYPDRAW: the aircraft type tag at ftx/fty. in: SI = plane offset -----
+TYPDRAW:
+        mov  bx,si
+        shr  bx,1
+        mov  al,[ptype+bx]
+        xor  ah,ah
+        add  ax,ax
+        mov  bx,ax
+        mov  si,[TYPTAB+bx]
+        cmp  byte ptr [si],0
+        je   @@r
+        call FDRAW
+@@r:    ret
+
 ; ---------------------------------------------------------------------------
 ;  TGTVIEW - sensor view of the locked target on the green MFD: callsign,
 ;  a wireframe of the jet (aspect follows its heading) and the IFF tag.
@@ -985,6 +1057,10 @@ TGTVIEW:
         mov  word ptr [ftx],197
         mov  word ptr [fty],155
         call CSDRAW
+        mov  word ptr [ftx],197
+        mov  word ptr [fty],163
+        mov  si,[locki]
+        call TYPDRAW
         mov  si,[locki]
         mov  byte ptr [COLOR],19
         mov  bx,offset MSGTGT
@@ -999,6 +1075,16 @@ TGTVIEW:
         call FDRAW
         pop  si
         ; wireframe: rotate the model by its aspect, project small
+        mov  bx,si
+        shr  bx,1
+        mov  al,[ptype+bx]
+        xor  ah,ah
+        add  ax,ax
+        mov  bx,ax
+        mov  ax,[MVTAB+bx]
+        mov  [mvb],ax
+        mov  ax,[MVNTAB+bx]
+        mov  [mvn],ax
         mov  ax,[pah+si]
         sub  ax,[heading]
         and  ax,255
@@ -1011,22 +1097,26 @@ TGTVIEW:
         mov  [mcos],ax
         xor  si,si
         xor  di,di
-@@tv2:  mov  ax,[MVERT+si]      ; vx = (mx*mcos + mz*msin)/256
+@@tv2:  mov  bx,[mvb]
+        mov  ax,[bx+si]         ; vx = (mx*mcos + mz*msin)/256
         imul word ptr [mcos]
-        mov  bx,ax
-        mov  ax,[MVERT+si+4]
+        mov  cx,ax
+        mov  bx,[mvb]
+        mov  ax,[bx+si+4]
         imul word ptr [msin]
-        add  ax,bx
+        add  ax,cx
         cwd
         mov  bx,256
         idiv bx
         mov  [dsx],ax
-        mov  ax,[MVERT+si]      ; vz = (mz*mcos - mx*msin)/256 + 300
+        mov  bx,[mvb]
+        mov  ax,[bx+si]         ; vz = (mz*mcos - mx*msin)/256 + 300
         imul word ptr [msin]
-        mov  bx,ax
-        mov  ax,[MVERT+si+4]
+        mov  cx,ax
+        mov  bx,[mvb]
+        mov  ax,[bx+si+4]
         imul word ptr [mcos]
-        sub  ax,bx
+        sub  ax,cx
         cwd
         mov  bx,256
         idiv bx
@@ -1038,7 +1128,8 @@ TGTVIEW:
         idiv word ptr [dsac]
         add  ax,217
         mov  [PVX+di],ax
-        mov  ax,[MVERT+si+2]    ; sy = 170 - vy*64/vz
+        mov  bx,[mvb]
+        mov  ax,[bx+si+2]       ; sy = 170 - vy*64/vz
         mov  bx,64
         imul bx
         idiv word ptr [dsac]
@@ -1047,7 +1138,7 @@ TGTVIEW:
         mov  [PVY+di],bx
         add  si,6
         add  di,2
-        cmp  si,13*6
+        cmp  si,[mvn]
         jb   @@tv2
         xor  si,si              ; sensor-green edges
 @@te:   mov  al,[WEDG+si]
@@ -1289,6 +1380,12 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
 BOOM:   mov  bx,si
         shr  bx,1
         mov  byte ptr [pst+bx],1 ; down for good (attrition war)
+        mov  al,[ptype+bx]      ; the wreck keeps the victim's shape
+        xor  ah,ah
+        add  ax,ax
+        mov  bx,ax
+        mov  ax,[MVTAB+bx]
+        mov  [mvb],ax
         mov  ax,[locki]
         cmp  ax,si
         jne  @@bk1
@@ -1312,7 +1409,8 @@ BOOM:   mov  bx,si
         jmp  WRKFILL
 
 ; PBOOM - the PLAYER breaks apart (cinematic death).
-PBOOM:  mov  ax,[camx]
+PBOOM:  mov  word ptr [mvb],offset MVERT ; the player flies a fighter
+        mov  ax,[camx]
         mov  [bpx],ax
         mov  ax,[camy]
         mov  [bpy],ax
@@ -1382,11 +1480,12 @@ WRKFILL:
         add  bx,bx
         add  bx,ax
         add  bx,bx              ; vertex id * 6
-        mov  ax,[MVERT+bx]
+        add  bx,[mvb]
+        mov  ax,[bx]
         add  [ctx],ax
-        mov  ax,[MVERT+bx+2]
+        mov  ax,[bx+2]
         add  [cty],ax
-        mov  ax,[MVERT+bx+4]
+        mov  ax,[bx+4]
         add  [ctz],ax
         inc  word ptr [wcc]
         cmp  word ptr [wcc],4
@@ -1469,10 +1568,11 @@ WRKFILL:
         add  bx,bx
         add  bx,ax
         add  bx,bx              ; vid*6
-        mov  ax,[MVERT+bx]
+        add  bx,[mvb]
+        mov  ax,[bx]
         sub  ax,[ctx]
-        push word ptr [MVERT+bx+2]
-        mov  dx,[MVERT+bx+4]
+        push word ptr [bx+2]
+        mov  dx,[bx+4]
         sub  dx,[ctz]
         call ROTMS              ; AX/DX = rotated x/z offsets
         mov  bx,[tpi]           ; corner slot = di + WCO + f*24 + c*6
@@ -2552,8 +2652,109 @@ RESPAWNALL:
         add  si,2
         cmp  si,NPLANE*2
         jb   @@rs
+        call FORMATION          ; ...then arrange the battle lines
         mov  byte ptr [pst],1   ; slot 0 never flies: the player is the
         ret                     ; 20th green
+
+; ---------------------------------------------------------------------------
+;  FORMATION - the battle line-up. The map splits north/south on a jagged
+;  red border around z=24576 (the map centre): green (the player's team)
+;  south of it, yellow north. Per team: 13 fighters up front facing the
+;  enemy, 3 bombers behind, 2 transports, the radar and the tanker deep
+;  in the rear. Specials patrol east-west lanes and never move in z.
+; ---------------------------------------------------------------------------
+FORMATION:
+        xor  si,si
+@@f:    mov  bx,si
+        shr  bx,1               ; slot
+        mov  ax,bx
+        shr  ax,1               ; k = index within the team
+        mov  byte ptr [ptype+bx],0
+        cmp  ax,13
+        jae  @@spec
+        sub  ax,6               ; fighters: a line abreast
+        mov  cx,1200
+        imul cx
+        mov  [ctx],ax
+        mov  word ptr [cty],2200
+        mov  word ptr [tpi],900
+        jmp  @@place
+@@spec: cmp  ax,16
+        jb   @@bmb
+        je   @@rdr
+        cmp  ax,19
+        jb   @@trn
+        mov  byte ptr [ptype+bx],4      ; k=19: the tanker
+        mov  byte ptr [php+bx],5
+        mov  word ptr [ctx],4200
+        mov  word ptr [cty],6400
+        mov  word ptr [tpi],1300
+        jmp  @@place
+@@bmb:  mov  byte ptr [ptype+bx],1      ; k=13..15: bombers
+        mov  byte ptr [php+bx],6        ; they soak more lead
+        sub  ax,14
+        mov  cx,2400
+        imul cx
+        mov  [ctx],ax
+        mov  word ptr [cty],4200
+        mov  word ptr [tpi],1100
+        jmp  @@place
+@@rdr:  mov  byte ptr [ptype+bx],2      ; k=16: the radar plane
+        mov  byte ptr [php+bx],5
+        mov  word ptr [ctx],0
+        mov  word ptr [cty],6400
+        mov  word ptr [tpi],1300
+        jmp  @@place
+@@trn:  mov  byte ptr [ptype+bx],3      ; k=17,18: transports
+        mov  byte ptr [php+bx],5
+        sub  ax,17
+        add  ax,ax
+        dec  ax                 ; -1, +1
+        mov  cx,2800
+        imul cx
+        mov  [ctx],ax
+        mov  word ptr [cty],5000
+        mov  word ptr [tpi],1200
+@@place:
+        mov  ax,[ctx]
+        add  ax,24576
+        mov  [pax+si],ax
+        mov  ax,[tpi]
+        mov  [pay+si],ax
+        test bx,1               ; even slot = green = the south
+        jnz  @@north
+        mov  ax,24576
+        sub  ax,[cty]
+        mov  [paz+si],ax
+        mov  word ptr [pah+si],0        ; nose at the enemy
+        jmp  @@fz
+@@north:
+        mov  ax,24576
+        add  ax,[cty]
+        mov  [paz+si],ax
+        mov  word ptr [pah+si],128
+@@fz:   cmp  byte ptr [ptype+bx],0      ; specials start on their lane
+        je   @@ftr
+        mov  word ptr [pah+si],64
+@@ftr:  mov  bx,si              ; reseed the contrail at the new spot
+        add  bx,bx
+        add  bx,bx
+        mov  ax,bx
+        add  ax,ax
+        add  bx,ax              ; si*12
+        mov  cx,TLN
+@@ff:   mov  ax,[pax+si]
+        mov  [TLX+bx],ax
+        mov  ax,[pay+si]
+        mov  [TLY+bx],ax
+        mov  ax,[paz+si]
+        mov  [TLZ+bx],ax
+        add  bx,2
+        loop @@ff
+        add  si,2
+        cmp  si,NPLANE*2
+        jb   @@f
+        ret
 
 ; ---------------------------------------------------------------------------
 ;  CHASESET / CHASERST - the F3 chase camera. For the render only: park

@@ -422,8 +422,44 @@ PANELBMP:
         test si,2
         jz   @@fr
         mov  al,96              ; hostile: yellow
-@@fr:   mov  es:[di],al
+@@fr:   ; blip shape by type: fighter 2x1, bomber a fat 4x1 bar, the
+        ; radar plane BLINKS (its antenna sweeps), transport a 2x2
+        ; block, the tanker a vertical 3-stack
+        push bx
+        mov  bx,si
+        shr  bx,1
+        mov  bl,[ptype+bx]
+        cmp  bl,1
+        je   @@shb
+        cmp  bl,2
+        je   @@shr
+        cmp  bl,3
+        je   @@sht
+        cmp  bl,4
+        je   @@shk
+        mov  es:[di],al         ; fighter: the classic 2x1
         mov  es:[di+1],al
+        jmp  @@shd
+@@shb:  mov  es:[di-1],al       ; bomber: the fat bar
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+2],al
+        jmp  @@shd
+@@shr:  mov  bx,[lasttk]        ; radar plane: the antenna sweeps
+        test bx,2
+        jnz  @@shd
+        mov  es:[di],al
+        mov  es:[di+1],al
+        jmp  @@shd
+@@sht:  mov  es:[di],al         ; transport: the 2x2 block
+        mov  es:[di+1],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+        jmp  @@shd
+@@shk:  mov  es:[di],al         ; tanker: the vertical stack
+        mov  es:[di-320],al
+        mov  es:[di+320],al
+@@shd:  pop  bx
         mov  bx,[pay+si]        ; altitude tick: above = higher, below =
         sub  bx,[camy]          ; lower than us (dead band +-200)
         cmp  bx,200

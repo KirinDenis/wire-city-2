@@ -3,6 +3,8 @@
 *.obj
 *.MAP
 *.map
+*.LST
+*.lst
 *.bak
 
 # editor / OS noise

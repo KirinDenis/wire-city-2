@@ -20,6 +20,20 @@ TLINK /t CITY.OBJ
 if errorlevel 1 goto err
 copy /y CITY.COM ..\INSTALL\CITY.COM >nul
 del CITY.COM
+REM -- the engine examples (EXAMPLES\*.ASM on ENGINE\*.INC) --
+cd ..\EXAMPLES
+TASM /T TERRA.ASM
+if errorlevel 1 goto err
+TLINK /t TERRA.OBJ
+if errorlevel 1 goto err
+TASM /T RING.ASM
+if errorlevel 1 goto err
+TLINK /t RING.OBJ
+if errorlevel 1 goto err
+TASM /T JET.ASM
+if errorlevel 1 goto err
+TLINK /t JET.OBJ
+if errorlevel 1 goto err
 cd ..
 echo.
 echo OK -- run INSTALL\CITY.COM

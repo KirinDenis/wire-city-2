@@ -17,6 +17,19 @@ TLINK /t CITY.OBJ >> ..\BUILD.LOG
 if errorlevel 1 goto err
 copy /y CITY.COM ..\INSTALL\CITY.COM >> ..\BUILD.LOG
 del CITY.COM
+cd ..\EXAMPLES
+TASM /T TERRA.ASM >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t TERRA.OBJ >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TASM /T RING.ASM >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t RING.OBJ >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TASM /T JET.ASM >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t JET.OBJ >> ..\BUILD.LOG
+if errorlevel 1 goto err
 cd ..
 echo BUILD OK >> BUILD.LOG
 goto end

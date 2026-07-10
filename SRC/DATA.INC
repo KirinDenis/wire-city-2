@@ -42,6 +42,20 @@ pax     dw NPLANE dup(0)        ; world position
 pay     dw NPLANE dup(0)
 paz     dw NPLANE dup(0)
 pah     dw NPLANE dup(0)        ; heading 0..255
+ptype   db NPLANE dup(0)        ; 0 fighter / 1 bomber / 2 radar /
+                                ;  3 transport / 4 tanker (FORMATION)
+pspd    dw 15                   ; AI speed of the plane being ticked
+mvb     dw MVERT                ; model table of the plane being drawn
+mvn     dw 13*6                 ; its vertex bytes (vertices * 6)
+mfb     dw MFACE                ; its face table
+nfc     dw 8                    ; its face count (core 8 + pods/dome)
+bordz   dw 17 dup(0)            ; the front line: jagged z offsets (BRDGEN)
+TYPN0   db 0                    ; fighters wear no tag
+TYPN1   db 'BOMBER',0
+TYPN2   db 'RADAR',0
+TYPN3   db 'TRANSP',0
+TYPN4   db 'TANKER',0
+TYPTAB  dw TYPN0,TYPN1,TYPN2,TYPN3,TYPN4
 ; model vertices (x,y,z), nose +Z, wingspan ~104 world units
 MVERT   dw   0,  1, 16          ; 0 nose        (quarter scale: the WORLD
         dw  -2,  2,-11          ; 1 rear top L    reads four times as big)
@@ -70,11 +84,128 @@ GLOWT   db 63,52,12             ; nozzle DAC cycle: yellow
         db 63,34, 6             ; orange
         db 56,14, 4             ; red
         db 63,34, 6             ; orange again (smooth loop)
-PVX     dw 13 dup(0)            ; camera-space vertex cache
-PVY     dw 13 dup(0)
-PVZ     dw 13 dup(0)
-FCD     dw NFACE dup(0)         ; face depths for the painter sort
-FCO     db NFACE dup(0)         ; face draw order
+; ---- the rest of the air force: variable geometry per type ----------------
+; Each type has its own vertex table (mvb/mvn) and face table (mfb/nfc).
+; The FIRST 13 vertices and 8 faces are always the core airframe with the
+; standard topology - the wreck pool breaks exactly those, so pods and
+; domes simply vanish in an explosion (nobody mourns a nacelle).
+MVTAB   dw MVERT,MVERT1,MVERT2,MVERT3,MVERT4
+MVNTAB  dw 13*6,25*6,19*6,13*6,19*6
+MFTAB   dw MFACE,MFACE1,MFACE2,MFACE,MFACE4
+NFCTAB  dw 8,12,10,8,10
+MVERT1  dw   0,  1, 34          ; BOMBER: long, four engines on the wings
+        dw  -5,  5,-22
+        dw   5,  5,-22
+        dw  -5, -4,-22
+        dw   5, -4,-22
+        dw -28,  1, -6
+        dw  28,  1, -6
+        dw   0,  1, 10
+        dw  -5,  1,-20
+        dw   5,  1,-20
+        dw   0,  5,-10
+        dw   0, 13,-26
+        dw   0,  5,-22
+        dw -10,  0,  6          ; 13..15 engine pod, inner left
+        dw -10,  0, -2
+        dw -10, -4,  2
+        dw -19,  0,  2          ; 16..18 outer left
+        dw -19,  0, -6
+        dw -19, -4, -2
+        dw  10,  0,  6          ; 19..21 inner right
+        dw  10,  0, -2
+        dw  10, -4,  2
+        dw  19,  0,  2          ; 22..24 outer right
+        dw  19,  0, -6
+        dw  19, -4, -2
+MFACE1  db 0,1,2,0, 24          ; the core 8 (exactly MFACE)...
+        db 0,3,4,0, 16
+        db 0,1,3,0, 25
+        db 0,2,4,0, 25
+        db 7,5,8,7, 0
+        db 7,6,9,7, 0
+        db 10,11,12,10, 25
+        db 1,2,4,3, 94
+        db 13,14,15,13, 16      ; ...and four dark engine slabs
+        db 16,17,18,16, 16
+        db 19,20,21,19, 16
+        db 22,23,24,22, 16
+MVERT2  dw   0,  2, 20          ; RADAR: fat body, the rotodome on top
+        dw  -4,  5,-14
+        dw   4,  5,-14
+        dw  -4, -3,-14
+        dw   4, -3,-14
+        dw -18,  2, -2
+        dw  18,  2, -2
+        dw   0,  2,  6
+        dw  -4,  2,-12
+        dw   4,  2,-12
+        dw   0,  5, -6
+        dw   0,  9,-14
+        dw   0,  5,-14
+        dw   0, 10,  2          ; 13..16 the dome: a horizontal diamond
+        dw   4, 10, -4
+        dw   0, 10,-10
+        dw  -4, 10, -4
+        dw   0, 12, -4          ; 17 dome top
+        dw   0,  8, -4          ; 18 dome bottom
+MFACE2  db 0,1,2,0, 24
+        db 0,3,4,0, 16
+        db 0,1,3,0, 25
+        db 0,2,4,0, 25
+        db 7,5,8,7, 0
+        db 7,6,9,7, 0
+        db 10,11,12,10, 25
+        db 1,2,4,3, 94
+        db 13,14,15,16, 24      ; the dome disc, sun-lit
+        db 13,17,15,18, 16      ; the dome lens, shaded
+MVERT3  dw   0,  2, 18          ; TRANSPORT: fat and slow
+        dw  -5,  6,-14
+        dw   5,  6,-14
+        dw  -5, -4,-14
+        dw   5, -4,-14
+        dw -20,  3, -2
+        dw  20,  3, -2
+        dw   0,  3,  6
+        dw  -5,  3,-12
+        dw   5,  3,-12
+        dw   0,  6, -6
+        dw   0, 12,-16
+        dw   0,  6,-14
+MVERT4  dw   0,  2, 26          ; TANKER: the fat fuel truck, two engines
+        dw  -7,  7,-18
+        dw   7,  7,-18
+        dw  -7, -5,-18
+        dw   7, -5,-18
+        dw -22,  2, -4
+        dw  22,  2, -4
+        dw   0,  2,  8
+        dw  -7,  2,-16
+        dw   7,  2,-16
+        dw   0,  7, -8
+        dw   0, 13,-20
+        dw   0,  7,-18
+        dw -11,  1,  6          ; 13..15 engine left
+        dw -11,  1, -2
+        dw -11, -4,  2
+        dw  11,  1,  6          ; 16..18 engine right
+        dw  11,  1, -2
+        dw  11, -4,  2
+MFACE4  db 0,1,2,0, 24
+        db 0,3,4,0, 16
+        db 0,1,3,0, 25
+        db 0,2,4,0, 25
+        db 7,5,8,7, 0
+        db 7,6,9,7, 0
+        db 10,11,12,10, 25
+        db 1,2,4,3, 94
+        db 13,14,15,13, 16
+        db 16,17,18,16, 16
+PVX     dw 25 dup(0)            ; camera-space vertex cache (max: bomber)
+PVY     dw 25 dup(0)
+PVZ     dw 25 dup(0)
+FCD     dw 12 dup(0)            ; face depths for the painter sort
+FCO     db 12 dup(0)            ; face draw order
 msin    dw 0                    ; model-vs-camera yaw sin/cos
 mcos    dw 0
 pdx     dw 0                    ; plane centre in camera space
