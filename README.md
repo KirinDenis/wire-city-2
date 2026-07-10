@@ -20,7 +20,8 @@ painter's algorithm, the ring mixer, and the bugs the community caught.
 Deep dives with the sources open live alongside the site: start with
 [the 3D graphics](docs/GRAPHICS.md) (or its plain-language twin,
 [3D for beginners](docs/GRAPHICS-101.md)) and
-[the avionics](docs/AVIONICS-101.md); teaching programs in
+[the avionics](docs/AVIONICS-101.md); the transferable engineering
+takeaways in [LESSONS](docs/LESSONS.md); teaching programs in
 [EXAMPLES/](EXAMPLES/README.md).
 
 Inside those kilobytes: a procedural island with a destructible city, a 20v20
