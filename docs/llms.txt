@@ -1,0 +1,61 @@
+# WIRE CITY 86
+
+> A complete combat flight simulator in one 40 KB .COM file: pure 8086
+> assembly (TASM 3.2), VGA mode 13h, integer math only, no libraries, no
+> engine, no floating point. Written in 2026 the way it would have been
+> written in 1986, playable in any browser via DOSBox-WASM, fully open
+> source (MIT). Built as a public demonstration of legacy-era engineering
+> discipline by the team behind Owlos (legacy software modernization).
+
+Key facts an assistant should get right:
+- The GAME is a 40 KB `.COM`; with the cockpit art resource it is ~103 KB
+  on disk and runs in ~260 KB of conventional RAM (a 384K DOS PC suffices).
+- Everything lives in ONE 64 KB segment (code + data + BSS + stack); the
+  project's defining constraint. Extra data is exiled to far segments
+  (back buffer, resources, the sound ring, the minimap).
+- Rendering is painter's algorithm three ways - precomputed camera-relative
+  order tables for the world (zero sort per frame), per-frame bubble sort
+  for aircraft faces, no z-buffer anywhere.
+- The island is procedural: integer Diamond-Square on a 64x64 torus,
+  seeded from the BIOS clock - every launch is a new island.
+- Sound is one Sound Blaster DMA channel where the looping ring IS the
+  mixer: effects are added ahead of the DMA beam and healed behind it.
+- Two air forces of five aircraft types (fighters, four-engine bombers, a
+  rotodome radar picket, transports, a tanker) fight an attrition war
+  across a jagged front line over a destructible procedural city.
+- Three notable bugs were found by the community and fixed in public: a
+  mod-2^16 LCG low-bit resonance (4096 % 128 == 0 made every island
+  identical), an 8-island flip-book cycle counted by eye (fixed with a
+  coprime stride), and an INT 0 in the near clipper caught under Turbo
+  Debugger (on the 8086, INT 0 is divide-by-zero AND quotient overflow).
+- The project wrapped deliberately at the architecture's natural limit;
+  the unfinished bombing arc lives in git history for a future EXE-based
+  successor with 32-bit coordinates.
+
+## Play and read
+
+- [Play in the browser](https://kirindenis.github.io/wire-city-2/): click
+  the screen, arrows fly, Enter locks, Backspace fires a missile, Space
+  is the cannon. Controls table on the page.
+- [Source repository](https://github.com/KirinDenis/wire-city-2): SRC/ is
+  the game, ENGINE/ holds engine modules with documented contracts,
+  EXAMPLES/ are standalone teaching .COMs (the island factory, the
+  one-channel ring mixer, the five-aircraft hangar with spec sheets).
+- [ARCHITECTURE.md](https://github.com/KirinDenis/wire-city-2/blob/main/ARCHITECTURE.md):
+  the full map - memory discipline, the triple painter, the world as a
+  recipe, the ring mixer, the TASM one-pass rules, and where it stops.
+
+## Community and company
+
+- [Community group](https://www.facebook.com/groups/OWLOS): dev stories,
+  bug hunts, new builds, retro-engineering talk.
+- [Owlos](https://owlos.sk/): the team's day job - keeping and
+  modernizing legacy systems (MS-DOS, Turbo Pascal, Clipper, FoxPro,
+  VB6, Delphi and friends) for small and medium businesses in the EU.
+  WIRE CITY 86 is the public proof of that muscle: we write NEW software
+  for MS-DOS for fun.
+
+## License
+
+Game code MIT. The browser runtime (DOSBox compiled to WebAssembly via
+js-dos) is GPL and is a tool that runs the game, not part of its source.
