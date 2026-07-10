@@ -14,6 +14,11 @@
 ;  and ~5 seconds later a fresh jet rolls off the line. The explosion
 ;  maths is all in one place - tune the kicks and the gravity below.
 ;
+;  UP / DOWN cycle through the whole air force - fighter, bomber (four
+;  engines), radar picket (rotodome), transport, tanker - with the spec
+;  sheet at the bottom drawn straight from the PC's ROM font (F000:FA6E,
+;  the same 8x8 glyphs the BIOS boots with).
+;
 ;  Left / Right arrows change the spin, ESC quits. The nozzle burns by
 ;  DAC cycling: one palette register rewritten every few frames - the
 ;  pixels never change, the COLOUR does.
@@ -22,7 +27,7 @@
 ; ============================================================================
 FOCAL   equ 220                 ; the game's lens
 NEARZ   equ 40                  ; near clip plane
-NFACE   equ 8
+MAXF    equ 12                  ; the biggest face count (bomber)
 ETIME   equ 350                 ; explosion length in frames (~5 s @ 70 Hz)
 
         .8086
@@ -72,38 +77,43 @@ START:  cld
         ; ---- transform the 13 vertices into the cache (x8 scale) ----
         xor  si,si              ; model table offset (6 bytes/vertex)
         xor  di,di              ; cache offset (2 bytes/vertex)
-@@tv:   mov  ax,[MVERT+si]      ; vx = (mx*mcos + mz*msin)/256
+@@tv:   mov  bx,[mvb]           ; the current aircraft's vertices
+        mov  ax,[bx+si]         ; vx = (mx*mcos + mz*msin)/256
         imul word ptr [mcos]
-        mov  bx,ax
-        mov  ax,[MVERT+si+4]
+        mov  cx,ax
+        mov  bx,[mvb]
+        mov  ax,[bx+si+4]
         imul word ptr [msin]
-        add  ax,bx
+        add  ax,cx
         cwd
         mov  bx,256
         idiv bx
         mov  cl,3
-        shl  ax,cl              ; x8: the model ships quarter-scale
+        shl  ax,cl              ; x8: the models ship quarter-scale
         mov  [PVX+di],ax
-        mov  ax,[MVERT+si+2]    ; vy = my (x8), a bit below the eye
+        mov  bx,[mvb]
+        mov  ax,[bx+si+2]       ; vy = my (x8), a bit below the eye
         shl  ax,cl
         sub  ax,20
         mov  [PVY+di],ax
-        mov  ax,[MVERT+si]      ; vz = (mz*mcos - mx*msin)/256
+        mov  bx,[mvb]
+        mov  ax,[bx+si]         ; vz = (mz*mcos - mx*msin)/256
         imul word ptr [msin]
-        mov  bx,ax
-        mov  ax,[MVERT+si+4]
+        mov  cx,ax
+        mov  bx,[mvb]
+        mov  ax,[bx+si+4]
         imul word ptr [mcos]
-        sub  ax,bx
+        sub  ax,cx
         cwd
         mov  bx,256
         idiv bx
         mov  cl,3
         shl  ax,cl
-        add  ax,300             ; park it in front of the lens
-        mov  [PVZ+di],ax
+        add  ax,[pdzc]          ; park it in front of the lens (big
+        mov  [PVZ+di],ax        ;  aircraft stand further back)
         add  si,6
         add  di,2
-        cmp  si,13*6
+        cmp  si,[mvn]
         jb   @@tv
         ; ---- deal the corners: CA[face][0..3] <- the vertex cache ----
         mov  word ptr [pfc],0
@@ -111,14 +121,15 @@ START:  cld
         mov  bx,si
         add  bx,bx
         add  bx,bx
-        add  bx,si              ; MFACE record = 5 bytes
+        add  bx,si              ; face record = 5 bytes
+        add  bx,[mfb]           ; in this type's face table
         mov  ax,si
         mov  cl,3
         shl  ax,cl
         mov  di,ax              ; corner buffer base = face*8
         xor  cx,cx
 @@cc:   mov  si,cx
-        mov  al,[MFACE+bx+si]
+        mov  al,[bx+si]
         xor  ah,ah
         add  ax,ax
         mov  si,ax
@@ -133,7 +144,8 @@ START:  cld
         cmp  cx,4
         jb   @@cc
         inc  word ptr [pfc]
-        cmp  word ptr [pfc],NFACE
+        mov  ax,[nfc]
+        cmp  [pfc],ax
         jb   @@cf
         jmp  @@depth
 @@phys: ; ---- the breakup: rigid faces drift apart on their kicks ----
@@ -155,7 +167,8 @@ START:  cld
         add  di,2
         loop @@pc
         inc  word ptr [pfc]
-        cmp  word ptr [pfc],NFACE
+        mov  ax,[nfc]
+        cmp  [pfc],ax
         jb   @@pf
         mov  ax,[etim]          ; gravity: a downward tug every 8th frame
         test ax,7               ; (tune: smaller mask = heavier world)
@@ -163,7 +176,9 @@ START:  cld
         xor  bx,bx
 @@gv:   dec  word ptr [FVY+bx]
         add  bx,2
-        cmp  bx,NFACE*2
+        mov  ax,[nfc]
+        add  ax,ax
+        cmp  bx,ax
         jb   @@gv
 @@ngv:  dec  word ptr [etim]
         jnz  @@depth
@@ -192,10 +207,12 @@ START:  cld
         mov  bx,si
         mov  [FCO+bx],al        ; order starts as identity
         inc  word ptr [pfc]
-        cmp  word ptr [pfc],NFACE
+        mov  ax,[nfc]
+        cmp  [pfc],ax
         jb   @@fd
         ; ---- bubble far -> near (descending depth) ----
-        mov  cx,NFACE-1
+        mov  cx,[nfc]
+        dec  cx
 @@bs:   push cx
         xor  si,si
 @@bi:   mov  bx,si
@@ -209,7 +226,9 @@ START:  cld
         xchg al,[FCO+si+1]
         mov  [FCO+si],al
 @@nsw:  inc  si
-        cmp  si,NFACE-1
+        mov  bx,[nfc]
+        dec  bx
+        cmp  si,bx
         jb   @@bi
         pop  cx
         loop @@bs
@@ -224,7 +243,8 @@ START:  cld
         add  bx,bx
         add  ax,bx              ; *5
         mov  bx,ax
-        mov  al,[MFACE+bx+4]
+        add  bx,[mfb]
+        mov  al,[bx+4]
         mov  [COLOR],al
         mov  ax,si
         mov  cl,3
@@ -243,7 +263,8 @@ START:  cld
         jb   @@dc
         call FACEFILL
         inc  word ptr [pfc]
-        cmp  word ptr [pfc],NFACE
+        mov  ax,[nfc]
+        cmp  [pfc],ax
         jb   @@df
         ; ---- the nozzle burns: DAC-cycle colour 94 ----
         inc  word ptr [gcnt]
@@ -267,6 +288,30 @@ START:  cld
         jb   @@ng
         mov  word ptr [gph],0
 @@ng:
+        ; ---- the spec sheet at the bottom (ROM font into the buffer) ----
+        mov  bx,[cmodel]
+        add  bx,bx
+        mov  ax,bx
+        add  ax,ax
+        add  bx,ax              ; *6: three lines per type
+        mov  byte ptr [tcol],30 ; amber name
+        push bx
+        mov  si,[INFTAB+bx]
+        mov  ax,168
+        mov  bx,16
+        call TXT
+        pop  bx
+        mov  byte ptr [tcol],28 ; grey data
+        push bx
+        mov  si,[INFTAB+bx+2]
+        mov  ax,180
+        mov  bx,16
+        call TXT
+        pop  bx
+        mov  si,[INFTAB+bx+4]
+        mov  ax,190
+        mov  bx,16
+        call TXT
         ; ---- vsync, blit, keys ----
         call WAITVR
         push ds
@@ -319,12 +364,39 @@ START:  cld
         sub  bx,3               ; toward / away from the lens
         mov  [FVZ+di],bx
         inc  si
-        cmp  si,NFACE
+        cmp  si,[nfc]
         jb   @@ev
         jmp  @@frame
 @@nsp:  or   al,al              ; extended key? AH = scan code
         jnz  @@frame
-        cmp  ah,4Bh             ; Left: spin slower / the other way
+        cmp  ah,48h             ; Up: the next aircraft
+        jne  @@kdn
+        inc  word ptr [cmodel]
+        cmp  word ptr [cmodel],5
+        jb   @@setm
+        mov  word ptr [cmodel],0
+        jmp  @@setm
+@@kdn:  cmp  ah,50h             ; Down: the previous one
+        jne  @@klf
+        dec  word ptr [cmodel]
+        cmp  word ptr [cmodel],0
+        jge  @@setm
+        mov  word ptr [cmodel],4
+@@setm: mov  bx,[cmodel]        ; roll the chosen airframe out
+        add  bx,bx
+        mov  ax,[MVTAB+bx]
+        mov  [mvb],ax
+        mov  ax,[MVNTAB+bx]
+        mov  [mvn],ax
+        mov  ax,[MFTAB+bx]
+        mov  [mfb],ax
+        mov  ax,[NFCTAB+bx]
+        mov  [nfc],ax
+        mov  ax,[PDZT+bx]
+        mov  [pdzc],ax
+        mov  byte ptr [emode],0 ; fresh and in one piece
+        jmp  @@frame
+@@klf:  cmp  ah,4Bh             ; Left: spin slower / the other way
         jne  @@kr
         dec  word ptr [spd]
         cmp  word ptr [spd],-4
@@ -342,6 +414,55 @@ START:  cld
         int  10h
         mov  ax,4C00h
         int  21h
+
+; ---- TXT: ASCIIZ at SI -> back buffer at (BX,AX), colour [tcol] -----------
+; The glyphs come from the PC's ROM font at F000:FA6E - 8x8, the very
+; characters the machine boots with. No font resource needed.
+TXT:    push es
+        push dx
+        mov  cx,ax
+        mov  ax,[bufseg]
+        mov  es,ax
+        mov  ax,cx
+        mov  cx,320
+        mul  cx
+        add  ax,bx
+        mov  di,ax              ; destination top-left
+@@ch:   lodsb
+        or   al,al
+        jz   @@done
+        push si
+        xor  ah,ah
+        mov  cl,3
+        shl  ax,cl              ; glyph offset = char*8
+        mov  si,0FA6Eh
+        add  si,ax
+        push ds
+        mov  ax,0F000h
+        mov  ds,ax
+        mov  cx,8
+        push di
+@@row:  lodsb                   ; one row of bits, MSB = left pixel
+        mov  ah,al
+        push cx
+        mov  cx,8
+@@px:   shl  ah,1
+        jnc  @@np
+        mov  al,cs:[tcol]
+        mov  es:[di],al
+@@np:   inc  di
+        loop @@px
+        add  di,320-8
+        pop  cx
+        loop @@row
+        pop  di
+        pop  ds
+        pop  si
+        add  di,8               ; the next character cell
+        jmp  @@ch
+@@done: pop  dx
+        pop  es
+        ret
 
 ; ---- wait for the vertical retrace edge ------------------------------------
 WAITVR: mov  dx,3DAh
@@ -375,48 +496,196 @@ PAL     db   0,  2, 4,12        ; backdrop: night blue
         db  25, 34,34,38        ; body sides / fin
         db  27, 44,44,46        ; wings
         db  94, 63,34, 6        ; nozzle (cycled)
+        db  28, 56,56,56        ; spec sheet text
+        db  30, 63,42,10        ; spec sheet heading (amber)
         db 255
 
-; ---- the aircraft: 13 vertices, 8 faces (from the game's DATA.INC) ---------
-; model vertices (x,y,z), nose +Z, wingspan ~104 world units
-MVERT   dw   0,  1, 16          ; 0 nose
-        dw  -2,  2,-11          ; 1 rear top L
-        dw   2,  2,-11          ; 2 rear top R
-        dw  -2, -2,-11          ; 3 rear bottom L
-        dw   2, -2,-11          ; 4 rear bottom R
-        dw -13,  1, -8          ; 5 wing tip L
-        dw  13,  1, -8          ; 6 wing tip R
-        dw   0,  1,  6          ; 7 wing root fore
-        dw  -2,  1,-11          ; 8 wing rear L
-        dw   2,  1,-11          ; 9 wing rear R
-        dw   0,  2, -5          ; 10 fin base fore
-        dw   0,  7,-13          ; 11 fin top rear
-        dw   0,  2,-11          ; 12 fin base rear
-; faces: 4 corner ids (triangles repeat the first) + colour
-MFACE   db 0,1,2,0, 24          ; body top (sun-lit)
-        db 0,3,4,0, 16          ; body bottom (shade)
-        db 0,1,3,0, 25          ; body left
-        db 0,2,4,0, 25          ; body right
-        db 7,5,8,7, 27          ; wing L
-        db 7,6,9,7, 27          ; wing R
-        db 10,11,12,10, 25      ; tail fin
-        db 1,2,4,3, 94          ; engine nozzle: palette-cycled fire
+; ---- the air force (from the game's DATA.INC; wings recoloured 27 for
+; this example's palette). Types share the first 13 vertices / 8 faces
+; of topology; engines and domes are extra vertices and faces.
+MVTAB   dw MVERT,MVERT1,MVERT2,MVERT3,MVERT4
+MVNTAB  dw 13*6,25*6,19*6,13*6,19*6
+MFTAB   dw MFACE,MFACE1,MFACE2,MFACE3,MFACE4
+NFCTAB  dw 8,12,10,8,10
+PDZT    dw 300,560,420,400,460  ; camera distance: big birds stand back
+MVERT   dw   0,  1, 16          ; FIGHTER
+        dw  -2,  2,-11
+        dw   2,  2,-11
+        dw  -2, -2,-11
+        dw   2, -2,-11
+        dw -13,  1, -8
+        dw  13,  1, -8
+        dw   0,  1,  6
+        dw  -2,  1,-11
+        dw   2,  1,-11
+        dw   0,  2, -5
+        dw   0,  7,-13
+        dw   0,  2,-11
+MFACE   db 0,1,2,0, 24
+        db 0,3,4,0, 16
+        db 0,1,3,0, 25
+        db 0,2,4,0, 25
+        db 7,5,8,7, 27
+        db 7,6,9,7, 27
+        db 10,11,12,10, 25
+        db 1,2,4,3, 94
+MVERT1  dw   0,  1, 34          ; BOMBER: four engines under the wings
+        dw  -5,  5,-22
+        dw   5,  5,-22
+        dw  -5, -4,-22
+        dw   5, -4,-22
+        dw -28,  1, -6
+        dw  28,  1, -6
+        dw   0,  1, 10
+        dw  -5,  1,-20
+        dw   5,  1,-20
+        dw   0,  5,-10
+        dw   0, 13,-26
+        dw   0,  5,-22
+        dw -10,  0,  6
+        dw -10,  0, -2
+        dw -10, -4,  2
+        dw -19,  0,  2
+        dw -19,  0, -6
+        dw -19, -4, -2
+        dw  10,  0,  6
+        dw  10,  0, -2
+        dw  10, -4,  2
+        dw  19,  0,  2
+        dw  19,  0, -6
+        dw  19, -4, -2
+MFACE1  db 0,1,2,0, 24
+        db 0,3,4,0, 16
+        db 0,1,3,0, 25
+        db 0,2,4,0, 25
+        db 7,5,8,7, 27
+        db 7,6,9,7, 27
+        db 10,11,12,10, 25
+        db 1,2,4,3, 94
+        db 13,14,15,13, 16
+        db 16,17,18,16, 16
+        db 19,20,21,19, 16
+        db 22,23,24,22, 16
+MVERT2  dw   0,  2, 20          ; RADAR PICKET: the rotodome
+        dw  -4,  5,-14
+        dw   4,  5,-14
+        dw  -4, -3,-14
+        dw   4, -3,-14
+        dw -18,  2, -2
+        dw  18,  2, -2
+        dw   0,  2,  6
+        dw  -4,  2,-12
+        dw   4,  2,-12
+        dw   0,  5, -6
+        dw   0,  9,-14
+        dw   0,  5,-14
+        dw   0, 10,  2
+        dw   4, 10, -4
+        dw   0, 10,-10
+        dw  -4, 10, -4
+        dw   0, 12, -4
+        dw   0,  8, -4
+MFACE2  db 0,1,2,0, 24
+        db 0,3,4,0, 16
+        db 0,1,3,0, 25
+        db 0,2,4,0, 25
+        db 7,5,8,7, 27
+        db 7,6,9,7, 27
+        db 10,11,12,10, 25
+        db 1,2,4,3, 94
+        db 13,14,15,16, 24
+        db 13,17,15,18, 16
+MVERT3  dw   0,  2, 18          ; TRANSPORT: fat and slow
+        dw  -5,  6,-14
+        dw   5,  6,-14
+        dw  -5, -4,-14
+        dw   5, -4,-14
+        dw -20,  3, -2
+        dw  20,  3, -2
+        dw   0,  3,  6
+        dw  -5,  3,-12
+        dw   5,  3,-12
+        dw   0,  6, -6
+        dw   0, 12,-16
+        dw   0,  6,-14
+MFACE3  db 0,1,2,0, 24
+        db 0,3,4,0, 16
+        db 0,1,3,0, 25
+        db 0,2,4,0, 25
+        db 7,5,8,7, 27
+        db 7,6,9,7, 27
+        db 10,11,12,10, 25
+        db 1,2,4,3, 94
+MVERT4  dw   0,  2, 26          ; TANKER: the fat fuel truck
+        dw  -7,  7,-18
+        dw   7,  7,-18
+        dw  -7, -5,-18
+        dw   7, -5,-18
+        dw -22,  2, -4
+        dw  22,  2, -4
+        dw   0,  2,  8
+        dw  -7,  2,-16
+        dw   7,  2,-16
+        dw   0,  7, -8
+        dw   0, 13,-20
+        dw   0,  7,-18
+        dw -11,  1,  6
+        dw -11,  1, -2
+        dw -11, -4,  2
+        dw  11,  1,  6
+        dw  11,  1, -2
+        dw  11, -4,  2
+MFACE4  db 0,1,2,0, 24
+        db 0,3,4,0, 16
+        db 0,1,3,0, 25
+        db 0,2,4,0, 25
+        db 7,5,8,7, 27
+        db 7,6,9,7, 27
+        db 10,11,12,10, 25
+        db 1,2,4,3, 94
+        db 13,14,15,13, 16
+        db 16,17,18,16, 16
 GLOWT   db 63,52,12             ; nozzle DAC cycle: yellow
         db 63,34, 6             ; orange
         db 56,14, 4             ; red
+; ---- the spec sheets (type, weight, speed, role, hits to kill) -------------
+INF0A   db 'FIGHTER',0
+INF0B   db 'WEIGHT 18T   SPEED 950 KM/H',0
+INF0C   db 'AIR SUPERIORITY        2-5 HITS TO KILL',0
+INF1A   db 'BOMBER',0
+INF1B   db 'WEIGHT 110T  SPEED 700 KM/H',0
+INF1C   db 'LEVELS ENEMY CITY BLOCKS    6 HITS',0
+INF2A   db 'RADAR PICKET',0
+INF2B   db 'WEIGHT 78T   SPEED 650 KM/H',0
+INF2C   db 'THE EYES OF THE TEAM        5 HITS',0
+INF3A   db 'TRANSPORT',0
+INF3B   db 'WEIGHT 92T   SPEED 600 KM/H',0
+INF3C   db 'DROPS PARATROOPERS          5 HITS',0
+INF4A   db 'TANKER',0
+INF4B   db 'WEIGHT 140T  SPEED 600 KM/H',0
+INF4C   db 'THE FLYING FUEL STATION     5 HITS',0
+INFTAB  dw INF0A,INF0B,INF0C, INF1A,INF1B,INF1C, INF2A,INF2B,INF2C
+        dw INF3A,INF3B,INF3C, INF4A,INF4B,INF4C
 
 ; ---- engine contract: E_M3D + E_RAST (see the module headers) --------------
 bufseg  dw 0
 mhead   dw 0                    ; model heading (the spin)
+cmodel  dw 0                    ; which aircraft is on the stand
+mvb     dw MVERT                ; current vertex table
+mvn     dw 13*6                 ; current vertex bytes
+mfb     dw MFACE                ; current face table
+nfc     dw 8                    ; current face count
+pdzc    dw 300                  ; current camera distance
+tcol    db 28                   ; TXT colour
 rseed   dw 1                    ; LCG state (explosion kicks)
 emode   db 0                    ; 0 = flying, 1 = in pieces
 etim    dw 0                    ; explosion frames left
-CAX     dw NFACE*4 dup(0)       ; face corners, absolute camera space
-CAY     dw NFACE*4 dup(0)       ;  (flying refills them from the model,
-CAZ     dw NFACE*4 dup(0)       ;   the breakup just moves them)
-FVX     dw NFACE dup(0)         ; face velocities
-FVY     dw NFACE dup(0)
-FVZ     dw NFACE dup(0)
+CAX     dw MAXF*4 dup(0)        ; face corners, absolute camera space
+CAY     dw MAXF*4 dup(0)        ;  (flying refills them from the model,
+CAZ     dw MAXF*4 dup(0)        ;   the breakup just moves them)
+FVX     dw MAXF dup(0)          ; face velocities
+FVY     dw MAXF dup(0)
+FVZ     dw MAXF dup(0)
 spd     dw 1                    ; spin per frame (arrows, -4..4)
 gcnt    dw 0                    ; glow frame counter
 gph     dw 0                    ; glow phase 0..2
@@ -444,11 +713,11 @@ ptmp    dw 0
 msin    dw 0                    ; model yaw sin/cos
 mcos    dw 0
 pfc     dw 0                    ; face draw counter
-PVX     dw 13 dup(0)            ; camera-space vertex cache
-PVY     dw 13 dup(0)
-PVZ     dw 13 dup(0)
-FCD     dw NFACE dup(0)         ; face depths for the painter sort
-FCO     db NFACE dup(0)         ; face draw order
+PVX     dw 25 dup(0)            ; camera-space vertex cache (max: bomber)
+PVY     dw 25 dup(0)
+PVZ     dw 25 dup(0)
+FCD     dw MAXF dup(0)          ; face depths for the painter sort
+FCO     db MAXF dup(0)          ; face draw order
 IX      dw 4 dup(0)             ; face input verts (3D)
 IY      dw 4 dup(0)
 IZ      dw 4 dup(0)

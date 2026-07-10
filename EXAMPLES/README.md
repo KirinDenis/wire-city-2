@@ -17,7 +17,7 @@ agreements about globals and registers.
 |---|---|---|---|
 | 01 | `TERRA.ASM` | The island factory: Diamond-Square on a 64×64 torus, integer only, seeded from the BIOS clock. Any key mints a fresh island, colour-banded exactly like the game's zoning. | `E_MATH`, `E_TERR` |
 | 02 | `RING.ASM` | The one-channel mixer: a looping ring on auto-init DMA, effects added *ahead* of the playback beam, a heal pass erasing them *behind* it. Keys 1–4 fire a cannon pop, a missile hiss, an explosion and a beep — press several at once, they mix. | `E_MATH`, `E_SND` |
-| 03 | `JET.ASM` | The aircraft: 13 vertices, 8 quad faces, spinning through the REAL pipeline — quarter-table sine rotation, face depths, a far-to-near bubble sort (nearly O(n): the order barely changes between frames), near-clip → project → scanline-fill. Painter's algorithm, no z-buffer. Arrows steer the spin; the nozzle burns by DAC cycling. | `E_M3D`, `E_RAST` |
+| 03 | `JET.ASM` | The hangar: ALL FIVE aircraft of the game (Up/Down to cycle — fighter, four-engine bomber, rotodome radar picket, transport, tanker) spinning through the REAL pipeline — quarter-table sine rotation, face depths, a far-to-near bubble sort (nearly O(n): the order barely changes between frames), near-clip → project → scanline-fill. Painter's algorithm, no z-buffer. Arrows steer the spin; the nozzle burns by DAC cycling. | `E_M3D`, `E_RAST` |
 
 More are planned: the painter's-algorithm terrain mesh, the breakup physics.
 Ask for the one you want next.
