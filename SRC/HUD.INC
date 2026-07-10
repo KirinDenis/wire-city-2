@@ -385,6 +385,62 @@ PANELBMP:
         mov  al,8
         mov  es:[di],al
         mov  es:[di-320],al
+        mov  cx,[rzsh]          ; scope range this zoom: 15px * (1<<rzsh)
+        mov  ax,15
+        shl  ax,cl
+        mov  [dsy],ax
+        ; ---- the faint world grid: a 4096-unit mesh that rotates and
+        ; scrolls with us - the same squares the island map is ruled in
+        mov  ax,[camx]
+        and  ax,0F000h
+        sub  ax,7*4096
+        mov  [tmpsx],ax         ; grid column world x
+@@ggx:  mov  ax,[camz]
+        and  ax,0F000h
+        sub  ax,7*4096
+        mov  [tmpsy],ax
+@@ggz:  mov  ax,[tmpsx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[tmpsy]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        call ROTXZ
+        mov  ax,[rcx]
+        cmp  ax,[dsy]
+        jge  @@ggn
+        mov  bx,[dsy]
+        neg  bx
+        cmp  ax,bx
+        jle  @@ggn
+        mov  bx,[rcz]
+        cmp  bx,[dsy]
+        jge  @@ggn
+        mov  cx,[dsy]
+        neg  cx
+        cmp  bx,cx
+        jle  @@ggn
+        mov  cx,[rzsh]
+        sar  ax,cl
+        sar  bx,cl
+        add  ax,87
+        mov  [dsx],ax
+        mov  ax,171
+        sub  ax,bx
+        call ROW320
+        add  di,[dsx]
+        mov  al,6               ; ground-grid green, barely there
+        mov  es:[di],al
+@@ggn:  add  word ptr [tmpsy],4096
+        mov  ax,[tmpsy]
+        sub  ax,[camz]
+        cmp  ax,7*4096
+        jle  @@ggz
+        add  word ptr [tmpsx],4096
+        mov  ax,[tmpsx]
+        sub  ax,[camx]
+        cmp  ax,7*4096
+        jle  @@ggx
         xor  si,si
 @@rdr:  mov  bx,si              ; the dead do not paint on the radar
         shr  bx,1
@@ -400,17 +456,21 @@ PANELBMP:
         call ROTXZ              ; rcx = right of the nose, rcz = ahead
         pop  si
         mov  ax,[rcx]
-        cmp  ax,7680
+        cmp  ax,[dsy]
         jge  @@rn
-        cmp  ax,-7680
+        mov  bx,[dsy]
+        neg  bx
+        cmp  ax,bx
         jle  @@rn
         mov  bx,[rcz]
-        cmp  bx,7680
+        cmp  bx,[dsy]
         jge  @@rn
-        cmp  bx,-7680
+        mov  cx,[dsy]
+        neg  cx
+        cmp  bx,cx
         jle  @@rn
-        mov  cl,9
-        sar  ax,cl              ; -15..15 px
+        mov  cx,[rzsh]
+        sar  ax,cl              ; -15..15 px at any zoom
         sar  bx,cl
         add  ax,87
         mov  [dsx],ax           ; blip column
@@ -422,9 +482,9 @@ PANELBMP:
         test si,2
         jz   @@fr
         mov  al,96              ; hostile: yellow
-@@fr:   ; blip shape by type: fighter 2x1, bomber a fat 4x1 bar, the
-        ; radar plane BLINKS (its antenna sweeps), transport a 2x2
-        ; block, the tanker a vertical 3-stack
+@@fr:   ; blip glyph by type - built to be told apart at a glance:
+        ; fighter a small dot, bomber a SOLID 3x3, the radar plane a
+        ; BLINKING cross, transport a HOLLOW 3x3, the tanker a T
         push bx
         mov  bx,si
         shr  bx,1
@@ -437,27 +497,41 @@ PANELBMP:
         je   @@sht
         cmp  bl,4
         je   @@shk
-        mov  es:[di],al         ; fighter: the classic 2x1
+        mov  es:[di],al         ; fighter: the classic small blip
         mov  es:[di+1],al
         jmp  @@shd
-@@shb:  mov  es:[di-1],al       ; bomber: the fat bar
+@@shb:  mov  es:[di-321],al     ; bomber: solid 3x3 - heavy metal
+        mov  es:[di-320],al
+        mov  es:[di-319],al
+        mov  es:[di-1],al
         mov  es:[di],al
         mov  es:[di+1],al
-        mov  es:[di+2],al
-        jmp  @@shd
-@@shr:  mov  bx,[lasttk]        ; radar plane: the antenna sweeps
-        test bx,2
-        jnz  @@shd
-        mov  es:[di],al
-        mov  es:[di+1],al
-        jmp  @@shd
-@@sht:  mov  es:[di],al         ; transport: the 2x2 block
-        mov  es:[di+1],al
+        mov  es:[di+319],al
         mov  es:[di+320],al
         mov  es:[di+321],al
         jmp  @@shd
-@@shk:  mov  es:[di],al         ; tanker: the vertical stack
+@@shr:  mov  bx,[lasttk]        ; radar plane: a blinking cross
+        test bx,2
+        jnz  @@shd
+        mov  es:[di],al
         mov  es:[di-320],al
+        mov  es:[di+320],al
+        mov  es:[di-1],al
+        mov  es:[di+1],al
+        jmp  @@shd
+@@sht:  mov  es:[di-321],al     ; transport: hollow 3x3 - the crate
+        mov  es:[di-320],al
+        mov  es:[di-319],al
+        mov  es:[di-1],al
+        mov  es:[di+1],al
+        mov  es:[di+319],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+        jmp  @@shd
+@@shk:  mov  es:[di-321],al     ; tanker: the letter T
+        mov  es:[di-320],al
+        mov  es:[di-319],al
+        mov  es:[di],al
         mov  es:[di+320],al
 @@shd:  pop  bx
         mov  bx,[pay+si]        ; altitude tick: above = higher, below =
@@ -503,16 +577,20 @@ PANELBMP:
 @@rblip:                        ; plot one amber spark from wdx/wdz
         call ROTXZ
         mov  ax,[rcx]
-        cmp  ax,7680
+        cmp  ax,[dsy]
         jge  @@rbx
-        cmp  ax,-7680
+        mov  bx,[dsy]
+        neg  bx
+        cmp  ax,bx
         jle  @@rbx
         mov  bx,[rcz]
-        cmp  bx,7680
+        cmp  bx,[dsy]
         jge  @@rbx
-        cmp  bx,-7680
+        mov  cx,[dsy]
+        neg  cx
+        cmp  bx,cx
         jle  @@rbx
-        mov  cl,9
+        mov  cx,[rzsh]
         sar  ax,cl
         sar  bx,cl
         add  ax,87

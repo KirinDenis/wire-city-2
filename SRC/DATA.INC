@@ -56,6 +56,13 @@ TYPN2   db 'RADAR',0
 TYPN3   db 'TRANSP',0
 TYPN4   db 'TANKER',0
 TYPTAB  dw TYPN0,TYPN1,TYPN2,TYPN3,TYPN4
+bmact   db NBOMB dup(0)         ; the bomb rack (pool)
+bmx     dw NBOMB dup(0)
+bmy     dw NBOMB dup(0)
+bmz     dw NBOMB dup(0)
+bvx     dw NBOMB dup(0)         ; keeps the bomber's forward speed
+bvz     dw NBOMB dup(0)
+bvy     dw NBOMB dup(0)         ; gravity builds this one
 ; model vertices (x,y,z), nose +Z, wingspan ~104 world units
 MVERT   dw   0,  1, 16          ; 0 nose        (quarter scale: the WORLD
         dw  -2,  2,-11          ; 1 rear top L    reads four times as big)
@@ -310,6 +317,9 @@ sbrst   dw 0                    ; ring-heal cursor (behind the DMA beam)
 sfa16   dw 0                    ; SFX: amplitude, 8.8 fixed point
 sfdec   dw 0                    ; SFX: amplitude decay per sample
 lastbp  dw 0                    ; last tick a lamp beeped on
+rzsh    dw 9                    ; radar zoom: world units per px = 1<<rzsh
+prevzo  db 0                    ; [ edge (zoom out)
+prevzi  db 0                    ; ] edge (zoom in)
 sndmod  db 2                    ; 2 = all sounds, 1 = effects only
                                 ;  (engine muted), 0 = silence
 prevsk  db 0                    ; V key edge detector (sound)

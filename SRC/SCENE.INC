@@ -21,6 +21,7 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
         call BUILDINGS          ; real buildings to the horizon (BORD walk)
         call WRECKDRAW          ; fallen jets burn on the ground
         call PLANESDRAW         ; AI jets own the sky
+        call BOMBDRAW           ; and the bombs hang under it
         cmp  byte ptr [chsview],0
         je   @@nochs
         cmp  byte ptr [dying],0

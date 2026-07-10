@@ -30,6 +30,7 @@ photo cockpit with a working radar.
 | **Space** (hold) | cannon — hits whatever sits inside the ring |
 | **M** | right MFD: island map ↔ sensor view of the locked target |
 | **V** | sound: all → effects only → silence (the S letter on the panel: amber / white / red) |
+| **[ / ]** | radar zoom out / in (4 steps, 3.8–30 km; a faint world grid rules the scope) |
 | **F2** | cockpit on / off |
 | **F3** | chase camera (your own jet from behind) |
 | **F4** | orbit camera around the locked target — arrows steer the orbit |
