@@ -221,7 +221,14 @@ DSGEN:  mov  word ptr [dss],32  ; seed anchors on the coarsest grid
         cmp  si,4096
         jb   @@sc
 @@sdone:
-        ret
+        call RND16              ; one extra draw, the whole fix: an island
+        ret                     ; is EXACTLY 4096 draws, and 4096 phases of
+                                ; a 65536 cycle leave only 16 starts - 8
+                                ; after the top-bit symmetry (x[n+32768] =
+                                ; x[n]+8000h, and the masks drop bit 15).
+                                ; A flip-book of islands looped every 8
+                                ; frames. Stride 4097 is COPRIME with the
+                                ; period: the full 65536-phase orbit.
 @@noise:                        ; AX = dsac/4 + (rnd & (amp-1)) - amp/2, 0..255
         call RND16
         mov  al,ah              ; use the HIGH byte: in a mod-2^16 LCG the
