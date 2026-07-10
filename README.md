@@ -17,6 +17,9 @@ Turbo Assembler 3.2 in DOSBox. In the browser it runs on DOSBox compiled to
 WebAssembly ([js-dos](https://js-dos.com)). **How the whole machine works:
 [ARCHITECTURE.md](ARCHITECTURE.md)** — the memory discipline, the triple
 painter's algorithm, the ring mixer, and the bugs the community caught.
+Deep dives with the sources open live in [DOCS/](DOCS/): start with
+[the 3D graphics](DOCS/GRAPHICS.md); teaching programs in
+[EXAMPLES/](EXAMPLES/README.md).
 
 Inside those kilobytes: a procedural island with a destructible city, a 20v20
 attrition air war, homing missiles, a cannon with real tracer rounds, wrecks
