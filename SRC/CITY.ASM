@@ -127,7 +127,7 @@ SC_MIN  equ 0Ch                 ; main-row -: throttle down
 SC_V    equ 2Fh                 ; V: sound mode (all/effects/silence)
 WRKSZ   equ 300                 ; wreck slot size (see the BSS block)
 WCL     equ 292                 ; face colours offset inside a slot
-BSSCLR  equ 1144                ; (BSSEND-WRK)/2 - keep in sync with BSS!
+BSSCLR  equ 2584                ; (BSSEND-WRK)/2 - keep in sync with BSS!
 SNDN    equ 8000h               ; sound ring length (ENGINE\E_SND.INC contract)
 NBOMB   equ 6                   ; bombs in the air at once
 FLBN    equ 48                  ; black box: samples (every 2nd tick, ~5.3 s)
@@ -489,14 +489,12 @@ WRK     equ  BSS+17919              ; wreck pool: 4 slots of WRKSZ bytes
                                     ;  +WCO corners 8x4x6b, +WCL colours 8b)
 FLB     equ  word ptr BSS+19119     ; black box ring: FLBN samples of
                                     ;  (camx,camy,camz,heading,pitch,roll)
-; contrail rings moved to the far scratch segment [scrseg] (the minimap
-; holds 0..4095 there): NPLANE*TLN words per axis, es-prefixed access
-TLX     equ  word ptr 4096
-TLY     equ  word ptr 5056
-TLZ     equ  word ptr 6016
-DSTB    equ  byte ptr BSS+19695     ; ruins bitmap: 1 bit per world cell
+TLX     equ  word ptr BSS+19695     ; contrail rings: NPLANE*TLN words each
+TLY     equ  word ptr BSS+20655     ;  (moved out of the image: generated
+TLZ     equ  word ptr BSS+21615     ;  at spawn, never shipped as zeros)
+DSTB    equ  byte ptr BSS+22575     ; ruins bitmap: 1 bit per world cell
                                     ;  (64x64), set = the building is down
-BSSEND  equ  BSS+20207
+BSSEND  equ  BSS+23087
 
 CODE    ENDS
         END START
