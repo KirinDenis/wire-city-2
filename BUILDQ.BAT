@@ -1,23 +1,40 @@
 @echo off
-REM Quiet build (run INSIDE DOSBox, usually via MAKE.BAT): assembles the
-REM sources in SRC, installs CITY.COM + CITY.DAT into INSTALL, and logs
-REM everything to BUILD.LOG in the repo root.
+REM BUILDQ.BAT %1 - runs INSIDE DOSBox (via MAKE.BAT), C: = repo root.
+REM Targets: ALL | OWLFLY | WIRECITY | EXAMPLES. Case matters (DOSBox).
 set PATH=c:\bp\bin;d:\bin;%PATH%
 echo BUILD START > BUILD.LOG
-cd SRC
-TASM /T RESDAT.ASM >> ..\BUILD.LOG
+if "%1"=="OWLFLY" goto owlfly
+if "%1"=="WIRECITY" goto wirecity
+if "%1"=="EXAMPLES" goto examples
+
+:owlfly
+cd GAMES\OWLFLY\SRC
+TASM /T RESDAT.ASM >> ..\..\..\BUILD.LOG
 if errorlevel 1 goto err
-TLINK /t RESDAT.OBJ >> ..\BUILD.LOG
+TLINK /t RESDAT.OBJ >> ..\..\..\BUILD.LOG
 if errorlevel 1 goto err
-copy /y RESDAT.COM ..\INSTALL\CITY.DAT >> ..\BUILD.LOG
+copy /y RESDAT.COM ..\INSTALL\CITY.DAT >> ..\..\..\BUILD.LOG
 del RESDAT.COM
-TASM /T CITY.ASM >> ..\BUILD.LOG
+TASM /T CITY.ASM >> ..\..\..\BUILD.LOG
 if errorlevel 1 goto err
-TLINK /t CITY.OBJ >> ..\BUILD.LOG
+TLINK /t CITY.OBJ >> ..\..\..\BUILD.LOG
 if errorlevel 1 goto err
-copy /y CITY.COM ..\INSTALL\CITY.COM >> ..\BUILD.LOG
+copy /y CITY.COM ..\INSTALL\FLYOWL.COM >> ..\..\..\BUILD.LOG
 del CITY.COM
-cd ..\EXAMPLES
+cd ..\..\..
+if "%1"=="OWLFLY" goto ok
+
+:wirecity
+cd GAMES\WIRECITY
+TASM /T CITY.ASM >> ..\..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t CITY.OBJ >> ..\..\BUILD.LOG
+if errorlevel 1 goto err
+cd ..\..
+if "%1"=="WIRECITY" goto ok
+
+:examples
+cd EXAMPLES
 TASM /T TERRA.ASM >> ..\BUILD.LOG
 if errorlevel 1 goto err
 TLINK /t TERRA.OBJ >> ..\BUILD.LOG
@@ -35,9 +52,11 @@ if errorlevel 1 goto err
 TLINK /t AVIO.OBJ >> ..\BUILD.LOG
 if errorlevel 1 goto err
 cd ..
-echo BUILD OK >> BUILD.LOG
+
+:ok
+echo BUILD OK >> C:\BUILD.LOG
 goto end
 :err
-cd ..
-echo BUILD FAILED >> BUILD.LOG
+echo BUILD FAILED >> C:\BUILD.LOG
 :end
+exit

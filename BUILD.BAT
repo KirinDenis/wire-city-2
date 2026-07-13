@@ -1,49 +1,69 @@
 @echo off
-REM Build WIRE CITY with Turbo Assembler (run INSIDE DOSBox).
-REM Sources live in SRC (CITY.ASM includes the subsystem .INC modules);
-REM the playable CITY.COM + CITY.DAT land in INSTALL.
-REM NB: run res\mkpanel.py (Windows, Python+Pillow) first if the cockpit
-REM art changed - or just use MAKE.BAT from Windows, it does both.
+REM ==========================================================================
+REM BUILD.BAT - the DOS-side master build: every game + the examples,
+REM in ONE batch with no nested CALLs (DOSBox resumes a parent batch by
+REM RELATIVE name in the CURRENT dir - nested calls die after the first
+REM child). Each folder also has its own standalone BUILD.BAT.
+REM Run inside DOS/DOSBox from the repo root, TASM + TLINK on the path.
+REM ==========================================================================
 set PATH=c:\bp\bin;d:\bin;%PATH%
-cd SRC
-REM -- resources first: RESDAT.ASM assembles into a raw byte image --
+
+echo ===== GAMES\OWLFLY =====
+cd GAMES\OWLFLY\SRC
 TASM /T RESDAT.ASM
-if errorlevel 1 goto err
+if errorlevel 1 goto err3
 TLINK /t RESDAT.OBJ
-if errorlevel 1 goto err
-copy /y RESDAT.COM ..\INSTALL\CITY.DAT >nul
+if errorlevel 1 goto err3
+copy /y RESDAT.COM ..\INSTALL\CITY.DAT
 del RESDAT.COM
-REM -- the game itself --
 TASM /T CITY.ASM
-if errorlevel 1 goto err
+if errorlevel 1 goto err3
 TLINK /t CITY.OBJ
-if errorlevel 1 goto err
-copy /y CITY.COM ..\INSTALL\CITY.COM >nul
+if errorlevel 1 goto err3
+copy /y CITY.COM ..\INSTALL\FLYOWL.COM
 del CITY.COM
-REM -- the engine examples (EXAMPLES\*.ASM on ENGINE\*.INC) --
-cd ..\EXAMPLES
+cd ..\..\..
+
+echo ===== GAMES\WIRECITY =====
+cd GAMES\WIRECITY
+TASM /T CITY.ASM
+if errorlevel 1 goto err2
+TLINK /t CITY.OBJ
+if errorlevel 1 goto err2
+cd ..\..
+
+echo ===== EXAMPLES =====
+cd EXAMPLES
 TASM /T TERRA.ASM
-if errorlevel 1 goto err
+if errorlevel 1 goto err1
 TLINK /t TERRA.OBJ
-if errorlevel 1 goto err
+if errorlevel 1 goto err1
 TASM /T RING.ASM
-if errorlevel 1 goto err
+if errorlevel 1 goto err1
 TLINK /t RING.OBJ
-if errorlevel 1 goto err
+if errorlevel 1 goto err1
 TASM /T JET.ASM
-if errorlevel 1 goto err
+if errorlevel 1 goto err1
 TLINK /t JET.OBJ
-if errorlevel 1 goto err
+if errorlevel 1 goto err1
 TASM /T AVIO.ASM
-if errorlevel 1 goto err
+if errorlevel 1 goto err1
 TLINK /t AVIO.OBJ
-if errorlevel 1 goto err
+if errorlevel 1 goto err1
 cd ..
+
 echo.
-echo OK -- run INSTALL\CITY.COM
+echo ALL BUILT: FLYOWL, WIRECITY, EXAMPLES
 goto end
-:err
+:err3
+cd ..\..\..
+goto fail
+:err2
+cd ..\..
+goto fail
+:err1
 cd ..
+:fail
 echo.
-echo BUILD FAILED
+echo BUILD FAILED - see the messages above
 :end

@@ -41,7 +41,7 @@ Key facts an assistant should get right:
   the game, ENGINE/ holds engine modules with documented contracts,
   EXAMPLES/ are standalone teaching .COMs (the island factory, the
   one-channel ring mixer, the five-aircraft hangar with spec sheets).
-- [ARCHITECTURE.md](https://github.com/KirinDenis/wire-city-2/blob/main/ARCHITECTURE.md):
+- [ARCHITECTURE.md](https://github.com/KirinDenis/wire-city-2/blob/main/GAMES/OWLFLY/ARCHITECTURE.md):
   the full map - memory discipline, the triple painter, the world as a
   recipe, the ring mixer, the TASM one-pass rules, and where it stops.
 

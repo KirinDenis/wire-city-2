@@ -2,7 +2,7 @@
 
 The transferable lessons of WIRE CITY 86 — each learned the hard way in
 this repo, each applicable far beyond DOS. Companion to
-[ARCHITECTURE.md](https://github.com/KirinDenis/wire-city-2/blob/main/ARCHITECTURE.md).
+[ARCHITECTURE.md](https://github.com/KirinDenis/wire-city-2/blob/main/GAMES/OWLFLY/ARCHITECTURE.md).
 
 ## 1. A visible budget makes architecture honest
 

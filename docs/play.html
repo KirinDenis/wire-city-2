@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WIRE CITY 86 arcade</title>
+<link rel="stylesheet" href="jsdos/js-dos.css">
+<style>
+  html,body{margin:0;min-height:100vh;background:#04060f;color:#bcd;font-family:monospace}
+  #wrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px}
+  h1{letter-spacing:2px;color:#bcf;margin:4px;text-shadow:0 0 8px #46c;font-size:18px}
+  #dos{width:min(96vw,1000px);aspect-ratio:4/3;background:#000}
+  .hint{font-size:13px;color:#89b}
+  a{color:#9bf}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1 id="ttl">WIRE CITY 86</h1>
+  <div class="hint">click the screen first to grab the keyboard &middot; <a href="index.html">back to the arcade</a></div>
+  <div id="dos"></div>
+  <div class="hint" id="sub"></div>
+</div>
+<script src="coi-serviceworker.js"></script>
+<script src="jsdos/js-dos.js"></script>
+<script>
+(function () {
+  // one player page for every machine: play.html?g=<name>. Everything
+  // stays inside this IIFE: the minified js-dos.js READS the global
+  // single-letter variable "g" - a top-level "var g" here broke Dos()
+  // with createElement('[object Object]'). Found the hard way.
+  var machines = {
+    wirecity: {b:"wirecity_v4.jsdos", t:"WIRE CITY (1986 original)",
+               s:"the ancestor: a 5.5 KB wireframe night-flight - arrows steer, banking turns"},
+    jet:      {b:"jet_v2.jsdos", t:"THE HANGAR",
+               s:"Up/Down cycle the air force, arrows spin, Space blows it apart"},
+    terra:    {b:"terra_v2.jsdos", t:"THE ISLAND FACTORY",
+               s:"any key mints a fresh Diamond-Square island, ESC quits"},
+    avio:     {b:"avio_v2.jsdos", t:"THE AVIONICS",
+               s:"arrows = stick, +/- = throttle - fly the instruments themselves"}
+  };
+  var pick = machines[new URLSearchParams(location.search).get("g")] || machines.wirecity;
+  document.getElementById("ttl").textContent = pick.t;
+  document.getElementById("sub").textContent = pick.s;
+  Dos(document.getElementById("dos"), {
+    url: pick.b,
+    pathPrefix: "jsdos/emulators/",
+    theme: "dark",
+    imageRendering: "pixelated",
+    scaleControls: 0.2
+  });
+})();
+</script>
+</body>
+</html>
+
+

@@ -1,26 +1,19 @@
 @echo off
 REM ============================================================================
-REM PUBLISH.BAT - deploy the current build to GitHub Pages. Run it from
-REM Windows AFTER building via MAKE.BAT and checking INSTALL\CITY.COM.
-REM
-REM   PUBLISH "message"   - commit message for git (optional)
-REM
-REM Steps: 1) repack docs\city.jsdos from CITY.COM
-REM        2) bump the cache-busting ?v=N in docs\index.html
-REM        3) git add + commit + push  ->  Pages redeploys in ~1 minute
+REM PUBLISH.BAT [game] ["message"] - deploy a game bundle to GitHub Pages.
+REM   PUBLISH                 - publish OWLFLY (default)
+REM   PUBLISH WIRECITY        - publish the 1986 original
+REM   PUBLISH OWLFLY "msg"    - with a commit message
+REM Steps: pack a fresh <game>_vN.jsdos (new filename busts the js-dos
+REM IndexedDB cache), patch the player page, then confirm + git push.
 REM ============================================================================
 setlocal
 cd /d %~dp0
+set GAME=%~1
+if "%GAME%"=="" set GAME=OWLFLY
 
-if not exist INSTALL\CITY.COM (
-  echo ERROR: INSTALL\CITY.COM not found - build it first ^(MAKE.BAT^)
-  exit /b 1
-)
-
-echo [1/2] Packing a fresh versioned bundle (city_vN.jsdos) ...
-REM the new FILENAME each release busts js-dos's IndexedDB bundle cache
-REM (a ?v= query does not - pack.ps1 renames it and patches index.html)
-powershell -NoProfile -ExecutionPolicy Bypass -File docs\pack.ps1
+echo [1/2] Packing a fresh %GAME% bundle ...
+powershell -NoProfile -ExecutionPolicy Bypass -File docs\pack.ps1 -Game %GAME%
 if errorlevel 1 goto fail
 
 echo [2/2] Commit + push ...
@@ -33,19 +26,16 @@ if /i not "%CONFIRM%"=="y" (
   echo Aborted - nothing was committed or pushed.
   exit /b 1
 )
-set MSG=%~1
-if "%MSG%"=="" set MSG=publish build
+set MSG=%~2
+if "%MSG%"=="" set MSG=publish %GAME% build
 git add -A
 git commit -m "%MSG%"
 git push
 if errorlevel 1 goto fail
-
 echo.
-echo OK - Pages will redeploy in about a minute:
-echo   https://kirindenis.github.io/wire-city-2/   (Ctrl+Shift+R in the browser)
+echo OK - Pages will redeploy in about a minute.
 exit /b 0
-
 :fail
 echo.
-echo PUBLISH FAILED - nothing (or only part) was deployed. Check the error above.
+echo PUBLISH FAILED - nothing (or only part) was deployed.
 exit /b 1

@@ -440,14 +440,14 @@ QUIT:
         mov  ax,4C00h
         int  21h
 
-        INCLUDE ..\ENGINE\E_MATH.INC ; engine: LCG random
-        INCLUDE ..\ENGINE\E_TERR.INC ; engine: Diamond-Square world
-        INCLUDE ..\ENGINE\E_SND.INC  ; engine: DSP write, DMA beam, ring mix
+        INCLUDE ..\..\..\ENGINE\E_MATH.INC ; engine: LCG random
+        INCLUDE ..\..\..\ENGINE\E_TERR.INC ; engine: Diamond-Square world
+        INCLUDE ..\..\..\ENGINE\E_SND.INC  ; engine: DSP write, DMA beam, ring mix
         INCLUDE VIDEO.INC       ; palette DAC, background bands, blit
         INCLUDE M3D.INC         ; the 3D-edge pipeline (game side)
-        INCLUDE ..\ENGINE\E_M3D.INC  ; engine: trig, rotation, projection
+        INCLUDE ..\..\..\ENGINE\E_M3D.INC  ; engine: trig, rotation, projection
         INCLUDE RASTER.INC      ; the gunsight (game side)
-        INCLUDE ..\ENGINE\E_RAST.INC ; engine: polygon/line rasterizer
+        INCLUDE ..\..\..\ENGINE\E_RAST.INC ; engine: polygon/line rasterizer
         INCLUDE TERRAIN.INC     ; Diamond-Square map, 3D mesh, minimap bake
         INCLUDE SCENE.INC       ; frame render: sky, far belt megablocks
         INCLUDE WORLD.INC       ; near cells: buildings, faces, windows

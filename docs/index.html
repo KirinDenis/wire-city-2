@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WIRE CITY 86 — the DOS arcade</title>
+<style>
+  html,body{margin:0;min-height:100vh;background:#04060f;color:#bcd;font-family:monospace}
+  #wrap{max-width:1080px;margin:0 auto;padding:16px}
+  h1{letter-spacing:3px;color:#bcf;text-shadow:0 0 8px #46c;margin:8px 0 2px}
+  .tag{color:#89b;font-size:13px;margin-bottom:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}
+  .card{border:1px solid #234;background:#070b18;padding:14px;display:flex;
+        flex-direction:column;gap:8px}
+  .card h2{margin:0;color:#dfe;font-size:16px;letter-spacing:1px}
+  .card img{width:100%;image-rendering:pixelated;border:1px solid #234;
+            aspect-ratio:16/10;object-fit:cover;background:#000}
+  .card .kb{color:#5f7;font-size:11px}
+  .card p{margin:0;font-size:13px;line-height:1.45;color:#abc;flex:1}
+  .row{display:flex;gap:10px;align-items:center}
+  .play{background:#123;border:1px solid #46c;color:#cdf;padding:6px 18px;
+        text-decoration:none;font-family:monospace;font-size:14px}
+  .play:hover{background:#235}
+  .src{font-size:12px;color:#9bf}
+  .now{font-size:11px;color:#f96}
+  h3{color:#9bf;letter-spacing:2px;margin:22px 0 8px;font-size:14px}
+  .foot{margin-top:22px;font-size:12px;color:#789;line-height:1.6}
+  a{color:#9bf}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>W I R E&nbsp;&nbsp;C I T Y&nbsp;&nbsp;8 6</h1>
+  <div class="tag">the DOS arcade: real 8086 assembly, running in your browser
+    &middot; <a href="https://github.com/KirinDenis/wire-city-2">sources</a>
+    &middot; <a href="https://www.facebook.com/groups/OWLOS">community</a>
+    &middot; built by <a href="https://owlos.sk/">Owlos</a></div>
+
+  <h3>GAMES</h3>
+  <div class="grid">
+    <div class="card">
+      <img src="shots/owlfly.png" alt="owlfly">
+      <h2>OWL FLY <span class="kb">40 KB</span></h2>
+      <p>The combat flight simulator: a procedural island, a destructible
+         city, two air forces of five aircraft types across a jagged front
+         line, homing missiles, a photo cockpit with a working radar, and a
+         real jet engine in one Sound Blaster channel. <i>Fly, owl!</i></p>
+      <div class="row">
+        <a class="play" href="owlfly.html">&#9654; PLAY</a>
+        <a class="src" href="https://github.com/KirinDenis/wire-city-2/tree/main/GAMES/OWLFLY">sources</a>
+        <span class="now" data-game="owlfly"></span>
+      </div>
+    </div>
+    <div class="card">
+      <img src="shots/wirecity.png" alt="wirecity">
+      <h2>WIRE CITY <span class="kb">5.5 KB</span></h2>
+      <p>The 1986-style original that started it all: a wireframe
+         night-flight over a procedural megacity. One source file, hidden
+         lines by the painter's algorithm, banking turns. The ancestor.</p>
+      <div class="row">
+        <a class="play" href="play.html?g=wirecity">&#9654; PLAY</a>
+        <a class="src" href="https://github.com/KirinDenis/wire-city-2/tree/main/GAMES/WIRECITY">sources</a>
+        <span class="now" data-game="wirecity"></span>
+      </div>
+    </div>
+  </div>
+
+  <h3>THE TEACHING MACHINES</h3>
+  <div class="grid">
+    <div class="card">
+      <img src="shots/jet.png" alt="jet">
+      <h2>THE HANGAR <span class="kb">5.4 KB</span></h2>
+      <p>All five aircraft with ROM-font spec sheets. Up/Down to cycle,
+         arrows to spin, Space blows one apart - and the painter's sort
+         keeps ordering the debris.</p>
+      <div class="row">
+        <a class="play" href="play.html?g=jet">&#9654; PLAY</a>
+        <a class="src" href="https://github.com/KirinDenis/wire-city-2/blob/main/EXAMPLES/JET.ASM">source</a>
+      </div>
+    </div>
+    <div class="card">
+      <img src="shots/terra.png" alt="terra">
+      <h2>THE ISLAND FACTORY <span class="kb">5 KB</span></h2>
+      <p>Diamond-Square on a torus, seeded by the clock: any key mints a
+         fresh island. The generator the games fly over - and the one that
+         taught us two number-theory lessons.</p>
+      <div class="row">
+        <a class="play" href="play.html?g=terra">&#9654; PLAY</a>
+        <a class="src" href="https://github.com/KirinDenis/wire-city-2/blob/main/EXAMPLES/TERRA.ASM">source</a>
+      </div>
+    </div>
+    <div class="card">
+      <img src="shots/avio.png" alt="avio">
+      <h2>THE AVIONICS <span class="kb">3.5 KB</span></h2>
+      <p>A flying instrument panel with no world attached: artificial
+         horizon, tapes with the red stall line, a compass, a toy flight
+         model. Arrows are the stick.</p>
+      <div class="row">
+        <a class="play" href="play.html?g=avio">&#9654; PLAY</a>
+        <a class="src" href="https://github.com/KirinDenis/wire-city-2/blob/main/EXAMPLES/AVIO.ASM">source</a>
+      </div>
+    </div>
+  </div>
+
+  <h3>READING</h3>
+  <div class="foot">
+    <a href="https://github.com/KirinDenis/wire-city-2/blob/main/GAMES/OWLFLY/ARCHITECTURE.md">ARCHITECTURE</a> — the 64K discipline, the memory map, where it stops and why &middot;
+    <a href="https://github.com/KirinDenis/wire-city-2/blob/main/docs/GRAPHICS.md">3D GRAPHICS</a> — painter's algorithm three ways &middot;
+    <a href="https://github.com/KirinDenis/wire-city-2/blob/main/docs/GRAPHICS-101.md">3D FOR BEGINNERS</a> &middot;
+    <a href="https://github.com/KirinDenis/wire-city-2/blob/main/docs/AVIONICS-101.md">AVIONICS</a> &middot;
+    <a href="https://github.com/KirinDenis/wire-city-2/blob/main/docs/LESSONS.md">LESSONS</a> — what 40 kilobytes taught us
+  </div>
+
+  <div class="foot">
+    Every machine here is a real DOS .COM built with TASM 3.2, running in
+    DOSBox compiled to WebAssembly (<a href="https://js-dos.com">js-dos</a>).
+    Multiplayer over IPX-through-WebSocket is in the workshop.
+  </div>
+</div>
+<script>
+  // NOW PLAYING: wired to the C# gateway when it lands.
+  // fetch('https://arcade.owlos.sk/api/now-playing').then(r=>r.json()).then(d=>{
+  //   document.querySelectorAll('.now').forEach(e=>{
+  //     var n = d[e.dataset.game]; if (n) e.textContent = '▶ '+n+' playing now';
+  //   });
+  // });
+</script>
+</body>
+</html>

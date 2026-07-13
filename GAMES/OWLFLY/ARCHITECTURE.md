@@ -154,9 +154,9 @@ and every byte of it can be read.
 
 ---
 [Play the game](https://kirindenis.github.io/wire-city-2/) ·
-[README](README.md) ·
-[3D graphics deep dive](docs/GRAPHICS.md) ·
-[3D for beginners](docs/GRAPHICS-101.md) ·
-[Avionics](docs/AVIONICS-101.md) ·
-[Examples](EXAMPLES/README.md) ·
+[README](../../README.md) ·
+[3D graphics deep dive](../../docs/GRAPHICS.md) ·
+[3D for beginners](../../docs/GRAPHICS-101.md) ·
+[Avionics](../../docs/AVIONICS-101.md) ·
+[Examples](../../EXAMPLES/README.md) ·
 [Community](https://www.facebook.com/groups/OWLOS)

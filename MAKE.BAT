@@ -1,40 +1,48 @@
 @echo off
-REM MAKE.BAT - the full build pipeline, run from Windows (NOT inside DOSBox):
-REM   1. res\mkpanel.py  - convert res\panel1.bmp + res\panel2.bmp into
-REM                        SRC\PANELIMG.INC / SRC\PALPNL.INC (Python + Pillow)
-REM   2. DOSBox headless - BUILDQ.BAT assembles SRC, installs into INSTALL
-REM Output: INSTALL\CITY.COM + INSTALL\CITY.DAT, log in BUILD.LOG.
-REM
-REM Machine-specific paths live in LOCAL.BAT (gitignored), e.g.:
+REM ============================================================================
+REM MAKE.BAT [target] - the arcade build orchestrator. Run from Windows.
+REM   MAKE            - build EVERYTHING (all games + examples)
+REM   MAKE OWLFLY     - the flight simulator only (converters + TASM)
+REM   MAKE WIRECITY   - the 1986 original only
+REM   MAKE EXAMPLES   - the teaching machines only
+REM Per-game folders have one-line wrappers calling this with their target.
+REM All build logic lives HERE: DOSBox always mounts the repo root as C:
+REM because ENGINE\ is shared by every target. Log: BUILD.LOG in the root.
+REM Machine paths live in LOCAL.BAT (gitignored):
 REM   set DOSBOX=C:\Games\DOSBox\DOSBox.exe
 REM   set TASMDIR=d:\borland\bp
+REM ============================================================================
 cd /d %~dp0
 if exist LOCAL.BAT call .\LOCAL.BAT
 if "%DOSBOX%"=="" set DOSBOX=dosbox.exe
 if "%TASMDIR%"=="" set TASMDIR=c:\bp
+set TARGET=%~1
+if "%TARGET%"=="" set TARGET=ALL
 
-echo === 1/2 panel + engine sample converters ===
-python res\mkpanel.py
+if "%TARGET%"=="WIRECITY" goto skipconv
+if "%TARGET%"=="EXAMPLES" goto skipconv
+echo === 1/2 OWLFLY converters (panel + engine sample) ===
+python GAMES\OWLFLY\res\mkpanel.py
 if errorlevel 1 goto err
-python res\mkengine.py
+python GAMES\OWLFLY\res\mkengine.py
 if errorlevel 1 goto err
-echo === 2/2 DOSBox build ===
-REM stale logs lie: kill it first, so a failed DOSBox run cannot pass
+:skipconv
+
+echo === 2/2 DOSBox build: %TARGET% ===
 if exist BUILD.LOG del BUILD.LOG
-REM %~dp0 ends with a backslash - DOSBox mount silently rejects that
 set MKROOT=%~dp0
 if "%MKROOT:~-1%"=="\" set MKROOT=%MKROOT:~0,-1%
-"%DOSBOX%" -noautoexec -noconsole -c "mount c %MKROOT%" -c "mount d %TASMDIR%" -c "c:" -c "buildq.bat" -c "exit"
+"%DOSBOX%" -noautoexec -noconsole -c "mount c %MKROOT%" -c "mount d %TASMDIR%" -c "c:" -c "buildq.bat %TARGET%" -c "exit"
 if not exist BUILD.LOG goto norun
 type BUILD.LOG
 findstr /C:"BUILD OK" BUILD.LOG >nul
 if errorlevel 1 goto err
 echo.
-echo MAKE OK - run INSTALL\CITY.COM (or PUBLISH.BAT for the web)
+echo MAKE OK [%TARGET%]
 goto end
 :norun
 echo BUILD.LOG was never written - the DOSBox mount or BUILDQ.BAT failed
 :err
 echo.
-echo MAKE FAILED - see messages above
+echo MAKE FAILED [%TARGET%] - see messages above
 :end
