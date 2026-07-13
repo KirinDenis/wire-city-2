@@ -37,7 +37,7 @@ photo cockpit with a working radar.
 | **← / →** (num 4/6) | bank left / right — rolls through 360°, loops and barrel rolls work |
 | **↓ / ↑** (num 2/8) | pull the nose up / push it down (flight-sim yoke) |
 | **Z / C** (num 7/9) | rudder — flat turn without banking |
-| **+ / −** | throttle up / down (numpad or main row) |
+| **+ / −** or **W / S** | throttle up / down (some layouts eat + — W/S always work) |
 | **A** | afterburner — double thrust, drinks fuel |
 | **Enter** | lock the jet inside the aiming ring; Enter on empty sky drops the lock |
 | **Backspace** | missile — 4 rails, homing on the lock, dumb-fire without one |

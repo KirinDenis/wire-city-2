@@ -186,26 +186,57 @@ INPUT:
         ; --- RUDDER: Q/E yaw the nose flat, no bank. Slow like a real
         ; rudder: 1 unit/tick = a full circle in ~14 s. Good for lining
         ; up a runway or a gun run without dropping a wing.
+        xor  cx,cx              ; r = rudder input, in eighths
         cmp  byte ptr [KEYS+SC_Q],0
         jne  @@rdl
         cmp  byte ptr [KEYS+SC_Z],0
         jne  @@rdl
         cmp  byte ptr [KEYS+SC_NP7],0
         je   @@rdq
-@@rdl:  mov  ax,[heading]
-        dec  ax
-        and  ax,255
-        mov  [heading],ax
+@@rdl:  sub  cx,8
 @@rdq:  cmp  byte ptr [KEYS+SC_E],0
         jne  @@rdr
         cmp  byte ptr [KEYS+SC_C],0
         jne  @@rdr
         cmp  byte ptr [KEYS+SC_NP9],0
-        je   @@rde
-@@rdr:  mov  ax,[heading]
-        inc  ax
+        je   @@rdz
+@@rdr:  add  cx,8
+@@rdz:  jcxz @@rde
+        ; LOCAL yaw (community feedback): the rudder turns about the
+        ; plane's own vertical axis, so it blends by bank exactly like
+        ; the elevator does - wings level it is the old flat turn, in
+        ; knife-edge the top rudder holds the nose up, and coordinated
+        ; turns finally add up. Fractions ride pfrac/hfrac.
+        push cx
+        mov  ax,[roll]
+        add  ax,64
+        call SINQ               ; cos(roll)
+        pop  cx
+        push cx
+        imul cx                 ; r*cos*256 (32-bit)
+        mov  bx,256
+        idiv bx                 ; eighths of heading
+        add  ax,[hfrac]
+        cwd
+        mov  bx,8
+        idiv bx
+        mov  [hfrac],dx
+        add  ax,[heading]
         and  ax,255
         mov  [heading],ax
+        mov  ax,[roll]
+        call SINQ               ; sin(roll)
+        pop  cx
+        imul cx
+        mov  bx,256
+        idiv bx
+        neg  ax                 ; top rudder raises the nose
+        add  ax,[pfrac]
+        cwd
+        mov  bx,8
+        idiv bx
+        mov  [pfrac],dx
+        add  [pitch],ax
 @@rde:
         ; --- PITCH: real fighter controls. Pull (DOWN key) rotates the nose
         ; through the roll plane: pitch_rate = q*cos(roll), yaw = q*sin(roll).
