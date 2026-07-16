@@ -1,0 +1,14 @@
+say overview
+wait 10
+poke apx -2200
+poke apz 60
+poke apy 350
+poke hdg 64
+poke vel 400
+poke thr 50
+wait 6
+shot w3_overview
+wait 10
+shot w3_overview2
+tap ESC 4
+end

@@ -1,0 +1,13 @@
+say horizon check
+wait 20
+press PLUS
+until thr >= 100 300
+release PLUS
+until vel >= 330 600
+press DOWN
+wait 14
+release DOWN
+until alt >= 1700 2400
+shot h_high
+tap ESC 4
+end

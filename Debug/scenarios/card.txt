@@ -1,0 +1,18 @@
+say card honest roll
+wait 15
+press PLUS
+until thr >= 100 300
+release PLUS
+until apx >= -1500 700
+shot card_a
+until apx >= -800 400
+shot card_b
+until apx >= -200 400
+shot card_c
+press DOWN
+wait 14
+release DOWN
+until alt >= 120 600
+shot card_d
+tap ESC 4
+end

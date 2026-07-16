@@ -5,6 +5,8 @@ REM   MAKE            - build EVERYTHING (all games + examples)
 REM   MAKE OWLFLY     - the flight simulator only (converters + TASM)
 REM   MAKE WIRECITY   - the 1986 original only
 REM   MAKE EXAMPLES   - the teaching machines only
+REM   MAKE TOOLS      - the DOS toolchain (OBJ2DAT model precompiler)
+REM   MAKE TRAINER    - the flight school (model DAT + TASM)
 REM Per-game folders have one-line wrappers calling this with their target.
 REM All build logic lives HERE: DOSBox always mounts the repo root as C:
 REM because ENGINE\ is shared by every target. Log: BUILD.LOG in the root.
@@ -21,6 +23,15 @@ if "%TARGET%"=="" set TARGET=ALL
 
 if "%TARGET%"=="WIRECITY" goto skipconv
 if "%TARGET%"=="EXAMPLES" goto skipconv
+if "%TARGET%"=="TOOLS" goto skipconv
+if "%TARGET%"=="TRAINER" goto trconv
+goto convdone
+:trconv
+echo === 1/2 TRAINER converters (instrument panel) ===
+python GAMES\TRAINER\res\mkpanel.py
+if errorlevel 1 goto err
+goto skipconv
+:convdone
 echo === 1/2 OWLFLY converters (panel + engine sample) ===
 python GAMES\OWLFLY\res\mkpanel.py
 if errorlevel 1 goto err

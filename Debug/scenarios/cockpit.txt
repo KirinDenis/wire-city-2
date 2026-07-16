@@ -1,0 +1,17 @@
+say cockpit check
+wait 15
+tap V 3
+wait 6
+shot c2_fp
+tap O 3
+wait 30
+shot c2_canopy
+press LEFT
+wait 2
+release LEFT
+wait 2
+press RIGHT
+wait 2
+release RIGHT
+tap ESC 4
+end

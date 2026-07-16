@@ -1,0 +1,11 @@
+say canopy check
+wait 15
+tap V 3
+tap O 3
+wait 30
+shot c3_open
+tap O 3
+wait 30
+shot c3_closed
+tap ESC 4
+end

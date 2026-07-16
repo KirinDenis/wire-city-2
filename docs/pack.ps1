@@ -1,4 +1,4 @@
-# pack.ps1 -Game <OWLFLY|WIRECITY> - build a versioned js-dos bundle.
+# pack.ps1 -Game <OWLFLY|WIRECITY|TRAINER> - build a versioned js-dos bundle.
 #
 # js-dos caches extracted bundles in IndexedDB keyed by the bundle PATH,
 # so every release gets a NEW FILENAME: <prefix>_vN.jsdos. This script
@@ -28,6 +28,24 @@ $MAP = @{
       @{ p = "docs\dosbox-root.conf"; n = "dosbox.conf" }
     )
     strings = @()
+  }
+  TRAINER = @{
+    prefix = "field"
+    page   = Join-Path $root "docs\play.html"
+    detect = "field_v(\d+)\.jsdos"
+    files  = @(
+      @{ p = "GAMES\TRAINER\FIELD.COM";  n = "FIELD.COM" },
+      @{ p = "GAMES\TRAINER\PLANE1.DAT"; n = "PLANE1.DAT" },
+      @{ p = "GAMES\TRAINER\RBASE1.DAT"; n = "RBASE1.DAT" },
+      @{ p = "GAMES\TRAINER\RDISH1.DAT"; n = "RDISH1.DAT" },
+      @{ p = "GAMES\TRAINER\TWR1.DAT";   n = "TWR1.DAT" },
+      @{ p = "GAMES\TRAINER\CKPT1.DAT";  n = "CKPT1.DAT" },
+      @{ p = "GAMES\TRAINER\CNPY1.DAT";  n = "CNPY1.DAT" }
+    )
+    strings = @(
+      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`nfield`n" },
+      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`nfield`n" }
+    )
   }
   WIRECITY = @{
     prefix = "wirecity"

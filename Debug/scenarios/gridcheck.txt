@@ -1,0 +1,19 @@
+; verify the altitude-scaled grid: shots low, mid, high
+say scenario gridcheck
+wait 20
+shot g_ground
+press PLUS
+until thr >= 100 300
+release PLUS
+until vel >= 330 600
+press DOWN
+wait 14
+release DOWN
+until alt >= 300 900
+shot g_low
+until alt >= 900 1200
+shot g_mid
+until alt >= 1800 1800
+shot g_high
+tap ESC 4
+end

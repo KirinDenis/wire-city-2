@@ -1,6 +1,7 @@
 # TASM / TLINK build artifacts
 *.OBJ
 *.obj
+EXAMPLES/*.EXE
 *.MAP
 *.map
 *.LST
@@ -37,3 +38,16 @@ stdout.txt
 stderr.txt
 GAMES/OWLFLY/res/panel1.psd
 LOCAL.BAT
+
+# Wavefront MODELS are sources, not TLINK artifacts - un-ignore them
+# (the global *.obj above catches TASM output; res/ holds Blender exports)
+!GAMES/*/res/*.obj
+!TOOLS/TRAINER.OBJ
+
+# Debug harness: keep the folders, drop the noise (shots, flight logs,
+# the compiled exe); sources and scenarios stay tracked
+Debug/shots/*
+!Debug/shots/.gitkeep
+Debug/log/*
+!Debug/log/.gitkeep
+Debug/FlyDbg.exe

@@ -1,0 +1,11 @@
+say tower look
+wait 10
+poke apx 100
+poke apz -300
+poke apy 45
+wait 8
+shot w_tower
+wait 14
+shot w_tower2
+tap ESC 4
+end

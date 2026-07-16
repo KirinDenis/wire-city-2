@@ -1,0 +1,15 @@
+say poke test
+wait 10
+poke apy 1500
+poke vel 480
+poke pit 0
+poke thr 80
+wait 6
+shot p_teleport
+poke slow 20
+wait 3
+shot p_slowmo
+poke slow 0
+wait 5
+tap ESC 4
+end

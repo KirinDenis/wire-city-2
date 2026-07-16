@@ -1,0 +1,13 @@
+say two looks
+wait 10
+poke apx 0
+poke apz -380
+poke apy 40
+poke hdg 192
+wait 10
+shot w2_west_radar
+poke hdg 64
+wait 10
+shot w2_east_tower
+tap ESC 4
+end

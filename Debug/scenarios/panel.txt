@@ -1,0 +1,12 @@
+say panel check
+wait 15
+tap V 3
+wait 6
+shot p2_panel
+press PLUS
+until thr >= 100 300
+release PLUS
+until vel >= 300 600
+shot p2_asi
+tap ESC 4
+end

@@ -1,0 +1,13 @@
+say radar look
+wait 10
+poke apx -900
+poke apz -180
+poke apy 40
+poke vel 350
+poke thr 60
+wait 8
+shot r_close
+wait 20
+shot r_spin
+tap ESC 4
+end

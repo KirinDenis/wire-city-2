@@ -50,10 +50,45 @@ TASM /T AVIO.ASM
 if errorlevel 1 goto err1
 TLINK /t AVIO.OBJ
 if errorlevel 1 goto err1
+TASM /T SMOKE.ASM
+if errorlevel 1 goto err1
+TLINK /t SMOKE.OBJ
+if errorlevel 1 goto err1
 cd ..
 
+echo ===== TOOLS =====
+cd TOOLS
+TASM /T OBJ2DAT.ASM
+if errorlevel 1 goto err1
+TLINK /t OBJ2DAT.OBJ
+if errorlevel 1 goto err1
+cd ..
+
+echo ===== GAMES\TRAINER =====
+cd GAMES\TRAINER
+\TOOLS\OBJ2DAT.COM res\PLANE1.OBJ PLANE1.DAT 4
+if errorlevel 1 goto err2
+\TOOLS\OBJ2DAT.COM res\RBASE1.OBJ RBASE1.DAT 4
+if errorlevel 1 goto err2
+\TOOLS\OBJ2DAT.COM res\RDISH1.OBJ RDISH1.DAT 4
+if errorlevel 1 goto err2
+\TOOLS\OBJ2DAT.COM res\TWR1.OBJ TWR1.DAT 12
+if errorlevel 1 goto err2
+\TOOLS\OBJ2DAT.COM res\CKPT1.OBJ CKPT1.DAT 120
+if errorlevel 1 goto err2
+\TOOLS\OBJ2DAT.COM res\CNPY1.OBJ CNPY1.DAT 120
+if errorlevel 1 goto err2
+cd SRC
+TASM /T FIELD.ASM
+if errorlevel 1 goto err3
+TLINK /t FIELD.OBJ
+if errorlevel 1 goto err3
+copy /y FIELD.COM ..
+del FIELD.COM
+cd ..\..\..
+
 echo.
-echo ALL BUILT: FLYOWL, WIRECITY, EXAMPLES
+echo ALL BUILT: FLYOWL, WIRECITY, TRAINER, EXAMPLES, TOOLS
 goto end
 :err3
 cd ..\..\..

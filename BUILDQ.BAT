@@ -6,6 +6,8 @@ echo BUILD START > BUILD.LOG
 if "%1"=="OWLFLY" goto owlfly
 if "%1"=="WIRECITY" goto wirecity
 if "%1"=="EXAMPLES" goto examples
+if "%1"=="TOOLS" goto tools
+if "%1"=="TRAINER" goto trainer
 
 :owlfly
 cd GAMES\OWLFLY\SRC
@@ -51,7 +53,44 @@ TASM /T AVIO.ASM >> ..\BUILD.LOG
 if errorlevel 1 goto err
 TLINK /t AVIO.OBJ >> ..\BUILD.LOG
 if errorlevel 1 goto err
+TASM /T SMOKE.ASM >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t SMOKE.OBJ >> ..\BUILD.LOG
+if errorlevel 1 goto err
 cd ..
+if "%1"=="EXAMPLES" goto ok
+
+:tools
+cd TOOLS
+TASM /T OBJ2DAT.ASM >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t OBJ2DAT.OBJ >> ..\BUILD.LOG
+if errorlevel 1 goto err
+cd ..
+if "%1"=="TOOLS" goto ok
+
+:trainer
+cd GAMES\TRAINER
+\TOOLS\OBJ2DAT.COM res\PLANE1.OBJ PLANE1.DAT 4 >> ..\..\BUILD.LOG
+if errorlevel 1 goto err
+\TOOLS\OBJ2DAT.COM res\RBASE1.OBJ RBASE1.DAT 4 >> ..\..\BUILD.LOG
+if errorlevel 1 goto err
+\TOOLS\OBJ2DAT.COM res\RDISH1.OBJ RDISH1.DAT 4 >> ..\..\BUILD.LOG
+if errorlevel 1 goto err
+\TOOLS\OBJ2DAT.COM res\TWR1.OBJ TWR1.DAT 12 >> ..\..\BUILD.LOG
+if errorlevel 1 goto err
+\TOOLS\OBJ2DAT.COM res\CKPT1.OBJ CKPT1.DAT 120 >> ..\..\BUILD.LOG
+if errorlevel 1 goto err
+\TOOLS\OBJ2DAT.COM res\CNPY1.OBJ CNPY1.DAT 120 >> ..\..\BUILD.LOG
+if errorlevel 1 goto err
+cd SRC
+TASM /T FIELD.ASM >> ..\..\..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t FIELD.OBJ >> ..\..\..\BUILD.LOG
+if errorlevel 1 goto err
+copy /y FIELD.COM .. >> ..\..\..\BUILD.LOG
+del FIELD.COM
+cd ..\..\..
 
 :ok
 echo BUILD OK >> C:\BUILD.LOG

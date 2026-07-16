@@ -1,0 +1,26 @@
+say aoa check
+wait 15
+press PLUS
+until thr >= 100 300
+release PLUS
+until vel >= 330 600
+press DOWN
+wait 14
+release DOWN
+until alt >= 250 900
+press MINUS
+until thr <= 30 300
+release MINUS
+tap F 3
+wait 3
+tap F 3
+until vel <= 310 700
+shot a_slowflight
+wait 30
+shot a_glide
+until alt <= 40 900
+shot a_flare
+wait 30
+shot a_after
+tap ESC 4
+end

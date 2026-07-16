@@ -1,0 +1,13 @@
+say merge check
+wait 20
+press PLUS
+until thr >= 100 300
+release PLUS
+until vel >= 330 600
+press DOWN
+wait 14
+release DOWN
+until alt >= 2100 1800
+shot m_2100
+tap ESC 4
+end

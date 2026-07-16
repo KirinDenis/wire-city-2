@@ -1,0 +1,14 @@
+say creep and lift v2
+wait 10
+tap B 3
+press PLUS
+until thr >= 100 300
+release PLUS
+wait 50
+say creep done
+tap B 3
+until vel >= 380 700
+say float window
+wait 40
+tap ESC 4
+end

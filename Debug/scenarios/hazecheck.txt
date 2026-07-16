@@ -1,0 +1,18 @@
+say haze check
+wait 20
+shot z_ground
+press PLUS
+until thr >= 100 300
+release PLUS
+until vel >= 330 600
+press DOWN
+wait 14
+release DOWN
+until alt >= 400 900
+shot z_400
+until alt >= 1700 1500
+shot z_1700
+until alt >= 2600 1500
+shot z_2600
+tap ESC 4
+end

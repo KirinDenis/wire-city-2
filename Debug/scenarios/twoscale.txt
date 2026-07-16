@@ -1,0 +1,20 @@
+say twoscale check
+wait 20
+shot t_hangars
+press PLUS
+until thr >= 100 300
+release PLUS
+until vel >= 330 600
+press DOWN
+wait 14
+release DOWN
+until alt >= 600 1200
+shot t_600
+until alt >= 700 400
+shot t_700
+until alt >= 800 400
+shot t_800
+until alt >= 900 400
+shot t_900
+tap ESC 4
+end

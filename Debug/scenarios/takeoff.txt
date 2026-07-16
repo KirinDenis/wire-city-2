@@ -1,0 +1,18 @@
+; the smoke test: taxi power, take off, climb, look around
+say scenario takeoff
+wait 20
+shot parked
+press PLUS
+until thr >= 100 300
+release PLUS
+until vel >= 330 600
+shot rolling
+press DOWN
+wait 14
+release DOWN
+until alt >= 120 600
+shot airborne
+until alt >= 700 1200
+shot climb
+tap ESC 4
+end

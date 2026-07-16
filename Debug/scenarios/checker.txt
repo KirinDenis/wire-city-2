@@ -1,0 +1,26 @@
+say checker check
+wait 20
+shot c_ground
+press PLUS
+until thr >= 100 300
+release PLUS
+until vel >= 330 600
+press DOWN
+wait 14
+release DOWN
+until alt >= 900 1200
+shot c_1000
+press LEFT
+wait 12
+release LEFT
+press DOWN
+wait 40
+release DOWN
+shot c_turn
+press RIGHT
+wait 12
+release RIGHT
+until alt >= 2500 1500
+shot c_2600
+tap ESC 4
+end
