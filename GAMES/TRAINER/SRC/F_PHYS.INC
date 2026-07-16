@@ -62,12 +62,16 @@ PHYS:   cmp  word ptr [dead],0
 @@go:
         ; ---- throttle spools while +/- is held ----
         mov  ax,[thr]
+        cmp  byte ptr [KEYS+SC_W],0     ; W: layout-proof in the browser
+        jne  @@ta
         cmp  byte ptr [KEYS+SC_EQ],0
         jne  @@ta
         cmp  byte ptr [KEYS+SC_NPP],0
         je   @@tb
 @@ta:   add  ax,2
-@@tb:   cmp  byte ptr [KEYS+SC_MIN],0
+@@tb:   cmp  byte ptr [KEYS+SC_S],0
+        jne  @@tc
+        cmp  byte ptr [KEYS+SC_MIN],0
         jne  @@tc
         cmp  byte ptr [KEYS+SC_NPM],0
         je   @@td

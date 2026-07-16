@@ -24,6 +24,8 @@ SC_ESC  equ 01h
 SC_MIN  equ 0Ch
 SC_EQ   equ 0Dh
 SC_R    equ 13h
+SC_W    equ 11h
+SC_S    equ 1Fh
 SC_O    equ 18h
 SC_F    equ 21h
 SC_G    equ 22h

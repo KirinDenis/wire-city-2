@@ -217,7 +217,7 @@ PAL     db   1, 50,10, 4        ; warning red (unused yet)
         db  23, 55,55,58        ; wings
         db 255
 MSGH    db 'FLIGHT SCHOOL',0
-MSGH2   db 'arrows +-thr F G B V R Sh-look O-cnpy',0
+MSGH2   db 'arrows WS/+-thr F G B V R Sh-look',0
 MSPD    db 'SPD=',0
 MALT    db 'ALT=',0
 MTHR    db 'THR=',0
