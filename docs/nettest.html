@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>IPX net test - direct emulators API</title>
+<style>body{background:#04060f;color:#bcd;font-family:monospace;font-size:13px}
+#log{white-space:pre-wrap}canvas{border:1px solid #345;image-rendering:pixelated}</style>
+</head><body>
+<div id="log">loading...</div>
+<canvas id="scr" width="640" height="400"></canvas>
+<script>
+(function () {
+  // Headless-pane shim: rAF never fires there, js-dos paces emulation on it.
+  let rafProbe = false;
+  requestAnimationFrame(() => { rafProbe = true; });
+  setTimeout(() => {
+    if (!rafProbe) {
+      window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16);
+      window.cancelAnimationFrame = (id) => clearTimeout(id);
+    }
+  }, 300);
+})();
+</script>
+<script src="coi-serviceworker.js"></script>
+<script src="jsdos/emulators/emulators.js"></script>
+<script>
+const L = (m) => { document.getElementById("log").textContent += "\n" + m; };
+window.__result = "pending";
+
+const KBD = { enter: 257, space: 32, backspace: 259 };
+for (let i = 0; i < 26; i++) KBD[String.fromCharCode(97 + i)] = 65 + i;
+for (let i = 0; i < 10; i++) KBD[String.fromCharCode(48 + i)] = 48 + i;
+
+window.typeText = async (s) => {
+  for (const ch of s.toLowerCase()) {
+    const code = ch === "\n" ? KBD.enter : ch === " " ? KBD.space : KBD[ch];
+    if (code === undefined) { L("no key for " + ch); continue; }
+    window.ci.simulateKeyPress(code);
+    await new Promise((r) => setTimeout(r, 80));
+  }
+};
+
+window.grab = async () => {
+  const im = await window.ci.screenshot();
+  const c = document.getElementById("scr");
+  c.width = im.width; c.height = im.height;
+  c.getContext("2d").putImageData(im, 0, 0);
+  let sum = 0;
+  for (let i = 0; i < im.data.length; i += 7) sum = (sum + im.data[i]) % 1000000007;
+  return { w: im.width, h: im.height, hash: sum };
+};
+
+(async () => {
+  try {
+    const params = new URLSearchParams(location.search);
+    const room = params.get("room") || "wire";
+    const relay = params.get("relay") || "ws://localhost:1900";
+    emulators.pathPrefix = "jsdos/emulators/";
+    const name = params.get("bundle") || "chat_v3.jsdos";
+    const bundle = new Uint8Array(await (await fetch(name)).arrayBuffer());
+    L("bundle " + bundle.length + " bytes");
+    const ci = await emulators.dosboxDirect(bundle);
+    window.ci = ci;
+    L("ci ready, connecting to room " + room + "...");
+    await ci.networkConnect(0, relay + "/ipx/" + room);
+    L("networkConnect RESOLVED - connected");
+    window.__result = "connected";
+  } catch (e) {
+    L("FAILED: " + e.message);
+    window.__result = "error: " + e.message;
+  }
+})();
+</script></body></html>

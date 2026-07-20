@@ -1,0 +1,9 @@
+{
+  "_readme": "Second bot instance: joins the first instance's relay as a client. Run: RUN-BOT2.BAT",
+  "BotName": "BORIS",
+  "PersonaFile": "persona.boris.md",
+  "RelayUrl": "ws://localhost:1900/ipx/wire",
+  "ChimeEveryNMessages": 5,
+  "MinSecondsBetweenReplies": 45,
+  "MaxCallsPerHour": 15
+}

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WIRE CITY CHAT - dev relay</title>
+<link rel="stylesheet" href="jsdos/js-dos.css">
+<style>html,body{margin:0;background:#04060f;color:#bcd;font-family:monospace}
+#dos{width:min(96vw,900px);aspect-ratio:4/3;margin:12px auto;background:#000}
+p{max-width:900px;margin:8px auto;padding:0 12px;font-size:13px}</style>
+</head><body>
+<p><b>DEV RELAY TEST:</b> same 1986 chat, IPX auto-connects to
+<b>ws://localhost:1900/ipx/wire</b> (relay/IpxRelay) right after the
+emulator starts - just press play, then type.
+<span id="netstat" style="color:#8af">[net: waiting for emulator]</span></p>
+<div id="dos"></div>
+<script>
+window.__dbg = { workers: 0, events: [] };
+window.__acs = [];
+(function () {
+  // Headless-pane shim: rAF never fires there, js-dos paces emulation on it.
+  let rafProbe = false;
+  requestAnimationFrame(() => { rafProbe = true; });
+  setTimeout(() => {
+    if (!rafProbe) {
+      window.__dbg.rafShim = true;
+      window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16);
+      window.cancelAnimationFrame = (id) => clearTimeout(id);
+    }
+  }, 300);
+})();
+(function () {
+  const OW = window.Worker;
+  window.Worker = function (url, opts) { window.__dbg.workers++; return new OW(url, opts); };
+  window.Worker.prototype = OW.prototype;
+  const OAC = window.AudioContext;
+  window.AudioContext = function (...a) { const c = new OAC(...a); window.__acs.push(c); return c; };
+  window.AudioContext.prototype = OAC.prototype;
+  document.addEventListener("keydown", () => {
+    window.__acs.forEach((c) => { if (c.state === "suspended") c.resume(); });
+  });
+})();
+</script>
+<script src="coi-serviceworker.js"></script>
+<script src="jsdos/js-dos.js"></script>
+<script>Dos(document.getElementById("dos"),{url:"chat_v3.jsdos",
+pathPrefix:"jsdos/emulators/",theme:"dark",imageRendering:"pixelated",
+noNetworking:false,
+workerThread:false,
+ipx:[{name:"local",host:"ws://localhost"}],
+ipxBackend:"local",
+room:"wire",
+onEvent:(e,arg)=>{ window.__dbg.events.push(e); if(e==="ci-ready"){ window.__ci=arg;
+  const st=document.getElementById("netstat");
+  st.textContent="[net: connecting...]";
+  arg.networkConnect(0,"ws://localhost:1900/ipx/wire")
+    .then(()=>{ st.textContent="[net: IPX connected, room wire]"; st.style.color="#6f6"; })
+    .catch((err)=>{ st.textContent="[net: FAILED - "+err.message+"]"; st.style.color="#f66"; });
+} }});
+</script></body></html>

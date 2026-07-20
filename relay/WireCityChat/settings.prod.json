@@ -1,0 +1,4 @@
+{
+  "_readme": "ALEX on the LIVE ViewOwl pipe (GENERAL board). Run: RUN-PROD.BAT. API key still comes from settings.local.json.",
+  "RelayUrl": "wss://view.owlos.sk/ipx/general"
+}

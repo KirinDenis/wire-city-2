@@ -51,3 +51,9 @@ Debug/shots/*
 Debug/log/*
 !Debug/log/.gitkeep
 Debug/FlyDbg.exe
+
+# WireCityChat: local API key and runtime artifacts stay out of the repo
+relay/WireCityChat/settings.local.json
+relay/WireCityChat/logs/
+relay/**/bin/
+relay/**/obj/

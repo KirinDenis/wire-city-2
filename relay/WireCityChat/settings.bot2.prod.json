@@ -1,0 +1,9 @@
+{
+  "_readme": "BORIS on the LIVE ViewOwl pipe (GENERAL board). Run: WireCityChat.exe settings.bot2.prod.json",
+  "BotName": "BORIS",
+  "PersonaFile": "persona.boris.md",
+  "RelayUrl": "wss://view.owlos.sk/ipx/general",
+  "ChimeEveryNMessages": 5,
+  "MinSecondsBetweenReplies": 45,
+  "MaxCallsPerHour": 15
+}

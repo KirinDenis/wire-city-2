@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WIRE CITY 86 — BBS</title>
+<link rel="stylesheet" href="jsdos/js-dos.css">
+<style>
+  html,body{margin:0;background:#04060f;color:#bcd;font-family:monospace}
+  #wrap{max-width:900px;margin:0 auto;padding:12px}
+  h1{letter-spacing:3px;color:#bcf;text-shadow:0 0 8px #46c;margin:6px 0 2px;font-size:22px}
+  .tag{color:#89b;font-size:13px;margin-bottom:10px}
+  .tag a{color:#9bf}
+  #dos{width:100%;aspect-ratio:4/3;background:#000;border:1px solid #234}
+  .note{max-width:900px;font-size:13px;color:#abc;line-height:1.5;margin:10px auto 0}
+  .stat{color:#5f7;font-size:12px;margin-left:8px}
+</style>
+</head><body>
+<div id="wrap">
+  <h1>W I R E&nbsp;&nbsp;C I T Y&nbsp;&nbsp;8 6&nbsp;&nbsp;/&nbsp;&nbsp;B B S</h1>
+  <div class="tag">the 1986 bulletin board: a real DOS program speaking IPX,
+    tunneled through WebSocket &middot; <a href="index.html">&larr; back to the arcade</a>
+    &middot; handle: <input id="nick" maxlength="10" size="10"
+      style="background:#0a1020;color:#5f7;border:1px solid #234;font-family:monospace">
+    <span class="stat" id="stat"></span></div>
+  <div id="dos"></div>
+  <p class="note"><b>How it works:</b> press &#9654; to boot the terminal and you
+    are on the wire with everyone else — DOS boxes, the web, and the OWLOS
+    regulars. Type a line, Enter posts it, ESC quits. Public board; be nice,
+    no personal data.</p>
+</div>
+<script src="coi-serviceworker.js"></script>
+<script src="jsdos/js-dos.js"></script>
+<script>
+  // Relay host for this BBS. Local dev = the WireCityChat / dev relay on :1900.
+  // On production point this at the ViewOwl pipe (wss://<host>/ipx). The room
+  // name is the board; "wire" is the general board.
+  const params = new URLSearchParams(location.search);
+  // Default relay: local dev hub when the page itself is on localhost;
+  // anywhere else (GitHub Pages, ViewOwl wwwroot) - the production
+  // ViewOwl pipe. ?relay= overrides both.
+  const RELAY = params.get("relay")
+             || (location.hostname === "localhost" || location.hostname === "127.0.0.1"
+                 ? "ws://localhost:1900"
+                 : "wss://view.owlos.sk");
+  // "general" is the board where the web guests and the bots live.
+  const ROOM  = params.get("room") || "general";
+
+  // Handle lives OUTSIDE the DOS program: it rides the WS URL as ?nick=
+  // and the relay stamps "nick: " onto every line at routing time.
+  // Sticky via localStorage; ?nick= in the page URL overrides.
+  const clean = (s) => (s || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 10);
+  const NICK = clean(params.get("nick")) || clean(localStorage.getItem("bbs-nick"))
+            || "guest" + (10 + Math.floor(Math.random() * 90));
+  localStorage.setItem("bbs-nick", NICK);
+  const nickBox = document.getElementById("nick");
+  nickBox.value = NICK;
+  nickBox.addEventListener("change", () => {
+    const n = clean(nickBox.value);
+    if (!n || n === NICK) { nickBox.value = NICK; return; }
+    localStorage.setItem("bbs-nick", n);
+    location.search = ""; // reload; the new handle applies on next boot
+  });
+
+  // Worker mode (default), minimal options - the one config where real
+  // typing provably works (2026-07-19). No ipx:/ipxBackend:/room:
+  // custom options (they kill the keyboard), no key interceptor needed.
+  Dos(document.getElementById("dos"), {
+    url: "bbs_v6.jsdos",
+    pathPrefix: "jsdos/emulators/",
+    theme: "dark", imageRendering: "pixelated",
+    noNetworking: false,
+    onEvent: (e, ci) => {
+      if (e !== "ci-ready") return;
+      window.__ci = ci;
+      const st = document.getElementById("stat");
+      st.textContent = "· connecting…";
+      ci.networkConnect(0, RELAY + "/ipx/" + ROOM + "?nick=" + encodeURIComponent(NICK))
+        .then(() => { st.textContent = "· on the wire as " + NICK + " · board \"" + ROOM + "\""; })
+        .catch((err) => { st.textContent = "· offline (" + err.message + ")"; });
+    }
+  });
+</script>
+</body></html>

@@ -24,6 +24,13 @@
   .src{font-size:12px;color:#9bf}
   .now{font-size:11px;color:#f96}
   h3{color:#9bf;letter-spacing:2px;margin:22px 0 8px;font-size:14px}
+  .bbsbar{display:flex;align-items:center;gap:12px;margin:4px 0 16px;
+          padding:10px 16px;border:1px solid #2a5;background:#081408;
+          text-decoration:none;font-size:16px;font-weight:bold;letter-spacing:2px}
+  .bbsbar:hover{background:#0c2010;border-color:#5f7}
+  .bbsarrow{color:#5f7}
+  .bbstitle{color:#9fb;text-shadow:0 0 6px #142}
+  .bbsstat{margin-left:auto;font-weight:normal;letter-spacing:0;font-size:12px}
   .foot{margin-top:22px;font-size:12px;color:#789;line-height:1.6}
   a{color:#9bf}
 </style>
@@ -35,6 +42,12 @@
     &middot; <a href="https://github.com/KirinDenis/wire-city-2">sources</a>
     &middot; <a href="https://www.facebook.com/groups/OWLOS">community</a>
     &middot; built by <a href="https://owlos.sk/">Owlos</a></div>
+
+  <a class="bbsbar" href="bbs.html" id="bbslink" title="the 1986 bulletin board — chat with the crew over IPX">
+    <span class="bbsarrow">&#9654;</span>
+    <span class="bbstitle">ENTER&nbsp; THE&nbsp; WIRE&nbsp; CITY&nbsp; BBS</span>
+    <span class="bbsstat" id="bbsstat"></span>
+  </a>
 
   <h3>GAMES</h3>
   <div class="grid">
@@ -153,6 +166,32 @@
   //     var n = d[e.dataset.game]; if (n) e.textContent = '▶ '+n+' playing now';
   //   });
   // });
+
+  // BBS status: light the header link when the board is online and show how
+  // many callers (bots count — they are BBS regulars). Backend host is set by
+  // ?bbs=<origin>; defaults to same origin for local dev. Fails silently.
+  (function () {
+    var origin = new URLSearchParams(location.search).get('bbs')
+      || (location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+          ? '' : 'https://view.owlos.sk');
+    var stat = document.getElementById('bbsstat');
+    var link = document.getElementById('bbslink');
+    function paint() {
+      fetch(origin + '/api/bbs/status', { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          var n = 0; for (var k in d) n += d[k];
+          stat.innerHTML = ' <span style="color:#5f7">● online</span>' +
+            ' <span style="color:#789">· ' + n + ' on the board' + (n === 1 ? '' : 's') + '</span>';
+          link.style.color = '#7f7';
+        })
+        .catch(function () {
+          stat.innerHTML = ' <span style="color:#556">○ offline</span>';
+          link.style.color = '';
+        });
+    }
+    paint(); setInterval(paint, 15000);
+  })();
 </script>
 </body>
 </html>
