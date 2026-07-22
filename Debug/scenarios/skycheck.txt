@@ -1,0 +1,22 @@
+; SOLO: climb high and photograph the sky - it must be BLUE
+wait 10
+tap SPACE 3
+wait 10
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 800 300
+tap L 3
+until alt >= 6400 900
+say at 400 m - checking the sky
+shot sky400
+wait 300
+shot sky400b
+until alt >= 12800 900
+say at 800 m
+shot sky800
+end

@@ -1,0 +1,19 @@
+; drop the speed under the stall line and look at the light
+wait 10
+tap SPACE 3
+wait 10
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 3200 600
+say flaps out, then take the speed away
+tap F 3
+poke vel 900
+wait 6
+shot stalllamp
+say done
+end

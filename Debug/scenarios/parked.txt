@@ -1,0 +1,9 @@
+; SOLO: photograph the parked view - checker back? horizon still?
+wait 10
+tap SPACE 3
+wait 40
+shot parked1
+wait 40
+shot parked2
+say two frames 2 s apart - compare the horizon rows
+end

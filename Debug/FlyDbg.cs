@@ -45,8 +45,8 @@ static class FlyDbg
     static readonly Dictionary<string, byte> KEY = new Dictionary<string, byte>(StringComparer.OrdinalIgnoreCase)
     {
         {"ESC",0x01},{"MINUS",0x0C},{"PLUS",0x0D},{"R",0x13},{"O",0x18},{"F",0x21},
-        {"G",0x22},{"Z",0x2C},{"C",0x2E},{"V",0x2F},{"B",0x30},
-        {"UP",0x48},{"LEFT",0x4B},{"RIGHT",0x4D},{"DOWN",0x50}
+        {"G",0x22},{"L",0x26},{"Z",0x2C},{"C",0x2E},{"V",0x2F},{"B",0x30},
+        {"SPACE",0x39},{"UP",0x48},{"LEFT",0x4B},{"RIGHT",0x4D},{"DOWN",0x50}
     };
     static readonly string[] VARS = { "tick", "vel", "alt", "pit", "rol", "hdg", "thr", "wrn", "dead", "apx", "apz", "chf", "gpi", "rxn", "lst", "pkn" };
     static readonly string[] POKE = { "apx", "apy", "apz", "hdg", "pit", "rol", "vel", "thr", "chdgf", "wind", "slow" };

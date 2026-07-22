@@ -1,0 +1,22 @@
+; SOLO endurance: climb through the old 292 m death altitude and
+; cruise for ~100 s; if the CPU faults, the tick stream stops
+wait 10
+tap SPACE 3
+wait 10
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 800 300
+tap L 3
+until alt >= 6400 900
+say past 400 m - the old killer is behind
+shot high
+tap MINUS 30
+wait 1800
+say endurance complete
+shot endure
+end

@@ -57,6 +57,34 @@ TASM /T SMOKE.ASM >> ..\BUILD.LOG
 if errorlevel 1 goto err
 TLINK /t SMOKE.OBJ >> ..\BUILD.LOG
 if errorlevel 1 goto err
+TASM /T SPOOL.ASM >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t SPOOL.OBJ >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TASM /T TKOFF.ASM >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t TKOFF.OBJ >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TASM /T FLIGHT.ASM >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t FLIGHT.OBJ >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TASM /T LAND.ASM >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t LAND.OBJ >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TASM /T TKPHYS.ASM >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t TKPHYS.OBJ >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TASM /T LNDPHYS.ASM >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t LNDPHYS.OBJ >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TASM /T SOLO.ASM >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t SOLO.OBJ >> ..\BUILD.LOG
+if errorlevel 1 goto err
 cd ..
 if "%1"=="EXAMPLES" goto ok
 

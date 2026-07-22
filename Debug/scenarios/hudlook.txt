@@ -1,0 +1,38 @@
+; HUD check: parked, rotation, climb, level, and a flapped descent -
+; one shot per state so every new symbol can be looked at in place
+wait 10
+shot parked
+tap SPACE 3
+wait 10
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+say rotating
+press DOWN
+wait 12
+release DOWN
+until alt >= 800 300
+say fifty metres - gear up
+tap L 3
+until alt >= 4800 900
+say through 300 m
+shot climb
+tap MINUS 25
+wait 120
+shot level
+say flaps and gear for the descent
+tap F 3
+tap L 3
+tap MINUS 20
+press UP
+wait 10
+release UP
+wait 200
+shot descent
+say slowing down to the stall band
+tap MINUS 30
+wait 250
+shot slow
+say done
+end

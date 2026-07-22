@@ -1,0 +1,21 @@
+; SOLO diagnostic: full-throttle roll, pull at 106 m/s, watch the lift
+wait 10
+tap SPACE 3
+wait 10
+press PLUS              ; lever to the stop
+wait 70
+release PLUS
+until vel >= 1200 600   ; 75 m/s
+say at 75 mps
+until vel >= 1700 900   ; 106 m/s
+say at 106 mps - pulling
+press DOWN
+wait 30
+release DOWN
+shot pull
+wait 60
+shot after
+until alt >= 160 200    ; did we climb 10 m?
+say alt check done
+shot final
+end
