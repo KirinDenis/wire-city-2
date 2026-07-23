@@ -43,34 +43,10 @@ SBINIT: mov  dx,226h            ; DSP reset pulse
         add  ax,4FFFh
         and  ax,0F000h
         mov  [sndseg],ax
-        ; ---- load ENGINE.RAW into it ----
-        mov  dx,offset ENGFN
-        mov  ax,3D00h
-        int  21h
-        jc   @@ret              ; no sample: stay silent
-        mov  bx,ax
-        push ds
-        mov  ax,[sndseg]
-        mov  ds,ax
-        xor  dx,dx
-        mov  cx,SNDN
-        mov  ah,3Fh
-        int  21h
-        pop  ds
-        mov  ah,3Eh
-        int  21h
-        push ds                 ; pristine copy in the segment's top half:
-        push es                 ; the ring self-heals from it after SFX
-        mov  ax,[sndseg]
-        mov  ds,ax
-        mov  es,ax
-        xor  si,si
-        mov  di,SNDN
-        mov  cx,SNDN/2
-        cld
-        rep  movsw
-        pop  es
-        pop  ds
+        ; ---- the NEWTON turbine: GENERATED, not loaded. ENGINE.RAW ----
+        ; retired; GENBED (in the sky segment) cuts the tuned bed fresh
+        ; every launch, pristine copy in the top half included
+        call FAR PTR GENBEDF
         mov  byte ptr [sbok],1
         ; ---- 8237 DMA channel 1: auto-init, read from memory ----
         mov  al,05h
@@ -498,12 +474,32 @@ SNDENG: cmp  byte ptr [sbok],0
         jge  @@wr
         mov  ax,60
         jmp  @@wr
-@@live: mov  ax,[throt]         ; spool: TC 120..184 = 7.3..13.9 kHz
-        add  ax,120             ; (the sample's native pitch ~ 2/3 throttle)
+@@live: mov  ax,[throt]         ; the lever: target N2 = throt*4 (0..256)
+        add  ax,ax
+        add  ax,ax
         cmp  byte ptr [abon],0
-        je   @@mn1
-        add  ax,10              ; the burner leans on the pitch
-@@mn1:  mov  bx,[mlvl]          ; manoeuvre loading: the airflow works the
+        je   @@sp0
+        add  ax,24              ; the burner leans on the spool
+@@sp0:  mov  bx,ax              ; THE SPOOL: the note chases the lever
+        sub  bx,[sbn2]          ; the way a real turbine does - about a
+        mov  ax,bx              ; second to wind up, never a step
+        sar  ax,1
+        sar  ax,1
+        sar  ax,1
+        sar  ax,1
+        jnz  @@sp1
+        or   bx,bx              ; the last fifteen counts still walk in,
+        jz   @@sp2              ; one a frame, or the settle never lands
+        mov  ax,1
+        or   bx,bx
+        jns  @@sp1
+        neg  ax
+@@sp1:  add  [sbn2],ax
+@@sp2:  mov  ax,[sbn2]          ; TC = 90 + n2/4: idle 90, military 154,
+        sar  ax,1               ; the burner tops out at 160 - the tuned
+        sar  ax,1               ; bed's own range from NEWTON's ENG
+        add  ax,90
+        mov  bx,[mlvl]          ; manoeuvre loading: the airflow works the
         mov  cl,3               ; intake - the note sags under g...
         shr  bx,cl
         sub  ax,bx
@@ -527,6 +523,9 @@ SNDENG: cmp  byte ptr [sbok],0
         mov  ah,byte ptr [sbtc]
         call SBWR
 @@r:    ret
+
+; (GENBED moved to SKY.INC - one-shot startup code belongs in the far
+; segment; the main 64K pays for every byte with stack headroom)
 
 ; ---- SBOFF: silence and put the hardware back (called from QUIT) ----------
 SBOFF:  cmp  byte ptr [sbok],0

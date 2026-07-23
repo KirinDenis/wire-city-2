@@ -124,6 +124,186 @@ PANEL:  cmp  word ptr [pimgo],0
 ;  segment needs every byte)
 
 ; ============================================================================
+;  LADR - the pitch ladder, riding the WORLD (the NEWTON rule, retuned
+;  for this projection). Rungs every 10 degrees (7 angle units), placed
+;  by TRUE tangent - tan(a)*FOCAL - so the ladder measures the same sky
+;  the terrain is projected into (NEWTON's 5.4 px/deg was linear
+;  because ITS horizon was; ours is pofs = tan*220, so the rungs obey
+;  the same law). Solid above the horizon, dotted below; a centre gap
+;  keeps the gunsight clean. The pilot's rule, hard-won in NEWTON:
+;  while the REAL horizon crosses the window the rails stay OUT of it -
+;  they light up just before it slips away (|f| > 92 px) and then they
+;  follow the NOSE, not the long-gone horizon. ES = back buffer;
+;  hcur/cx0/sinr/cosr are the frame's horizon pivot from CLEARBUF.
+; ============================================================================
+LADR:   mov  ax,100
+        sub  ax,[hcur]
+        imul word ptr [cosr]
+        mov  cx,256
+        idiv cx
+        mov  [lfc],ax           ; f of the screen centre
+        or   ax,ax
+        jns  @@fc1
+        neg  ax
+@@fc1:  cmp  ax,92
+        jg   @@arm
+        ret                     ; the horizon is on the glass: no rails
+@@arm:  mov  ax,[lfc]           ; the rung nearest the nose:
+        cwd                     ; tan(10 deg)*220 = 38.8 px per rung
+        mov  cx,38
+        idiv cx
+        neg  ax
+        dec  ax                 ; four rungs, k0-1 .. k0+2
+        mov  [lp],ax
+        add  ax,3
+        mov  [lke],ax
+@@l:    cmp  word ptr [lp],0
+        je   @@next             ; zero belongs to the horizon, not us
+        cmp  word ptr [lp],-8
+        jl   @@next
+        cmp  word ptr [lp],8
+        jg   @@next
+        mov  ax,[lp]            ; a = k*7 units = k*10 degrees
+        mov  cx,7
+        imul cx
+        push ax
+        call SINQ
+        mov  [lsn],ax           ; sin(a)*256
+        pop  ax
+        add  ax,64
+        call SINQ               ; cos(a)*256
+        mov  cx,ax
+        mov  ax,[lsn]
+        mov  bx,220
+        imul bx
+        idiv cx                 ; tan(a)*FOCAL, exact
+        neg  ax
+        mov  bx,ax              ; f: up the sky is negative rows
+        xor  ax,ax
+        call LROT               ; the rung's centre sits at t = 0
+        mov  [lcx],ax
+        mov  [lcy],dx
+        cmp  dx,-60
+        jl   @@next             ; the whole line is off the glass
+        cmp  dx,260
+        jg   @@next
+        mov  ax,[cosr]          ; walk out along the HORIZON direction,
+        mov  cx,-60             ; 8.8, starting 60 px to one side
+        imul cx
+        mov  [lx8],ax
+        mov  ax,[sinr]
+        mov  cx,-60
+        imul cx
+        mov  [ly8],ax
+        mov  word ptr [li],0
+@@pt:   mov  ax,[li]            ; 0..119: the centre gap is 44..76
+        cmp  ax,44
+        jb   @@vis
+        cmp  ax,76
+        jb   @@skip
+@@vis:  cmp  word ptr [lp],0    ; below the horizon: dotted
+        jg   @@draw
+        test word ptr [li],1
+        jnz  @@skip
+@@draw: mov  ax,[lx8]
+        mov  cl,8
+        sar  ax,cl
+        add  ax,[lcx]
+        js   @@skip
+        cmp  ax,319
+        jg   @@skip
+        mov  [lpx],ax
+        mov  ax,[ly8]
+        mov  cl,8
+        sar  ax,cl
+        add  ax,[lcy]
+        js   @@skip
+        cmp  ax,199
+        jg   @@skip
+        call ROW320
+        add  di,[lpx]
+        mov  byte ptr es:[di],LDIM
+@@skip: mov  ax,[cosr]          ; one pixel further along the line
+        add  [lx8],ax
+        mov  ax,[sinr]
+        add  [ly8],ax
+        inc  word ptr [li]
+        cmp  word ptr [li],120
+        jb   @@pt
+        mov  ax,[lp]            ; the label, upright at the left end -
+        or   ax,ax              ; a 4x6 font has no rotation, and the
+        jg   @@l5               ; era's HUDs did not turn their numbers
+        neg  ax
+        mov  byte ptr [LBUF],'-'
+        jmp  @@l6
+@@l5:   mov  byte ptr [LBUF],' '
+@@l6:   add  al,'0'
+        mov  [LBUF+1],al
+        mov  byte ptr [LBUF+2],'0'
+        mov  ax,[cosr]
+        mov  cx,-76
+        imul cx
+        mov  cl,8
+        sar  ax,cl
+        add  ax,[lcx]
+        js   @@next
+        cmp  ax,300
+        jg   @@next
+        mov  [ftx],ax
+        mov  ax,[sinr]
+        mov  cx,-76
+        imul cx
+        mov  cl,8
+        sar  ax,cl
+        add  ax,[lcy]
+        sub  ax,2
+        js   @@next
+        cmp  ax,193
+        jg   @@next
+        mov  [fty],ax
+        mov  byte ptr [COLOR],LDIM
+        mov  si,offset LBUF
+        call FDRAW
+@@next: inc  word ptr [lp]
+        mov  ax,[lp]
+        cmp  ax,[lke]
+        jle  @@l
+        ret
+
+; ---- LROT: horizon-frame (AX=t, BX=f) -> screen (AX=x, DX=y) ---------------
+; The sky segment has this same rotate as ROTPT, but a near CALL cannot
+; cross segments; thirty bytes can. Clobbers DI.
+LROT:   push bx
+        push si
+        mov  si,ax
+        imul word ptr [cosr]
+        mov  cx,256
+        idiv cx
+        mov  di,ax
+        mov  ax,bx
+        imul word ptr [sinr]
+        mov  cx,256
+        idiv cx
+        sub  di,ax              ; x = cx0 + (t*cos - f*sin)/256
+        add  di,[cx0]
+        mov  ax,si
+        imul word ptr [sinr]
+        mov  cx,256
+        idiv cx
+        mov  si,ax
+        mov  ax,bx
+        imul word ptr [cosr]
+        mov  cx,256
+        idiv cx
+        add  ax,si              ; y = hcur + (t*sin + f*cos)/256
+        add  ax,[hcur]
+        mov  dx,ax
+        mov  ax,di
+        pop  si
+        pop  bx
+        ret
+
+; ============================================================================
 ;  FDRAW - draw an ASCIIZ string with the 4x6 CITY.DAT font into the back
 ;  buffer. in: SI -> string (DS), [ftx]/[fty] = position, COLOR = colour.
 ;  ES=bufseg. Advances ftx by 4 per glyph. Supports 0-9 A-Z + - : % . space.
@@ -849,22 +1029,26 @@ HUDBARS:
 @@hboff:
         ret                     ; tapes live on the glass, not in the sky
 @@hbon: cld
+        call LADR               ; the ladder goes down FIRST: the tapes
+                                ; and the gunsight draw over its rails
         ; ---- pick the layout ----
         cmp  byte ptr [cockpit],0
         je   @@f2l
         mov  word ptr [hbsx],84   ; cockpit: inside the windshield
-        mov  word ptr [hbslb],94
+        mov  word ptr [hbslb],66  ; scale numbers OUTBOARD (left)
         mov  word ptr [hbst1],85  ; ticks grow INTO the glass
         mov  word ptr [hbst2],85
         mov  word ptr [hbcx],85
         mov  word ptr [hbax],236
-        mov  word ptr [hbalb],206
+        mov  word ptr [hbalb],240 ; scale numbers OUTBOARD (right)
         mov  word ptr [hbat1],230
         mov  word ptr [hbat2],232
         mov  word ptr [hbacx],227
+        mov  word ptr [hbscur],94  ; current values INBOARD - the eye
+        mov  word ptr [hbacur],206 ; reads them without leaving centre
         jmp  @@lay
 @@f2l:  mov  word ptr [hbsx],68   ; F2: the full pane
-        mov  word ptr [hbslb],38
+        mov  word ptr [hbslb],38  ; scale outboard...
         mov  word ptr [hbst1],62
         mov  word ptr [hbst2],64
         mov  word ptr [hbcx],59
@@ -873,6 +1057,8 @@ HUDBARS:
         mov  word ptr [hbat1],253
         mov  word ptr [hbat2],253
         mov  word ptr [hbacx],253
+        mov  word ptr [hbscur],72  ; ...current inboard, same law
+        mov  word ptr [hbacur],230
 @@lay:
         ; ================= compass tape: top centre =================
         mov  ax,[heading]
@@ -897,8 +1083,8 @@ HUDBARS:
         mov  ax,[ctx]
         and  ax,31              ; every 32 units = 45 degrees: major
         jnz  @@cmin
-        mov  ax,18
-        mov  cx,2
+        mov  ax,16              ; major: LONG, twice the stubs, tall
+        mov  cx,8               ; over its number
         mov  bl,8
         call VLINE2
         mov  ax,[ctx]
@@ -914,8 +1100,8 @@ HUDBARS:
         mov  byte ptr [COLOR],8
         call FNUM3
         jmp  @@cpn
-@@cmin: mov  ax,18
-        mov  cx,1
+@@cmin: mov  ax,20              ; minor: a short stub, bottom-aligned
+        mov  cx,2               ; with the majors
         mov  bl,8
         call VLINE2
 @@cpn:  add  word ptr [ctx],4
@@ -929,8 +1115,8 @@ HUDBARS:
         mov  es:[di-319],al
 
         ; ================= speed tape: left =================
-        mov  ax,60              ; the spine
-        mov  bx,[hbsx]
+        mov  ax,48              ; the spine (12 rows higher: the tapes
+        mov  bx,[hbsx]          ; sit UP in the glass, off the nose)
         mov  [dsx],bx
         mov  cx,71
         mov  bl,8
@@ -952,12 +1138,12 @@ HUDBARS:
         mov  [dsac],ax          ; keep the offset (label crowding test)
         sar  ax,1
         sar  ax,1
-        mov  bx,95
+        mov  bx,83
         sub  bx,ax
         mov  [cty],bx           ; y
-        cmp  bx,60
+        cmp  bx,48
         jl   @@spn
-        cmp  bx,130
+        cmp  bx,118
         jg   @@spn
         mov  ax,[ctx]
         xor  dx,dx
@@ -983,7 +1169,7 @@ HUDBARS:
         mov  [ftx],ax
         mov  byte ptr [COLOR],8
         mov  ax,[ctx]
-        call FNUM
+        call FNUMK
         jmp  @@spn
 @@smin: mov  ax,[cty]           ; minor: same anchor, shorter
         mov  bx,[hbst2]
@@ -1001,11 +1187,11 @@ HUDBARS:
         jl   @@snc
         sar  ax,1
         sar  ax,1
-        mov  bx,95
+        mov  bx,83
         sub  bx,ax
-        cmp  bx,60
+        cmp  bx,48
         jl   @@snc
-        cmp  bx,130
+        cmp  bx,118
         jg   @@snc
         mov  ax,bx
         mov  bx,[hbcx]
@@ -1013,23 +1199,29 @@ HUDBARS:
         mov  cx,9
         mov  bl,19
         call HLINE2
-@@snc:  mov  ax,95              ; caret + live speed (white, classic)
+@@snc:  mov  ax,83              ; the long pointer: from the current
+        mov  bx,[hbsx]          ; value, across the spine, toward the
+        sub  bx,3               ; scale
+        mov  [dsx],bx
+        mov  cx,10
+        mov  bl,8
+        call HLINE2
+        mov  ax,83              ; caret + live speed (white, classic)
         call ROW320
         add  di,[hbsx]
         inc  di
         mov  al,8
-        mov  es:[di],al
         mov  es:[di+1-320],al
         mov  es:[di+1+320],al
-        mov  ax,[hbslb]
-        mov  [ftx],ax
-        mov  word ptr [fty],92
+        mov  ax,[hbscur]        ; the current value INBOARD: read it
+        mov  [ftx],ax           ; without leaving the gunsight
+        mov  word ptr [fty],80
         mov  byte ptr [COLOR],8
         mov  ax,[vel]
         call FNUM
 
         ; ================= altitude tape: right =================
-        mov  ax,60              ; the spine
+        mov  ax,48              ; the spine, 12 rows higher too
         mov  bx,[hbax]
         mov  [dsx],bx
         mov  cx,71
@@ -1053,17 +1245,17 @@ HUDBARS:
         sar  ax,1
         sar  ax,1
         sar  ax,1
-        mov  bx,95
+        mov  bx,83
         sub  bx,ax
         mov  [cty],bx
-        cmp  bx,60
+        cmp  bx,48
         jl   @@apn
-        cmp  bx,130
+        cmp  bx,118
         jg   @@apn
         mov  ax,[ctx]
         xor  dx,dx
-        mov  bx,500
-        div  bx
+        mov  bx,100             ; a number every 100 - every 500 left
+        div  bx                 ; the whole tape blank between labels
         test dx,dx
         jnz  @@amin
         mov  ax,[cty]           ; major divider (a touch longer)
@@ -1084,7 +1276,7 @@ HUDBARS:
         mov  [ftx],ax
         mov  byte ptr [COLOR],8
         mov  ax,[ctx]
-        call FNUM
+        call FNUMK
         jmp  @@apn
 @@amin: mov  ax,[cty]           ; minor divider
         mov  bx,[hbat2]
@@ -1103,11 +1295,11 @@ HUDBARS:
         sar  ax,1
         sar  ax,1
         sar  ax,1
-        mov  bx,95
+        mov  bx,83
         sub  bx,ax
-        cmp  bx,60
+        cmp  bx,48
         jl   @@anc
-        cmp  bx,130
+        cmp  bx,118
         jg   @@anc
         mov  ax,bx
         mov  bx,[hbacx]
@@ -1122,9 +1314,9 @@ HUDBARS:
         sar  ax,1
         sar  ax,1
         sar  ax,1
-        mov  bx,95
+        mov  bx,83
         sub  bx,ax
-        cmp  bx,60
+        cmp  bx,48
         jl   @@anc2
         mov  ax,bx
         mov  bx,[hbacx]
@@ -1132,18 +1324,100 @@ HUDBARS:
         mov  cx,9
         mov  bl,19
         call HLINE2
-@@anc2: mov  ax,95              ; caret + live altitude (white)
+@@anc2: mov  ax,83              ; the long pointer: from the current
+        mov  bx,[hbax]          ; value, across the spine, toward the
+        sub  bx,12              ; scale
+        mov  [dsx],bx
+        mov  cx,16
+        mov  bl,8
+        call HLINE2
+        mov  ax,83              ; caret + live altitude (white)
         call ROW320
         add  di,[hbax]
         sub  di,2
         mov  al,8
-        mov  es:[di],al
         mov  es:[di-1-320],al
         mov  es:[di-1+320],al
-        mov  ax,[hbalb]
+        mov  ax,[hbacur]        ; current value INBOARD
         mov  [ftx],ax
-        mov  word ptr [fty],92
+        mov  word ptr [fty],80
         mov  byte ptr [COLOR],8
         mov  ax,[camy]
         call FNUM
+
+        ; ---- IVV: the manual's vertical-speed caret, cyan, sliding
+        ; along the altitude spine - one pixel per world unit per tick,
+        ; up for a climb, down for a sink
+        mov  ax,[vvy]
+        cmp  ax,33
+        jle  @@iv1
+        mov  ax,33
+@@iv1:  cmp  ax,-33
+        jge  @@iv2
+        mov  ax,-33
+@@iv2:  neg  ax
+        add  ax,83
+        mov  bx,[hbax]
+        inc  bx
+        mov  [dsx],bx
+        mov  cx,3
+        mov  bl,LCYN
+        call HLINE2
+
+        ; ================= the G meter, under the speed tape =========
+        ; The manual's readout. This model has no accelerometer, so it
+        ; reads what the pilot is DOING: G = 1 + q*vel/512 - the ramped
+        ; elevator times airspeed, signed. Hands off = 1.0, a full pull
+        ; at combat speed ~ 3.3, a full push goes negative.
+        mov  ax,[gq]
+        imul word ptr [vel]
+        mov  cx,512
+        idiv cx
+        add  ax,10              ; level flight reads 1.0
+        mov  byte ptr [GBUF],' '
+        or   ax,ax
+        jns  @@gpos
+        neg  ax
+        mov  byte ptr [GBUF],'-'
+@@gpos: cmp  ax,99
+        jle  @@gclp
+        mov  ax,99
+@@gclp: xor  dx,dx
+        mov  bx,10
+        div  bx
+        add  al,'0'
+        mov  [GBUF+1],al
+        add  dl,'0'
+        mov  [GBUF+3],dl
+        mov  ax,[hbscur]
+        mov  [ftx],ax
+        mov  word ptr [fty],123
+        mov  byte ptr [COLOR],8
+        mov  si,offset GBUF
+        call FDRAW
+        ret
+
+; FNUMK - FNUM, but past 1000 it reads in K: 1400 -> 1.4K, 2000 -> 2K.
+; The scale numbers wear it; the current values keep their full digits.
+FNUMK:  cmp  ax,1000
+        jb   FNUM
+        xor  dx,dx
+        mov  bx,100
+        div  bx                 ; hundreds, 10..99
+        xor  dx,dx
+        mov  bx,10
+        div  bx                 ; AL = thousands, DL = the odd hundred
+        add  al,'0'
+        mov  [NB],al
+        mov  di,offset NB+1
+        or   dl,dl
+        jz   @@k
+        mov  byte ptr [di],'.'
+        add  dl,'0'
+        mov  [di+1],dl
+        add  di,2
+@@k:    mov  byte ptr [di],'K'
+        mov  byte ptr [di+1],0
+        mov  si,offset NB
+        call FDRAW
         ret

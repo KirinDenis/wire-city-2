@@ -19,7 +19,11 @@ The first build is byte-identical to OWL FLY (`FLYOWL2.COM` and
    (up = nose down), +/- throttle, A afterburner and the views were
    already the manual's scheme. L gear / B brakes / P autopilot are
    skipped: this sim has no landing model to hang them on (crash =
-   respawn). The old W/S, Q/E, Z/C and numpad aliases still work.
+   respawn). The exit is **Alt-Q**, the MicroProse way - ESC is
+   deliberately dead (players kept quitting whole sorties with it by
+   accident), and the old Q/E rudder aliases died with it so a held
+   rudder can never meet a stray Alt. W/S, Z/C and numpad aliases
+   still work.
 3. **done** — **EXE**: FLYOWL2.EXE via TLINK without /t. One PARA
    segment still, ORG 100h kept so every offset matches the proven
    COM image byte for byte; the entry prologue rebuilds the COM
@@ -48,7 +52,20 @@ The first build is byte-identical to OWL FLY (`FLYOWL2.COM` and
    explosion debris still cuts sensible shards. New models: edit
    the OBJ (or export one from Blender with PALnn materials),
    ceilings are 25 vertices / 16 faces
-6. the network arc: ViewOwl relay, DOS chat, Claude in the tower
+6. **flying** — the network arc, first light 2026-07-23: `SRC/NET.INC`
+   is IPX multiplayer the 1990 way. Joining a game is a TWO-BYTE
+   handshake - the world is procedural, so the newcomer broadcasts
+   HELLO, whoever is flying answers with the world seed, and DSGEN
+   builds the same island, city and clouds on both machines. Then
+   everyone broadcasts an 11-byte position per physics tick, and the
+   other pilots fly your sky as F15s in the last four AI slots -
+   PLANESDRAW, contrails, target lock and wrecks all come free.
+   `NETHOST.BAT` starts a sky (ipxnet server, UDP 213), `NETJOIN.BAT
+   <ip>` joins one; two windows on one machine is the dogfight lab.
+   Proven: shared world (identical minimaps), mutual sightings.
+   Next: the ViewOwl /ipx relay for internet skies, Claude in the
+   tower. NB the ECB layout lesson lives in EXAMPLES\BBS.ASM and the
+   project memory - link dword first, or the wire eats you
 
 ## What NEWTON left us
 

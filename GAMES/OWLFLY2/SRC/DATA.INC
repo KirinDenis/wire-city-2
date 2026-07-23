@@ -44,11 +44,16 @@ paz     dw NPLANE dup(0)
 pah     dw NPLANE dup(0)        ; heading 0..255
 ptype   db NPLANE dup(0)        ; 0 fighter / 1 bomber / 2 radar /
                                 ;  3 transport / 4 tanker (FORMATION)
+premote db NPLANE dup(0)        ; 1 = a REAL pilot flies this slot over
+                                ;  the wire: the AI keeps its hands off
+wseed   dw 0                    ; the seed the world was built from
+netup   db 0                    ; 1 = IPX answered at startup
+netpid  dw 0                    ; our name on the wire (spawn fan-out)
 pspd    dw 15                   ; AI speed of the plane being ticked
-mvb     dw MVERT                ; model table of the plane being drawn
-mvn     dw 13*6                 ; its vertex bytes (vertices * 6)
-mfb     dw MFACE                ; its face table
-nfc     dw 8                    ; its face count (core 8 + pods/dome)
+mvb     dw F15VT                ; model table of the plane being drawn
+mvn     dw F15NV*6              ; its vertex bytes (vertices * 6)
+mfb     dw F15FC                ; its face table
+nfc     dw F15NF                ; its face count
 bordz   dw 17 dup(0)            ; the front line: jagged z offsets (BRDGEN)
 TYPN0   db 0                    ; fighters wear no tag
 TYPN1   db 'BOMBER',0
@@ -56,21 +61,13 @@ TYPN2   db 'RADAR',0
 TYPN3   db 'TRANSP',0
 TYPN4   db 'TANKER',0
 TYPTAB  dw TYPN0,TYPN1,TYPN2,TYPN3,TYPN4
-; model vertices (x,y,z), nose +Z, wingspan ~104 world units
-MVERT   dw   0,  1, 16          ; 0 nose        (quarter scale: the WORLD
-        dw  -2,  2,-11          ; 1 rear top L    reads four times as big)
-        dw   2,  2,-11          ; 2 rear top R
-        dw  -2, -2,-11          ; 3 rear bottom L
-        dw   2, -2,-11          ; 4 rear bottom R
-        dw -13,  1, -8          ; 5 wing tip L
-        dw  13,  1, -8          ; 6 wing tip R
-        dw   0,  1,  6          ; 7 wing root fore
-        dw  -2,  1,-11          ; 8 wing rear L
-        dw   2,  1,-11          ; 9 wing rear R
-        dw   0,  2, -5          ; 10 fin base fore
-        dw   0,  7,-13          ; 11 fin top rear
-        dw   0,  2,-11          ; 12 fin base rear
-; faces: 4 corner ids (triangles repeat the first) + colour
+; ---- the fighter: BAKED at build time from res\F15.OBJ by Obj2Inc ----------
+; (TOOLS\Obj2Inc, C# - the tooling contract). 23 verts, 14 faces, the
+; twin-tail. Its first 13 vertices keep the CLASSIC meanings - nose,
+; rear box, wingtips, roots, left fin - because the wreck pool below
+; cuts its debris from the classic MFACE over exactly those.
+        INCLUDE F15M.INC
+; the classic eight faces, kept ONLY for the wreck pool (see above)
 MFACE   db 0,1,2,0, 24          ; body top (sun-lit white)
         db 0,3,4,0, 16          ; body bottom (shade)
         db 0,1,3,0, 25          ; body left
@@ -89,10 +86,10 @@ GLOWT   db 63,52,12             ; nozzle DAC cycle: yellow
 ; The FIRST 13 vertices and 8 faces are always the core airframe with the
 ; standard topology - the wreck pool breaks exactly those, so pods and
 ; domes simply vanish in an explosion (nobody mourns a nacelle).
-MVTAB   dw MVERT,MVERT1,MVERT2,MVERT3,MVERT4
-MVNTAB  dw 13*6,25*6,19*6,13*6,19*6
-MFTAB   dw MFACE,MFACE1,MFACE2,MFACE,MFACE4
-NFCTAB  dw 8,12,10,8,10
+MVTAB   dw F15VT,MVERT1,MVERT2,MVERT3,MVERT4
+MVNTAB  dw F15NV*6,25*6,19*6,13*6,19*6
+MFTAB   dw F15FC,MFACE1,MFACE2,MFACE,MFACE4
+NFCTAB  dw F15NF,12,10,8,10
 MVERT1  dw   0,  1, 34          ; BOMBER: long, four engines on the wings
         dw  -5,  5,-22
         dw   5,  5,-22
@@ -318,11 +315,32 @@ mprvp   dw 0                    ; previous pitch (for the delta)
 mprvr   dw 0                    ; previous roll
 qramp   dw 0                    ; elevator ramp: a tap is a feather (2/8
                                 ;  unit), a hold builds to 16/8 in ~0.4 s
+gq      dw 0                    ; the ramp SIGNED, for the HUD's G meter
+                                ;  (+pull, -push, 0 hands-off)
+vvy     dw 0                    ; climb per tick, world units (the IVV)
+; ---- wreck smoke: the puff column's walkers (code in PLANES.INC) -----------
+wpi     dw 0                    ; which puff of the four
+wph     dw 0                    ; its phase up the column, 0..127
+wpz     dw 0                    ; its camera depth (for the radius)
+wpr     dw 0                    ; its screen radius
+wpsx    dw 0                    ; its screen centre
+wpsy    dw 0
+wpc     db 0                    ; its grey of the cooling ramp
 pfrac   dw 0                    ; pitch fraction accumulator (eighths)
 hfrac   dw 0                    ; heading fraction accumulator (eighths)
 sndseg  dw 0
 scrseg  dw 0                    ; far scratch segment (holds the minimap)                    ; sample loop segment (64K-aligned)
-ENGFN   db 'ENGINE.RAW',0
+; (ENGFN retired 2026-07-23: GENBED generates the NEWTON turbine bed)
+; ---- GENBED: the turbine generator's state --------------------------------
+bm1     dw 0                    ; bed: lowpass pole states
+bm2     dw 0
+bm3     dw 0
+bm4     dw 0
+praw    dw 0                    ; bed: previous raw sum (the muffler)
+warmc   dw 2048                 ; bed: warm-up samples to discard
+xtt     db 0                    ; bed: crossfade scratch
+sbn2    dw 0                    ; the audio spool: the note chases the
+                                ;  lever from 0 - startup whine for free
 tgti    dw 0                    ; orbited plane (kept past the lock)
 tcws    dw 0                    ; wreck slot the camera follows (mode 2)
 tgaz    dw 0                    ; orbit azimuth (0..255)
@@ -391,13 +409,15 @@ hbalb   dw 0                    ; altitude labels/value x
 hbat1   dw 0                    ; altitude major tick x
 hbat2   dw 0                    ; altitude minor tick x
 hbacx   dw 0                    ; altitude critical mark x
+hbscur  dw 0                    ; speed CURRENT value x (outboard side)
+hbacur  dw 0                    ; altitude CURRENT value x (outboard)
+GBUF    db ' 1.0G',0            ; the G readout scratch
 ftx     dw 0                    ; font cursor x
 fty     dw 0                    ; font cursor y
 NB      db 6 dup(0)             ; number->text scratch for FNUM
 FNAME   db 'CITY.DAT',0
 RESMSG  db 'CITY.DAT not found - keep it next to CITY.COM',13,10,'$'
-F15FN   db 'F15.DAT',0          ; the Blender fighter (optional file)
-MHDR    dw 3 dup(0)             ; its 6-byte header lands here
+; (F15FN/MHDR gone: the model is baked into the image at build time)
 daymode db 1                    ; 1 = day palette, 0 = night (N key toggles)
 prevn   db 0                    ; previous N-key state (edge detect)
 bcol    db 0                    ; terrain patch colour chosen by HBLD
@@ -453,6 +473,18 @@ wdx2    dw 0                    ; WCAM2: world delta in, camera pair out
 wdz2    dw 0
 cldu    dw 0
 cldd    dw 0
+; ---- LADR: the pitch ladder's walkers (code in HUD.INC) --------------------
+lp      dw 0                    ; rung index, tens of degrees
+lfc     dw 0                    ; f of the screen centre
+lke     dw 0                    ; last rung of this frame's four
+lcx     dw 0                    ; the rung's centre on screen
+lcy     dw 0
+lx8     dw 0                    ; the walk along the line, 8.8
+ly8     dw 0
+li      dw 0                    ; which pixel of the walk
+lpx     dw 0                    ; the pixel's column
+lsn     dw 0                    ; sin scratch for the tangent
+LBUF    db '   ',0              ; ladder label scratch
 ; mountain / megablock work
 
 ; ---- Diamond-Square world heightmap (the CityGame terrain generator) -------
@@ -1035,8 +1067,9 @@ HCOL    db 8
 ;            8 HUD       9 sky band    10 ground     11 field/ground band
 ;            12 haze     13 mountains  14 water      15 forest
 ;            16 wall E/W (shade)       17 roof
-NPALC   equ 105                 ; 31 game + 63 cockpit + glow + 2 IFF +
-                                ; amber + 7 NEWTON sky (SKYZ..SKYZ+6)
+NPALC   equ 107                 ; 31 game + 63 cockpit + glow + 2 IFF +
+                                ; amber + 7 NEWTON sky (SKYZ..SKYZ+6) +
+                                ; ladder dim (LDIM) + HUD cyan (LCYN)
 PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db 30,32,36          ;1  far stroke (fades to haze)
         db 22,24,28          ;2  mid stroke
@@ -1080,6 +1113,10 @@ PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db 27,41,62          ;102 ...the haze over the horizon
         db 46,50,60          ;103 cloud ramp: base...
         db 58,59,63          ;104 ...sunlit top
+        db 34,36,40          ;105 HUD dim: the pitch ladder - darker
+                             ;    than the clouds, lighter than the
+                             ;    ground (white vanishes in cumulus)
+        db 30,58,63          ;106 HUD cyan: the IVV caret
 
 PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db 12,18,40          ;1  far stroke
@@ -1124,6 +1161,8 @@ PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db 10,15,33          ;102 ...the city-glow horizon
         db 14,17,26          ;103 cloud in moonlight: base...
         db 19,22,32          ;104 ...lit top
+        db 20,22,27          ;105 HUD dim ladder, night-lit
+        db 16,38,48          ;106 HUD cyan IVV, dimmed for the night
 
 STARN   equ 16                  ; stars as DIRECTIONS: azimuth, elevation
 STARTAB dw 10,18, 35,40, 60,12, 85,55, 110,30, 135,60, 160,22, 185,45

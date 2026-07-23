@@ -1,0 +1,15 @@
+C:\DOSFiles\wire-city-2\TOOLS\Obj2Inc\bin\Release\net8.0\Obj2Inc.exe
+C:\DOSFiles\wire-city-2\TOOLS\Obj2Inc\bin\Release\net8.0\Obj2Inc.deps.json
+C:\DOSFiles\wire-city-2\TOOLS\Obj2Inc\bin\Release\net8.0\Obj2Inc.runtimeconfig.json
+C:\DOSFiles\wire-city-2\TOOLS\Obj2Inc\bin\Release\net8.0\Obj2Inc.dll
+C:\DOSFiles\wire-city-2\TOOLS\Obj2Inc\bin\Release\net8.0\Obj2Inc.pdb
+C:\DOSFiles\wire-city-2\TOOLS\Obj2Inc\obj\Release\net8.0\Obj2Inc.GeneratedMSBuildEditorConfig.editorconfig
+C:\DOSFiles\wire-city-2\TOOLS\Obj2Inc\obj\Release\net8.0\Obj2Inc.AssemblyInfoInputs.cache
+C:\DOSFiles\wire-city-2\TOOLS\Obj2Inc\obj\Release\net8.0\Obj2Inc.AssemblyInfo.cs
+C:\DOSFiles\wire-city-2\TOOLS\Obj2Inc\obj\Release\net8.0\Obj2Inc.csproj.CoreCompileInputs.cache
+C:\DOSFiles\wire-city-2\TOOLS\Obj2Inc\obj\Release\net8.0\Obj2Inc.sourcelink.json
+C:\DOSFiles\wire-city-2\TOOLS\Obj2Inc\obj\Release\net8.0\Obj2Inc.dll
+C:\DOSFiles\wire-city-2\TOOLS\Obj2Inc\obj\Release\net8.0\refint\Obj2Inc.dll
+C:\DOSFiles\wire-city-2\TOOLS\Obj2Inc\obj\Release\net8.0\Obj2Inc.pdb
+C:\DOSFiles\wire-city-2\TOOLS\Obj2Inc\obj\Release\net8.0\Obj2Inc.genruntimeconfig.cache
+C:\DOSFiles\wire-city-2\TOOLS\Obj2Inc\obj\Release\net8.0\ref\Obj2Inc.dll

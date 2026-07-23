@@ -22,7 +22,10 @@ PLANESUPD:
         jmp  @@next
 @@fly:  mov  bx,si
         shr  bx,1
-        mov  word ptr [pspd],15
+        cmp  byte ptr [premote+bx],0 ; a real pilot flies this one:
+        je   @@ai                    ; the wire steers, not the AI
+        jmp  @@next
+@@ai:   mov  word ptr [pspd],15
         cmp  byte ptr [ptype+bx],0
         je   @@fgt
         ; ---- specials: patrol an east-west lane at formation altitude;
@@ -1409,7 +1412,7 @@ BOOM:   mov  bx,si
         jmp  WRKFILL
 
 ; PBOOM - the PLAYER breaks apart (cinematic death).
-PBOOM:  mov  word ptr [mvb],offset MVERT ; the player flies a fighter
+PBOOM:  mov  word ptr [mvb],offset F15VT ; the player flies the F15
         mov  ax,[camx]
         mov  [bpx],ax
         mov  ax,[camy]
@@ -1860,50 +1863,143 @@ WRECKDRAW:
         mov  es:[di+321],al
         pop  di
         pop  bx
-@@wfm:  ; smoke: a grey dot climbing out of the same piece
-        mov  ax,[wcc]
-        mov  cx,40
+@@wfm:  ; smoke: the SMOKE.ASM lab's column, on the game's budget.
+        ; Four puffs ride phases up a ~400-unit column above the piece,
+        ; swaying wider the higher they climb (the lab's vortex, one
+        ; SINQ), swelling as they cool through the stroke greys - and
+        ; by night that ramp reverses into fire-lit bright at the base,
+        ; for free. The smoke dies at 500 ticks (~27 s), before the
+        ; embers do.
+        cmp  word ptr [di],500
+        jae  @@wsn
+        mov  [ctx],bx           ; the face record: HLINE2 eats BX
+        push di
+        mov  word ptr [wpi],0
+@@wpf:  mov  ax,[wcc]           ; phase = (t*2 + plume*43 + puff*32)&127
+        mov  cx,43
         imul cx
+        mov  cx,[wpi]
+        push cx
+        mov  cl,5
+        shl  cx,cl
+        pop  bx
+        add  ax,cx
         mov  cx,[lasttk]
         add  cx,cx
         add  ax,cx
-        and  ax,127             ; rising phase 0..127
-        mov  [ctz],ax
-        mov  ax,[bx]
+        and  ax,127
+        mov  [wph],ax
+        ; sway: sin(phase*4 + puff*64) * (phase/16) / 256 - the higher,
+        ; the wider the wander
+        mov  cl,6
+        shl  bx,cl              ; puff*64
+        add  ax,ax
+        add  ax,ax
+        add  ax,bx
+        call SINQ
+        mov  cx,[wph]
+        mov  bx,cx
+        mov  cl,4
+        sar  bx,cl
+        imul bx
+        mov  bx,256
+        idiv bx
+        mov  bx,[ctx]
+        add  ax,[bx]            ; world x = piece + sway
         sub  ax,[camx]
         mov  [wdx],ax
         mov  ax,[bx+4]
         sub  ax,[camz]
         mov  [wdz],ax
-        mov  ax,[bx+2]
-        sub  ax,[camy]
+        mov  ax,[wph]           ; world y = piece + 10 + phase*3
+        mov  cx,ax
+        add  ax,ax
+        add  ax,cx
         add  ax,10
-        add  ax,[ctz]
+        add  ax,[bx+2]
+        sub  ax,[camy]
         mov  [ctz],ax
-        push di
         call ROTXZ
+        mov  ax,[rcz]
+        cmp  ax,40              ; radius wants a sane depth
+        jge  @@wz1
+        mov  ax,40
+@@wz1:  mov  [wpz],ax
         mov  dx,[ctz]
         mov  ax,[rcx]
         mov  cx,[rcz]
         call PPOINT
+        jc   @@wpn
+        mov  [wpsx],ax
+        mov  [wpsy],dx
+        mov  ax,[wph]           ; the puff swells as it rises:
+        mov  cl,2               ; r = 3 + phase/4 world units...
+        sar  ax,cl
+        add  ax,3
+        mov  cx,220
+        imul cx
+        idiv word ptr [wpz]     ; ...projected: r*220/z
+        or   ax,ax
+        jz   @@wpn
+        cmp  ax,13
+        jle  @@wr1
+        mov  ax,13
+@@wr1:  mov  [wpr],ax
+        mov  bl,3               ; the cooling ramp: dark at the fire...
+        mov  ax,[wph]
+        cmp  ax,40
+        jb   @@wc1
+        mov  bl,2
+        cmp  ax,88
+        jb   @@wc1
+        mov  bl,1               ; ...pale where it thins out
+@@wc1:  mov  [wpc],bl
+        mov  ax,[wpr]           ; rows -r..+r, width = r - |row|/2:
+        neg  ax                 ; a fat lens of a puff
+@@wbr:  push ax
+        mov  bx,ax
+        or   bx,bx
+        jns  @@wb1
+        neg  bx
+@@wb1:  sar  bx,1
+        mov  cx,[wpr]
+        sub  cx,bx              ; half-width
+        add  ax,[wpsy]
+        js   @@wbn
+        cmp  ax,199
+        jg   @@wbn
+        mov  bx,[wpsx]
+        sub  bx,cx
+        add  cx,cx
+        inc  cx                 ; len = 2w+1
+        or   bx,bx
+        jns  @@wb2
+        add  cx,bx              ; clip left
+        xor  bx,bx
+@@wb2:  or   cx,cx
+        jle  @@wbn
+        mov  [dsx],bx
+        add  bx,cx
+        cmp  bx,320             ; clip right
+        jle  @@wb3
+        sub  bx,320
+        sub  cx,bx
+        jle  @@wbn
+@@wb3:  push ax
+        mov  bx,cx
+        mov  cx,bx
+        mov  bl,[wpc]
+        call HLINE2
+        pop  ax
+@@wbn:  pop  ax
+        inc  ax
+        cmp  ax,[wpr]
+        jle  @@wbr
+@@wpn:  inc  word ptr [wpi]
+        cmp  word ptr [wpi],4
+        jb   @@wpf
         pop  di
-        jc   @@wsn
-        cmp  ax,0
-        jl   @@wsn
-        cmp  ax,319
-        jg   @@wsn
-        cmp  dx,0
-        jl   @@wsn
-        cmp  dx,191
-        jg   @@wsn
-        push di
-        mov  [dsx],ax
-        mov  ax,dx
-        call ROW320
-        add  di,[dsx]
-        mov  al,25              ; smoke grey
-        mov  es:[di],al
-        pop  di
+        mov  bx,[ctx]
 @@wsn:  inc  word ptr [wcc]
         cmp  word ptr [wcc],3
         jb   @@wsm

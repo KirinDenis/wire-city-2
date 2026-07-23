@@ -99,6 +99,8 @@ MAXSTEP equ 6                   ; max physics steps per render (anti-spiral)
 ; ---- the NEWTON sky's palette block (see SKY.INC and the palettes) ---------
 SKYZ    equ 98                  ; ramp SKYZ..SKYZ+4 zenith->haze, then
                                 ; SKYZ+4..SKYZ+6 the cloud light
+LDIM    equ 105                 ; the pitch ladder's dim grey
+LCYN    equ 106                 ; the IVV caret's cyan
 
 ; ---- keyboard scan codes ---------------------------------------------------
 SC_ESC  equ 01h
@@ -133,9 +135,10 @@ SC_1    equ 02h                 ; top-row 1: rudder left  (the F-15 way)
 SC_3    equ 04h                 ; top-row 3: rudder right
 SC_LSH  equ 2Ah                 ; the shifts, for the throttle gates
 SC_RSH  equ 36h
+SC_ALT  equ 38h                 ; Alt: the Alt-Q exit chord
 WRKSZ   equ 300                 ; wreck slot size (see the BSS block)
 WCL     equ 292                 ; face colours offset inside a slot
-BSSCLR  equ 2699                ; (BSSEND-WRK)/2 - keep in sync with BSS!
+BSSCLR  equ 2584                ; (BSSEND-WRK)/2 - keep in sync with BSS!
 SNDN    equ 8000h               ; sound ring length (ENGINE\E_SND.INC contract)
 FLBN    equ 48                  ; black box: samples (every 2nd tick, ~5.3 s)
 FLBSZ   equ 576                 ; FLBN * 12 bytes (x,y,z,hdg,pitch,roll)
@@ -144,10 +147,8 @@ WCO     equ 100                 ; corner offsets offset inside a slot           
 
 CODE    SEGMENT PARA PUBLIC 'CODE'
         ASSUME  CS:CODE, DS:CODE, ES:CODE, SS:CODE
-        ORG 100h                ; kept from the COM years: every offset in
-                                ; the EXE image matches the proven COM byte
-                                ; for byte, so the whole BSS/segment map
-                                ; above CS survives the format change
+        ; (the COM-era ORG 100h gap is gone: the segment got tight and
+        ; those 256 bytes belong to the STACK now - see the BSS guard)
 
 START:  jmp  MAIN
         INCLUDE DATA.INC        ; variables, palettes, tables
@@ -170,11 +171,11 @@ MAIN:
         mov  es,ax
 
         ; back-buffer 64K above the image (maxalloc: we still own it all).
-        ; The EXE now carries TWO segments - CODE and the sky's SKYSEG
-        ; right behind it - so the whole far-memory map moved up one
-        ; notch (+100h paragraphs) to clear it.
+        ; The EXE carries TWO segments - CODE and SKYSEG right behind
+        ; it. SKYSEG gets a full 8K window (CS+1000h..CS+11FFh) with
+        ; its own assemble-time guard, and the far map starts past it.
         mov  ax,cs
-        add  ax,1100h
+        add  ax,1200h
         mov  [bufseg],ax
 
         ; hook INT 9
@@ -190,7 +191,7 @@ MAIN:
 
         ; ---- load CITY.DAT into its own segment (resources: font, ...) ----
         mov  ax,cs
-        add  ax,2100h           ; past the back-buffer at CS+1100h
+        add  ax,2200h           ; past the back-buffer at CS+1200h
         mov  [resseg],ax
         mov  dx,offset FNAME
         mov  ax,3D00h           ; open read-only
@@ -298,6 +299,40 @@ MAIN:
         pop  es
         or   ax,1               ; LCG must not start at 0
         mov  [rseed],ax
+        mov  [wseed],ax         ; remember the seed the world gets built
+                                ; from (rseed itself mutates with every
+                                ; RND16 - a host must hand out the ORIGIN)
+        ; ---- the wire: if IPX is up, knock before building the world.
+        ; A pilot already flying answers with THEIR seed and we stand
+        ; in their sky; ~2 s of silence and we host our own.
+        call FAR PTR NETINITF
+        mov  [netup],al
+        or   al,al
+        jz   @@nonet
+        mov  [netpid],dx
+        call FAR PTR NETHELLOF
+        push es
+        mov  ax,40h
+        mov  es,ax
+        mov  ax,es:[6Ch]
+        mov  [dsx],ax           ; t0 lives in MEMORY: the polls eat BX
+@@nwt:  call FAR PTR NETPOLLF
+        or   al,al
+        jnz  @@nadopt
+        mov  ax,40h             ; and ES gets re-set every lap, out of
+        mov  es,ax              ; the same caution
+        mov  ax,es:[6Ch]
+        sub  ax,[dsx]
+        cmp  ax,40              ; ~2.2 s
+        jb   @@nwt
+        pop  es
+        call FAR PTR NETHOSTF   ; nobody home: this sky is ours to host
+        jmp  @@nonet
+@@nadopt:
+        pop  es
+        mov  [rseed],dx         ; their world, bit for bit: same island,
+        mov  [wseed],dx         ; same city, same clouds
+@@nonet:
         mov  ax,cs              ; far scratch: the 64K page right above
         add  ax,5FFFh           ; the sample segment - the minimap lives
         and  ax,0F000h          ; there, not in our crowded 64K
@@ -346,6 +381,11 @@ MAIN:
         cmp  si,4096
         jb   @@seek
 @@sdone:
+        mov  ax,[netpid]        ; pilots of one wire must not share a
+        and  ax,3               ; cockpit: fan the spawns out east
+        mov  cl,7
+        shl  ax,cl              ; 0/128/256/384
+        add  [camx],ax
         mov  word ptr [camy],1450 ; start high above everything (peaks ~1110)
         ; ---- wreck pool lives in BSS: zero it (memory past the image
         ; is not guaranteed clean) ----
@@ -359,76 +399,11 @@ MAIN:
         rep  stosw
         pop  es
 
-        ; ---- F15.DAT: the Blender-pipeline fighter (OBJ2DAT format) ----
-        ; The file IS the engine's model format - header, dw x,y,z per
-        ; vertex, then 4 corner bytes + colour per face - so loading is
-        ; two reads into BSS and a patch of the type-0 table entries.
-        ; Any trouble (no file, wrong magic, too big, short read) and
-        ; the built-in fighter flies on like nothing happened.
-        mov  dx,offset F15FN
-        mov  ax,3D00h
-        int  21h
-        jc   @@f15n
-        mov  bx,ax
-        mov  dx,offset MHDR     ; 'M','D', nverts, nfaces
-        mov  cx,6
-        mov  ah,3Fh
-        int  21h
-        jc   @@f15c
-        cmp  ax,6
-        jne  @@f15c
-        cmp  word ptr [MHDR],444Dh
-        jne  @@f15c
-        mov  ax,[MHDR+2]
-        or   ax,ax
-        jz   @@f15c
-        cmp  ax,25              ; the PV cache holds 25 vertices
-        ja   @@f15c
-        mov  cx,ax              ; vertex bytes = nv*6
-        add  ax,ax
-        add  ax,cx
-        add  ax,ax
-        mov  [dsx],ax
-        mov  dx,offset MVERTF
-        mov  cx,ax
-        mov  ah,3Fh
-        int  21h
-        jc   @@f15c
-        cmp  ax,[dsx]
-        jne  @@f15c
-        mov  ax,[MHDR+4]
-        or   ax,ax
-        jz   @@f15c
-        cmp  ax,16              ; FCD/FCO hold 16 faces
-        ja   @@f15c
-        mov  cx,ax              ; face bytes = nf*5
-        add  ax,ax
-        add  ax,ax
-        add  ax,cx
-        mov  [dsx],ax
-        mov  dx,offset MFACEF
-        mov  cx,ax
-        mov  ah,3Fh
-        int  21h
-        jc   @@f15c
-        cmp  ax,[dsx]
-        jne  @@f15c
-        ; whole file in: the fighter slot flies the new airframe
-        mov  ax,offset MVERTF
-        mov  [MVTAB],ax
-        mov  ax,[MHDR+2]
-        mov  cx,ax
-        add  ax,ax
-        add  ax,cx
-        add  ax,ax
-        mov  [MVNTAB],ax
-        mov  ax,offset MFACEF
-        mov  [MFTAB],ax
-        mov  ax,[MHDR+4]
-        mov  [NFCTAB],ax
-@@f15c: mov  ah,3Eh             ; close; on any bail-out above the old
-        int  21h                ; tables were never touched
-@@f15n:
+        ; (the F15 model is BAKED into the image now - Obj2Inc turns
+        ; res\F15.OBJ into F15M.INC at build time. The runtime loader
+        ; and its BSS buffers died in the stack-collapse postmortem of
+        ; 2026-07-23: they lived at the very top of BSS, exactly where
+        ; SP tramples first when the segment runs tight.)
         call SBINIT             ; the engine hums if a Blaster is home
 
         ; ---- AI traffic: two squadrons scattered around the player ----
@@ -486,6 +461,8 @@ GAMELOOP:
 @@pdone:
         inc  word ptr [fcnt]
         call COLLIDE
+        call FAR PTR NETPOSF    ; tell the wire where we are (1/tick)...
+        call FAR PTR NETPOLLF   ; ...and learn where everyone else is
 
         ; --- render (runs as fast as it can; speed no longer tied to it) ---
         call LERPSET            ; draw BETWEEN the ticks: silk, not jerks
@@ -519,7 +496,12 @@ GAMELOOP:
         call SNDENG             ; the engine follows the throttle
         call HUD                ; text overlay (BIOS)
         call WAITV              ; tearing guard only (does not gate physics)
-        cmp  byte ptr [KEYS+SC_ESC],0
+        ; the exit is Alt-Q, the MicroProse way (F-15 SE II manual).
+        ; ESC is deliberately DEAD: players kept quitting whole sorties
+        ; by accident with it (user feedback 2026-07-23)
+        cmp  byte ptr [KEYS+SC_ALT],0
+        je   GAMELOOP
+        cmp  byte ptr [KEYS+SC_Q],0
         je   GAMELOOP
 
 QUIT:
@@ -567,7 +549,7 @@ KEYS    db 128 dup(0)
 ; EXE's linker knows no such custom: the ground has to be CLAIMED with
 ; real uninitialized bytes, or it settles SKYSEG right on top of it.
 BSS     label byte
-        db  23317 dup(?)        ; the buffers (see the equ map below)
+        db  23087 dup(?)        ; the buffers (see the equ map below)
 HMAP    equ  byte ptr BSS           ; 4096 bytes: world heightmap
 ; (the baked minimap lives at [scrseg]:0 - a far 64K page - not here)
 TRX     equ  word ptr BSS+4096      ; 1681 words: rotated node X
@@ -593,18 +575,28 @@ TLY     equ  word ptr BSS+20655     ;  (moved out of the image: generated
 TLZ     equ  word ptr BSS+21615     ;  at spawn, never shipped as zeros)
 DSTB    equ  byte ptr BSS+22575     ; ruins bitmap: 1 bit per world cell
                                     ;  (64x64), set = the building is down
-MVERTF  equ  word ptr BSS+23087 ; F15.DAT fighter model: 25 vertices...
-MFACEF  equ  byte ptr BSS+23237 ; ...and 16 faces, loaded at startup
-BSSEND  equ  BSS+23317
+BSSEND  equ  BSS+23087
 
-        ORG  0FFF0h             ; ...and the stack is ground too: claim
-        db   14 dup(?)          ; the segment clean to SP's perch at
-                                ; FFFEh, so SKYSEG lands at CS+1000h -
-                                ; right where the old memory map (now
-                                ; shifted +100h) left it a parking spot
+; ---- THE STACK GUARD -------------------------------------------------------
+; The 2026-07-23 lesson: the stack starts at FFFEh and grows DOWN into
+; whatever sits at the top of BSS. When features pushed BSSEND close to
+; the top, SP quietly shredded the model tables and the jets tore into
+; giant shards. The build now REFUSES to get that tight: BSSEND must
+; leave the stack at least 512 bytes of clean fall (typical depth is
+; under 300). Under pressure again? Evict cold code/data to SKYSEG the
+; way GENBED went, or open a third segment for the model tables.
+IF (BSSEND-START) GT 0FDEEh
+        %OUT *** BSS has eaten the stack: move data out of CODE ***
+        .ERR
+ENDIF
+
+        ORG  0FFF0h             ; claim the segment clean to SP's perch
+        db   14 dup(?)          ; at FFFEh, so the linker parks SKYSEG
+                                ; at CS+1000h, clear of this ground
 
 CODE    ENDS
 
         INCLUDE SKY.INC         ; the NEWTON sky, in its own segment
+        INCLUDE NET.INC         ; the wire: IPX multiplayer (same segment)
 
         END START

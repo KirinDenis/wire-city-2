@@ -85,6 +85,131 @@ WCLOUDF PROC FAR
         ret
 WCLOUDF ENDP
 
+GENBEDF PROC FAR
+        call GENBED
+        ret
+GENBEDF ENDP
+
+; ---- GENBED: the tuned turbine + warm-up + splice + pristine copy ----------
+; NEWTON's bed, ported VERBATIM - this exact arithmetic is the sound
+; the pilot signed off on. Four cascaded low-pass poles over LCG noise
+; make the rumble; a slow bounded walker (BP) breathes under it; a
+; six-phase +-2 ripple is the blade-pass whine; praw's two-tap average
+; is the muffler. 2048 warm-up samples are discarded while the poles
+; settle, the last 512 crossfade into the first for a seamless loop,
+; and the top half of the segment keeps the pristine copy the SFX
+; heal restores from. Lives HERE because it runs once at startup and
+; the main segment pays for every byte with stack headroom.
+GENBED: push es
+        cld
+        mov  ax,[sndseg]
+        mov  es,ax
+        xor  di,di
+        xor  si,si
+        xor  bp,bp
+        mov  word ptr [bm1],0
+        mov  word ptr [bm2],0
+        mov  word ptr [bm3],0
+        mov  word ptr [bm4],0
+        mov  word ptr [praw],0
+@@g:    call RNDS
+        mov  al,ah
+        xor  ah,ah
+        and  ax,31
+        sub  ax,15
+        mov  bx,ax
+        mov  cl,4
+        shl  ax,cl
+        sub  ax,[bm1]
+        sar  ax,1
+        sar  ax,1
+        add  [bm1],ax
+        mov  ax,[bm1]
+        sub  ax,[bm2]
+        sar  ax,1
+        sar  ax,1
+        add  [bm2],ax
+        mov  ax,[bm2]
+        sub  ax,[bm3]
+        sar  ax,1
+        add  [bm3],ax
+        mov  ax,[bm3]
+        sub  ax,[bm4]
+        sar  ax,1
+        add  [bm4],ax
+        mov  dx,[bm4]
+        sar  dx,1
+        sar  dx,1
+        cmp  dx,38
+        jle  @@r1
+        mov  dx,38
+@@r1:   cmp  dx,-38
+        jge  @@r2
+        mov  dx,-38
+@@r2:   mov  ax,bx
+        sar  ax,1
+        add  bp,ax
+        mov  ax,bp
+        mov  cl,4
+        sar  ax,cl
+        sub  bp,ax
+        cmp  bp,16
+        jle  @@w1
+        mov  bp,16
+@@w1:   cmp  bp,-16
+        jge  @@w2
+        mov  bp,-16
+@@w2:   add  dx,bp
+        cmp  si,3
+        jae  @@g2
+        add  dx,2
+        jmp  @@g3
+@@g2:   sub  dx,2
+@@g3:   mov  ax,dx
+        add  ax,[praw]
+        sar  ax,1
+        mov  [praw],dx
+        add  ax,128
+        cmp  word ptr [warmc],0
+        je   @@st
+        dec  word ptr [warmc]
+        jmp  @@wh
+@@st:   stosb
+@@wh:   inc  si
+        cmp  si,6
+        jb   @@g4
+        xor  si,si
+@@g4:   cmp  di,SNDN
+        jb   @@g
+        xor  si,si
+@@xf:   mov  di,si
+        add  di,SNDN-512
+        mov  al,es:[di]
+        mov  [xtt],al
+        mov  al,es:[si]
+        sub  al,[xtt]
+        cbw
+        mov  bx,si
+        mov  cl,3
+        shr  bx,cl
+        imul bx
+        mov  cl,6
+        sar  ax,cl
+        add  al,[xtt]
+        mov  es:[di],al
+        inc  si
+        cmp  si,512
+        jb   @@xf
+        push ds
+        mov  ax,es
+        mov  ds,ax
+        xor  si,si
+        mov  cx,SNDN/2
+        rep  movsw
+        pop  ds
+        pop  es
+        ret
+
 ; ---- BGND: sky and ground, split by the horizon LINE -----------------------
 ; One span each side of the line per row, the sky shaded by the
 ; PERPENDICULAR distance to it - so the haze ramp rotates with the
@@ -819,5 +944,8 @@ RNDS:   push bx
         pop  dx
         pop  bx
         ret
+
+; (the 8K window guard moved to NET.INC - it must measure sky + net
+; together, and NET.INC appends to this same segment)
 
 SKYSEG  ENDS

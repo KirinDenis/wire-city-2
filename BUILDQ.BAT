@@ -125,10 +125,7 @@ cd ..\..\..
 if "%1"=="TRAINER" goto ok
 
 :owlfly2
-cd GAMES\OWLFLY2
-\TOOLS\OBJ2DAT.COM res\F15.OBJ INSTALL\F15.DAT 2 >> ..\..\BUILD.LOG
-if errorlevel 1 goto err
-cd SRC
+cd GAMES\OWLFLY2\SRC
 TASM /T RESDAT.ASM >> ..\..\..\BUILD.LOG
 if errorlevel 1 goto err
 TLINK /t RESDAT.OBJ >> ..\..\..\BUILD.LOG

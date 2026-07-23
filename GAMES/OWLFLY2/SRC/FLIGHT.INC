@@ -199,18 +199,14 @@ INPUT:
         ; rudder: 1 unit/tick = a full circle in ~14 s. Good for lining
         ; up a runway or a gun run without dropping a wing.
         xor  cx,cx              ; r = rudder input, in eighths
-        cmp  byte ptr [KEYS+SC_1],0 ; the F-15 pedals: top-row 1 and 3
-        jne  @@rdl
-        cmp  byte ptr [KEYS+SC_Q],0
-        jne  @@rdl
-        cmp  byte ptr [KEYS+SC_Z],0
-        jne  @@rdl
-        cmp  byte ptr [KEYS+SC_NP7],0
+        cmp  byte ptr [KEYS+SC_1],0 ; the F-15 pedals: top-row 1 and 3.
+        jne  @@rdl              ; Q and E left the pedals when Alt-Q
+        cmp  byte ptr [KEYS+SC_Z],0 ; became the exit: holding Q rudder
+        jne  @@rdl              ; through an accidental Alt would have
+        cmp  byte ptr [KEYS+SC_NP7],0 ; quit the whole sortie
         je   @@rdq
 @@rdl:  sub  cx,8
 @@rdq:  cmp  byte ptr [KEYS+SC_3],0
-        jne  @@rdr
-        cmp  byte ptr [KEYS+SC_E],0
         jne  @@rdr
         cmp  byte ptr [KEYS+SC_C],0
         jne  @@rdr
@@ -280,6 +276,7 @@ INPUT:
         jns  @@qr2
         neg  ax
 @@qr2:  mov  cx,ax              ; q, signed, in eighths
+        mov  [gq],cx            ; the G meter reads the live stick
         mov  ax,[vel]           ; turning bleeds a bit of airspeed
         sub  ax,TURNDRG
         jns  @@qd
@@ -316,6 +313,7 @@ INPUT:
         mov  [heading],ax
         jmp  @@gflip            ; active stick: skip the self-trim
 @@nopq: mov  word ptr [qramp],0 ; stick centred: the ramp lets go
+        mov  word ptr [gq],0    ; hands off: one G on the meter
         ; no auto-trim in free air - the attitude holds.
         ; Near the ground the cushion pushes a dropped nose back level,
         ; so a gentle descent surfs the terrain instead of meeting it.
@@ -623,6 +621,7 @@ INPUT:
         imul word ptr [psin]    ; climb component
         mov  bx,256
         idiv bx
+        mov  [vvy],ax           ; the HUD's IVV caret reads this
         add  [camy],ax
         pop  ax
         imul word ptr [pcos]    ; horizontal component

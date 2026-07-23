@@ -40,6 +40,8 @@ python GAMES\OWLFLY\res\mkpanel.py
 if errorlevel 1 goto err
 python GAMES\OWLFLY\res\mkengine.py
 if errorlevel 1 goto err
+dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY2\res\F15.OBJ -o GAMES\OWLFLY2\SRC\F15M.INC -n F15 -s 2
+if errorlevel 1 goto err
 :skipconv
 
 echo === 2/2 DOSBox build: %TARGET% ===
