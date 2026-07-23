@@ -1,0 +1,39 @@
+; The local-axis rudder, proven three ways: wings level C walks the
+; heading; on the RIGHT knife edge C is the bottom rudder and must
+; drop the NOSE (gamma down, heading still); left knife mirrors.
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 800 500
+tap P 3
+say level rudder
+poke chdgf 0
+poke pit 2400
+poke apy -1536
+poke vel 2600
+poke rol 0
+poke hdg 0
+wait 2
+press C
+wait 40
+release C
+say right knife rudder
+poke chdgf 0
+poke pit 2400
+poke apy -1536
+poke vel 2600
+poke rol 64
+poke hdg 0
+wait 2
+press C
+wait 40
+release C
+say done
+end

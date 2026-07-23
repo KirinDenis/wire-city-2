@@ -1,0 +1,73 @@
+; TEMPORARY survey run: 32 stops around the lap, the gpi column carries
+; the tallest near-wall - read the CSV, pick the mountains.
+wait 10
+tap SPACE 3
+wait 5
+poke apy 9600
+poke apz 0
+wait 3
+poke apz 2048
+wait 3
+poke apz 4096
+wait 3
+poke apz 6144
+wait 3
+poke apz 8192
+wait 3
+poke apz 10240
+wait 3
+poke apz 12288
+wait 3
+poke apz 14336
+wait 3
+poke apz 16384
+wait 3
+poke apz 18432
+wait 3
+poke apz 20480
+wait 3
+poke apz 22528
+wait 3
+poke apz 24576
+wait 3
+poke apz 26624
+wait 3
+poke apz 28672
+wait 3
+poke apz 30720
+wait 3
+poke apz -32768
+wait 3
+poke apz -30720
+wait 3
+poke apz -28672
+wait 3
+poke apz -26624
+wait 3
+poke apz -24576
+wait 3
+poke apz -22528
+wait 3
+poke apz -20480
+wait 3
+poke apz -18432
+wait 3
+poke apz -16384
+wait 3
+poke apz -14336
+wait 3
+poke apz -12288
+wait 3
+poke apz -10240
+wait 3
+poke apz -8192
+wait 3
+poke apz -6144
+wait 3
+poke apz -4096
+wait 3
+poke apz -2048
+wait 3
+say done
+end
+

@@ -1,0 +1,46 @@
+; THE WORLD: take off, turn east by banking, watch the island wheel
+; around the nose, then come back west and find the runway again.
+wait 10
+shot v_parked
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 4800 900
+tap MINUS 30
+press UP
+wait 10
+release UP
+wait 40
+poke rol 0
+wait 4
+shot v_north
+say bank right and let Newton turn us
+poke rol 26
+until hdg >= 30 600
+poke rol 0
+wait 6
+shot v_turning
+until hdg >= 30 60
+say now heading east-ish
+poke hdg 64
+wait 6
+shot v_east
+poke hdg 128
+wait 6
+shot v_south
+poke hdg 192
+wait 6
+shot v_west
+poke hdg 0
+poke rol 21
+wait 4
+shot v_bankworld
+poke rol 0
+say done
+end

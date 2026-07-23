@@ -1,0 +1,39 @@
+; The survey said the mountains stand at 10-18 km this seed: a low pass
+; through them, level, then banked both ways.
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 2400 600
+tap MINUS 34
+press UP
+wait 10
+release UP
+wait 40
+poke apz 9216
+poke apy 9600
+poke rol 0
+wait 6
+shot g_ahead
+wait 60
+poke apy 9600
+wait 2
+shot g_among
+wait 60
+poke apy 9600
+wait 2
+shot g_deep
+poke rol 21
+wait 4
+shot g_bankr
+poke rol 235
+wait 4
+shot g_bankl
+say done
+end

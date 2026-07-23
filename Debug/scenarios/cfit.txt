@@ -1,0 +1,35 @@
+; Controlled flight into terrain: sweep low across the island until a
+; hill objects. The dead column going 6 mid-air is the proof the ground
+; is real now; a timeout on every leg just means this seed is kind.
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 2400 600
+tap MINUS 20
+wait 20
+say leg east, 150 m
+poke apy 9600
+poke hdg 64
+until dead >= 6 300
+say leg southeast
+poke apy 9600
+poke hdg 96
+until dead >= 6 300
+say leg south
+poke apy 9600
+poke hdg 128
+until dead >= 6 300
+say leg west
+poke apy 9600
+poke hdg 192
+until dead >= 6 300
+shot x_end
+say done
+end

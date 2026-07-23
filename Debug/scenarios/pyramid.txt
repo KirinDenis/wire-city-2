@@ -1,0 +1,52 @@
+; The pyramid bench. Known spots, known ground:
+;  (16384,32768) node (16,32): dist 16, ground 336 m
+;  ( 24576,32768) node (24,32): dist 8, ground 504 m
+; apx/apz pokes are signed; apy is AGL 1/64 m.
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 480 400
+tap P 3
+say slope from 500 m AGL, facing the peak (east)
+poke apx 16384
+poke apz -32768
+poke hdg 64
+poke chdgf 0
+poke pit 2400
+poke apy -1536
+poke vel 2600
+wait 3
+shot p1_east
+wait 3
+shot p1_east2
+say same spot, facing away (west)
+poke apx 16384
+poke apz -32768
+poke hdg 192
+poke chdgf 0
+poke apy -1536
+wait 3
+shot p2_west
+say higher on the slope, low AGL
+poke apx 24576
+poke apz -32768
+poke hdg 64
+poke chdgf 0
+poke apy 6400
+poke vel 2600
+wait 3
+shot p3_low
+say banked on the slope
+poke rol 21
+wait 3
+shot p4_bank
+poke rol 0
+say done
+end

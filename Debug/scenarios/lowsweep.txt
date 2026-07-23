@@ -1,0 +1,37 @@
+; Low sweep across whatever terrain this seed put east: five shots at
+; 150 m AGL-ish, hunting for the straddle-quad explosion (fixed today -
+; these frames are the proof it stays fixed).
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 2400 600
+tap MINUS 24
+poke hdg 64
+wait 40
+poke apy 9600
+wait 2
+shot s1
+wait 100
+poke apy 9600
+wait 2
+shot s2
+wait 100
+poke apy 9600
+wait 2
+shot s3
+wait 100
+poke apy 9600
+wait 2
+shot s4
+poke rol 21
+wait 4
+shot s5
+say done
+end

@@ -1,0 +1,38 @@
+; The runway as a projected object: put the jet ON a slab, then bank.
+; apz pokes posm - 13500 lands us 500 m past a threshold with 1900 m
+; of concrete still ahead.
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 3200 900
+say level off at 200 m
+tap MINUS 30
+press UP
+wait 10
+release UP
+wait 60
+poke apz 13500
+poke rol 0
+wait 4
+shot r_000
+poke apz 13500
+poke rol 21
+wait 4
+shot r_030
+poke apz 13500
+poke rol 64
+wait 4
+shot r_090
+poke apz 13500
+poke rol 235
+wait 4
+shot r_l30
+say done
+end

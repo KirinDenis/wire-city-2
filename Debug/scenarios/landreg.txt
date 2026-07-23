@@ -1,0 +1,22 @@
+; Landing regression: lift off, stay in ground effect over the slab,
+; flaps out, power to idle - the float must END on the concrete and
+; the card must say SOLO COMPLETE (or at least judge us honestly).
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1550 900
+say rotate
+press DOWN
+wait 10
+release DOWN
+until alt >= 200 300
+say flaps, idle, settle
+tap F 3
+poke thr 1200
+until dead >= 6 900
+shot l_card
+say done
+end

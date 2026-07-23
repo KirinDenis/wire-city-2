@@ -1,0 +1,12 @@
+wait 30
+tap SPACE 3
+wait 6
+shot y_hdg0
+poke hdg 6
+wait 3
+shot y_hdg6
+poke hdg 250
+wait 3
+shot y_hdg250
+say done
+end

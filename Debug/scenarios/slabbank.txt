@@ -1,0 +1,23 @@
+; Sitting ON the concrete, bank the world around it: the threshold, the
+; far end and the centreline must all survive, which the old triangle
+; could not manage past two degrees.
+wait 10
+tap SPACE 3
+wait 6
+poke rol 0
+wait 3
+shot k_000
+poke rol 11
+wait 3
+shot k_015
+poke rol 21
+wait 3
+shot k_030
+poke rol 32
+wait 3
+shot k_045
+poke rol 235
+wait 3
+shot k_l30
+say done
+end

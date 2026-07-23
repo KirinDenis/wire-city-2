@@ -1,0 +1,30 @@
+; The burner and the rudder, by the numbers: A slams the lever to
+; 25000 and the spool chases; Z walks the heading left a few units.
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 4800 900
+tap MINUS 30
+press UP
+wait 10
+release UP
+wait 40
+say burner ON
+tap A 3
+wait 60
+say burner OFF
+tap A 3
+wait 20
+say rudder left five seconds
+press Z
+wait 91
+release Z
+say done
+end

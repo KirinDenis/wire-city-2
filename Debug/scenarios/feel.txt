@@ -1,0 +1,57 @@
+; The feel pass, measured: push over (gamma must go DOWN briskly now),
+; pull up (4 G of authority), pull IN a bank (the turn must tighten),
+; and the rudder (a walk you can see). Level entry re-poked each phase.
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 320 300
+say phase one - push
+poke chdgf 0
+poke pit 2400
+poke apy -1536
+poke vel 2800
+poke rol 0
+wait 2
+press UP
+wait 55
+release UP
+say phase two - pull
+poke chdgf 0
+poke pit 2400
+poke apy -1536
+poke vel 2800
+wait 2
+press DOWN
+wait 55
+release DOWN
+say phase three - bank and pull
+poke chdgf 0
+poke pit 2400
+poke apy -1536
+poke vel 2800
+poke hdg 0
+poke rol 32
+wait 2
+press DOWN
+wait 90
+release DOWN
+say phase four - rudder
+poke chdgf 0
+poke pit 2400
+poke rol 0
+poke apy -1536
+poke vel 2800
+poke hdg 0
+wait 2
+press Z
+wait 90
+release Z
+say done
+end

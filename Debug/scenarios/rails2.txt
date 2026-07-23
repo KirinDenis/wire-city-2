@@ -1,0 +1,26 @@
+; the dead zone: a ~18 degree dive must show rails now
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 800 500
+poke chdgf 244
+poke pit 2400
+poke apy -1536
+poke vel 2600
+poke rol 0
+wait 2
+shot d_dive18
+poke chdgf 12
+poke apy -1536
+wait 2
+shot d_climb17
+poke chdgf 0
+say done
+end

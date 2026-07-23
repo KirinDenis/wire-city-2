@@ -1,0 +1,34 @@
+; The attitude sweep at the ONE focal length: climb, hands-off settle,
+; push into a dive - the horizon must stay honest on the glass through
+; ordinary flying, and the ladder must agree with the terrain.
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 640 300
+shot a_climb
+say hands off - she must settle, not tumble
+wait 120
+shot a_settled
+wait 120
+shot a_settled2
+say push over into a dive
+press UP
+wait 40
+release UP
+wait 8
+shot a_dive
+say recover
+press DOWN
+wait 30
+release DOWN
+wait 40
+shot a_level
+say done
+end

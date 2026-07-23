@@ -1,0 +1,34 @@
+; The barrel roll, timed: full aileron from level - the roll column
+; must lap the circle in ~1.3 s and gamma must barely dip; the world
+; must NOT snap 180 anywhere. Then a hands-off 45 bank: the trim must
+; press canopy-ward and hold the sink gentle.
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 320 300
+poke chdgf 0
+poke pit 2400
+poke apy -1536
+poke vel 2600
+poke rol 0
+wait 2
+say ROLL
+press RIGHT
+wait 40
+release RIGHT
+say bank and hands off
+poke chdgf 0
+poke pit 2400
+poke apy -1536
+poke vel 2600
+poke rol 32
+wait 120
+say done
+end

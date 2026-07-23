@@ -1,0 +1,43 @@
+; NEWTON milestone 2: does the world tilt, and does it hang upside down?
+; The roll column is the bank now (256 = full circle), so every stop is
+; taken on the angle itself, not on a tick count.
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+say rotating
+press DOWN
+wait 12
+release DOWN
+until alt >= 4800 900
+say wings level
+shot n_level
+press RIGHT
+until rol >= 32 400
+release RIGHT
+say 45 degrees right
+shot n_bank45
+press RIGHT
+until rol >= 64 400
+release RIGHT
+say knife edge
+shot n_bank90
+press RIGHT
+until rol >= 128 600
+release RIGHT
+say inverted
+shot n_inverted
+press RIGHT
+until rol >= 200 600
+release RIGHT
+say coming round the other side
+shot n_bank200
+press LEFT
+until rol <= 8 900
+release LEFT
+say back to level
+shot n_backlevel
+end

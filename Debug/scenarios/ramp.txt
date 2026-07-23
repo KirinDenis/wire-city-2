@@ -1,0 +1,11 @@
+wait 30
+shot r_park
+tap SPACE 3
+wait 5
+press PLUS
+wait 40
+until vel >= 700 300
+shot r_roll
+release PLUS
+say done
+end

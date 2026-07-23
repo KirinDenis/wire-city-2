@@ -1,13 +1,16 @@
 @echo off
 REM BUILDQ.BAT %1 - runs INSIDE DOSBox (via MAKE.BAT), C: = repo root.
-REM Targets: ALL | OWLFLY | WIRECITY | EXAMPLES. Case matters (DOSBox).
+REM Targets: ALL | OWLFLY | OWLFLY2 | WIRECITY | EXAMPLES | TRAINER |
+REM NEWTON. Case matters (DOSBox).
 set PATH=c:\bp\bin;d:\bin;%PATH%
 echo BUILD START > BUILD.LOG
 if "%1"=="OWLFLY" goto owlfly
+if "%1"=="OWLFLY2" goto owlfly2
 if "%1"=="WIRECITY" goto wirecity
 if "%1"=="EXAMPLES" goto examples
 if "%1"=="TOOLS" goto tools
 if "%1"=="TRAINER" goto trainer
+if "%1"=="NEWTON" goto newton
 
 :owlfly
 cd GAMES\OWLFLY\SRC
@@ -118,6 +121,37 @@ TLINK /t FIELD.OBJ >> ..\..\..\BUILD.LOG
 if errorlevel 1 goto err
 copy /y FIELD.COM .. >> ..\..\..\BUILD.LOG
 del FIELD.COM
+cd ..\..\..
+if "%1"=="TRAINER" goto ok
+
+:owlfly2
+cd GAMES\OWLFLY2
+\TOOLS\OBJ2DAT.COM res\F15.OBJ INSTALL\F15.DAT 2 >> ..\..\BUILD.LOG
+if errorlevel 1 goto err
+cd SRC
+TASM /T RESDAT.ASM >> ..\..\..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t RESDAT.OBJ >> ..\..\..\BUILD.LOG
+if errorlevel 1 goto err
+copy /y RESDAT.COM ..\INSTALL\CITY.DAT >> ..\..\..\BUILD.LOG
+del RESDAT.COM
+TASM /T CITY.ASM >> ..\..\..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK CITY.OBJ >> ..\..\..\BUILD.LOG
+if errorlevel 1 goto err
+copy /y CITY.EXE ..\INSTALL\FLYOWL2.EXE >> ..\..\..\BUILD.LOG
+del CITY.EXE
+cd ..\..\..
+if "%1"=="OWLFLY2" goto ok
+
+:newton
+cd GAMES\NEWTON\SRC
+TASM /T NEWTON.ASM >> ..\..\..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t NEWTON.OBJ >> ..\..\..\BUILD.LOG
+if errorlevel 1 goto err
+copy /y NEWTON.COM .. >> ..\..\..\BUILD.LOG
+del NEWTON.COM
 cd ..\..\..
 
 :ok

@@ -1,0 +1,34 @@
+; hunt the mess: low among the hills, a shot every fifty ticks
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 480 400
+poke hdg 64
+wait 20
+shot m1
+poke apy -1536
+wait 50
+shot m2
+wait 50
+shot m3
+poke apy -1536
+poke hdg 96
+wait 50
+shot m4
+wait 50
+shot m5
+poke apy -1536
+poke hdg 160
+wait 50
+shot m6
+wait 50
+shot m7
+say done
+end

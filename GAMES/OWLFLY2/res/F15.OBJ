@@ -1,0 +1,61 @@
+# F15.OBJ - the OWL FLY II fighter, hand-built for the OBJ2DAT pipeline.
+# Convert with:  OBJ2DAT F15.OBJ F15.DAT 2   (2 units per metre)
+#
+# Axes as Blender exports: -Z forward, Y up; OBJ2DAT maps engine Z = -obj Z.
+# The nose therefore points to obj -Z here, and the engine sees +Z.
+#
+# CONTRACT WITH THE WRECK POOL: the game's explosion debris is cut from
+# the OLD fighter's face table over THIS model's first 13 vertices, so
+# vertices 1..13 below keep the classic meanings: nose, rear top L/R,
+# rear bottom L/R, wingtip L/R, wing root fore, wing rear L/R, fin
+# base/top/rear (the left fin of the twin tail plays the classic fin).
+# Everything after 13 is new geometry: the forward fuselage, the canopy,
+# the right fin, the aft wingtips.
+#
+# Materials are absolute palette indices (PALnn): 24 sun-lit white,
+# 16 shade, 25 mid grey, 00 light grey wings, 04 canopy glass,
+# 94 the palette-cycled engine fire.
+v 0 0.5 -11
+v -1.5 1 6
+v 1.5 1 6
+v -1.5 -0.5 6
+v 1.5 -0.5 6
+v -6.5 0.5 2
+v 6.5 0.5 2
+v 0 0.5 -3
+v -1.5 0.5 5
+v 1.5 0.5 5
+v -1.5 1 3
+v -2 4 7
+v -1.5 1 6
+v -1 1 -5
+v 1 1 -5
+v -1 -0.5 -5
+v 1 -0.5 -5
+v 0 2 -2
+v 1.5 1 3
+v 2 4 7
+v 1.5 1 6
+v -6.5 0.5 4.5
+v 6.5 0.5 4.5
+usemtl PAL24
+f 1 14 15
+f 14 15 3 2
+usemtl PAL16
+f 1 16 17
+f 16 17 5 4
+usemtl PAL25
+f 1 14 16
+f 1 15 17
+f 14 2 4 16
+f 15 3 5 17
+usemtl PAL00
+f 8 6 22 9
+f 8 7 23 10
+usemtl PAL04
+f 14 18 15
+usemtl PAL25
+f 11 12 13
+f 19 20 21
+usemtl PAL94
+f 2 3 5 4

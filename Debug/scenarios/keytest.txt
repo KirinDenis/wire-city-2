@@ -1,0 +1,17 @@
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 1600 900
+say airborne - hold DOWN
+press DOWN
+wait 40
+release DOWN
+say done
+end

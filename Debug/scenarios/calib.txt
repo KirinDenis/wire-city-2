@@ -1,0 +1,44 @@
+; The calibration bench: known position, known colours. Parked shot
+; first (the squares can be NAMED), then a straight low pass with
+; back-to-back frames, then a steady bank with six frames two ticks
+; apart - the churn between consecutive pairs must be EVEN, not
+; two-steps-forward-one-back.
+wait 10
+shot k_ramp
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 320 300
+poke chdgf 0
+poke pit 2400
+poke apy -1536
+poke vel 2400
+wait 4
+shot k_str1
+wait 2
+shot k_str2
+wait 2
+shot k_str3
+say steady bank
+poke rol 21
+wait 6
+shot k_t1
+wait 2
+shot k_t2
+wait 2
+shot k_t3
+wait 2
+shot k_t4
+wait 2
+shot k_t5
+wait 2
+shot k_t6
+poke rol 0
+say done
+end

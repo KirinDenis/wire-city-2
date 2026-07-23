@@ -1,0 +1,30 @@
+; the rails rule: level (horizon in view) = NO rails; nose high (all
+; sky) = rails near the datum; steep dive = rails again
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 800 500
+poke chdgf 0
+poke pit 2400
+poke apy -1536
+poke vel 2600
+poke rol 0
+wait 3
+shot l_level
+poke chdgf 40
+wait 3
+shot l_zoom
+poke chdgf 216
+poke apy -1536
+wait 3
+shot l_dive
+poke chdgf 0
+say done
+end

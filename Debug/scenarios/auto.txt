@@ -1,0 +1,42 @@
+; The Pilot Automatic, put through its paces: default AUTO takeoff,
+; DOWN means climb and HOLDS, UP means descend, a bank holds its
+; height while it turns, let go and the wings level themselves. Then
+; P back to the raw stick and alpha answers the keys directly.
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 480 400
+say auto climb - hands off, must HOLD the path
+wait 80
+say command a climb
+press DOWN
+wait 14
+release DOWN
+wait 60
+say command a descent
+press UP
+wait 24
+release UP
+wait 60
+say bank and let the pilot fly the turn
+press RIGHT
+wait 9
+release RIGHT
+wait 80
+say hands off - wings must level
+wait 60
+say now the raw stick via P
+tap P 3
+wait 4
+press DOWN
+wait 20
+release DOWN
+say done
+end

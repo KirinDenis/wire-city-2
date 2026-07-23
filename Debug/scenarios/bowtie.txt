@@ -1,0 +1,32 @@
+; straight to the pilot's artifact coordinates: (7328,59102) at 600 m,
+; heading 290-ish over the low checker plain - the triangles must be
+; gone from the squares
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 480 400
+tap P 3
+poke apx 7328
+poke apz -6434
+poke hdg 200
+poke chdgf 0
+poke pit 2400
+poke apy -28536
+poke vel 2600
+poke rol 0
+wait 3
+shot b1
+wait 3
+shot b2
+poke rol 21
+wait 3
+shot b3
+say done
+end

@@ -1,0 +1,24 @@
+; The ground is real everywhere: pull the power, drift down over open
+; terrain, and the world must end the flight with a card - not a fall
+; through the floor.
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 3200 600
+say power to idle, heading east, down we go
+poke hdg 64
+poke thr 1200
+poke pit 2000
+wait 40
+poke apy 700
+until dead >= 6 600
+shot z_card
+say done
+end

@@ -1,0 +1,36 @@
+; Newton's turn, measured: level at ~430 km/h, bank 30 then 45, hold
+; five seconds each, wings level between. The CSV's hdg column must
+; ramp at the rate the tilted lift vector commands - no faster, no
+; slower - and stand still with the wings level.
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 4800 900
+tap MINUS 30
+press UP
+wait 10
+release UP
+wait 40
+say wings level - heading must hold
+poke rol 0
+wait 60
+say bank 30 right - five seconds
+poke rol 21
+wait 91
+say wings level again
+poke rol 0
+wait 40
+say bank 45 left - five seconds
+poke rol 235
+wait 91
+poke rol 0
+wait 20
+say done
+end

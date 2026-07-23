@@ -1,0 +1,46 @@
+; THE LOOP, flown properly this time: trim level at 1000 m, burner to
+; 600 km/h, then full back stick and gamma (gpi) sweeps the circle.
+; The first attempt taught two things: an untrimmed burner climb loops
+; BY ITSELF, and a loop begun at 400 m ends in the island.
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 16000 1200
+say trim level
+press UP
+wait 26
+release UP
+tap MINUS 10
+wait 40
+say burner - wind her up
+tap A 3
+until vel >= 2800 700
+say PULL
+press DOWN
+until gpi >= 32 200
+shot p_up45
+until gpi >= 58 200
+shot p_vertical
+until gpi >= 116 300
+shot p_overtop
+wait 8
+shot p_top2
+until gpi >= 188 300
+shot p_downhill
+until gpi >= 248 400
+release DOWN
+press UP
+wait 20
+release UP
+tap A 3
+wait 10
+shot p_out
+say done
+end

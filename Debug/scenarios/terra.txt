@@ -1,0 +1,40 @@
+; NEWTON terrain: the island seen from the corridor - parked, level,
+; banked, inverted, then straight across the world's wrap seam, which
+; must not visibly exist (the torus and posm close together).
+wait 10
+shot t_parked
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 4800 900
+say level at 300 m
+tap MINUS 30
+press UP
+wait 10
+release UP
+wait 60
+poke rol 0
+wait 4
+shot t_level
+poke rol 21
+wait 4
+shot t_bank30
+poke rol 128
+wait 4
+shot t_invert
+poke rol 0
+wait 4
+say jump to the seam
+poke apz -336
+wait 30
+shot t_wrapa
+wait 60
+shot t_wrapb
+say done
+end

@@ -1,0 +1,36 @@
+; The new weather: look at the sky from the runway, climb through it,
+; look on four headings, then get ABOVE the cloudbase and look down.
+wait 10
+shot w_ramp
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 320 300
+poke chdgf 0
+poke pit 2400
+poke apy -1536
+poke vel 2400
+wait 4
+shot w_n
+poke hdg 64
+wait 4
+shot w_e
+poke hdg 128
+wait 4
+shot w_s
+poke hdg 192
+wait 4
+shot w_w
+poke hdg 0
+poke apy -15536
+poke chdgf 0
+wait 4
+shot w_above
+say done
+end

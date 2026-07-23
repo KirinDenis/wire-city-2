@@ -1,0 +1,46 @@
+; A lap of the island in eight jumps: where did DSGEN put the mountains
+; this time? (poke values are SIGNED 16-bit: 40960 = -24576 etc.)
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 6400 900
+say level at 400 m
+tap MINUS 30
+press UP
+wait 10
+release UP
+wait 60
+poke rol 0
+poke apz 4096
+wait 6
+shot w_04k
+poke apz 12288
+wait 6
+shot w_12k
+poke apz 20480
+wait 6
+shot w_20k
+poke apz 28672
+wait 6
+shot w_28k
+poke apz -28672
+wait 6
+shot w_36k
+poke apz -20480
+wait 6
+shot w_44k
+poke apz -12288
+wait 6
+shot w_52k
+poke apz -4096
+wait 6
+shot w_60k
+say done
+end

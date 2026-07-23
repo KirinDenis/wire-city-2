@@ -1,0 +1,34 @@
+; The knife test: low over the checkerboard, banked hard, four frames -
+; the bottom edge must show clipped HALVES of squares, never a green
+; hole where a square just vanished.
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 320 300
+poke chdgf 0
+poke pit 2400
+poke apy 12800
+poke vel 2400
+poke rol 21
+wait 4
+shot n_bank1
+wait 3
+shot n_bank2
+poke rol 235
+wait 4
+shot n_bank3
+wait 3
+shot n_bank4
+poke rol 0
+poke apy 6400
+wait 4
+shot n_low
+say done
+end

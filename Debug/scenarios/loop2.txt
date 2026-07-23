@@ -1,0 +1,47 @@
+; THE LOOP, third lesson: the until-gates are unsigned, so gamma must
+; be small-positive-and-rising BEFORE the first gate or a 247 walks
+; through every one of them. Stick first, gates after.
+wait 10
+tap SPACE 3
+wait 5
+press PLUS
+wait 70
+release PLUS
+until vel >= 1600 900
+press DOWN
+wait 12
+release DOWN
+until alt >= 320 300
+say entry by the numbers
+poke chdgf 0
+poke pit 2400
+poke apy -1536
+poke vel 2800
+tap A 3
+wait 2
+poke chdgf 0
+poke apy -1536
+poke vel 2800
+say PULL
+press DOWN
+wait 16
+until gpi >= 32 300
+shot q_up45
+until gpi >= 58 200
+shot q_vertical
+until gpi >= 116 300
+shot q_overtop
+wait 6
+shot q_top2
+until gpi >= 188 300
+shot q_downhill
+until gpi >= 246 400
+release DOWN
+press UP
+wait 24
+release UP
+tap A 3
+wait 10
+shot q_out
+say done
+end
