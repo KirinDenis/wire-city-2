@@ -199,16 +199,12 @@ INPUT:
         ; rudder: 1 unit/tick = a full circle in ~14 s. Good for lining
         ; up a runway or a gun run without dropping a wing.
         xor  cx,cx              ; r = rudder input, in eighths
-        cmp  byte ptr [KEYS+SC_1],0 ; the F-15 pedals: top-row 1 and 3.
-        jne  @@rdl              ; Q and E left the pedals when Alt-Q
-        cmp  byte ptr [KEYS+SC_Z],0 ; became the exit: holding Q rudder
-        jne  @@rdl              ; through an accidental Alt would have
-        cmp  byte ptr [KEYS+SC_NP7],0 ; quit the whole sortie
-        je   @@rdq
+        cmp  byte ptr [KEYS+SC_1],0 ; the F-15 pedals: top-row 1 and 3
+        jne  @@rdl              ; (numpad 7/9 as aliases; Z/C left the
+        cmp  byte ptr [KEYS+SC_NP7],0 ; pedals for the radar zoom -
+        je   @@rdq              ; Z/X per the manual)
 @@rdl:  sub  cx,8
 @@rdq:  cmp  byte ptr [KEYS+SC_3],0
-        jne  @@rdr
-        cmp  byte ptr [KEYS+SC_C],0
         jne  @@rdr
         cmp  byte ptr [KEYS+SC_NP9],0
         je   @@rdz
@@ -420,6 +416,26 @@ INPUT:
         jz   @@nf3
         xor  byte ptr [chsview],1
 @@nf3:
+        ; --- Z / X: the scope zooms in and out, the manual's way ---
+        mov  al,[KEYS+SC_Z]
+        cmp  al,[prevz]
+        je   @@nzi
+        mov  [prevz],al
+        test al,al
+        jz   @@nzi
+        cmp  byte ptr [rzsh],8
+        jbe  @@nzi
+        dec  byte ptr [rzsh]
+@@nzi:  mov  al,[KEYS+SC_X]
+        cmp  al,[prevxx]
+        je   @@nzo
+        mov  [prevxx],al
+        test al,al
+        jz   @@nzo
+        cmp  byte ptr [rzsh],10
+        jae  @@nzo
+        inc  byte ptr [rzsh]
+@@nzo:
         ; --- F5: arm/disarm the missile camera (edge) ---
         mov  al,[KEYS+SC_F5]
         cmp  al,[prevf5]

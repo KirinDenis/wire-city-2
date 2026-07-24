@@ -134,7 +134,7 @@ copy /y RESDAT.COM ..\INSTALL\CITY.DAT >> ..\..\..\BUILD.LOG
 del RESDAT.COM
 TASM /T CITY.ASM >> ..\..\..\BUILD.LOG
 if errorlevel 1 goto err
-TLINK CITY.OBJ >> ..\..\..\BUILD.LOG
+TLINK /m CITY.OBJ >> ..\..\..\BUILD.LOG
 if errorlevel 1 goto err
 copy /y CITY.EXE ..\INSTALL\FLYOWL2.EXE >> ..\..\..\BUILD.LOG
 del CITY.EXE

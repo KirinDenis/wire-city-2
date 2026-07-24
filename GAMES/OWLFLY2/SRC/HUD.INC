@@ -557,8 +557,17 @@ PANELBMP:
         inc  si
         jmp  @@tb
 @@tbd:
-        ; ---- radar: heading-up PPI, centre (87,171), 1 px = 512 world
-        ; units (~7.7k range). Own ship = 2 px tick, traffic = 2x1 blips.
+        ; ---- radar: heading-up PPI, centre (87,171). The scale is a
+        ; LIVE zoom: 1 px = 256/512/1024 world units (Z in, X out, the
+        ; manual's keys). Own ship = 2 px tick, traffic = shaped blips,
+        ; HUMANS wear white. A compass-true grey grid marches under it
+        ; all: dots every 4096 world units, plus two dots up the NORTH
+        ; radius - the scope stays tied to the rose at any bank of the
+        ; mind.
+        ; -- the grid first, under everything (far code: the scope's
+        ; grey rose lives in the sky segment, the stack guard's rent) --
+        call FAR PTR RGRIDF
+        ; -- own ship --
         mov  ax,172
         call ROW320
         add  di,87
@@ -579,19 +588,19 @@ PANELBMP:
         push si
         call ROTXZ              ; rcx = right of the nose, rcz = ahead
         pop  si
+        mov  cl,[rzsh]          ; the zoom, then a PIXEL-space clip
         mov  ax,[rcx]
-        cmp  ax,7680
-        jge  @@rn
-        cmp  ax,-7680
-        jle  @@rn
+        sar  ax,cl
+        cmp  ax,14
+        jg   @@rn
+        cmp  ax,-14
+        jl   @@rn
         mov  bx,[rcz]
-        cmp  bx,7680
-        jge  @@rn
-        cmp  bx,-7680
-        jle  @@rn
-        mov  cl,9
-        sar  ax,cl              ; -15..15 px
         sar  bx,cl
+        cmp  bx,14
+        jg   @@rn
+        cmp  bx,-14
+        jl   @@rn
         add  ax,87
         mov  [dsx],ax           ; blip column
         mov  ax,171
@@ -604,11 +613,20 @@ PANELBMP:
         mov  al,96              ; hostile: yellow
 @@fr:   ; blip shape by type: fighter 2x1, bomber a fat 4x1 bar, the
         ; radar plane BLINKS (its antenna sweeps), transport a 2x2
-        ; block, the tanker a vertical 3-stack
+        ; block, the tanker a vertical 3-stack - and a HUMAN pilot
+        ; overrides them all in white: people first
         push bx
         mov  bx,si
         shr  bx,1
-        mov  bl,[ptype+bx]
+        cmp  byte ptr [premote+bx],0
+        je   @@shai
+        mov  al,8               ; the white block of a real pilot
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+        jmp  @@shd
+@@shai: mov  bl,[ptype+bx]
         cmp  bl,1
         je   @@shb
         cmp  bl,2
@@ -682,19 +700,19 @@ PANELBMP:
         jmp  @@rsc
 @@rblip:                        ; plot one amber spark from wdx/wdz
         call ROTXZ
+        mov  cl,[rzsh]          ; sparks ride the same zoom
         mov  ax,[rcx]
-        cmp  ax,7680
-        jge  @@rbx
-        cmp  ax,-7680
-        jle  @@rbx
-        mov  bx,[rcz]
-        cmp  bx,7680
-        jge  @@rbx
-        cmp  bx,-7680
-        jle  @@rbx
-        mov  cl,9
         sar  ax,cl
+        cmp  ax,14
+        jg   @@rbx
+        cmp  ax,-14
+        jl   @@rbx
+        mov  bx,[rcz]
         sar  bx,cl
+        cmp  bx,14
+        jg   @@rbx
+        cmp  bx,-14
+        jl   @@rbx
         add  ax,87
         mov  [dsx],ax
         mov  ax,171

@@ -67,6 +67,19 @@ The first build is byte-identical to OWL FLY (`FLYOWL2.COM` and
    tower. NB the ECB layout lesson lives in EXAMPLES\BBS.ASM and the
    project memory - link dword first, or the wire eats you
 
+## The front door (2026-07-24)
+
+`SRC/UI.INC` is the third far segment: a splash (the three-ship of
+wireframe F15s out of the night, straight at you, under a spooling
+turbine and the big amber title - any key skips) and the sky list.
+The list is LIVE: every host advertises its sky once a second over
+IPX ('G' packets: name, seed, heads, the war score, bots), the menu
+just listens and draws. ENTER joins the picked sky - the ad already
+carries the world seed. C names a new sky (type 8 letters), B picks
+bots on (the 20v20 war) or off (a clean PvP arena, Counter-Strike
+manners: shot down - SPACE - back in). Ten minutes, a whole sortie:
+that is the pilot this game is for.
+
 ## What NEWTON left us
 
 NEWTON lives on in `GAMES\NEWTON` as the physics laboratory: full

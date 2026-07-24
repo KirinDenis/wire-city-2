@@ -49,6 +49,16 @@ premote db NPLANE dup(0)        ; 1 = a REAL pilot flies this slot over
 wseed   dw 0                    ; the seed the world was built from
 netup   db 0                    ; 1 = IPX answered at startup
 netpid  dw 0                    ; our name on the wire (spawn fan-out)
+gact    db 0                    ; the menu's verdict: 1 create, 2 join
+gbots   db 1                    ; 1 = the 20v20 war flies with us
+ggid    dw 0                    ; which sky we are in (the host's pid)
+gname   db 9 dup(0)             ; our sky's name (8 + NUL)
+kprev   db 84 dup(0)            ; the menu's key-edge memory (DS, plain)
+rzsh    db 9                    ; radar zoom shift: 8 close / 9 / 10 far
+prevz   db 0                    ; Z / X edge memory (the scope zoom)
+prevxx  db 0
+rgk     dw 0                    ; the radar grid's walkers
+rgj     dw 0
 pspd    dw 15                   ; AI speed of the plane being ticked
 mvb     dw F15VT                ; model table of the plane being drawn
 mvn     dw F15NV*6              ; its vertex bytes (vertices * 6)
@@ -1067,9 +1077,9 @@ HCOL    db 8
 ;            8 HUD       9 sky band    10 ground     11 field/ground band
 ;            12 haze     13 mountains  14 water      15 forest
 ;            16 wall E/W (shade)       17 roof
-NPALC   equ 107                 ; 31 game + 63 cockpit + glow + 2 IFF +
+NPALC   equ 108                 ; 31 game + 63 cockpit + glow + 2 IFF +
                                 ; amber + 7 NEWTON sky (SKYZ..SKYZ+6) +
-                                ; ladder dim (LDIM) + HUD cyan (LCYN)
+                                ; ladder dim + HUD cyan + true black
 PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db 30,32,36          ;1  far stroke (fades to haze)
         db 22,24,28          ;2  mid stroke
@@ -1117,6 +1127,7 @@ PALDAY  db 36,37,40          ;0  wall N/S (light grey)
                              ;    than the clouds, lighter than the
                              ;    ground (white vanishes in cumulus)
         db 30,58,63          ;106 HUD cyan: the IVV caret
+        db  0, 0, 0          ;107 true black (the front door's night)
 
 PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db 12,18,40          ;1  far stroke
@@ -1163,6 +1174,7 @@ PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db 19,22,32          ;104 ...lit top
         db 20,22,27          ;105 HUD dim ladder, night-lit
         db 16,38,48          ;106 HUD cyan IVV, dimmed for the night
+        db  0, 0, 0          ;107 true black
 
 STARN   equ 16                  ; stars as DIRECTIONS: azimuth, elevation
 STARTAB dw 10,18, 35,40, 60,12, 85,55, 110,30, 135,60, 160,22, 185,45

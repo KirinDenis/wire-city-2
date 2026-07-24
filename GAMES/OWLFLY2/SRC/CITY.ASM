@@ -101,6 +101,7 @@ SKYZ    equ 98                  ; ramp SKYZ..SKYZ+4 zenith->haze, then
                                 ; SKYZ+4..SKYZ+6 the cloud light
 LDIM    equ 105                 ; the pitch ladder's dim grey
 LCYN    equ 106                 ; the IVV caret's cyan
+UBLACK  equ 107                 ; the front door's true black
 
 ; ---- keyboard scan codes ---------------------------------------------------
 SC_ESC  equ 01h
@@ -136,6 +137,7 @@ SC_3    equ 04h                 ; top-row 3: rudder right
 SC_LSH  equ 2Ah                 ; the shifts, for the throttle gates
 SC_RSH  equ 36h
 SC_ALT  equ 38h                 ; Alt: the Alt-Q exit chord
+SC_X    equ 2Dh                 ; X: radar unzoom (Z zooms - the manual)
 WRKSZ   equ 300                 ; wreck slot size (see the BSS block)
 WCL     equ 292                 ; face colours offset inside a slot
 BSSCLR  equ 2584                ; (BSSEND-WRK)/2 - keep in sync with BSS!
@@ -175,8 +177,8 @@ MAIN:
         ; it. SKYSEG gets a full 8K window (CS+1000h..CS+11FFh) with
         ; its own assemble-time guard, and the far map starts past it.
         mov  ax,cs
-        add  ax,1200h
-        mov  [bufseg],ax
+        add  ax,1400h           ; past SKYSEG (CS+1000h) and UISEG
+        mov  [bufseg],ax        ; (CS+1200h), both 8K and guarded
 
         ; hook INT 9
         mov  ax,3509h
@@ -191,7 +193,7 @@ MAIN:
 
         ; ---- load CITY.DAT into its own segment (resources: font, ...) ----
         mov  ax,cs
-        add  ax,2200h           ; past the back-buffer at CS+1200h
+        add  ax,2400h           ; past the back-buffer at CS+1400h
         mov  [resseg],ax
         mov  dx,offset FNAME
         mov  ax,3D00h           ; open read-only
@@ -292,47 +294,42 @@ MAIN:
 @@sd:   mov  word ptr [di],0FFFFh
 @@pn:   pop  es
 
-        push es                 ; seed the world from the clock: new map
-        mov  ax,40h             ; every run (the map lives in HMAP after this,
-        mov  es,ax              ; so everything stays self-consistent)
-        mov  ax,es:[6Ch]
+        ; ---- THE FRONT DOOR: video and sound up FIRST, then the wire,
+        ; then the splash and the sky list. The world is minted only
+        ; after the pilot picks one - its seed comes from the clock
+        ; (create) or from the chosen sky's ad (join).
+        mov  ax,0013h
+        int  10h
+        call APPLYPAL
+        push es                 ; wreck pool etc: BSS is not guaranteed
+        mov  ax,cs              ; clean, and the menu era runs long
+        mov  es,ax
+        mov  di,offset WRK
+        xor  ax,ax
+        mov  cx,BSSCLR
+        cld
+        rep  stosw
         pop  es
-        or   ax,1               ; LCG must not start at 0
-        mov  [rseed],ax
-        mov  [wseed],ax         ; remember the seed the world gets built
-                                ; from (rseed itself mutates with every
-                                ; RND16 - a host must hand out the ORIGIN)
-        ; ---- the wire: if IPX is up, knock before building the world.
-        ; A pilot already flying answers with THEIR seed and we stand
-        ; in their sky; ~2 s of silence and we host our own.
+        call SBINIT             ; the splash roar wants a voice
         call FAR PTR NETINITF
         mov  [netup],al
-        or   al,al
-        jz   @@nonet
-        mov  [netpid],dx
-        call FAR PTR NETHELLOF
-        push es
-        mov  ax,40h
-        mov  es,ax
+        mov  [netpid],dx        ; 0 when the wire is dark
+        call FAR PTR UISPLASH
+        call FAR PTR UIMENU     ; blocks until a sky is picked
+        cmp  byte ptr [gact],2
+        je   @@gjn              ; join: the menu set rseed/wseed/ggid
+        push es                 ; create: mint a fresh seed NOW (the
+        mov  ax,40h             ; menu ran for human seconds - good
+        mov  es,ax              ; entropy)
         mov  ax,es:[6Ch]
-        mov  [dsx],ax           ; t0 lives in MEMORY: the polls eat BX
-@@nwt:  call FAR PTR NETPOLLF
-        or   al,al
-        jnz  @@nadopt
-        mov  ax,40h             ; and ES gets re-set every lap, out of
-        mov  es,ax              ; the same caution
-        mov  ax,es:[6Ch]
-        sub  ax,[dsx]
-        cmp  ax,40              ; ~2.2 s
-        jb   @@nwt
         pop  es
-        call FAR PTR NETHOSTF   ; nobody home: this sky is ours to host
-        jmp  @@nonet
-@@nadopt:
-        pop  es
-        mov  [rseed],dx         ; their world, bit for bit: same island,
-        mov  [wseed],dx         ; same city, same clouds
-@@nonet:
+        or   ax,1
+        mov  [rseed],ax
+        mov  [wseed],ax
+        mov  ax,[netpid]
+        mov  [ggid],ax          ; our sky flies under our wire name
+        call FAR PTR NETHOSTF
+@@gjn:
         mov  ax,cs              ; far scratch: the 64K page right above
         add  ax,5FFFh           ; the sample segment - the minimap lives
         and  ax,0F000h          ; there, not in our crowded 64K
@@ -342,10 +339,7 @@ MAIN:
         call BRDGEN             ; draw the front line on the war
         call FAR PTR SKYBAKE    ; cut this run's sky: ramp + cloud coats
 
-        ; video mode 13h + palette (day by default; N toggles at runtime)
-        mov  ax,0013h
-        int  10h
-        call APPLYPAL
+        ; (video mode went up before the menu - the world just draws)
 
         ; spawn over a city node (H in 130..160), not out at sea
         mov  word ptr [camx],0
@@ -387,27 +381,19 @@ MAIN:
         shl  ax,cl              ; 0/128/256/384
         add  [camx],ax
         mov  word ptr [camy],1450 ; start high above everything (peaks ~1110)
-        ; ---- wreck pool lives in BSS: zero it (memory past the image
-        ; is not guaranteed clean) ----
-        push es
-        mov  ax,cs
-        mov  es,ax
-        mov  di,offset WRK      ; zero WRK..BSSEND: wrecks, black box,
-        xor  ax,ax              ; trails (reseeded anyway) and the ruins
-        mov  cx,BSSCLR          ; bitmap
-        cld
-        rep  stosw
-        pop  es
-
-        ; (the F15 model is BAKED into the image now - Obj2Inc turns
-        ; res\F15.OBJ into F15M.INC at build time. The runtime loader
-        ; and its BSS buffers died in the stack-collapse postmortem of
-        ; 2026-07-23: they lived at the very top of BSS, exactly where
-        ; SP tramples first when the segment runs tight.)
-        call SBINIT             ; the engine hums if a Blaster is home
+        ; (the BSS wipe and SBINIT went up before the menu; the F15
+        ; model is BAKED into the image by Obj2Inc at build time)
 
         ; ---- AI traffic: two squadrons scattered around the player ----
         call RESPAWNALL
+        cmp  byte ptr [gbots],0 ; a botless sky is a clean arena:
+        jne  @@bots1            ; the 20v20 war stays home, only real
+        xor  bx,bx              ; pilots fly (CS manners)
+@@bk:   inc  bx
+        mov  byte ptr [pst+bx],1
+        cmp  bx,39
+        jb   @@bk
+@@bots1:
         mov  word ptr [heading],0
         mov  word ptr [roll],0
         call FLBSEED            ; the black box starts at the spawn point
@@ -597,6 +583,7 @@ ENDIF
 CODE    ENDS
 
         INCLUDE SKY.INC         ; the NEWTON sky, in its own segment
-        INCLUDE NET.INC         ; the wire: IPX multiplayer (same segment)
+        INCLUDE UI.INC          ; the front door: splash + sky list
+        INCLUDE NET.INC         ; the wire (appends SKYSEG; writes GLIST)
 
         END START

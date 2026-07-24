@@ -73,8 +73,7 @@ mypid   dw 0                    ; our name on the wire (node tail bytes)
 sentk   dw 0                    ; last tick a POS went out
 rpid    dw NRMT dup(0)          ; who wears remote slot i (0 = nobody)
 rlast   dw NRMT dup(0)          ; the tick their last POS arrived
-gots    db 0                    ; NETPOLL: a seed landed this drain
-gseed   dw 0                    ; ...and this is it
+adtk    dw 0                    ; the tick the last sky ad went out
 ; send: ECB + header + payload, header and payload CONTIGUOUS - the
 ; one fragment covers both
 SECB    db ECBSZ dup(0)
@@ -89,10 +88,6 @@ NETINITF PROC FAR
         call NETINIT
         ret
 NETINITF ENDP
-NETHELLOF PROC FAR
-        call NETHELLO
-        ret
-NETHELLOF ENDP
 NETPOLLF PROC FAR
         call NETPOLL
         ret
@@ -119,13 +114,21 @@ NETINIT:
         mov  al,0               ; until program exit
         mov  dx,NETSOCK
         int  7Ah
+        sti                     ; the driver may hand IF back OFF - and
+                                ; a frozen BIOS tick starves every wait
         or   al,al
         jnz  @@no
+        ; (an IRQ 11 mask lived here for one afternoon: it silenced
+        ; DOSBox's ESR bell - and with it, packet DELIVERY. The menu
+        ; freeze it was blamed for turned out to be the first UEDGE's
+        ; doing. The bell rings; DOSBox answers itself at INT 73h.)
         mov  bx,9               ; our internetwork address -> mynode
         mov  ax,SKYSEG
         mov  es,ax
         mov  si,offset mynode
         int  7Ah
+        sti                     ; the driver may hand IF back OFF - and
+                                ; a frozen BIOS tick starves every wait
         mov  ax,word ptr [mynode+8] ; the node's tail names us on the
         mov  [mypid],ax             ; wire (DOSBox hands out unique
         or   ax,ax                  ; nodes; zero would read as free)
@@ -140,8 +143,18 @@ NETINIT:
         cmp  si,NLSTN
         jb   @@pl
         mov  byte ptr [netok],1
-        mov  al,1
-        mov  dx,[mypid]
+        ; ---- is the wire actually CONNECTED? Send a probe: DOSBox
+        ; marks it undeliverable when no ipxnet server is on the other
+        ; end, and the completion code says so. The menu shows the
+        ; verdict, so "why can't we see each other" answers itself.
+        mov  byte ptr [SPAY],'W'
+        mov  cx,1
+        call NETXMIT
+        mov  al,1               ; 1 = IPX up but the wire is DARK
+        cmp  byte ptr [SECB+E_CC],0
+        jne  @@drk
+        mov  al,2               ; 2 = the wire is LIVE
+@@drk:  mov  dx,[mypid]
         pop  es
         ret
 @@no:   mov  byte ptr [netok],0
@@ -175,6 +188,8 @@ NETLSTN:
         mov  si,di              ; ES:SI -> ECB
         mov  bx,4               ; ListenForPacket
         int  7Ah
+        sti                     ; the driver may hand IF back OFF - and
+                                ; a frozen BIOS tick starves every wait
         pop  es
         ret
 
@@ -215,32 +230,25 @@ NETXMIT:
         mov  si,offset SECB
         mov  bx,3               ; SendPacket
         int  7Ah
+        sti                     ; the driver may hand IF back OFF - and
+                                ; a frozen BIOS tick starves every wait
         mov  cx,5000            ; BBS.ASM's manner: give the driver its
 @@sw:   cmp  byte ptr [SECB+E_INUSE],0   ; time (bounded - a game frame
         je   @@sd               ; must never wedge on the wire)
         mov  bx,0Ah             ; RelinquishControl
         int  7Ah
+        sti                     ; the driver may hand IF back OFF - and
+                                ; a frozen BIOS tick starves every wait
         loop @@sw
 @@sd:   pop  es
 @@drop: ret
 
-; ---- NETHELLO: the joiner's knock ------------------------------------------
-NETHELLO:
-        mov  byte ptr [SPAY],'H'
-        mov  cx,1
-        call NETXMIT
-        ret
-
-; ---- NETSEED: the host's answer --------------------------------------------
-NETSEED:
-        mov  byte ptr [SPAY],'S'
-        mov  ax,[wseed]         ; the seed the WORLD was built from
-        mov  word ptr [SPAY+1],ax
-        mov  cx,3
-        call NETXMIT
-        ret
+; (HELLO/SEED retired: the menu joins from the 'G' ads, which carry
+; the seed already - the handshake became a billboard)
 
 ; ---- NETPOS: our position, one broadcast per BIOS tick ---------------------
+; Every ~18 ticks the HOST also advertises the sky itself: gid, seed,
+; heads, the war score and the name - the menu's whole world.
 NETPOS: cmp  byte ptr [netok],0
         je   @@r
         mov  ax,[lasttk]
@@ -250,27 +258,89 @@ NETPOS: cmp  byte ptr [netok],0
         mov  byte ptr [SPAY],'P'
         mov  ax,[mypid]
         mov  word ptr [SPAY+1],ax
-        mov  ax,[camx]
+        mov  ax,[ggid]
         mov  word ptr [SPAY+3],ax
-        mov  ax,[camy]
+        mov  ax,[camx]
         mov  word ptr [SPAY+5],ax
-        mov  ax,[camz]
+        mov  ax,[camy]
         mov  word ptr [SPAY+7],ax
-        mov  ax,[heading]
+        mov  ax,[camz]
         mov  word ptr [SPAY+9],ax
-        mov  cx,11
+        mov  ax,[heading]
+        mov  word ptr [SPAY+11],ax
+        mov  cx,13
         call NETXMIT
+        cmp  byte ptr [nethost],0
+        je   @@r
+        mov  ax,[lasttk]        ; the once-a-second sky ad
+        sub  ax,[adtk]
+        cmp  ax,18
+        jb   @@r
+        mov  ax,[lasttk]
+        mov  [adtk],ax
+        call NETADS
 @@r:    ret
 
+; ---- NETADS: broadcast the sky ad ('G') ------------------------------------
+NETADS: mov  byte ptr [SPAY],'G'
+        mov  ax,[ggid]
+        mov  word ptr [SPAY+1],ax
+        mov  ax,[wseed]
+        mov  word ptr [SPAY+3],ax
+        mov  al,1               ; heads: us + everyone on our wire
+        xor  si,si
+@@hc:   mov  di,si
+        add  di,di
+        cmp  word ptr [rpid+di],0
+        je   @@hn
+        inc  al
+@@hn:   inc  si
+        cmp  si,NRMT
+        jb   @@hc
+        mov  [SPAY+5],al
+        ; the war score: kills BY green = yellows down (20..39), and
+        ; the mirror. A botless arena reports zeros.
+        xor  al,al
+        xor  ah,ah
+        cmp  byte ptr [gbots],0
+        je   @@sc0
+        xor  si,si
+@@scl:  cmp  byte ptr [premote+si+1],0
+        jne  @@scn              ; a live pilot is nobody's kill
+        cmp  byte ptr [pst+si+1],0
+        je   @@scn
+        cmp  si,19              ; slots 1..19 green, 20..39 yellow
+        jae  @@scy
+        inc  ah                 ; a green down: yellow scores
+        jmp  @@scn
+@@scy:  inc  al                 ; a yellow down: green scores
+@@scn:  inc  si
+        cmp  si,39
+        jb   @@scl
+@@sc0:  mov  [SPAY+6],al
+        mov  [SPAY+7],ah
+        mov  al,[gbots]
+        mov  [SPAY+8],al
+        push es
+        mov  ax,SKYSEG          ; the name rides at +9: DS gname ->
+        mov  es,ax              ; our own SPAY via es:di
+        mov  si,offset gname
+        mov  di,offset SPAY+9
+        mov  cx,8
+        cld
+        rep  movsb
+        pop  es
+        mov  cx,17
+        call NETXMIT
+        ret
+
 ; ---- NETPOLL: drain the listens, keep the remote pilots honest -------------
-; Returns AL=1 + DX=seed ONCE when a SEED arrives; else AL=0.
 NETPOLL:
         xor  ax,ax
         cmp  byte ptr [netok],0
         jne  @@go
         ret
-@@go:   mov  byte ptr [gots],0
-        xor  si,si              ; walk the listen ECBs
+@@go:   xor  si,si              ; walk the listen ECBs
 @@e:    push si
         mov  ax,si
         mov  bx,ECBSZ
@@ -289,27 +359,79 @@ NETPOLL:
         mov  al,cs:[bx]
         cmp  al,'P'
         je   @@pos
-        cmp  al,'H'
-        je   @@hello
-        cmp  al,'S'
-        je   @@seed
+        cmp  al,'G'
+        je   @@gad
         jmp  @@rearm
-@@hello:
-        cmp  byte ptr [nethost],0
-        je   @@rearm
-        call NETSEED            ; someone knocked: hand them the world
-        jmp  @@rearm
-@@seed: cmp  byte ptr [nethost],0
-        jne  @@rearm            ; hosts keep their own world
-        mov  ax,word ptr cs:[bx+1]
-        mov  [gseed],ax
-        mov  byte ptr [gots],1
+@@gad:  ; ---- a sky's ad: upsert the menu's list (UISEG) ----
+        push es
+        push si
+        mov  ax,UISEG
+        mov  es,ax
+        mov  dx,word ptr cs:[bx+1]  ; its gid
+        mov  bp,-1                  ; first free row
+        xor  si,si
+@@gf:   mov  ax,si
+        mov  cl,4
+        shl  ax,cl
+        mov  di,ax
+        cmp  word ptr es:[GLIST+di],dx
+        je   @@gu               ; known sky: refresh it
+        cmp  word ptr es:[GLIST+di],0
+        jne  @@gn
+        cmp  bp,-1
+        jne  @@gn
+        mov  bp,si              ; remember the empty bunk
+@@gn:   inc  si
+        cmp  si,NGL
+        jb   @@gf
+        cmp  bp,-1
+        je   @@gz               ; the board is full: let it pass
+        mov  si,bp
+        mov  ax,si
+        mov  cl,4
+        shl  ax,cl
+        mov  di,ax
+@@gu:   mov  word ptr es:[GLIST+di],dx
+        mov  ax,word ptr cs:[bx+3]
+        mov  word ptr es:[GLIST+di+2],ax ; seed
+        mov  al,cs:[bx+5]
+        mov  es:[GLIST+di+4],al     ; heads
+        mov  al,cs:[bx+6]
+        mov  es:[GLIST+di+5],al     ; the score
+        mov  al,cs:[bx+7]
+        mov  es:[GLIST+di+6],al
+        mov  al,cs:[bx+8]
+        mov  es:[GLIST+di+7],al     ; bots
+        add  di,8                   ; the name rides at +8
+        xor  si,si
+@@gnm:  mov  al,cs:[bx+si+9]
+        mov  es:[GLIST+di],al
+        inc  di
+        inc  si
+        cmp  si,8
+        jb   @@gnm
+        sub  di,16                  ; back to the entry base
+        mov  ax,di                  ; freshness stamp
+        mov  cl,3
+        shr  ax,cl                  ; row*2 = di/16*2 = di/8
+        mov  di,ax
+        push es
+        mov  ax,40h
+        mov  es,ax
+        mov  ax,es:[6Ch]
+        pop  es
+        mov  word ptr es:[GLAST+di],ax
+@@gz:   pop  si
+        pop  es
         jmp  @@rearm
 @@pos:  mov  ax,word ptr cs:[bx+1]  ; whose position?
         cmp  ax,[mypid]
         je   @@rearm            ; our own echo
         or   ax,ax
         jz   @@rearm
+        mov  dx,word ptr cs:[bx+3]  ; whose SKY?
+        cmp  dx,[ggid]
+        jne  @@rearm            ; a different game on the same wire
         call RSLOT              ; DI = remote index 0..3 or -1
         cmp  di,-1
         je   @@rearm
@@ -325,13 +447,13 @@ NETPOLL:
         mov  byte ptr [pst+si],0
         mov  byte ptr [ptype+si],0
         add  si,si              ; word index
-        mov  ax,word ptr cs:[bx+3]
-        mov  [pax+si],ax
         mov  ax,word ptr cs:[bx+5]
-        mov  [pay+si],ax
+        mov  [pax+si],ax
         mov  ax,word ptr cs:[bx+7]
-        mov  [paz+si],ax
+        mov  [pay+si],ax
         mov  ax,word ptr cs:[bx+9]
+        mov  [paz+si],ax
+        mov  ax,word ptr cs:[bx+11]
         mov  [pah+si],ax
         pop  si
 @@rearm:
@@ -360,8 +482,90 @@ NETPOLL:
 @@swn:  inc  si
         cmp  si,NRMT
         jb   @@sw
-        mov  al,[gots]          ; the verdict for the joiner
-        mov  dx,[gseed]
+        xor  ax,ax
+        ret
+
+; ---- RGRID: the radar's compass-true grey grid + the north anchor ----------
+; Dots every 4096 world units through WCAM2 (the same yaw the world
+; turns by), clipped in PIXEL space so any zoom fits, plus two
+; brighter dots up the NORTH radius. ES = bufseg (the caller's).
+RGRIDF  PROC FAR
+        call RGRID
+        ret
+RGRIDF  ENDP
+RGRID:  mov  word ptr [rgk],-4
+@@gx:   mov  word ptr [rgj],-4
+@@gz:   mov  ax,[camx]
+        and  ax,0F000h          ; the nearest grid corner west of us
+        mov  bx,[rgk]
+        mov  cl,12
+        shl  bx,cl
+        add  ax,bx
+        sub  ax,[camx]
+        mov  [wdx2],ax
+        mov  ax,[camz]
+        and  ax,0F000h
+        mov  bx,[rgj]
+        shl  bx,cl
+        add  ax,bx
+        sub  ax,[camz]
+        mov  [wdz2],ax
+        call WCAM2              ; cldu = right of the nose, cldd = ahead
+        mov  cl,[rzsh]
+        mov  ax,[cldu]
+        sar  ax,cl
+        cmp  ax,14
+        jg   @@gn
+        cmp  ax,-14
+        jl   @@gn
+        mov  bx,[cldd]
+        sar  bx,cl
+        cmp  bx,14
+        jg   @@gn
+        cmp  bx,-14
+        jl   @@gn
+        add  ax,87
+        push ax
+        mov  ax,171
+        sub  ax,bx
+        call ROWAD
+        mov  di,ax
+        pop  ax
+        add  di,ax
+        mov  al,30              ; quiet trim grey
+        mov  es:[di],al
+@@gn:   inc  word ptr [rgj]
+        cmp  word ptr [rgj],5
+        jl   @@gz
+        inc  word ptr [rgk]
+        cmp  word ptr [rgk],5
+        jl   @@gx
+        ; -- the north anchor: two brighter dots up the N radius --
+        mov  si,13
+        call RNDOT
+        mov  si,10
+        call RNDOT
+        ret
+RNDOT:  mov  ax,[hsin]          ; one wall-grey dot SI px north
+        neg  ax
+        imul si
+        mov  cx,256
+        idiv cx
+        add  ax,87
+        push ax
+        mov  ax,[hcos]
+        imul si
+        mov  cx,256
+        idiv cx
+        mov  bx,ax
+        mov  ax,171
+        sub  ax,bx
+        call ROWAD
+        mov  di,ax
+        pop  ax
+        add  di,ax
+        mov  al,0
+        mov  es:[di],al
         ret
 
 ; ---- RSLOT: pid in AX -> remote index in DI (alloc), -1 if full ------------
@@ -391,12 +595,16 @@ RSLOT:  push si
         ret
 
 ; ---- THE WINDOW GUARD (sky + net together) ---------------------------------
-; SKYSEG lives at CS+1000h and the back-buffer starts at CS+1200h:
-; 8K, not a byte more. The build refuses to overflow instead of
-; letting the frame buffer eat the cloud tables (postmortem 2026-07-23).
+; SKYSEG lives at CS+1000h with UISEG at CS+1200h right behind: 8K,
+; not a byte more. The build refuses to overflow instead of letting
+; the neighbour eat the cloud tables (postmortem 2026-07-23) - and
+; the ORG pad below CLAIMS the full window, so the linker parks
+; UISEG exactly at CS+1200h.
 IF ($-BNOISE) GT 8176
-        %OUT *** SKYSEG overflows its 8K window before the buffer ***
+        %OUT *** SKYSEG overflows its 8K window before UISEG ***
         .ERR
 ENDIF
+        ORG  1FF0h
+        db   16 dup(?)
 
 SKYSEG  ENDS
