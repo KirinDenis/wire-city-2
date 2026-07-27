@@ -1039,6 +1039,19 @@ wqx     dw 4 dup(0)             ; window-face projected corners
 wqy     dw 4 dup(0)
 wfu     dw 0
 wfv     dw 0
+; the glass walks the wall in CAMERA space now (see WINFACE): one
+; column edge pair, and the pane's own 3-D point before projection
+wtcx    dw 0                    ; this column's top edge point
+wtcy    dw 0
+wtcz    dw 0
+wbcx    dw 0                    ; ...and its bottom edge point
+wbcy    dw 0
+wbcz    dw 0
+wgx     dw 0                    ; the pane itself, camera space
+wgy     dw 0
+wgz     dw 0
+wfi     dw 0                    ; fire: which tongue of the flame
+wfh     dw 0                    ; fire/glass: the flicker hash
 
 ; quarter sine table: SINT[i] = round(256*sin(i*90/64 deg)), i=0..64
 SINT    dw 0,6,13,19,25,31,38,44,50,56,62,68,74,80,86,92,98,104,109,115
