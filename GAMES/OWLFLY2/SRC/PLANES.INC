@@ -1950,10 +1950,105 @@ WRECKDRAW:
         ; ---- fire and smoke while it burns ----
         cmp  word ptr [di],600
         jae  @@wdn
-        mov  word ptr [wcc],0   ; three plumes on faces 0, 3 and 6
+        ; ---- the glass goes first: a burst of window shards thrown
+        ; out of the block in the opening second, bright against the
+        ; smoke and gone by the time the fire settles.
+        cmp  word ptr [di],45
+        jae  @@wgd
+        mov  bx,di
+        add  bx,WFP             ; face 0 record = the breakup spot
+        mov  word ptr [wfi],0
+@@wgl:  mov  ax,[wfi]           ; shards fan out on even angles
+        mov  cx,21
+        imul cx
+        push ax
+        call SINQ               ; sideways
+        mov  cx,[di]            ; radius grows with the wreck's age
+        mov  dx,cx
+        add  cx,cx
+        add  cx,cx
+        add  cx,cx
+        add  cx,dx              ; age*9
+        add  cx,10
+        mov  [wfh],cx
+        imul cx
+        mov  cx,256
+        idiv cx
+        mov  cx,ax              ; keep dx-of-flight
+        pop  ax
+        push cx
+        add  ax,64
+        call SINQ               ; ...and the other axis
+        imul word ptr [wfh]
+        mov  cx,256
+        idiv cx
+        mov  dx,ax
+        pop  cx
+        mov  ax,[bx]            ; world x = piece + fan
+        add  ax,cx
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[bx+4]
+        add  ax,dx
+        sub  ax,[camz]
+        mov  [wdz],ax
+        mov  ax,[di]            ; the arc: up fast, then falling back
+        mov  cx,7
+        imul cx
+        mov  cx,[di]
+        push ax
+        mov  ax,cx
+        imul cx
+        mov  cx,5
+        cwd
+        idiv cx
+        mov  cx,ax
+        pop  ax
+        sub  ax,cx              ; age*7 - age*age/5
+        add  ax,[bx+2]
+        sub  ax,[camy]
+        mov  [ctz],ax
+        push bx
+        push di
+        call ROTXZ
+        mov  dx,[ctz]
+        mov  ax,[rcx]
+        mov  cx,[rcz]
+        call PPOINT
+        pop  di
+        pop  bx
+        jc   @@wgn
+        cmp  ax,1
+        jl   @@wgn
+        cmp  ax,317
+        jg   @@wgn
+        cmp  dx,1
+        jl   @@wgn
+        cmp  dx,197
+        jg   @@wgn
+        push bx
+        push di
+        mov  [dsx],ax
+        mov  ax,dx
+        call ROW320
+        add  di,[dsx]
+        mov  al,8               ; a splinter of lit glass...
+        test word ptr [wfi],1
+        jz   @@wgc
+        mov  al,5               ; ...and one of amber pane
+@@wgc:  mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+320],al
+        pop  di
+        pop  bx
+@@wgn:  inc  word ptr [wfi]
+        cmp  word ptr [wfi],14
+        jb   @@wgl
+@@wgd:
+        mov  word ptr [wcc],0   ; a plume off EVERY face, not every third
 @@wsm:  mov  ax,[wcc]
-        mov  bx,36
-        imul bx                 ; face k*3 record = k*36 bytes
+        mov  bx,12
+        imul bx                 ; face k record = k*12 bytes
         mov  bx,ax
         add  bx,di
         add  bx,WFP             ; -> face record
@@ -1991,15 +2086,72 @@ WRECKDRAW:
         jg   @@wfm
         push bx
         push di
-        mov  [dsx],ax
-        mov  ax,dx
-        call ROW320
-        add  di,[dsx]
-        mov  al,94              ; palette-cycled fire
-        mov  es:[di],al
-        mov  es:[di+1],al
-        mov  es:[di+320],al
-        mov  es:[di+321],al
+        mov  [wpsx],ax          ; the fire's root on the glass
+        mov  [wpsy],dx
+        ; A real flame instead of the old lone 2x2 block: six tongues
+        ; per face, each with its own flicker phase, licking upward and
+        ; cooling as it climbs - white-hot palette 94 at the root,
+        ; amber above it, red at the tips.
+        mov  word ptr [wfi],0
+@@wfl:  mov  ax,[wfi]           ; phase = t*3 + tongue*51 + face*29
+        mov  cx,51
+        imul cx
+        mov  bx,ax
+        mov  ax,[wcc]
+        mov  cx,29
+        imul cx
+        add  bx,ax
+        mov  ax,[lasttk]
+        mov  cx,3
+        imul cx
+        add  ax,bx
+        and  ax,63
+        mov  [wfh],ax
+        mov  bx,ax              ; sideways wander: (phase & 7) - 3
+        and  bx,7
+        sub  bx,3
+        add  bx,[wpsx]
+        mov  [dsx],bx
+        mov  ax,[wfh]           ; and the climb: up to 8 rows of tongue
+        mov  cl,3
+        shr  ax,cl
+        mov  bx,[wpsy]
+        sub  bx,ax
+        mov  [dsy],bx
+        mov  ax,[wfh]           ; the tongue thins as it rises
+        mov  cl,4
+        shr  ax,cl
+        mov  cx,3
+        sub  cx,ax              ; 3,2,1 pixels wide
+        jcxz @@wfn
+        mov  bl,94              ; the root burns white-hot...
+        mov  ax,[wfh]
+        cmp  ax,24
+        jb   @@wfc
+        mov  bl,97              ; ...amber in the body...
+        cmp  ax,44
+        jb   @@wfc
+        mov  bl,19              ; ...and red at the tip
+@@wfc:  mov  ax,[dsy]
+        cmp  ax,1
+        jl   @@wfn
+        cmp  ax,197
+        jg   @@wfn
+        mov  ax,[dsx]
+        cmp  ax,1
+        jl   @@wfn
+        cmp  ax,316
+        jg   @@wfn
+        mov  ax,[dsy]           ; two rows of it, so it reads as flame
+        push cx                 ; (HLINE2 eats CX in its rep stosb)
+        call HLINE2
+        pop  cx
+        mov  ax,[dsy]
+        dec  ax
+        call HLINE2
+@@wfn:  inc  word ptr [wfi]
+        cmp  word ptr [wfi],6
+        jb   @@wfl
         pop  di
         pop  bx
 @@wfm:  ; smoke: the SMOKE.ASM lab's column, on the game's budget.
@@ -2080,9 +2232,9 @@ WRECKDRAW:
         idiv word ptr [wpz]     ; ...projected: r*220/z
         or   ax,ax
         jz   @@wpn
-        cmp  ax,13
+        cmp  ax,18
         jle  @@wr1
-        mov  ax,13
+        mov  ax,18
 @@wr1:  mov  [wpr],ax
         mov  bl,3               ; the cooling ramp: dark at the fire...
         mov  ax,[wph]
@@ -2093,54 +2245,71 @@ WRECKDRAW:
         jb   @@wc1
         mov  bl,1               ; ...pale where it thins out
 @@wc1:  mov  [wpc],bl
-        mov  ax,[wpr]           ; rows -r..+r, width = r - |row|/2:
-        neg  ax                 ; a fat lens of a puff
-@@wbr:  push ax
-        mov  bx,ax
-        or   bx,bx
-        jns  @@wb1
-        neg  bx
-@@wb1:  sar  bx,1
-        mov  cx,[wpr]
-        sub  cx,bx              ; half-width
-        add  ax,[wpsy]
-        js   @@wbn
-        cmp  ax,199
-        jg   @@wbn
-        mov  bx,[wpsx]
-        sub  bx,cx
-        add  cx,cx
-        inc  cx                 ; len = 2w+1
-        or   bx,bx
-        jns  @@wb2
-        add  cx,bx              ; clip left
-        xor  bx,bx
-@@wb2:  or   cx,cx
-        jle  @@wbn
-        mov  [dsx],bx
-        add  bx,cx
-        cmp  bx,320             ; clip right
-        jle  @@wb3
-        sub  bx,320
-        sub  cx,bx
-        jle  @@wbn
-@@wb3:  push ax
-        mov  bx,cx
-        mov  cx,bx
-        mov  bl,[wpc]
-        call HLINE2
-        pop  ax
-@@wbn:  pop  ax
-        inc  ax
-        cmp  ax,[wpr]
-        jle  @@wbr
+        ; The puff is a lumpy six-sided flake that TURNS as it climbs.
+        ; The old fixed lens drew the same chevron every time, so a
+        ; column read as a row of check-marks instead of smoke.
+        mov  ax,[wph]           ; spin: rises with the phase, offset per
+        mov  cx,3               ; petal so no two flakes turn together
+        imul cx
+        mov  cx,[wpi]
+        push ax
+        mov  ax,cx
+        mov  cx,37
+        imul cx
+        pop  cx
+        add  ax,cx
+        mov  [wprot],ax
+        mov  word ptr [NPOLY],6
+        mov  word ptr [wvk],0
+@@wpg:  mov  ax,[wvk]           ; vertex angle = k*42 + spin
+        mov  cx,42
+        imul cx
+        add  ax,[wprot]
+        and  ax,255
+        mov  [wang],ax
+        mov  ax,[wvk]           ; ragged edge: r*(2..5)/5 per vertex
+        mov  cx,53
+        imul cx
+        add  ax,[wph]
+        and  ax,3
+        add  ax,2
+        imul word ptr [wpr]
+        mov  cx,5
+        idiv cx
+        mov  [wrad],ax
+        mov  ax,[wang]
+        call SINQ
+        imul word ptr [wrad]
+        mov  cx,256
+        idiv cx
+        add  ax,[wpsx]
+        mov  si,[wvk]
+        add  si,si
+        mov  [PX+si],ax
+        mov  ax,[wang]
+        add  ax,64
+        call SINQ
+        imul word ptr [wrad]
+        mov  cx,256
+        idiv cx
+        mov  bx,[wpsy]
+        sub  bx,ax
+        mov  si,[wvk]
+        add  si,si
+        mov  [PY+si],bx
+        inc  word ptr [wvk]
+        cmp  word ptr [wvk],6
+        jb   @@wpg
+        mov  al,[wpc]
+        mov  [COLOR],al
+        call SCANPOLY
 @@wpn:  inc  word ptr [wpi]
-        cmp  word ptr [wpi],4
+        cmp  word ptr [wpi],12  ; twelve petals to a column, not four
         jb   @@wpf
         pop  di
         mov  bx,[ctx]
 @@wsn:  inc  word ptr [wcc]
-        cmp  word ptr [wcc],3
+        cmp  word ptr [wcc],NFACE
         jb   @@wsm
 @@wdn:  inc  word ptr [pidx]
         cmp  word ptr [pidx],4

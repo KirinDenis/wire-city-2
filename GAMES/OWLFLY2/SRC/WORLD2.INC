@@ -259,138 +259,138 @@ CELLHASH:
 ;  corner order: 0=A_bot 1=A_top 2=B_top 3=B_bot ; needs all IZ>=NEARZ
 ; ============================================================================
 WINFACE:
-        ; require all 4 corners in front of near plane
-        mov  ax,[IZ]
-        cmp  ax,NEARZ
-        jl   @@ret
-        mov  ax,[IZ+2]
-        cmp  ax,NEARZ
-        jl   @@ret
-        mov  ax,[IZ+4]
-        cmp  ax,NEARZ
-        jl   @@ret
-        mov  ax,[IZ+6]
-        cmp  ax,NEARZ
-        jl   @@ret
-        ; project 4 corners -> wqx/wqy (pitch them like CLIPNEAR does,
-        ; or the glass detaches from the wall in a dive)
-        call PITCH4
-        mov  ax,[IZ]            ; pitched corners can cross the near plane
-        cmp  ax,NEARZ
-        jl   @@ret
-        mov  ax,[IZ+2]
-        cmp  ax,NEARZ
-        jl   @@ret
-        mov  ax,[IZ+4]
-        cmp  ax,NEARZ
-        jl   @@ret
-        mov  ax,[IZ+6]
-        cmp  ax,NEARZ
-        jl   @@ret
-        mov  word ptr [pk],0
-@@pj:   mov  si,[pk]
-        add  si,si
-        mov  ax,[IX+si]
-        mov  dx,[IY+si]
-        mov  cx,[IZ+si]
-        call PROJPT
-        mov  si,[pk]
-        add  si,si
-        mov  [wqx+si],ax
-        mov  [wqy+si],dx
-        inc  word ptr [pk]
-        mov  ax,[pk]
-        cmp  ax,4
-        jl   @@pj
-        ; grid 3 cols x 5 rows, bilinear in screen space; each window = 3x3 px
-        mov  byte ptr [wr],0
-@@rl:   mov  byte ptr [wc],0
-@@cl:
-        ; u = (2*wc+1)/6  -> work with numerator wfu over 6
-        mov  al,[wc]
+        ; The glass walks the wall in CAMERA space and every pane is
+        ; projected on its own. The old grid was bilinear in SCREEN
+        ; space - affine, which is fine at a distance but slides the
+        ; windows clean off the building when you close in, leaving
+        ; them hanging in the air beside it (user report 2026-07-27).
+        ; A corner behind the near plane no longer kills the whole
+        ; face either: each pane carries its own Z test, so a
+        ; half-clipped wall keeps the glass it can still show.
+        ;
+        ; NO PITCH4 HERE. FACESTROKE ran on this face one call ago and
+        ; its CLIPNEAR already pitched IX/IY/IZ IN PLACE. Pitching again
+        ; turned the glass a second time about the camera axis, so the
+        ; windows slid off the wall exactly when you dived at the city -
+        ; which is the only way you ever approach it (2026-07-27).
+        mov  byte ptr [wc],0
+@@cl:   mov  al,[wc]            ; u = (2c+1)/6 across the wall
         cbw
         add  ax,ax
         inc  ax
         mov  [wfu],ax
-        ; v numerator over 8
-        mov  al,[wr]
+        mov  ax,[IX+4]          ; column top = C1 + (C2-C1)*u/6
+        sub  ax,[IX+2]
+        imul word ptr [wfu]
+        mov  bx,6
+        idiv bx
+        add  ax,[IX+2]
+        mov  [wtcx],ax
+        mov  ax,[IY+4]
+        sub  ax,[IY+2]
+        imul word ptr [wfu]
+        mov  bx,6
+        idiv bx
+        add  ax,[IY+2]
+        mov  [wtcy],ax
+        mov  ax,[IZ+4]
+        sub  ax,[IZ+2]
+        imul word ptr [wfu]
+        mov  bx,6
+        idiv bx
+        add  ax,[IZ+2]
+        mov  [wtcz],ax
+        mov  ax,[IX+6]          ; column bottom = C0 + (C3-C0)*u/6
+        sub  ax,[IX]
+        imul word ptr [wfu]
+        mov  bx,6
+        idiv bx
+        add  ax,[IX]
+        mov  [wbcx],ax
+        mov  ax,[IY+6]
+        sub  ax,[IY]
+        imul word ptr [wfu]
+        mov  bx,6
+        idiv bx
+        add  ax,[IY]
+        mov  [wbcy],ax
+        mov  ax,[IZ+6]
+        sub  ax,[IZ]
+        imul word ptr [wfu]
+        mov  bx,6
+        idiv bx
+        add  ax,[IZ]
+        mov  [wbcz],ax
+        mov  byte ptr [wr],0
+@@rl:   mov  al,[wr]            ; v = (2r+1)/10 down the column
         cbw
         add  ax,ax
         inc  ax
         mov  [wfv],ax
-        ; top point = wq1 + (wq2-wq1)*u/6
-        mov  ax,[wqx+4]
-        sub  ax,[wqx+2]
-        imul word ptr [wfu]
-        mov  bx,6
-        idiv bx
-        add  ax,[wqx+2]
-        mov  [sx0],ax           ; reuse sx0/sy0 = top
-        mov  ax,[wqy+4]
-        sub  ax,[wqy+2]
-        imul word ptr [wfu]
-        mov  bx,6
-        idiv bx
-        add  ax,[wqy+2]
-        mov  [sy0],ax
-        ; bottom point = wq0 + (wq3-wq0)*u/6
-        mov  ax,[wqx+6]
-        sub  ax,[wqx]
-        imul word ptr [wfu]
-        mov  bx,6
-        idiv bx
-        add  ax,[wqx]
-        mov  [sx1],ax           ; reuse sx1/sy1 = bottom
-        mov  ax,[wqy+6]
-        sub  ax,[wqy]
-        imul word ptr [wfu]
-        mov  bx,6
-        idiv bx
-        add  ax,[wqy]
-        mov  [sy1],ax
-        ; px = top + (bottom-top)*v/8
-        mov  ax,[sx1]
-        sub  ax,[sx0]
+        mov  ax,[wbcz]          ; depth first: it gates AND it sizes
+        sub  ax,[wtcz]
         imul word ptr [wfv]
         mov  bx,10
         idiv bx
-        add  ax,[sx0]
+        add  ax,[wtcz]
+        mov  [wgz],ax
+        cmp  ax,NEARZ
+        jl   @@wn               ; this pane is behind us
+        mov  ax,[wbcx]
+        sub  ax,[wtcx]
+        imul word ptr [wfv]
+        mov  bx,10
+        idiv bx
+        add  ax,[wtcx]
+        mov  [wgx],ax
+        mov  ax,[wbcy]
+        sub  ax,[wtcy]
+        imul word ptr [wfv]
+        mov  bx,10
+        idiv bx
+        add  ax,[wtcy]
+        mov  [wgy],ax
+        mov  ax,[wgx]
+        mov  dx,[wgy]
+        mov  cx,[wgz]
+        call PROJPT
         mov  [wpx],ax
-        mov  ax,[sy1]
-        sub  ax,[sy0]
-        imul word ptr [wfv]
-        mov  bx,10
-        idiv bx
-        add  ax,[sy0]
-        mov  [wpy],ax
-        ; bounds
-        mov  ax,[wpx]
-        cmp  ax,2
-        jl   @@wn
-        cmp  ax,317
-        jg   @@wn
-        mov  ax,[wpy]
-        cmp  ax,2
-        jl   @@wn
-        cmp  ax,197
-        jg   @@wn
+        mov  [wpy],dx
         call WLIT2
         jz   @@wn
-        mov  al,3                   ; window block: 3x3 near, 1x1 mid-range
-        cmp  word ptr [minrz],600
-        jle  @@wsz
-        mov  al,1
-@@wsz:  mov  [wbsz],al
+        mov  ax,6160            ; a pane is ~28 units of glass: r=28*220/z
+        cwd
+        idiv word ptr [wgz]
+        or   ax,ax
+        jnz  @@ws1
+        inc  ax                 ; never smaller than one lit pixel
+@@ws1:  cmp  ax,10
+        jle  @@ws2
+        mov  ax,10              ; ...and never a wall of light
+@@ws2:  mov  [wbsz],al
+        sar  ax,1               ; centre the pane on its point
+        mov  bx,[wpx]
+        sub  bx,ax
+        mov  [wpx],bx
+        mov  bx,[wpy]
+        sub  bx,ax
+        mov  [wpy],bx
         mov  byte ptr [wbj],0
 @@wby:  mov  byte ptr [wbi],0
 @@wbx:  mov  al,[wbi]
         cbw
         add  ax,[wpx]
+        js   @@wbs
+        cmp  ax,319
+        jg   @@wbs
         mov  bl,[wbj]
         xor  bh,bh
         add  bx,[wpy]
+        js   @@wbs
+        cmp  bx,199
+        jg   @@wbs
         call PUTPIXEL
-        inc  byte ptr [wbi]
+@@wbs:  inc  byte ptr [wbi]
         mov  al,[wbi]
         cmp  al,[wbsz]
         jl   @@wbx
@@ -398,13 +398,13 @@ WINFACE:
         mov  al,[wbj]
         cmp  al,[wbsz]
         jl   @@wby
-@@wn:   inc  byte ptr [wc]
-        cmp  byte ptr [wc],3
-        jl   @@cl
-        inc  byte ptr [wr]
+@@wn:   inc  byte ptr [wr]
         cmp  byte ptr [wr],5
         jl   @@rl
-@@ret:  ret
+        inc  byte ptr [wc]
+        cmp  byte ptr [wc],3
+        jl   @@cl
+        ret
 
 ; lit? hash from gi,gj,fa,wr,wc -> ZF=1 not lit else COLOR set
 WLIT2:  mov  ax,[gi]

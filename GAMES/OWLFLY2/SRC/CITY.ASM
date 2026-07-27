@@ -140,10 +140,10 @@ SC_ALT  equ 38h                 ; Alt: the Alt-Q exit chord
 SC_X    equ 2Dh                 ; X: radar unzoom (Z zooms - the manual)
 WRKSZ   equ 300                 ; wreck slot size (see the BSS block)
 WCL     equ 292                 ; face colours offset inside a slot
-BSSCLR  equ 2584                ; (BSSEND-WRK)/2 - keep in sync with BSS!
+BSSCLR  equ 2488                ; (BSSEND-WRK)/2 - keep in sync with BSS!
 SNDN    equ 8000h               ; sound ring length (ENGINE\E_SND.INC contract)
-FLBN    equ 48                  ; black box: samples (every 2nd tick, ~5.3 s)
-FLBSZ   equ 576                 ; FLBN * 12 bytes (x,y,z,hdg,pitch,roll)
+FLBN    equ 32                  ; black box: samples (every 2nd tick, ~3.5 s)
+FLBSZ   equ 384                 ; FLBN * 12 bytes (x,y,z,hdg,pitch,roll)
 WFP     equ 4                   ; face records offset inside a slot
 WCO     equ 100                 ; corner offsets offset inside a slot                 ; C: toggle cockpit panel
 
@@ -289,7 +289,7 @@ MAIN:
         jmp  @@s2
 @@se:   mov  [di+2],cx          ; span length
         add  di,4
-        cmp  di,offset PSPAN+1796 ; keep room for the terminator
+        cmp  di,offset PSPAN+1596 ; keep room for the terminator
         jb   @@sc
 @@sd:   mov  word ptr [di],0FFFFh
 @@pn:   pop  es
@@ -536,7 +536,7 @@ KEYS    db 128 dup(0)
 ; EXE's linker knows no such custom: the ground has to be CLAIMED with
 ; real uninitialized bytes, or it settles SKYSEG right on top of it.
 BSS     label byte
-        db  23087 dup(?)        ; the buffers (see the equ map below)
+        db  22695 dup(?)        ; the buffers (see the equ map below)
 HMAP    equ  byte ptr BSS           ; 4096 bytes: world heightmap
 ; (the baked minimap lives at [scrseg]:0 - a far 64K page - not here)
 TRX     equ  word ptr BSS+4096      ; 1681 words: rotated node X
@@ -548,21 +548,21 @@ FONTBUF equ  BSS+15863              ; 246 bytes: font from CITY.DAT (untyped:
 ; NB: the COM image + this BSS + the stack ALL share one 64K segment.
 ; Keep BSSEND + image size under ~63.5K or the black box eats the stack
 ; (that was the grey-screen hang of 2026-07-09).
-PSPAN   equ  BSS+16119              ; 1800 bytes: cockpit blit span table,
+PSPAN   equ  BSS+16119              ; 1600 bytes: cockpit blit span table,
                                     ;  (buffer offset, length) pairs, 0FFFFh
-                                    ;  terminated (449 spans max; the real
-                                    ;  panel uses ~400)
-WRK     equ  BSS+17919              ; wreck pool: 4 slots of WRKSZ bytes
+                                    ;  terminated (399 spans max; the real
+                                    ;  panel uses 382 - mkpanel prints it)
+WRK     equ  BSS+17719              ; wreck pool: 4 slots of WRKSZ bytes
                                     ;  (+0 wtim, +2 wgy, +WFP faces 8x12b,
                                     ;  +WCO corners 8x4x6b, +WCL colours 8b)
-FLB     equ  word ptr BSS+19119     ; black box ring: FLBN samples of
+FLB     equ  word ptr BSS+18919     ; black box ring: FLBN samples of
                                     ;  (camx,camy,camz,heading,pitch,roll)
-TLX     equ  word ptr BSS+19695     ; contrail rings: NPLANE*TLN words each
-TLY     equ  word ptr BSS+20655     ;  (moved out of the image: generated
-TLZ     equ  word ptr BSS+21615     ;  at spawn, never shipped as zeros)
-DSTB    equ  byte ptr BSS+22575     ; ruins bitmap: 1 bit per world cell
+TLX     equ  word ptr BSS+19303     ; contrail rings: NPLANE*TLN words each
+TLY     equ  word ptr BSS+20263     ;  (moved out of the image: generated
+TLZ     equ  word ptr BSS+21223     ;  at spawn, never shipped as zeros)
+DSTB    equ  byte ptr BSS+22183     ; ruins bitmap: 1 bit per world cell
                                     ;  (64x64), set = the building is down
-BSSEND  equ  BSS+23087
+BSSEND  equ  BSS+22695
 
 ; ---- THE STACK GUARD -------------------------------------------------------
 ; The 2026-07-23 lesson: the stack starts at FFFEh and grows DOWN into

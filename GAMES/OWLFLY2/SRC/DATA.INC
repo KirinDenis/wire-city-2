@@ -993,7 +993,6 @@ NPOLY   dw 0
 oc      dw 0
 ci      dw 0
 ni      dw 0
-pk      dw 0
 pminy   dw 0
 pmaxy   dw 0
 
@@ -1035,8 +1034,9 @@ minrz   dw 0
 maxrz   dw 0
 FRX     dw 4 dup(0)             ; footprint corners (camera-space X)
 FRZ     dw 4 dup(0)             ; footprint corners (camera-space Z)
-wqx     dw 4 dup(0)             ; window-face projected corners
-wqy     dw 4 dup(0)
+pk      dw 0                    ; polygon/loop counter (ENGINE E_RAST too)
+; (wqx/wqy retired 2026-07-27: the glass is interpolated in camera
+;  space now, so the projected-corner cache died with the old grid)
 wfu     dw 0
 wfv     dw 0
 ; the glass walks the wall in CAMERA space now (see WINFACE): one
@@ -1050,6 +1050,10 @@ wbcz    dw 0
 wgx     dw 0                    ; the pane itself, camera space
 wgy     dw 0
 wgz     dw 0
+wvk     dw 0                    ; smoke flake: vertex counter
+wang    dw 0                    ; ...its angle
+wrad    dw 0                    ; ...and this vertex's ragged radius
+wprot   dw 0                    ; the flake's own spin
 wfi     dw 0                    ; fire: which tongue of the flame
 wfh     dw 0                    ; fire/glass: the flicker hash
 
