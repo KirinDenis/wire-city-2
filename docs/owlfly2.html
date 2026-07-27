@@ -136,6 +136,50 @@
   // ?t= tags the window title so test rigs can tell two pilots apart
   if (params.get("t")) document.title = "OWL FLY II " + params.get("t");
 
+
+  // ---- key probe (?keylog=1): what does THIS keyboard actually send?
+  // '+' works in native DOSBox but not in js-dos, so the browser must be
+  // handing the emulator a different key than we think. Capture phase,
+  // so we see the event before js-dos does.
+  if (params.get("keylog")) {
+    const box = document.createElement("div");
+    box.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;" +
+      "background:#111;color:#5f7;font:14px monospace;padding:8px;white-space:pre";
+    box.textContent = "KEY PROBE: click the game, then press the key. Waiting...";
+    document.body.appendChild(box);
+    window.addEventListener("keydown", (e) => {
+      const rec = { key: e.key, code: e.code, keyCode: e.keyCode,
+                    shift: e.shiftKey, ctrl: e.ctrlKey, alt: e.altKey };
+      box.textContent = "KEY PROBE  " + JSON.stringify(rec);
+      try { fetch("/key", { method: "POST", body: JSON.stringify(rec) }); } catch (err) {}
+    }, true);
+  }
+
+
+  // ---- the '+' fix: js-dos has KBD_equals/KBD_minus constants but its
+  // DOM-code table has no "Equal"/"Minus" entry at all, so the physical
+  // +/-/= keys are simply never delivered to DOSBox. They work in native
+  // DOSBox and die in the browser - proven with a key probe 2026-07-27.
+  // We hand them to the emulator ourselves, press AND release, so the
+  // throttle ramps while the key is held.
+  const KBDFIX = { Equal: 61, Minus: 45, NumpadAdd: 334, NumpadSubtract: 333 };
+  const kbdDown = {};
+  window.addEventListener("keydown", (e) => {
+    const k = KBDFIX[e.code];
+    if (!k || !window.__ci) return;
+    e.preventDefault();
+    if (kbdDown[e.code]) return;         // ignore auto-repeat: DOS wants one press
+    kbdDown[e.code] = true;
+    window.__ci.sendKeyEvent(k, true);
+  }, true);
+  window.addEventListener("keyup", (e) => {
+    const k = KBDFIX[e.code];
+    if (!k || !window.__ci) return;
+    e.preventDefault();
+    kbdDown[e.code] = false;
+    window.__ci.sendKeyEvent(k, false);
+  }, true);
+
   // Worker mode, minimal options - the one config where real typing
   // provably works (the BBS lesson, 2026-07-19). Networking is wired
   // AFTER boot via networkConnect; no ipx:/room: page options.
