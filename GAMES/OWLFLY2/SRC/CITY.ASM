@@ -300,7 +300,7 @@ MAIN:
         ; (create) or from the chosen sky's ad (join).
         mov  ax,0013h
         int  10h
-        call APPLYPAL
+        call FAR PTR APPLYPALF
         push es                 ; wreck pool etc: BSS is not guaranteed
         mov  ax,cs              ; clean, and the menu era runs long
         mov  es,ax

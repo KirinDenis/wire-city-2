@@ -435,6 +435,15 @@ NETPOLL:
         call RSLOT              ; DI = remote index 0..3 or -1
         cmp  di,-1
         je   @@rearm
+        push si                 ; callsign letter = 'A' + pid mod 26
+        xor  dx,dx              ; (AX still carries the pid here)
+        mov  si,26
+        div  si
+        add  dl,'A'
+        mov  si,di
+        add  si,NETSLT
+        mov  [pltr+si],dl
+        pop  si
         push si
         mov  si,di
         add  si,si

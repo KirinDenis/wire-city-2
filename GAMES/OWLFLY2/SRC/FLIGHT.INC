@@ -387,7 +387,7 @@ INPUT:
         test al,al
         jz   @@nn
         xor  byte ptr [daymode],1
-        call APPLYPAL
+        call FAR PTR APPLYPALF
 @@nn:
         ; --- V key: sound mode - all / effects only / silence (edge) ---
         mov  al,[KEYS+SC_V]
@@ -513,14 +513,19 @@ INPUT:
         mov  ax,-30
 @@tcd:  mov  [tgel],ax
 @@ntc:
-        ; --- M key: right MFD mode, map <-> target camera (edge) ---
+        ; --- M key: centre MFD page, MAP -> SIT -> TGT (edge) ---
         mov  al,[KEYS+SC_M]
         cmp  al,[prevm]
         je   @@nmfd
         mov  [prevm],al
         test al,al
         jz   @@nmfd
-        xor  byte ptr [mfdmode],1
+        mov  al,[mfdmode]
+        inc  al
+        cmp  al,3
+        jb   @@mfs
+        xor  al,al
+@@mfs:  mov  [mfdmode],al
 @@nmfd:
         ; --- Enter: lock the plane inside the aiming ring (edge). The
         ; nearest jet whose screen point is within 24 px of the ring

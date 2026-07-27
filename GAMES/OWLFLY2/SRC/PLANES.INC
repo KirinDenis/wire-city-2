@@ -617,9 +617,13 @@ PLANESDRAW:
         mov  ax,[pdz]
         cmp  ax,NEARZ
         jle  @@nomk
-        cmp  ax,8500            ; the IFF box waits for visual range
+        mov  bx,[pidx]          ; a human is never just a dot: the
+        shr  bx,1               ; nameplate box rides at ANY range
+        cmp  byte ptr [premote+bx],0
+        jne  @@mkgo
+        cmp  ax,8500            ; the AI's IFF box waits for visual range
         jg   @@nomk
-        mov  ax,[pdx]
+@@mkgo: mov  ax,[pdx]
         mov  dx,[pdy]
         mov  cx,[pdz]
         call PPOINT
@@ -768,9 +772,13 @@ PLANESDRAW:
         sub  ax,[dsac]
         mov  [sy1],ax
         call @@mln              ; left -> top
-@@mlbl: ; ---- the callsign under the marker (close targets only) ----
+@@mlbl: ; ---- the label under the marker ----
+        mov  bx,[pidx]          ; humans wear the SA nameplate instead:
+        shr  bx,1               ; callsign letter + range, any distance
+        cmp  byte ptr [premote+bx],0
+        jne  @@hum
         cmp  word ptr [dsac],6
-        jl   @@nomk             ; a distant dot stays a dot
+        jl   @@nomk             ; a distant AI dot stays a dot
         mov  ax,[dsx]
         cmp  ax,20              ; FDRAW has no clipping: stay on screen
         jl   @@nomk
@@ -800,6 +808,50 @@ PLANESDRAW:
         mov  [ftx],ax
         mov  si,[pidx]
         call TYPDRAW
+        jmp  @@nomk
+@@hum:  ; ---- the SA nameplate: white letter + range (K-notation, the
+        ; tapes' own language), riding ABOVE the designator box ----
+        mov  al,[pltr+bx]
+        or   al,al
+        jz   @@nomk
+        mov  [NB],al
+        mov  byte ptr [NB+1],0
+        mov  ax,[dsx]
+        cmp  ax,20              ; FDRAW has no clipping: stay on glass
+        jl   @@nomk
+        cmp  ax,290
+        jg   @@nomk
+        sub  ax,10
+        mov  [ftx],ax
+        mov  ax,[dsy]
+        sub  ax,[dsac]
+        sub  ax,9
+        cmp  ax,2
+        jge  @@huy
+        mov  ax,[dsy]           ; no headroom: tuck the plate below
+        add  ax,[dsac]
+        add  ax,3
+        cmp  ax,185
+        jg   @@nomk
+@@huy:  mov  [fty],ax
+        mov  byte ptr [COLOR],8 ; humans wear white, everywhere
+        mov  si,offset NB
+        call FDRAW
+        add  word ptr [ftx],2   ; a breath between letter and range
+        mov  ax,[pdx]           ; slant range: octagonal max + 3*min/8
+        or   ax,ax
+        jns  @@hu1
+        neg  ax
+@@hu1:  mov  bx,[pdz]
+        cmp  ax,bx
+        jae  @@hu2
+        xchg ax,bx
+@@hu2:  mov  cl,3
+        shr  bx,cl
+        add  ax,bx
+        add  ax,bx
+        add  ax,bx
+        call FNUMK
         jmp  @@nomk
 @@mln:  call CLIPLINE
         jc   @@mlx
@@ -1051,33 +1103,75 @@ TYPDRAW:
 @@r:    ret
 
 ; ---------------------------------------------------------------------------
-;  TGTVIEW - sensor view of the locked target on the green MFD: callsign,
-;  a wireframe of the jet (aspect follows its heading) and the IFF tag.
+;  TGTVIEW - the TGT page on the CENTRE MFD: callsign (worn in the
+;  IFF colour), type, range, target altitude and a wireframe of the
+;  jet (aspect follows its heading). No lock: the page says NO TGT.
 ; ---------------------------------------------------------------------------
 TGTVIEW:
         mov  si,[locki]
-        mov  byte ptr [COLOR],8
-        mov  word ptr [ftx],197
-        mov  word ptr [fty],155
+        cmp  si,0FFFFh
+        jne  @@tgo
+        mov  byte ptr [COLOR],97 ; nothing locked: the page says so
+        mov  word ptr [ftx],148
+        mov  word ptr [fty],168
+        mov  si,offset MSGNOT
+        call FDRAW
+        ret
+@@tgo:  mov  byte ptr [COLOR],19 ; the callsign wears the IFF colour
+        test si,2
+        jnz  @@tgc
+        mov  byte ptr [COLOR],95
+@@tgc:  mov  word ptr [ftx],138
+        mov  word ptr [fty],156
         call CSDRAW
-        mov  word ptr [ftx],197
-        mov  word ptr [fty],163
+        mov  byte ptr [COLOR],8
+        mov  word ptr [ftx],138
+        mov  word ptr [fty],164
         mov  si,[locki]
         call TYPDRAW
-        mov  si,[locki]
-        mov  byte ptr [COLOR],19
-        mov  bx,offset MSGTGT
-        test si,2
-        jnz  @@tg
-        mov  byte ptr [COLOR],95
-        mov  bx,offset MSGFRD
-@@tg:   mov  word ptr [ftx],197
-        mov  word ptr [fty],182
-        push si
-        mov  si,bx
+        mov  byte ptr [COLOR],97 ; range: octagonal max + 3*(min/8)
+        mov  word ptr [ftx],138
+        mov  word ptr [fty],172
+        mov  si,offset MSGRNG
         call FDRAW
-        pop  si
+        mov  si,[locki]
+        mov  ax,[pax+si]
+        sub  ax,[camx]
+        jns  @@tr1
+        neg  ax
+@@tr1:  mov  bx,[paz+si]
+        sub  bx,[camz]
+        jns  @@tr2
+        neg  bx
+@@tr2:  cmp  ax,bx
+        jae  @@tr3
+        xchg ax,bx
+@@tr3:  mov  cl,3
+        shr  bx,cl
+        add  ax,bx              ; max 32767 + 3*4095: read UNSIGNED
+        add  ax,bx
+        add  ax,bx
+        cmp  ax,30000           ; clamp before FNUMK's signed idiv era
+        jbe  @@trc
+        mov  ax,30000
+@@trc:  mov  word ptr [ftx],154
+        mov  byte ptr [COLOR],8
+        call FNUMK
+        mov  byte ptr [COLOR],97 ; the target's altitude
+        mov  word ptr [ftx],138
+        mov  word ptr [fty],180
+        mov  si,offset MSGALT
+        call FDRAW
+        mov  word ptr [ftx],156
+        mov  byte ptr [COLOR],8
+        mov  si,[locki]
+        mov  ax,[pay+si]
+        or   ax,ax
+        jns  @@tr4
+        xor  ax,ax
+@@tr4:  call FNUMK
         ; wireframe: rotate the model by its aspect, project small
+        mov  si,[locki]         ; FNUMK's font walk ate SI
         mov  bx,si
         shr  bx,1
         mov  al,[ptype+bx]
@@ -1125,11 +1219,11 @@ TGTVIEW:
         idiv bx
         add  ax,75
         mov  [dsac],ax
-        mov  ax,[dsx]           ; sx = 217 + vx*64/vz
+        mov  ax,[dsx]           ; sx = 160 + vx*64/vz (centre MFD)
         mov  bx,64
         imul bx
         idiv word ptr [dsac]
-        add  ax,217
+        add  ax,160
         mov  [PVX+di],ax
         mov  bx,[mvb]
         mov  ax,[bx+si+2]       ; sy = 170 - vy*64/vz

@@ -63,9 +63,20 @@ The first build is byte-identical to OWL FLY (`FLYOWL2.COM` and
    `NETHOST.BAT` starts a sky (ipxnet server, UDP 213), `NETJOIN.BAT
    <ip>` joins one; two windows on one machine is the dogfight lab.
    Proven: shared world (identical minimaps), mutual sightings.
-   Next: the ViewOwl /ipx relay for internet skies, Claude in the
-   tower. NB the ECB layout lesson lives in EXAMPLES\BBS.ASM and the
-   project memory - link dword first, or the wire eats you
+   Browser skies ride the same IPX through WebSocket into the relay
+   (docs/owlfly2.html); native DOSBoxes keep `ipxnet`. Next: in-game
+   chat on the same wire, real callsigns, Claude in the tower. NB the
+   ECB layout lesson lives in EXAMPLES\BBS.ASM and the project
+   memory - link dword first, or the wire eats you
+7. **done 2026-07-27** — the SA / cockpit redesign. The scope speaks
+   NATO shapes (friend = square, hostile = diamond, humans white with
+   a callsign letter, a velocity stub on every blip); the ADI died
+   (it duplicated the HUD) and the centre MFD pages through
+   MAP (north-up island, front line, humans as letter + altitude
+   digit) -> SIT (close-zoom scope) -> TGT (callsign in IFF colour,
+   type, RNG/ALT, live wireframe) on the M key; the right MFD is
+   pure status (score, GUN, MSL, DAM); any human in view wears a
+   white nameplate - letter + range - at any distance
 
 ## The front door (2026-07-24)
 
@@ -93,4 +104,6 @@ Raid it for parts; do not resurrect it whole.
 
     MAKE.BAT            (or MAKE.BAT OWLFLY2 from the repo root)
 
-Output: `INSTALL\FLYOWL2.EXE` + `INSTALL\CITY.DAT` + `ENGINE.RAW`.
+Output: `INSTALL\FLYOWL2.EXE` + `INSTALL\CITY.DAT` (no ENGINE.RAW:
+the turbine is generated at startup - GENBED). Web bundle:
+`docs\pack.ps1 -Game OWLFLY2`; deploy with `PUBLISH.BAT OWLFLY2`.

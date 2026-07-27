@@ -422,14 +422,22 @@ PANELBMP:
         add  si,4
         jmp  @@sp
 @@spd:
-        cmp  byte ptr [mfdmode],0
-        je   @@mmap
-        cmp  word ptr [locki],0FFFFh
-        jne  @@tcam
-@@mmap: call MINIMAP2           ; half-scale map on the green MFD
-        jmp  @@mfdd
-@@tcam: call TGTVIEW            ; sensor view of the locked target
-@@mfdd:
+        ; the SA redesign: the ADI is gone - the HUD ladder already
+        ; said everything it said. The CENTRE MFD pages through
+        ; MAP / SIT / TGT on the M key (the F-15 SE II swapped its
+        ; MFD the same way); the RIGHT one is pure status.
+        mov  al,[mfdmode]
+        cmp  al,1
+        je   @@psit
+        cmp  al,2
+        je   @@ptgt
+        call FAR PTR MINIMAP2F  ; north-up MAP on the centre MFD
+        call MAPHUM             ; the humans on it: letter + altitude
+        jmp  @@pgd
+@@psit: call SITPG              ; heading-up close-zoom labeled radar
+        jmp  @@pgd
+@@ptgt: call TGTVIEW            ; the locked target's data page
+@@pgd:  call STATPG             ; the right MFD: score and arms
         ; ---- title strip: name, mission time, altitude ----
         mov  byte ptr [COLOR],8
         mov  word ptr [ftx],100
@@ -567,10 +575,23 @@ PANELBMP:
         ; -- the grid first, under everything (far code: the scope's
         ; grey rose lives in the sky segment, the stack guard's rent) --
         call FAR PTR RGRIDF
-        ; -- own ship --
-        mov  ax,172
+        mov  word ptr [rbcx],87 ; the scope frame: centre + live zoom
+        mov  word ptr [rbcy],171
+        mov  al,[rzsh]
+        mov  [rbsh],al
+        call RBLIPS
+        jmp  RDOUT              ; the readouts, past the blip engine
+
+; ============================================================================
+;  RBLIPS - the blip engine: own-ship tick, traffic blips (allegiance
+;  shape + velocity stub + callsign letter), missile sparks - on ANY
+;  heading-up scope. in: [rbcx]/[rbcy] = scope centre, [rbsh] = zoom
+;  shift. ES=bufseg. Serves both the radar and the SIT page.
+; ============================================================================
+RBLIPS: mov  ax,[rbcy]          ; own ship: the 2 px tick
+        inc  ax
         call ROW320
-        add  di,87
+        add  di,[rbcx]
         mov  al,8
         mov  es:[di],al
         mov  es:[di-320],al
@@ -588,7 +609,7 @@ PANELBMP:
         push si
         call ROTXZ              ; rcx = right of the nose, rcz = ahead
         pop  si
-        mov  cl,[rzsh]          ; the zoom, then a PIXEL-space clip
+        mov  cl,[rbsh]          ; the zoom, then a PIXEL-space clip
         mov  ax,[rcx]
         sar  ax,cl
         cmp  ax,14
@@ -601,72 +622,107 @@ PANELBMP:
         jg   @@rn
         cmp  bx,-14
         jl   @@rn
-        add  ax,87
+        add  ax,[rbcx]
         mov  [dsx],ax           ; blip column
-        mov  ax,171
+        mov  ax,[rbcy]
         sub  ax,bx              ; ahead = up the screen
+        mov  [dsy],ax           ; keep the row: the letter needs it
         call ROW320
         add  di,[dsx]
         mov  al,95              ; friendly: green
         test si,2
         jz   @@fr
         mov  al,96              ; hostile: yellow
-@@fr:   ; blip shape by type: fighter 2x1, bomber a fat 4x1 bar, the
-        ; radar plane BLINKS (its antenna sweeps), transport a 2x2
-        ; block, the tanker a vertical 3-stack - and a HUMAN pilot
-        ; overrides them all in white: people first
-        push bx
+@@fr:   mov  bx,si
+        shr  bx,1
+        cmp  byte ptr [premote+bx],0
+        je   @@iff
+        mov  al,8               ; a human wears white - people first
+@@iff:  xor  ah,ah
+        mov  [dsac],ax          ; the colour must survive SINQ below
+        ; allegiance is the SHAPE now (the score legend's language):
+        ; friends fly squares, hostiles diamonds. Type shapes retired -
+        ; the lock ring names the type in words anyway.
+        test si,2
+        jnz  @@shd
+        mov  es:[di-321],al     ; friend: 3x3 outline square
+        mov  es:[di-320],al
+        mov  es:[di-319],al
+        mov  es:[di-1],al
+        mov  es:[di+1],al
+        mov  es:[di+319],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+        jmp  @@vst
+@@shd:  mov  es:[di-320],al     ; hostile: the four diamond points
+        mov  es:[di-1],al
+        mov  es:[di+1],al
+        mov  es:[di+320],al
+@@vst:  ; -- velocity stub: two pixels out along the blip's own nose --
+        mov  ax,[pah+si]
+        sub  ax,[heading]       ; the scope is heading-up
+        and  ax,255
+        push si                 ; SINQ eats SI
+        push ax
+        call SINQ
+        mov  [wdx],ax           ; screen RIGHT per unit = sin(rel)
+        pop  ax
+        add  ax,64
+        call SINQ
+        mov  [wdz],ax           ; screen UP per unit = cos(rel)
+        pop  si
+        mov  word ptr [tmpi],2  ; pixels 2 and 3 out (clear of the shape)
+@@vsp:  mov  ax,[tmpi]
+        imul word ptr [wdx]
+        add  ax,128             ; round, not truncate: a diagonal stub
+        mov  cl,8               ; must actually leave the axis
+        sar  ax,cl
+        mov  bx,ax              ; px right
+        mov  ax,[tmpi]
+        imul word ptr [wdz]
+        add  ax,128
+        sar  ax,cl
+        mov  cx,ax              ; px up
+        mov  ax,320
+        imul cx
+        sub  bx,ax              ; bx = dx - 320*dy
+        mov  ax,[dsac]
+        mov  es:[bx+di],al
+        inc  word ptr [tmpi]
+        cmp  word ptr [tmpi],4
+        jb   @@vsp
+        ; -- altitude tick, pushed out past the shape ring --
+        mov  bx,[pay+si]        ; above = higher, below = lower than us
+        sub  bx,[camy]          ; (dead band +-200)
+        mov  ax,[dsac]
+        cmp  bx,200
+        jle  @@ral
+        mov  es:[di-640],al
+        jmp  @@ltr
+@@ral:  cmp  bx,-200
+        jge  @@ltr
+        mov  es:[di+640],al
+@@ltr:  ; -- the callsign letter beside a human blip --
         mov  bx,si
         shr  bx,1
         cmp  byte ptr [premote+bx],0
-        je   @@shai
-        mov  al,8               ; the white block of a real pilot
-        mov  es:[di],al
-        mov  es:[di+1],al
-        mov  es:[di+320],al
-        mov  es:[di+321],al
-        jmp  @@shd
-@@shai: mov  bl,[ptype+bx]
-        cmp  bl,1
-        je   @@shb
-        cmp  bl,2
-        je   @@shr
-        cmp  bl,3
-        je   @@sht
-        cmp  bl,4
-        je   @@shk
-        mov  es:[di],al         ; fighter: the classic 2x1
-        mov  es:[di+1],al
-        jmp  @@shd
-@@shb:  mov  es:[di-1],al       ; bomber: the fat bar
-        mov  es:[di],al
-        mov  es:[di+1],al
-        mov  es:[di+2],al
-        jmp  @@shd
-@@shr:  mov  bx,[lasttk]        ; radar plane: the antenna sweeps
-        test bx,2
-        jnz  @@shd
-        mov  es:[di],al
-        mov  es:[di+1],al
-        jmp  @@shd
-@@sht:  mov  es:[di],al         ; transport: the 2x2 block
-        mov  es:[di+1],al
-        mov  es:[di+320],al
-        mov  es:[di+321],al
-        jmp  @@shd
-@@shk:  mov  es:[di],al         ; tanker: the vertical stack
-        mov  es:[di-320],al
-        mov  es:[di+320],al
-@@shd:  pop  bx
-        mov  bx,[pay+si]        ; altitude tick: above = higher, below =
-        sub  bx,[camy]          ; lower than us (dead band +-200)
-        cmp  bx,200
-        jle  @@ral
-        mov  es:[di-320],al
-        jmp  @@rn
-@@ral:  cmp  bx,-200
-        jge  @@rn
-        mov  es:[di+320],al
+        je   @@rn
+        mov  al,[pltr+bx]
+        or   al,al
+        jz   @@rn
+        mov  [NB],al            ; a one-letter nameplate, white
+        mov  byte ptr [NB+1],0
+        mov  ax,[dsx]
+        add  ax,3
+        mov  [ftx],ax
+        mov  ax,[dsy]
+        sub  ax,2
+        mov  [fty],ax
+        mov  byte ptr [COLOR],8
+        push si
+        mov  si,offset NB
+        call FDRAW
+        pop  si
 @@rn:   add  si,2
         cmp  si,NPLANE*2
         jb   @@rdr
@@ -697,10 +753,10 @@ PANELBMP:
 @@rmn:  inc  si
         cmp  si,NAMSL
         jb   @@rml
-        jmp  @@rsc
+        ret                     ; the blip engine is done
 @@rblip:                        ; plot one amber spark from wdx/wdz
         call ROTXZ
-        mov  cl,[rzsh]          ; sparks ride the same zoom
+        mov  cl,[rbsh]          ; sparks ride the same zoom
         mov  ax,[rcx]
         sar  ax,cl
         cmp  ax,14
@@ -713,105 +769,18 @@ PANELBMP:
         jg   @@rbx
         cmp  bx,-14
         jl   @@rbx
-        add  ax,87
+        add  ax,[rbcx]
         mov  [dsx],ax
-        mov  ax,171
+        mov  ax,[rbcy]
         sub  ax,bx
         call ROW320
         add  di,[dsx]
         mov  al,97
         mov  es:[di],al
 @@rbx:  ret
-@@rsc:  ; scoreboard on the scope: kills by each team, tagged with the
-        ; team's own marker shape (square = yours, diamond = theirs)
-        mov  ax,156             ; tiny green square by the green count
-        call ROW320
-        add  di,47
-        mov  al,95
-        mov  es:[di],al
-        mov  es:[di+1],al
-        mov  es:[di+2],al
-        mov  es:[di+320],al
-        mov  es:[di+322],al
-        mov  es:[di+640],al
-        mov  es:[di+641],al
-        mov  es:[di+642],al
-        mov  ax,156             ; tiny yellow diamond by the yellow one
-        call ROW320
-        add  di,104
-        mov  al,96
-        mov  es:[di+1],al
-        mov  es:[di+320],al
-        mov  es:[di+322],al
-        mov  es:[di+641],al
-        mov  byte ptr [COLOR],95
-        mov  word ptr [ftx],53
-        mov  word ptr [fty],155
-        mov  ax,[tscf]
-        call FNUM
-        mov  byte ptr [COLOR],96
-        mov  word ptr [ftx],110
-        mov  word ptr [fty],155
-        mov  ax,[tsch]
-        call FNUM
-        mov  byte ptr [COLOR],8
-        mov  word ptr [ftx],106
-        mov  word ptr [fty],182
-        mov  ax,[psc]
-        call FNUM
-        ; damage pips, red, top centre: one per hit taken, five = down
-        xor  si,si
-@@dmp:  mov  ax,si
-        cmp  al,[pdam]
-        jae  @@dmn
-        mov  ax,155
-        call ROW320
-        add  di,78
-        mov  ax,si
-        add  ax,ax
-        add  ax,ax              ; k*4
-        add  di,ax
-        mov  al,19
-        mov  es:[di],al
-        mov  es:[di+1],al
-        mov  es:[di+2],al
-        mov  es:[di+320],al
-        mov  es:[di+321],al
-        mov  es:[di+322],al
-@@dmn:  inc  si
-        cmp  si,5
-        jb   @@dmp
-        mov  byte ptr [COLOR],97 ; cannon rounds, amber
-        mov  word ptr [ftx],92
-        mov  word ptr [fty],182
-        mov  ax,[gunam]
-        call FNUM
-        ; missile pips along the radar's bottom edge
-        xor  si,si
-@@amo:  mov  ax,si
-        cmp  al,[pammo]
-        jae  @@amn
-        mov  ax,184
-        call ROW320
-        add  di,55
-        mov  ax,si
-        add  ax,ax
-        add  ax,ax
-        add  ax,ax              ; k*8
-        add  di,ax
-        mov  al,97
-        mov  es:[di],al
-        mov  es:[di+1],al
-        mov  es:[di+2],al
-        mov  es:[di+3],al
-        mov  es:[di+320],al
-        mov  es:[di+321],al
-        mov  es:[di+322],al
-        mov  es:[di+323],al
-@@amn:  inc  si
-        cmp  si,4
-        jb   @@amo
-        ; ---- readouts right of the map: S/T/F/H rows ----
+; (the scope's furniture - score, pips, rounds - moved to the right
+;  MFD: STATPG. Blips fly alone on the glass now.)
+RDOUT:  ; ---- readouts right of the map: S/T/F/H rows ----
         mov  byte ptr [COLOR],97
         mov  word ptr [ftx],242
         mov  word ptr [fty],157
@@ -866,101 +835,198 @@ PANELBMP:
         mov  word ptr [ftx],256
         mov  ax,[heading]
         call FNUM
-        ; ---- compact ADI on the blue MFD: roll-rotated pitch ladder ----
-        ; rung k = -2..2 at 10-degree steps; offset = (pitch-k*7)/2, +-13.
-        mov  word ptr [tmpi],-2
-@@cl:   mov  ax,[tmpi]
-        mov  bx,7
-        imul bx
-        mov  bx,[pitch]
+        ret
+        ; (the compact ADI died here 2026-07-27: it duplicated the HUD
+        ; ladder and horizon exactly, and the centre MFD carries the
+        ; map now - the F-15 SE II swapped its MFD the same way)
+
+; ============================================================================
+;  MAPHUM - the humans on the centre map: callsign letter + altitude
+;  digit (thousands) at their node, white, over the half-scale map at
+;  (144,155). ES=bufseg, DS=CS.
+; ============================================================================
+MAPHUM: xor  si,si
+@@mh:   mov  bx,si
+        shr  bx,1
+        cmp  byte ptr [premote+bx],0
+        je   @@mhn
+        cmp  byte ptr [pst+bx],0
+        jne  @@mhn
+        mov  al,[pltr+bx]
+        or   al,al
+        jz   @@mhn
+        mov  [NB],al
+        mov  ax,[pay+si]        ; the altitude digit, thousands
+        or   ax,ax
+        jns  @@mhp
+        xor  ax,ax
+@@mhp:  xor  dx,dx
+        mov  bx,1000
+        div  bx
+        cmp  ax,9
+        jbe  @@mhd
+        mov  ax,9
+@@mhd:  add  al,'0'
+        mov  [NB+1],al
+        mov  byte ptr [NB+2],0
+        mov  ax,[pax+si]        ; node col/2 on the half-scale map
+        add  ax,BIAS
+        mov  cl,10
+        shr  ax,cl
+        and  ax,63
+        shr  ax,1
+        add  ax,144-1
+        mov  [ftx],ax
+        mov  ax,[paz+si]
+        add  ax,BIAS
+        mov  cl,10
+        shr  ax,cl
+        and  ax,63
+        mov  bx,63
         sub  bx,ax
-        mov  ax,bx
-        cwd
-        mov  bx,2
-        idiv bx
-        cmp  ax,13
-        jg   @@cn
-        cmp  ax,-13
-        jl   @@cn
-        mov  [dsx],ax
-        mov  ax,[rsin]          ; rung centre = C + perp*offset
-        imul word ptr [dsx]
-        mov  bx,256
-        idiv bx
-        neg  ax
-        add  ax,160
-        mov  [dsy],ax
-        mov  ax,[rcos]
-        imul word ptr [dsx]
-        mov  bx,256
-        idiv bx
-        add  ax,171
-        mov  [dsac],ax
-        mov  bx,6               ; short rung...
-        cmp  word ptr [tmpi],0
-        jne  @@cln
-        mov  bx,[rsin]          ; ...horizon: 20 - |rsin|/16 stays on
-        test bx,bx              ; the glass at any bank angle
-        jns  @@cp
-        neg  bx
-@@cp:   mov  cl,4
-        shr  bx,cl
-        neg  bx
-        add  bx,20
-@@cln:  mov  ax,[rcos]
-        imul bx
-        push bx
-        mov  bx,256
-        idiv bx
-        pop  bx
-        mov  cx,ax              ; dx = rcos*len/256
-        mov  ax,[rsin]
-        imul bx
-        mov  bx,256
-        idiv bx                 ; dy = rsin*len/256
-        mov  bx,[dsy]
-        sub  bx,cx
-        mov  [sx0],bx
-        mov  bx,[dsac]
-        sub  bx,ax
-        mov  [sy0],bx
-        mov  bx,[dsy]
-        add  bx,cx
-        mov  [sx1],bx
-        mov  bx,[dsac]
-        add  bx,ax
-        mov  [sy1],bx
-        mov  bl,8               ; horizon: white
-        cmp  word ptr [tmpi],0
-        je   @@cc
-        mov  bl,27              ; sky rungs: light blue
-        jg   @@cc
-        mov  bl,28              ; ground rungs: dark earth
-@@cc:   mov  [COLOR],bl
-        call CLIPLINE
-        jc   @@cn
-        call LINE
-@@cn:   inc  word ptr [tmpi]
-        cmp  word ptr [tmpi],2
-        jle  @@cl
-        ; fixed red wings in the middle of the glass
-        mov  ax,171
+        shr  bx,1
+        add  bx,155-3           ; centre the glyph rows on the node...
+        cmp  bx,155
+        jge  @@mhy
+        mov  bx,155             ; ...but keep it inside the MFD glass
+@@mhy:  cmp  bx,181
+        jle  @@mhz
+        mov  bx,181
+@@mhz:  mov  [fty],bx
+        mov  byte ptr [COLOR],8
+        push si
+        mov  si,offset NB
+        call FDRAW
+        pop  si
+@@mhn:  add  si,2
+        cmp  si,NPLANE*2
+        jb   @@mh
+        ret
+
+; ============================================================================
+;  STATPG - the right (green) MFD as pure status: the war score row,
+;  gun rounds, missile rails, damage pips - everything the scope used
+;  to carry. ES=bufseg, DS=CS.
+; ============================================================================
+STATPG: mov  ax,156             ; green square: kills by our team
         call ROW320
-        add  di,160
+        add  di,197
+        mov  al,95
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+2],al
+        mov  es:[di+320],al
+        mov  es:[di+322],al
+        mov  es:[di+640],al
+        mov  es:[di+641],al
+        mov  es:[di+642],al
+        mov  ax,156             ; yellow diamond: kills by theirs
+        call ROW320
+        add  di,234
+        mov  al,96
+        mov  es:[di+1],al
+        mov  es:[di+320],al
+        mov  es:[di+322],al
+        mov  es:[di+641],al
+        mov  byte ptr [COLOR],95
+        mov  word ptr [ftx],203
+        mov  word ptr [fty],156
+        mov  ax,[tscf]
+        call FNUM
+        mov  byte ptr [COLOR],8 ; own kills, centre, white
+        mov  word ptr [ftx],216
+        mov  word ptr [fty],156
+        mov  ax,[psc]
+        call FNUM
+        mov  byte ptr [COLOR],96
+        mov  word ptr [ftx],226
+        mov  word ptr [fty],156
+        mov  ax,[tsch]
+        call FNUM
+        mov  byte ptr [COLOR],97 ; cannon rounds
+        mov  word ptr [ftx],197
+        mov  word ptr [fty],165
+        mov  si,offset MSGGUN
+        call FDRAW
+        mov  byte ptr [COLOR],8
+        mov  word ptr [ftx],215
+        mov  ax,[gunam]
+        call FNUM
+        mov  byte ptr [COLOR],97 ; missile rails: label + a pip each
+        mov  word ptr [ftx],197
+        mov  word ptr [fty],174
+        mov  si,offset MSGMSL
+        call FDRAW
+        xor  si,si
+@@amo:  mov  ax,si
+        cmp  al,[pammo]
+        jae  @@amn
+        mov  ax,175
+        call ROW320
+        add  di,215
+        mov  ax,si
+        add  ax,ax
+        mov  bx,ax
+        add  ax,ax
+        add  ax,bx              ; k*6
+        add  di,ax
+        mov  al,97
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+2],al
+        mov  es:[di+3],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+        mov  es:[di+322],al
+        mov  es:[di+323],al
+@@amn:  inc  si
+        cmp  si,4
+        jb   @@amo
+        mov  byte ptr [COLOR],97 ; damage: label + red pips
+        mov  word ptr [ftx],197
+        mov  word ptr [fty],182
+        mov  si,offset MSGDAM
+        call FDRAW
+        xor  si,si
+@@dmp:  mov  ax,si
+        cmp  al,[pdam]
+        jae  @@dmn
+        mov  ax,183
+        call ROW320
+        add  di,215
+        mov  ax,si
+        add  ax,ax
+        mov  bx,ax
+        add  ax,ax
+        add  ax,bx              ; k*6
+        add  di,ax
         mov  al,19
-        mov  es:[di],al         ; nose dot
-        push di
-        sub  di,8
-        mov  cx,4
-@@wl:   mov  es:[di],al
-        inc  di
-        loop @@wl
-        pop  di
-        add  di,5
-        mov  cx,4
-@@wr:   mov  es:[di],al
-        inc  di
-        loop @@wr
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+2],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+        mov  es:[di+322],al
+@@dmn:  inc  si
+        cmp  si,5
+        jb   @@dmp
+        ret
+
+; ============================================================================
+;  SITPG - the SIT page: the same blip engine on the centre MFD at a
+;  fixed close zoom (1 px = 256 units), heading-up - Falcon's SAD
+;  idea on 1990 hardware. ES=bufseg, DS=CS.
+; ============================================================================
+SITPG:  mov  word ptr [rbcx],160
+        mov  word ptr [rbcy],171
+        mov  al,8               ; fixed close zoom
+        mov  [rbsh],al
+        call RBLIPS
+        mov  byte ptr [COLOR],97 ; the page name, amber, top left
+        mov  word ptr [ftx],138
+        mov  word ptr [fty],156
+        mov  si,offset MSGSIT
+        call FDRAW
         ret
 
 ; ============================================================================

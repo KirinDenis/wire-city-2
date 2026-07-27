@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Obj2Inc")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9ac2ab7dddf096fc433bf9fd86522c2e0bc34ee6")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e4ce429b7f9dc5ff7a560190472ddf7be0a7ea60")]
 [assembly: System.Reflection.AssemblyProductAttribute("Obj2Inc")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Obj2Inc")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

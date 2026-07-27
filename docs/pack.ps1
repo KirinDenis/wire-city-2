@@ -1,4 +1,4 @@
-# pack.ps1 -Game <OWLFLY|WIRECITY|TRAINER> - build a versioned js-dos bundle.
+# pack.ps1 -Game <OWLFLY|OWLFLY2|WIRECITY|TRAINER> - build a versioned js-dos bundle.
 #
 # js-dos caches extracted bundles in IndexedDB keyed by the bundle PATH,
 # so every release gets a NEW FILENAME: <prefix>_vN.jsdos. This script
@@ -16,6 +16,22 @@ $root = Split-Path -Parent $PSScriptRoot
 
 # ---- the per-game map: add a game = add an entry --------------------------
 $MAP = @{
+  OWLFLY2 = @{
+    prefix = "owlfly2"
+    page   = Join-Path $root "docs\owlfly2.html"
+    detect = "owlfly2_v(\d+)\.jsdos"
+    files  = @(
+      @{ p = "GAMES\OWLFLY2\INSTALL\FLYOWL2.EXE"; n = "FLYOWL2.EXE" },
+      @{ p = "GAMES\OWLFLY2\INSTALL\CITY.DAT";    n = "CITY.DAT" }
+      # no ENGINE.RAW: OWL FLY II generates its turbine (GENBED)
+    )
+    strings = @(
+      # the BBS lesson (2026-07-19): minimal conf, and [ipx] ipx=true is
+      # what lets the page's networkConnect reach the game's INT 7Ah
+      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[ipx]`nipx=true`n[autoexec]`necho off`nmount c .`nc:`nFLYOWL2`n" },
+      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[ipx]`nipx=true`n[autoexec]`necho off`nmount c .`nc:`nFLYOWL2`n" }
+    )
+  }
   OWLFLY = @{
     prefix = "owlfly"
     page   = Join-Path $root "docs\owlfly.html"

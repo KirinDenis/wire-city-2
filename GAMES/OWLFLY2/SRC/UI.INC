@@ -809,6 +809,247 @@ UNUM2:  xor  ah,ah
         pop  si
         ret
 
+; ============================================================================
+; ============================================================================
+;  APPLYPALF - the palette loader, far (evicted from the main segment
+;  2026-07-27 with both tables: 648 bytes of once-at-startup DAC data
+;  paid the stack guard's rent for the SA pages). Reads [daymode],
+;  streams the matching table to the DAC. Trashes AX,CX,DX,SI.
+; ============================================================================
+PALDAY  db 36,37,40          ;0  wall N/S (light grey)
+        db 30,32,36          ;1  far stroke (fades to haze)
+        db 22,24,28          ;2  mid stroke
+        db 12,13,16          ;3  near stroke (dark on light)
+        db 16,22,32          ;4  window (dark glass)
+        db 24,28,38          ;5  window (lighter glass)
+        db 18,32,16          ;6  ground grid
+        db 18,32,58          ;7  sky top (blue)
+        db 63,63,63          ;8  HUD / white
+        db 34,46,62          ;9  sky band (lighter near horizon)
+        db 22,38,18          ;10 ground (green)
+        db 32,46,28          ;11 field / ground band near horizon
+        db 50,56,63          ;12 haze at the horizon (near white)
+        db 26,17,10          ;13 mountains/rock (dark brown)
+        db 16,32,54          ;14 water
+        db 12,27,10          ;15 forest
+        db 28,29,33          ;16 wall E/W (shaded side)
+        db 44,45,48          ;17 roof (sun-lit)
+        db 33,24,14          ;18 minimap city (brown)
+        db 63, 6, 6          ;19 red (map course tick)
+        db 30,34,48          ;20 blue wall lit
+        db 22,26,40          ;21 blue wall shade
+        db 46,28,22          ;22 red wall lit
+        db 34,20,16          ;23 red wall shade
+        db 52,52,54          ;24 white wall lit
+        db 40,40,44          ;25 white wall shade
+        db 24,38,60          ;26 sky step 2 (F-15 gradient)
+        db 42,51,63          ;27 sky step 4, next to the haze
+        db 14,26,12          ;28 dark far ground at the horizon
+        db 10,10,12          ;29 cockpit panel (dark)
+        db 20,20,23          ;30 cockpit panel trim
+        include PALPNL.INC   ; 31..93 photo cockpit (generated)
+        db 63,34, 6          ;94 engine glow (GAMELOOP cycles this DAC slot)
+        db 16,63,16          ;95 IFF friendly (bright green)
+        db 63,63, 8          ;96 IFF hostile (bright yellow)
+        db 63,44, 6          ;97 UI amber (index 5 is glass by day)
+        db 12,22,42          ;98 NEWTON sky ramp: zenith deep...
+        db 15,26,48          ;99
+        db 18,30,53          ;100
+        db 22,35,58          ;101
+        db 27,41,62          ;102 ...the haze over the horizon
+        db 46,50,60          ;103 cloud ramp: base...
+        db 58,59,63          ;104 ...sunlit top
+        db 34,36,40          ;105 HUD dim: the pitch ladder - darker
+                             ;    than the clouds, lighter than the
+                             ;    ground (white vanishes in cumulus)
+        db 30,58,63          ;106 HUD cyan: the IVV caret
+        db  0, 0, 0          ;107 true black (the front door's night)
+
+PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
+        db 12,18,40          ;1  far stroke
+        db 22,33,58          ;2  mid stroke
+        db 40,55,63          ;3  near stroke (bright on dark)
+        db 50,60,63          ;4  window (lit cyan)
+        db 63,48,20          ;5  window (lit amber)
+        db 10,16,34          ;6  ground grid
+        db  6, 9,22          ;7  sky top
+        db 60,63,63          ;8  HUD / white
+        db 12,17,40          ;9  sky band (city glow)
+        db  4, 6,16          ;10 ground
+        db  7,10,24          ;11 field / ground band
+        db 18,24,48          ;12 haze (glow at horizon)
+        db 10, 7, 4          ;13 mountains/rock (dark brown)
+        db  8,14,38          ;14 water
+        db  3, 7,13          ;15 forest
+        db  2, 3, 9          ;16 wall E/W (same as body at night)
+        db  3, 4,11          ;17 roof
+        db 14,10, 6          ;18 minimap city (brown)
+        db 52, 5, 5          ;19 red (map course tick)
+        db  4, 5,14          ;20 blue wall lit
+        db  3, 4,11          ;21 blue wall shade
+        db  8, 4, 5          ;22 red wall lit
+        db  6, 3, 4          ;23 red wall shade
+        db  5, 6,12          ;24 white wall lit
+        db  4, 4, 9          ;25 white wall shade
+        db  8,12,30          ;26 sky step 2
+        db 14,19,44          ;27 sky step 4, next to the haze
+        db  2, 4,10          ;28 dark far ground at the horizon
+        db  6, 6, 8          ;29 cockpit panel (dark)
+        db 12,12,15          ;30 cockpit panel trim
+        include PALPNL.INC   ; 31..93 photo cockpit (same lamps at night)
+        db 63,34, 6          ;94 engine glow (GAMELOOP cycles this DAC slot)
+        db 16,63,16          ;95 IFF friendly (bright green)
+        db 63,63, 8          ;96 IFF hostile (bright yellow)
+        db 44,30, 4          ;97 UI amber (dimmed for the night)
+        db  3, 5,14          ;98 NEWTON sky ramp by night: zenith...
+        db  4, 7,18          ;99
+        db  6, 9,23          ;100
+        db  8,12,28          ;101
+        db 10,15,33          ;102 ...the city-glow horizon
+        db 14,17,26          ;103 cloud in moonlight: base...
+        db 19,22,32          ;104 ...lit top
+        db 20,22,27          ;105 HUD dim ladder, night-lit
+        db 16,38,48          ;106 HUD cyan IVV, dimmed for the night
+        db  0, 0, 0          ;107 true black
+
+APPLYPALF PROC FAR
+        push ds
+        mov  al,[daymode]       ; read the DS flag before leaving home
+        mov  si,offset PALDAY
+        or   al,al
+        jnz  @@go
+        mov  si,offset PALNITE
+@@go:   mov  ax,cs
+        mov  ds,ax              ; the tables live HERE now
+        mov  dx,3C8h
+        xor  al,al
+        out  dx,al
+        mov  dx,3C9h
+        mov  cx,NPALC*3
+        cld
+@@pl:   lodsb
+        out  dx,al
+        loop @@pl
+        pop  ds
+        ret
+APPLYPALF ENDP
+
+; ============================================================================
+;  MINIMAP2F - the half-scale baked map (32x32) on the MFD, evicted
+;  from the main segment 2026-07-27: the stack guard fired when the
+;  radar grew its SA symbology, and the map only plots pixels - no
+;  near calls home - so it pays rent out here. White plane blip, red
+;  course tick, the front line in red. ES = bufseg (the caller's).
+; ============================================================================
+MINIMAP2F PROC FAR
+        call MINIMAP2
+        ret
+MINIMAP2F ENDP
+; UROW - AX = row -> DI = row*320 (the main segment's ROW320, cloned:
+; a near CALL cannot cross segments; nine bytes can)
+UROW:   mov  di,ax
+        mov  bx,ax
+        mov  cl,8
+        shl  di,cl
+        mov  cl,6
+        shl  bx,cl
+        add  di,bx
+        ret
+MINIMAP2:
+        cld
+        mov  ax,155
+        call UROW
+        add  di,144
+        push ds                 ; the map lives in the far scratch segment
+        mov  ax,[scrseg]
+        mov  ds,ax
+        xor  si,si
+        mov  dx,32              ; dest rows
+@@row:  mov  cx,32
+@@px:   lodsb                   ; every other source column
+        inc  si
+        stosb
+        loop @@px
+        add  si,64              ; skip the odd source row
+        add  di,320-32
+        dec  dx
+        jnz  @@row
+        pop  ds
+        ; the front line, half scale
+        xor  cx,cx
+@@bd2:  mov  bx,cx
+        shr  bx,1               ; band = (col*2)/4
+        add  bx,bx
+        mov  ax,[bordz+bx]
+        add  ax,24576+BIAS
+        push cx
+        mov  cl,10
+        shr  ax,cl
+        and  ax,63
+        mov  bx,63
+        sub  bx,ax
+        shr  bx,1
+        mov  ax,bx
+        add  ax,155
+        call UROW
+        pop  cx
+        add  di,144
+        add  di,cx
+        mov  al,19
+        mov  es:[di],al
+        inc  cx
+        cmp  cx,32
+        jb   @@bd2
+        ; plane blip at node (camx,camz), halved
+        mov  ax,[camx]
+        add  ax,BIAS
+        mov  cl,2
+        shr  ax,cl
+        mov  cl,8
+        shr  ax,cl
+        and  ax,63
+        shr  ax,1
+        mov  bx,ax              ; col/2
+        mov  ax,[camz]
+        add  ax,BIAS
+        mov  cl,2
+        shr  ax,cl
+        mov  cl,8
+        shr  ax,cl
+        and  ax,63
+        mov  dx,63
+        sub  dx,ax              ; row = 63 - node z
+        shr  dx,1
+        mov  ax,dx
+        add  ax,155
+        push bx
+        call UROW
+        pop  bx
+        add  di,144
+        add  di,bx
+        mov  al,8               ; white blip
+        mov  es:[di],al
+        ; course tick 1-2 px ahead of the blip
+        mov  ax,[hsin]
+        add  ax,ax              ; hsin*2 -> -2..2 screen px
+        mov  bx,256
+        cwd
+        idiv bx
+        mov  si,ax
+        mov  ax,[hcos]
+        add  ax,ax
+        cwd
+        idiv bx                 ; dz -> minus one row per unit (+Z is up)
+        mov  cx,320
+        imul cx
+        mov  cx,ax
+        mov  ax,si
+        sub  ax,cx
+        add  di,ax
+        mov  al,19              ; red course tick
+        mov  es:[di],al
+        ret
+
 ; ---- THE WINDOW GUARD ------------------------------------------------------
 IF ($-GLIST) GT 8176
         %OUT *** UISEG overflows its 8K window before the buffer ***

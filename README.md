@@ -13,6 +13,7 @@ MS-DOS is how we relax.
 
 | Game | Size | What it is | |
 |---|---|---|---|
+| ![owlfly2](res/owlfly2.png) **[OWL FLY II](GAMES/OWLFLY2/)** | 76 KB | **The multiplayer successor**: real pilots share procedural skies over IPX-through-WebSocket — a live sky list to join or create (bots optional; off is a clean PvP arena), the NEWTON sky with baked clouds, an F-15 SE II cockpit with NATO-shape radar symbology, three MFD pages (MAP / SIT / TGT) and nameplates over every human in view. | [▶ play](https://kirindenis.github.io/wire-city-2/owlfly2.html) |
 | ![owlfly](res/owlfly.png) **[OWL FLY](GAMES/OWLFLY/)** | 40 KB | The combat flight simulator: procedural island, destructible city, two air forces of five aircraft types, missiles, a photo cockpit with a working radar, a real jet engine in one Sound Blaster channel. *Fly, owl!* | [▶ play](https://kirindenis.github.io/wire-city-2/owlfly.html) |
 | ![wirecity](res/wirecity.png) **[WIRE CITY](GAMES/WIRECITY/)** | 5.5 KB | The 1986-style original that named the arcade: a wireframe night-flight over a procedural megacity, one source file. The ancestor. | [▶ play](https://kirindenis.github.io/wire-city-2/play.html?g=wirecity) |
 
@@ -36,6 +37,7 @@ whole machine · [3D graphics](docs/GRAPHICS.md) (and
 ## Repository layout
 
 ```
+GAMES/OWLFLY2/    OWL FLY II, the multiplayer successor (EXE, far segments)
 GAMES/OWLFLY/     the flight simulator: SRC/, res/, INSTALL/, its README
 GAMES/WIRECITY/   the 1986 original: one CITY.ASM, its README
 ENGINE/           engine modules with documented contracts (shared by all)
@@ -52,9 +54,11 @@ by path).
 
 ## What is in the workshop
 
-Multiplayer over IPX tunneled through WebSocket (the 1986 chat already
-talks between two DOSBoxes), a C# gateway with a tournament page and a
-NOW-PLAYING API, and — one day — the emulator streamed to an ESP32 screen.
+Multiplayer over IPX tunneled through WebSocket is **live in OWL FLY II**
+(browser pilots meet through the relay; native DOSBoxes over `ipxnet`).
+Still cooking: in-game chat riding the same wire, real callsigns, relay
+bots keeping the skies alive, a NOW-PLAYING API — and, one day, the
+emulator streamed to an ESP32 screen.
 
 ## License
 

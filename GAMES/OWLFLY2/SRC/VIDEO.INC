@@ -1,27 +1,7 @@
 ; VIDEO.INC - part of WIRE CITY (included from CITY.ASM)
-; ============================================================================
-;  SET PALETTE
-; ============================================================================
-SETPAL: mov  dx,3C8h            ; in: SI -> palette table (NPALC colours)
-        xor  al,al
-        out  dx,al
-        mov  dx,3C9h
-        mov  cx,NPALC*3
-        cld                     ; lodsb must walk forward
-@@pl:   lodsb
-        out  dx,al
-        loop @@pl
-        ret
-
-; pick the palette that matches [daymode] and load it
-APPLYPAL:
-        cmp  byte ptr [daymode],0
-        je   @@nit
-        mov  si,offset PALDAY
-        jmp  @@go
-@@nit:  mov  si,offset PALNITE
-@@go:   call SETPAL
-        ret
+; (SETPAL/APPLYPAL and both palette tables moved to UISEG 2026-07-27
+;  as APPLYPALF - once-at-startup DAC data paid the stack guard's
+;  rent for the SA pages. See UI.INC.)
 
 ; ============================================================================
 ;  CLEAR BACK-BUFFER  (top = sky, bottom = ground)   ES=bufseg

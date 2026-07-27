@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OWL FLY II</title>
+<link rel="stylesheet" href="jsdos/js-dos.css">
+<style>
+  html{background:#04060f}
+  body{margin:0;min-height:100vh;background:#04060f;color:#bcd;
+       font-family:monospace}
+  #wrap{display:flex;flex-direction:column;align-items:center;
+        justify-content:flex-start;gap:10px;padding:12px;box-sizing:border-box}
+  h1{font-weight:bold;letter-spacing:3px;color:#bcf;margin:4px;
+     text-shadow:0 0 8px #46c}
+  h2{color:#9bf;letter-spacing:2px;margin:14px 0 6px;font-size:15px}
+  #dos{width:min(96vw,1080px);aspect-ratio:16/10;background:#000;
+       box-shadow:0 0 24px #1330}
+  .hint{font-size:13px;color:#89b;text-align:center}
+  a{color:#9bf}
+  #manual{width:min(96vw,1080px);font-size:13px;line-height:1.5;color:#abc;
+          background:#04060f}
+  table{border-collapse:collapse;width:100%;background:#04060f}
+  td{padding:2px 8px;border-bottom:1px solid #123;vertical-align:top;
+     background:#04060f;color:#abc}
+  td.k{color:#dfe;white-space:nowrap;width:14em}
+  .grn{color:#5f5}.yel{color:#ff5}.red{color:#f66}.amb{color:#fb4}
+  .wht{color:#fff}
+  .stat{color:#5f7;font-size:12px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>O W L&nbsp;&nbsp;F L Y&nbsp;&nbsp;I I</h1>
+  <div class="hint">click the screen first to grab the keyboard
+    &middot; keep this window visible &mdash; a hidden tab freezes your jet
+    &middot; <span class="stat" id="stat">wire: connecting&hellip;</span></div>
+  <div id="dos"></div>
+  <div class="hint">the multiplayer combat flight sim in pure 8086 assembly (76 KB), running in DOSBox (WASM) via <a href="https://js-dos.com" target="_blank" rel="noopener">js-dos</a>, IPX tunneled through WebSocket &middot; <a href="https://github.com/KirinDenis/wire-city-2" target="_blank" rel="noopener">source</a> &middot; <a href="https://www.facebook.com/groups/OWLOS" target="_blank" rel="noopener">community</a> &middot; built by <a href="https://owlos.sk/" target="_blank" rel="noopener">Owlos</a> &mdash; legacy systems are our day job</div>
+
+  <div id="manual">
+    <h2>THE FRONT DOOR</h2>
+    <p>
+      You land in the sky list: every sky on the wire advertises itself
+      once a second &mdash; name, pilots, the war score, bots. Everyone on
+      this page shares one wire, so a friend opening this URL sees your
+      sky in seconds. <b>&uarr;/&darr;</b> pick &middot; <b>Enter</b> join
+      &middot; <b>C</b> create your own (type up to 8 letters, <b>B</b>
+      toggles the 20v20 bot war on/off &mdash; off is a clean PvP arena)
+      &middot; <b>Enter</b> take off.
+    </p>
+
+    <h2>FLYING &mdash; the F-15 SE II scheme</h2>
+    <table>
+      <tr><td class="k">&larr; / &rarr; (num 4/6)</td><td>bank left / right (roll through 360&deg; &mdash; loops and barrel rolls work)</td></tr>
+      <tr><td class="k">&darr; / &uarr; (num 2/8)</td><td>pull the nose up / push it down (flight-sim yoke)</td></tr>
+      <tr><td class="k">1 / 3 &nbsp;(Z / C, num 7/9)</td><td>rudder pedals: flat turn without banking</td></tr>
+      <tr><td class="k">+ / &minus; or W / S</td><td>throttle up / down; <b>Shift +</b> / <b>Shift &minus;</b> snap to the throttle gates</td></tr>
+      <tr><td class="k">A</td><td>afterburner &mdash; double thrust, drinks fuel</td></tr>
+      <tr><td class="k">hands off</td><td>the plane rights itself and trims to level</td></tr>
+      <tr><td class="k">Alt-Q</td><td>quit to DOS (ESC is deliberately dead &mdash; no more sorties lost to a stray key)</td></tr>
+    </table>
+
+    <h2>FIGHTING</h2>
+    <table>
+      <tr><td class="k">Enter</td><td>lock the jet inside the aiming ring; Enter on empty sky drops the lock</td></tr>
+      <tr><td class="k">Backspace</td><td>missile &mdash; 4 rails, homing on the lock, dumb-fire without one; one reloads every ~20&nbsp;s</td></tr>
+      <tr><td class="k">Space (hold)</td><td>cannon &mdash; real tracer rounds; the belt refills while you hold fire</td></tr>
+      <tr><td class="k">Z / X</td><td>radar zoom in / out (1 px = 256 / 512 / 1024 world units)</td></tr>
+      <tr><td class="k">M</td><td>centre MFD pages: MAP (north-up island) &rarr; SIT (close-zoom radar) &rarr; TGT (locked target data)</td></tr>
+      <tr><td class="k">V</td><td>sound: all &rarr; effects only &rarr; silence</td></tr>
+    </table>
+
+    <h2>CAMERAS</h2>
+    <table>
+      <tr><td class="k">F2</td><td>cockpit on / off (the HUD tapes stay)</td></tr>
+      <tr><td class="k">F3</td><td>chase view: your own jet from behind, banking for real</td></tr>
+      <tr><td class="k">F4</td><td>orbit the locked target &mdash; the arrows steer the camera</td></tr>
+      <tr><td class="k">F5</td><td>arm the missile camera: the next launch is ridden to impact</td></tr>
+      <tr><td class="k">N</td><td>day / night &mdash; the stars are a real celestial sphere</td></tr>
+      <tr><td class="k">Space</td><td>after GAME OVER: take a fresh jet</td></tr>
+    </table>
+
+    <h2>READING THE GLASS &mdash; the SA suite</h2>
+    <p>
+      The scope speaks NATO shapes: <span class="grn">friends are
+      squares</span>, <span class="yel">hostiles are diamonds</span>, and
+      <span class="wht">real pilots wear white</span> with their callsign
+      letter beside the blip. Every blip trails a velocity stub along its
+      own nose; a dot above/below means higher/lower than you. A
+      compass-true grey grid marches under it all, two dots up the radius
+      point north.
+    </p>
+    <p>
+      Centre MFD: the north-up island map &mdash; the red front line, your
+      white blip, humans as a letter plus their altitude digit (thousands).
+      M swaps it for the SIT close-zoom scope or the TGT page (callsign in
+      IFF colour, type, RNG and ALT in K-notation, a live wireframe).
+      Right MFD: the war score with the shape legend, your kills in white,
+      GUN rounds, MSL rails, DAM pips.
+    </p>
+    <p>
+      In the world, any human in view wears a designator box with a white
+      nameplate &mdash; callsign letter and range &mdash; at any distance.
+      The AI's IFF boxes light up inside visual range only.
+    </p>
+
+    <h2>THE WAR</h2>
+    <p>
+      Two squadrons in an attrition war over a procedural island minted
+      from a two-byte seed &mdash; which is why joining a sky is instant:
+      the ad carries the seed, your machine builds the same island, city
+      and clouds, and you are there. Buildings fall and stay ruins,
+      wreckage chains, ramming works. Once. You take 5 hits; the fifth
+      replays your last five seconds, then GAME OVER &mdash; Space &mdash;
+      again.
+    </p>
+  </div>
+</div>
+
+<!-- Enables cross-origin isolation (SharedArrayBuffer) on static hosts like
+     GitHub Pages, which can't send COOP/COEP headers. Must load FIRST. -->
+<script src="coi-serviceworker.js"></script>
+
+<script src="jsdos/js-dos.js"></script>
+<script>
+  // The wire: IPX tunneled through WebSocket into the relay. Local dev =
+  // the IpxRelay on :1900; anywhere else - the production ViewOwl pipe.
+  // ?relay= overrides both, ?room= picks a private wire.
+  const params = new URLSearchParams(location.search);
+  const RELAY = params.get("relay")
+             || (location.hostname === "localhost" || location.hostname === "127.0.0.1"
+                 ? "ws://localhost:1900"
+                 : "wss://view.owlos.sk");
+  const ROOM  = params.get("room") || "owlfly2";
+  // ?t= tags the window title so test rigs can tell two pilots apart
+  if (params.get("t")) document.title = "OWL FLY II " + params.get("t");
+
+  // Worker mode, minimal options - the one config where real typing
+  // provably works (the BBS lesson, 2026-07-19). Networking is wired
+  // AFTER boot via networkConnect; no ipx:/room: page options.
+  Dos(document.getElementById("dos"), {
+    url: "owlfly2_v2.jsdos",
+    pathPrefix: "jsdos/emulators/",
+    theme: "dark",
+    renderAspect: "16/10",
+    imageRendering: "pixelated",
+    scaleControls: 0.2,
+    noNetworking: false,
+    autoStart: params.get("autostart") === "1", // the test rig's door
+
+    onEvent: (e, ci) => {
+      if (e !== "ci-ready") return;
+      window.__ci = ci;
+      const st = document.getElementById("stat");
+      ci.networkConnect(0, RELAY + "/ipx/" + ROOM)
+        .then(() => { st.textContent = "wire: LIVE - sky \"" + ROOM + "\""; })
+        .catch((err) => { st.textContent = "wire: dark (" + err.message + ") - solo flight"; });
+    }
+  });
+</script>
+</body>
+</html>
+
