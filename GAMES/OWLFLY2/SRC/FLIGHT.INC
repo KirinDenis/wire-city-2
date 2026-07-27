@@ -60,7 +60,14 @@ INPUT:
         jne  @@tup
         cmp  byte ptr [KEYS+SC_EQ],0
         je   @@tw
-@@tup:  mov  al,[KEYS+SC_LSH]
+@@tup:  ; The throttle GATE (slam to full) lives on Shift+W only. It used
+        ; to fire on Shift + any throttle key - but '+' IS Shift+'=' on a
+        ; real keyboard, so the manual's own throttle key could never ramp:
+        ; it jumped to 100% and stayed there, reading as "+ does nothing"
+        ; (user report 2026-07-27, browser build).
+        cmp  byte ptr [KEYS+SC_W],0
+        je   @@tu1
+        mov  al,[KEYS+SC_LSH]
         or   al,[KEYS+SC_RSH]
         jz   @@tu1
         mov  word ptr [throt],64
@@ -77,7 +84,9 @@ INPUT:
         jne  @@tdn
         cmp  byte ptr [KEYS+SC_MIN],0
         je   @@ts
-@@tdn:  mov  al,[KEYS+SC_LSH]
+@@tdn:  cmp  byte ptr [KEYS+SC_S],0 ; idle gate: Shift+S, same reasoning
+        je   @@td1
+        mov  al,[KEYS+SC_LSH]
         or   al,[KEYS+SC_RSH]
         jz   @@td1
         mov  word ptr [throt],0
@@ -874,7 +883,15 @@ INPUT:
         mov  word ptr [hitft],5
         mov  bx,si
         shr  bx,1
-        dec  byte ptr [php+bx]
+        cmp  byte ptr [premote+bx],0
+        je   @@gai              ; an AI jet: settle it here as always
+        push si                 ; a real pilot: the wire carries the round,
+        mov  al,bl              ; HIS machine counts his wounds
+        mov  ah,1               ; cannon: one hit of the five
+        call FAR PTR NETHITF
+        pop  si
+        jmp  @@gnf
+@@gai:  dec  byte ptr [php+bx]
         jnz  @@gnf              ; wounded, still flying
         push si
         call BOOM
@@ -1088,6 +1105,7 @@ CRASHHANDLE:
 ; PLAYERRESET - Space pressed during the fall: take a fresh jet.
 PLAYERRESET:
         mov  byte ptr [dying],0
+        mov  word ptr [lastklr],0   ; a fresh jet owes nobody a kill
         mov  word ptr [dytick],0
         mov  word ptr [camy],1450   ; respawn above everything
         mov  word ptr [camx],24576  ; home plate: the southern line

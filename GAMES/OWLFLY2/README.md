@@ -14,8 +14,11 @@ The first build is byte-identical to OWL FLY (`FLYOWL2.COM` and
 ## The road
 
 1. **done** — the fork, proven identical
-2. **done** — F-15 SE II keys: Shift+plus / Shift+minus throttle
-   gates and top-row 1/3 rudder pedals added; arrows-as-stick
+2. **done** — F-15 SE II keys: throttle gates (Shift+W full, Shift+S
+   idle - they lived on Shift+plus/minus until 2026-07-27, when the
+   obvious broke: '+' IS Shift+'=' on a real keyboard, so the manual's
+   own throttle key could never ramp, it just pinned 100%) and
+   top-row 1/3 rudder pedals added; arrows-as-stick
    (up = nose down), +/- throttle, A afterburner and the views were
    already the manual's scheme. L gear / B brakes / P autopilot are
    skipped: this sim has no landing model to hang them on (crash =

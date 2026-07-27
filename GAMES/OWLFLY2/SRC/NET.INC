@@ -78,7 +78,7 @@ adtk    dw 0                    ; the tick the last sky ad went out
 ; one fragment covers both
 SECB    db ECBSZ dup(0)
 SHDR    db HDRSZ dup(0)
-SPAY    db 16 dup(0)
+SPAY    db 24 dup(0)            ; 16 was one byte short of the 'G' ad's 17
 ; receive: NLSTN listen ECBs, 64-byte buffers
 RECB    db NLSTN*ECBSZ dup(0)
 RBUF    db NLSTN*64 dup(0)
@@ -100,6 +100,40 @@ NETPOSF PROC FAR
         call NETPOS
         ret
 NETPOSF ENDP
+; ---- NETHITF: our guns hit a REAL pilot - tell him, do not kill him -------
+; in: AL = his plane slot (NETSLT..NETSLT+NRMT-1), AH = damage points.
+; His machine decides whether that was the last one; ours only reports.
+NETHITF PROC FAR
+        push bx
+        push cx
+        push dx
+        push si
+        mov  dh,ah              ; the damage, kept clear of the maths
+        xor  ah,ah
+        sub  ax,NETSLT
+        js   @@hx
+        cmp  ax,NRMT
+        jae  @@hx               ; not a wire slot: nothing to report
+        add  ax,ax
+        mov  si,ax
+        mov  ax,[rpid+si]       ; who wears that slot
+        or   ax,ax
+        jz   @@hx               ; nobody home
+        mov  byte ptr [SPAY],'H'
+        mov  word ptr [SPAY+1],ax   ; the victim
+        mov  ax,[ggid]
+        mov  word ptr [SPAY+3],ax   ; our sky
+        mov  ax,[mypid]
+        mov  word ptr [SPAY+5],ax   ; the shooter
+        mov  [SPAY+7],dh
+        mov  cx,8
+        call NETXMIT
+@@hx:   pop  si
+        pop  dx
+        pop  cx
+        pop  bx
+        ret
+NETHITF ENDP
 
 ; ---- NETINIT: find IPX, open the socket, learn our name --------------------
 NETINIT:
@@ -268,7 +302,11 @@ NETPOS: cmp  byte ptr [netok],0
         mov  word ptr [SPAY+9],ax
         mov  ax,[heading]
         mov  word ptr [SPAY+11],ax
-        mov  cx,13
+        mov  al,[dying]         ; OUR life is ours to report: nobody else
+        mov  [SPAY+13],al       ; may declare this jet down
+        mov  ax,[lastklr]
+        mov  word ptr [SPAY+14],ax  ; and who did it (his canopy scores)
+        mov  cx,16
         call NETXMIT
         cmp  byte ptr [nethost],0
         je   @@r
@@ -361,6 +399,20 @@ NETPOLL:
         je   @@pos
         cmp  al,'G'
         je   @@gad
+        cmp  al,'H'
+        je   @@hit
+        jmp  @@rearm
+@@hit:  ; ---- somebody's guns found us: only WE may act on it ----
+        mov  ax,word ptr cs:[bx+1]  ; is this hit addressed to us?
+        cmp  ax,[mypid]
+        jne  @@rearm
+        mov  dx,word ptr cs:[bx+3]  ; and in our sky?
+        cmp  dx,[ggid]
+        jne  @@rearm
+        mov  al,cs:[bx+7]           ; how hard - the main segment applies
+        add  [nethdm],al            ; it (CRASHHANDLE is near code)
+        mov  ax,word ptr cs:[bx+5]
+        mov  [nethby],ax            ; remember the shooter for his score
         jmp  @@rearm
 @@gad:  ; ---- a sky's ad: upsert the menu's list (UISEG) ----
         push es
@@ -453,9 +505,24 @@ NETPOLL:
         add  ax,NETSLT          ; the plane slot
         mov  si,ax
         mov  byte ptr [premote+si],1
-        mov  byte ptr [pst+si],0
         mov  byte ptr [ptype+si],0
-        add  si,si              ; word index
+        mov  al,cs:[bx+13]      ; ALIVE OR DOWN - his word, not our guns'
+        or   al,al
+        jnz  @@rdown
+        mov  byte ptr [pst+si],0
+        jmp  @@rp
+@@rdown:cmp  byte ptr [pst+si],0
+        jne  @@rp               ; already down: no second funeral
+        mov  ax,si              ; hand the breakup to the main segment:
+        add  ax,ax              ; BOOM is near code and we are far
+        mov  [netdead],ax
+        mov  ax,word ptr cs:[bx+14]
+        or   ax,ax
+        jz   @@rp
+        cmp  ax,[mypid]         ; we shot him down: chalk it on the canopy
+        jne  @@rp
+        inc  word ptr [psc]
+@@rp:   add  si,si              ; word index
         mov  ax,word ptr cs:[bx+5]
         mov  [pax+si],ax
         mov  ax,word ptr cs:[bx+7]

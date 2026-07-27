@@ -449,6 +449,7 @@ GAMELOOP:
         call COLLIDE
         call FAR PTR NETPOSF    ; tell the wire where we are (1/tick)...
         call FAR PTR NETPOLLF   ; ...and learn where everyone else is
+        call NETAPPLY           ; deaths and hits the wire brought us
 
         ; --- render (runs as fast as it can; speed no longer tied to it) ---
         call LERPSET            ; draw BETWEEN the ticks: silk, not jerks

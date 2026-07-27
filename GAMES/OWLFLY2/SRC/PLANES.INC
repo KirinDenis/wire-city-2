@@ -1458,9 +1458,17 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
 @@p3:   add  bx,ax
         cmp  bx,40
         jge  @@pxn
-        call BOOM               ; direct hit: SI = the unlucky jet
+        mov  bx,si              ; direct hit: SI = the unlucky jet
+        shr  bx,1
+        cmp  byte ptr [premote+bx],0
+        je   @@pkai
+        mov  al,bl              ; a real pilot: the wire carries it, and a
+        mov  ah,5               ; missile is the whole five at once
+        call FAR PTR NETHITF
+        jmp  @@pkd              ; his death packet will chalk our canopy
+@@pkai: call BOOM
         inc  word ptr [psc]     ; chalk one on the canopy
-        call MCEND
+@@pkd:  call MCEND
         mov  byte ptr [msact],0
         ret
 @@pxn:  add  si,2
@@ -1476,7 +1484,15 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
 ; ---------------------------------------------------------------------------
 BOOM:   mov  bx,si
         shr  bx,1
-        mov  byte ptr [pst+bx],1 ; down for good (attrition war)
+        ; A REAL pilot dies on his own machine. Whatever hit him here -
+        ; our cannon, a missile, an AI, a hillside - we only report it;
+        ; his POS packet decides. Without this guard he exploded locally
+        ; and flew on, resurrected by his own next packet one tick later.
+        cmp  byte ptr [premote+bx],0
+        je   @@blcl
+        cmp  byte ptr [netboom],0   ; ...unless the wire itself said so
+        je   @@bskp
+@@blcl: mov  byte ptr [pst+bx],1 ; down for good (attrition war)
         mov  al,[ptype+bx]      ; the wreck keeps the victim's shape
         xor  ah,ah
         add  ax,ax
@@ -1504,6 +1520,35 @@ BOOM:   mov  bx,si
         mov  bx,[bpz]
         call SFXBM2
         jmp  WRKFILL
+@@bskp: ret                     ; a live pilot: his machine buries him
+
+; ---------------------------------------------------------------------------
+;  NETAPPLY - what the wire decided, applied where the near code lives:
+;  a real pilot's breakup, and the hits our own jet took. Called from
+;  GAMELOOP right after NETPOLLF.
+; ---------------------------------------------------------------------------
+NETAPPLY:
+        mov  si,[netdead]       ; a real pilot reported himself down
+        cmp  si,0FFFFh
+        je   @@nad
+        mov  word ptr [netdead],0FFFFh
+        mov  byte ptr [netboom],1   ; the one BOOM the guard lets through
+        call BOOM
+        mov  byte ptr [netboom],0
+@@nad:  mov  al,[nethdm]        ; and the rounds that found us over the wire
+        or   al,al
+        jz   @@nah
+        mov  byte ptr [nethdm],0
+        cmp  byte ptr [dying],0
+        jne  @@nah              ; already falling: no second death
+        add  [pdam],al
+        mov  word ptr [phit],9  ; the ring flashes red
+        cmp  byte ptr [pdam],5
+        jb   @@nah
+        mov  ax,[nethby]
+        mov  [lastklr],ax       ; his canopy gets the kill mark
+        call CRASHHANDLE
+@@nah:  ret
 
 ; PBOOM - the PLAYER breaks apart (cinematic death).
 PBOOM:  mov  word ptr [mvb],offset F15VT ; the player flies the F15

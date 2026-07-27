@@ -55,7 +55,7 @@
       <tr><td class="k">&larr; / &rarr; (num 4/6)</td><td>bank left / right (roll through 360&deg; &mdash; loops and barrel rolls work)</td></tr>
       <tr><td class="k">&darr; / &uarr; (num 2/8)</td><td>pull the nose up / push it down (flight-sim yoke)</td></tr>
       <tr><td class="k">1 / 3 &nbsp;(Z / C, num 7/9)</td><td>rudder pedals: flat turn without banking</td></tr>
-      <tr><td class="k">+ / &minus; or W / S</td><td>throttle up / down; <b>Shift +</b> / <b>Shift &minus;</b> snap to the throttle gates</td></tr>
+      <tr><td class="k">+ / &minus; or W / S</td><td>throttle up / down (numpad too); <b>Shift+W</b> slams to full military, <b>Shift+S</b> to idle</td></tr>
       <tr><td class="k">A</td><td>afterburner &mdash; double thrust, drinks fuel</td></tr>
       <tr><td class="k">hands off</td><td>the plane rights itself and trims to level</td></tr>
       <tr><td class="k">Alt-Q</td><td>quit to DOS (ESC is deliberately dead &mdash; no more sorties lost to a stray key)</td></tr>
@@ -140,7 +140,7 @@
   // provably works (the BBS lesson, 2026-07-19). Networking is wired
   // AFTER boot via networkConnect; no ipx:/room: page options.
   Dos(document.getElementById("dos"), {
-    url: "owlfly2_v2.jsdos",
+    url: "owlfly2_v4.jsdos",
     pathPrefix: "jsdos/emulators/",
     theme: "dark",
     renderAspect: "16/10",
@@ -161,4 +161,6 @@
 </script>
 </body>
 </html>
+
+
 

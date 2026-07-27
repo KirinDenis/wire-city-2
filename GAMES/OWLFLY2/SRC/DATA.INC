@@ -48,6 +48,16 @@ premote db NPLANE dup(0)        ; 1 = a REAL pilot flies this slot over
                                 ;  the wire: the AI keeps its hands off
 pltr    db NPLANE dup(0)        ; callsign letter of the human in the
                                 ;  slot (ASCII, from pid; 0 = none)
+; ---- owner authority over life and death (the immortal-pilot fix) ----------
+; A real pilot dies on HIS machine and nowhere else: our guns only send the
+; hit over the wire, and his own POS packet says whether he is still flying.
+; Before this, a shot-down human exploded locally and kept flying anyway -
+; his next POS resurrected him one tick later (the Highlander bug 2026-07-27).
+netdead dw 0FFFFh               ; plane offset the wire says is down
+netboom db 0                    ; 1 = this BOOM is the wire's, let it pass
+nethdm  db 0                    ; damage points that arrived for US
+nethby  dw 0                    ; who dealt them (pid)
+lastklr dw 0                    ; who shot us down (rides our death POS)
 wseed   dw 0                    ; the seed the world was built from
 netup   db 0                    ; 1 = IPX answered at startup
 netpid  dw 0                    ; our name on the wire (spawn fan-out)
