@@ -1,16 +1,23 @@
 @echo off
 REM ============================================================================
 REM PUBLISH.BAT [game] ["message"] - deploy a game bundle to GitHub Pages.
-REM   PUBLISH                 - publish OWLFLY (default)
+REM   PUBLISH                 - publish OWLFLY2, the game being worked on
+REM   PUBLISH OWLFLY          - the 40 KB predecessor (finished, archived)
 REM   PUBLISH WIRECITY        - publish the 1986 original
-REM   PUBLISH OWLFLY "msg"    - with a commit message
+REM   PUBLISH OWLFLY2 "msg"   - with a commit message
 REM Steps: pack a fresh <game>_vN.jsdos (new filename busts the js-dos
 REM IndexedDB cache), patch the player page, then confirm + git push.
+REM
+REM The default moved from OWLFLY to OWLFLY2 on 2026-07-28. It had been
+REM pointing at the finished predecessor, so a bare PUBLISH shipped a
+REM byte-for-byte identical bundle under a new version number - the push
+REM went through, the page reloaded, and the new feature was never in it.
+REM Per-game wrappers (GAMES\<game>\PUBLISH.BAT) say it out loud instead.
 REM ============================================================================
 setlocal
 cd /d %~dp0
 set GAME=%~1
-if "%GAME%"=="" set GAME=OWLFLY
+if "%GAME%"=="" set GAME=OWLFLY2
 
 echo [1/2] Packing a fresh %GAME% bundle ...
 powershell -NoProfile -ExecutionPolicy Bypass -File docs\pack.ps1 -Game %GAME%

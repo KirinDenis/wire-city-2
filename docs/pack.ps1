@@ -122,3 +122,10 @@ if ($Game -eq "OWLFLY") {
 $s = [regex]::Replace($s, $g.detect, $name)
 Set-Content -Encoding ascii $g.page $s
 Write-Host "Created docs/$name and updated $(Split-Path $g.page -Leaf)"
+# say WHAT went in, with the hour it was built: a bundle is only ever as
+# fresh as the binary inside it, and a stale one looks exactly like a
+# good one from the outside (the lesson of 2026-07-28)
+foreach ($f in $g.files) {
+  $fi = Get-Item (Join-Path $root $f.p)
+  Write-Host ("  {0,-14} {1,8:N0} bytes  built {2:yyyy-MM-dd HH:mm}" -f $f.n, $fi.Length, $fi.LastWriteTime)
+}
