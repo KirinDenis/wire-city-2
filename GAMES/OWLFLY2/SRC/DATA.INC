@@ -77,6 +77,37 @@ mvn     dw F15NV*6              ; its vertex bytes (vertices * 6)
 mfb     dw F15FC                ; its face table
 nfc     dw F15NF                ; its face count
 bordz   dw 17 dup(0)            ; the front line: jagged z offsets (BRDGEN)
+; ---- the ground radar stations: one per side, deep behind its line --------
+; Slot 0 is OURS (south of the border), slot 1 is THEIRS (north). They are
+; not aircraft: they never move, they turn only their dish, and each one
+; is the eye of its own side - lose yours and the scope goes to snow.
+NRSTA   equ 2
+RSHITS  equ 8                   ; cannon hits it soaks (a jet takes 2..5)
+RSPINV  equ 3                   ; dish angle per tick: one turn in ~4.7 s
+RSMDMG  equ 4                   ; a missile is worth four shells: two level it
+RSRAD   equ 90                  ; its footprint, half-width. Wider than the
+                                ;  dish (54) ON PURPOSE: a cannon round steps
+                                ;  150 units a tick, so a box thinner than
+                                ;  that can be jumped clean over between two
+                                ;  samples - 180 deep cannot be
+RSTOP   equ 190                 ; and how high the mast and dish reach
+rsx     dw 0,0                  ; where each station stands
+rsy     dw 0,0                  ;  (rsy = the ground under its feet)
+rsz     dw 0,0
+rsst    db 0,0                  ; 0 = standing, 1 = down
+rshp    db 0,0                  ; hits it still has in it (a building, not a jet)
+rspin   dw 0                    ; the dish angle 0..255 - both dishes turn
+rsi     dw 0                    ; the station being ticked or drawn
+rhx     dw 0                    ; RSHIT's question: did anything of ours
+rhy     dw 0                    ;  reach this point in the world...
+rhz     dw 0
+rhdmg   db 0                    ;  ...and how hard (1 a shell, 4 a missile)
+airng   dw 10000                ; how far the AI may shoot: its own radar
+                                ;  down and it is 2500, eyeball range
+rsnet   db 0                    ; a station fell HERE: tell the wire (idx+1)
+rsboom  db 0                    ; the wire says one fell THERE: light the
+                                ;  fire in the main segment (idx+1)
+MSGNORAD db 'NO RADAR',0        ; the legend under the snow
 TYPN0   db 0                    ; fighters wear no tag
 TYPN1   db 'BOMBER',0
 TYPN2   db 'RADAR',0
@@ -89,6 +120,14 @@ TYPTAB  dw TYPN0,TYPN1,TYPN2,TYPN3,TYPN4
 ; rear box, wingtips, roots, left fin - because the wreck pool below
 ; cuts its debris from the classic MFACE over exactly those.
         INCLUDE F15M.INC
+; ---- the ground radar station, baked the same way from res\RBASE.OBJ and
+; res\RDISH.OBJ: a lattice tower and a SIX-panel dish. Six, not the eight
+; the trainer's dish has - this world is cut from flat chunks and a smooth
+; bowl read as a foreign object (user's call, 2026-07-28). Both stand at
+; the station's feet: the tower spans y 0..40, the dish y 26..58, so one
+; position draws both and the dish alone takes the spin.
+        INCLUDE RBASEM.INC
+        INCLUDE RDISHM.INC
 ; the classic eight faces, kept ONLY for the wreck pool (see above)
 MFACE   db 0,1,2,0, 24          ; body top (sun-lit white)
         db 0,3,4,0, 16          ; body bottom (shade)

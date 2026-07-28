@@ -13,6 +13,10 @@
 ;  the player (leash respawn when too far). Called from INPUT.
 ; ---------------------------------------------------------------------------
 PLANESUPD:
+        mov  ax,[rspin]         ; the dishes sweep on the physics clock
+        add  ax,RSPINV
+        and  ax,255
+        mov  [rspin],ax
         xor  si,si              ; plane offset (words)
 @@pl:
         mov  bx,si              ; the dead stay dead - attrition war
@@ -472,146 +476,7 @@ PLANESDRAW:
         call SINQ
         mov  [mcos],ax
         pop  si
-        ; ---- transform the 13 model vertices into the PV cache ----
-        xor  si,si              ; model table offset (6 bytes/vertex)
-        xor  di,di              ; cache offset (2 bytes/vertex)
-@@tv:   mov  bx,[mvb]           ; the model of THIS type of aircraft
-        mov  ax,[bx+si]         ; vx = (mx*mcos + mz*msin)/256 + pdx
-        imul word ptr [mcos]
-        mov  cx,ax
-        mov  bx,[mvb]
-        mov  ax,[bx+si+4]
-        imul word ptr [msin]
-        add  ax,cx
-        cwd
-        mov  bx,256
-        idiv bx
-        add  ax,[pdx]
-        mov  [PVX+di],ax
-        mov  bx,[mvb]
-        mov  ax,[bx+si+2]       ; vy = my + pdy
-        add  ax,[pdy]
-        mov  [PVY+di],ax
-        mov  bx,[mvb]
-        mov  ax,[bx+si]         ; vz = (mz*mcos - mx*msin)/256 + pdz
-        imul word ptr [msin]
-        mov  cx,ax
-        mov  bx,[mvb]
-        mov  ax,[bx+si+4]
-        imul word ptr [mcos]
-        sub  ax,cx
-        cwd
-        mov  bx,256
-        idiv bx
-        add  ax,[pdz]
-        mov  [PVZ+di],ax
-        add  si,6
-        add  di,2
-        cmp  si,[mvn]
-        jb   @@tv
-        ; ---- face depths: FCD = avg z of the face corners ----
-        xor  si,si              ; face index
-@@fd:   mov  bx,si
-        add  bx,bx
-        add  bx,bx
-        add  bx,si              ; face record = 5 bytes
-        add  bx,[mfb]           ; in THIS type's face table
-        push si
-        mov  al,[bx]            ; corner ids -> depths, pairwise averaged
-        xor  ah,ah
-        add  ax,ax
-        mov  si,ax
-        mov  cx,[PVZ+si]
-        mov  al,[bx+1]
-        xor  ah,ah
-        add  ax,ax
-        mov  si,ax
-        add  cx,[PVZ+si]
-        sar  cx,1               ; (a+b)/2
-        mov  al,[bx+2]
-        xor  ah,ah
-        add  ax,ax
-        mov  si,ax
-        mov  dx,[PVZ+si]
-        mov  al,[bx+3]
-        xor  ah,ah
-        add  ax,ax
-        mov  si,ax
-        add  dx,[PVZ+si]
-        sar  dx,1               ; (c+d)/2
-        add  cx,dx
-        sar  cx,1               ; face average depth
-        pop  si
-        mov  bx,si
-        add  bx,bx
-        mov  [FCD+bx],cx
-        mov  ax,si
-        mov  bx,si
-        mov  [FCO+bx],al        ; order starts as identity
-        inc  si
-        cmp  si,[nfc]
-        jb   @@fd
-        ; ---- bubble far -> near (descending depth) ----
-        mov  cx,[nfc]
-        dec  cx
-@@bs:   push cx
-        xor  si,si
-@@bi:   mov  bx,si
-        add  bx,bx
-        mov  ax,[FCD+bx]
-        cmp  ax,[FCD+bx+2]
-        jge  @@nsw
-        xchg ax,[FCD+bx+2]      ; swap depths
-        mov  [FCD+bx],ax
-        mov  al,[FCO+si]        ; swap order entries
-        xchg al,[FCO+si+1]
-        mov  [FCO+si],al
-@@nsw:  inc  si
-        mov  bx,[nfc]
-        dec  bx
-        cmp  si,bx
-        jb   @@bi
-        pop  cx
-        loop @@bs
-        ; ---- draw the faces in painter order ----
-        mov  word ptr [pfc],0
-@@df:   mov  si,[pfc]
-        mov  al,[FCO+si]
-        xor  ah,ah
-        mov  bx,ax
-        add  bx,bx
-        add  bx,bx
-        add  ax,bx              ; *5
-        mov  bx,ax              ; face record offset
-        add  bx,[mfb]           ; in THIS type's face table
-        mov  al,[bx+4]
-        mov  [COLOR],al
-        xor  cx,cx              ; corner 0..3
-@@dc:   push bx
-        push cx
-        mov  si,cx
-        mov  al,[bx+si]
-        xor  ah,ah
-        add  ax,ax
-        mov  si,ax              ; vertex cache offset
-        mov  di,cx
-        add  di,di              ; IX/IY/IZ slot
-        mov  ax,[PVX+si]
-        mov  [IX+di],ax
-        mov  ax,[PVY+si]
-        mov  [IY+di],ax
-        mov  ax,[PVZ+si]
-        mov  [IZ+di],ax
-        pop  cx
-        pop  bx
-        inc  cx
-        cmp  cx,4
-        jb   @@dc
-        call FACEFILL
-        inc  word ptr [pfc]
-        mov  ax,[nfc]
-        cmp  [pfc],ax
-        jb   @@df
+        call MODELDRAW          ; transform, sort and fill this model
         ; ---- IFF marker: friendly = green square, hostile = yellow
         ; diamond, sized to the wingspan (11440/rz px half-size) ----
         mov  ax,[pdz]
@@ -863,6 +728,185 @@ PLANESDRAW:
         cmp  word ptr [pidx],NPLANE*2
         jb   @@pd
         ret
+
+
+; ---------------------------------------------------------------------------
+;  MODELDRAW - draw the CURRENT model (mvb/mvn/mfb/nfc) at camera-space
+;  pdx/pdy/pdz, yawed by msin/mcos: transform the vertices into the PV
+;  cache, sort the faces far->near and FACEFILL them. Lifted out of
+;  PLANESDRAW so anything else with a model - a ground radar station,
+;  say - is just 'set the four table words and call this'. ES=bufseg.
+;  Clobbers everything, including SI/DI and [pfc].
+; ---------------------------------------------------------------------------
+MODELDRAW:
+        ; ---- transform this model's vertices into the PV cache ----
+        xor  si,si              ; model table offset (6 bytes/vertex)
+        xor  di,di              ; cache offset (2 bytes/vertex)
+@@tv:   mov  bx,[mvb]           ; the model being drawn
+        mov  ax,[bx+si]         ; vx = (mx*mcos + mz*msin)/256 + pdx
+        imul word ptr [mcos]
+        mov  cx,ax
+        mov  bx,[mvb]
+        mov  ax,[bx+si+4]
+        imul word ptr [msin]
+        add  ax,cx
+        cwd
+        mov  bx,256
+        idiv bx
+        add  ax,[pdx]
+        mov  [PVX+di],ax
+        mov  bx,[mvb]
+        mov  ax,[bx+si+2]       ; vy = my + pdy
+        add  ax,[pdy]
+        mov  [PVY+di],ax
+        mov  bx,[mvb]
+        mov  ax,[bx+si]         ; vz = (mz*mcos - mx*msin)/256 + pdz
+        imul word ptr [msin]
+        mov  cx,ax
+        mov  bx,[mvb]
+        mov  ax,[bx+si+4]
+        imul word ptr [mcos]
+        sub  ax,cx
+        cwd
+        mov  bx,256
+        idiv bx
+        add  ax,[pdz]
+        mov  [PVZ+di],ax
+        add  si,6
+        add  di,2
+        cmp  si,[mvn]
+        jb   @@tv
+        ; ---- face depths: FCD = avg z of the face corners ----
+        xor  si,si              ; face index
+@@fd:   mov  bx,si
+        add  bx,bx
+        add  bx,bx
+        add  bx,si              ; face record = 5 bytes
+        add  bx,[mfb]           ; in THIS type's face table
+        push si
+        mov  al,[bx]            ; corner ids -> depths, pairwise averaged
+        xor  ah,ah
+        add  ax,ax
+        mov  si,ax
+        mov  cx,[PVZ+si]
+        mov  al,[bx+1]
+        xor  ah,ah
+        add  ax,ax
+        mov  si,ax
+        add  cx,[PVZ+si]
+        sar  cx,1               ; (a+b)/2
+        mov  al,[bx+2]
+        xor  ah,ah
+        add  ax,ax
+        mov  si,ax
+        mov  dx,[PVZ+si]
+        mov  al,[bx+3]
+        xor  ah,ah
+        add  ax,ax
+        mov  si,ax
+        add  dx,[PVZ+si]
+        sar  dx,1               ; (c+d)/2
+        add  cx,dx
+        sar  cx,1               ; face average depth
+        pop  si
+        mov  bx,si
+        add  bx,bx
+        mov  [FCD+bx],cx
+        mov  ax,si
+        mov  bx,si
+        mov  [FCO+bx],al        ; order starts as identity
+        inc  si
+        cmp  si,[nfc]
+        jb   @@fd
+        ; ---- bubble far -> near (descending depth) ----
+        mov  cx,[nfc]
+        dec  cx
+@@bs:   push cx
+        xor  si,si
+@@bi:   mov  bx,si
+        add  bx,bx
+        mov  ax,[FCD+bx]
+        cmp  ax,[FCD+bx+2]
+        jge  @@nsw
+        xchg ax,[FCD+bx+2]      ; swap depths
+        mov  [FCD+bx],ax
+        mov  al,[FCO+si]        ; swap order entries
+        xchg al,[FCO+si+1]
+        mov  [FCO+si],al
+@@nsw:  inc  si
+        mov  bx,[nfc]
+        dec  bx
+        cmp  si,bx
+        jb   @@bi
+        pop  cx
+        loop @@bs
+        ; ---- draw the faces in painter order ----
+        mov  word ptr [pfc],0
+@@df:   mov  si,[pfc]
+        mov  al,[FCO+si]
+        xor  ah,ah
+        mov  bx,ax
+        add  bx,bx
+        add  bx,bx
+        add  ax,bx              ; *5
+        mov  bx,ax              ; face record offset
+        add  bx,[mfb]           ; in THIS type's face table
+        mov  al,[bx+4]
+        mov  [COLOR],al
+        xor  cx,cx              ; corner 0..3
+@@dc:   push bx
+        push cx
+        mov  si,cx
+        mov  al,[bx+si]
+        xor  ah,ah
+        add  ax,ax
+        mov  si,ax              ; vertex cache offset
+        mov  di,cx
+        add  di,di              ; IX/IY/IZ slot
+        mov  ax,[PVX+si]
+        mov  [IX+di],ax
+        mov  ax,[PVY+si]
+        mov  [IY+di],ax
+        mov  ax,[PVZ+si]
+        mov  [IZ+di],ax
+        pop  cx
+        pop  bx
+        inc  cx
+        cmp  cx,4
+        jb   @@dc
+        call FACEFILL
+        inc  word ptr [pfc]
+        mov  ax,[nfc]
+        cmp  [pfc],ax
+        jb   @@df
+        ret
+
+; ---------------------------------------------------------------------------
+;  THE FAR SEGMENT'S DOOR HOME. The radar stations live in UISEG (the
+;  stack guard's rent, the way MINIMAP2F went), and a far segment cannot
+;  near-call into CODE. These four are all it needs from home; seven
+;  bytes each, against the hundreds the station code would cost here.
+; ---------------------------------------------------------------------------
+MODELDRAWF PROC FAR
+        call MODELDRAW
+        ret
+MODELDRAWF ENDP
+ROTXZF  PROC FAR
+        call ROTXZ
+        ret
+ROTXZF  ENDP
+SINQF   PROC FAR
+        call SINQ
+        ret
+SINQF   ENDP
+TERRHF  PROC FAR
+        call TERRH
+        ret
+TERRHF  ENDP
+WRKATF  PROC FAR
+        call WRKAT              ; break something at bpx/bpz into the pool
+        ret
+WRKATF  ENDP
 
 ; ---------------------------------------------------------------------------
 ;  PPOINT - project one camera-space point (yaw-rotated, not yet pitched).
@@ -1433,7 +1477,21 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         call MCEND
         mov  byte ptr [msact],0
         ret
-@@mbn:  ; proximity fuse: |dx|+|dy|+|dz| < 160 pops any living jet
+@@mbn:  ; ---- a radar station stops a missile the way a building does ----
+        mov  ax,[msx]
+        mov  [rhx],ax
+        mov  ax,[msy]
+        mov  [rhy],ax
+        mov  ax,[msz]
+        mov  [rhz],ax
+        mov  byte ptr [rhdmg],RSMDMG
+        call FAR PTR RSHITF
+        or   ax,ax
+        jz   @@mbp
+        call MCEND              ; spent in the lattice, camera and all
+        mov  byte ptr [msact],0
+        ret
+@@mbp:  ; proximity fuse: |dx|+|dy|+|dz| < 160 pops any living jet
         xor  si,si
 @@px:   mov  bx,si
         shr  bx,1
@@ -1548,7 +1606,21 @@ NETAPPLY:
         mov  ax,[nethby]
         mov  [lastklr],ax       ; his canopy gets the kill mark
         call CRASHHANDLE
-@@nah:  ret
+@@nah:  mov  al,[rsboom]        ; a station the wire says is down: break it
+        or   al,al              ; up HERE too, so every pilot sees the same
+        jz   @@nar              ; fire on the same hill
+        mov  byte ptr [rsboom],0
+        dec  al
+        xor  ah,ah
+        mov  bx,ax
+        add  bx,bx
+        mov  ax,[rsx+bx]
+        mov  [bpx],ax
+        mov  ax,[rsz+bx]
+        mov  [bpz],ax
+        mov  word ptr [bschm],0
+        call WRKAT
+@@nar:  ret
 
 ; PBOOM - the PLAYER breaks apart (cinematic death).
 PBOOM:  mov  word ptr [mvb],offset F15VT ; the player flies the F15
@@ -2410,7 +2482,14 @@ AMSLUPD:
         shr  bx,1
         cmp  byte ptr [pst+bx],0
         jne  @@fly
-        mov  dx,si              ; hunt the OTHER team
+        mov  bx,si              ; how far can this side SEE? its own
+        and  bx,2               ; station answers: green reads rsst+0,
+        shr  bx,1               ; yellow rsst+1, and a side whose radar
+        mov  word ptr [airng],10000 ; is rubble is down to eyeball range
+        cmp  byte ptr [rsst+bx],0
+        je   @@rok
+        mov  word ptr [airng],2500
+@@rok:  mov  dx,si              ; hunt the OTHER team
         and  dx,2
         xor  dx,2
         xor  di,di
@@ -2427,14 +2506,14 @@ AMSLUPD:
         jns  @@g1
         neg  ax
 @@g1:   mov  bx,ax
-        cmp  bx,10000
+        cmp  bx,[airng]
         jge  @@tgn
         mov  ax,[paz+di]
         sub  ax,[paz+si]
         jns  @@g2
         neg  ax
 @@g2:   add  bx,ax
-        cmp  bx,10000
+        cmp  bx,[airng]
         jl   @@shoot
 @@tgn:  add  di,2
         cmp  di,NPLANE*2
@@ -2718,6 +2797,23 @@ TRCUPD: xor  bx,bx
         jmp  @@n
 @@thn:  pop  di
         pop  bx
+        ; ---- and did it meet a radar station? (buildings first: they
+        ; are the common case, and the station test costs a far call) ----
+        mov  di,bx
+        add  di,di
+        mov  ax,[tcx+di]
+        mov  [rhx],ax
+        mov  ax,[tcy+di]
+        mov  [rhy],ax
+        mov  ax,[tcz+di]
+        mov  [rhz],ax
+        mov  byte ptr [rhdmg],1 ; one shell, one point
+        push bx
+        call FAR PTR RSHITF
+        pop  bx
+        or   ax,ax
+        jz   @@n
+        mov  byte ptr [trcact+bx],0 ; the round is spent in the lattice
 @@n:    inc  bx
         cmp  bx,NTRC
         jb   @@t
@@ -3682,14 +3778,7 @@ BDAMAGE:
 ;  inside, falling under the usual wreck physics, burning and smoking.
 ;  Needs HBLD data valid (bhgt2, bschm). Clobbers everything.
 ; ---------------------------------------------------------------------------
-BWRECK: mov  di,[wnext]         ; claim a wreck slot
-        add  word ptr [wnext],WRKSZ
-        cmp  word ptr [wnext],WRKSZ*4
-        jb   @@w1
-        mov  word ptr [wnext],0
-@@w1:   add  di,offset WRK
-        mov  word ptr [di],1
-        mov  ax,[gi]            ; cell centre world coords
+BWRECK: mov  ax,[gi]            ; cell centre world coords
         mov  cl,8
         shl  ax,cl
         add  ax,128
@@ -3701,6 +3790,15 @@ BWRECK: mov  di,[wnext]         ; claim a wreck slot
         add  ax,128
         sub  ax,BIAS
         mov  [bpz],ax
+        ; ---- fall into WRKAT: everything below works from bpx/bpz alone,
+        ; which is how a radar station borrows the whole thing (WRKATF) ----
+WRKAT:  mov  di,[wnext]         ; claim a wreck slot
+        add  word ptr [wnext],WRKSZ
+        cmp  word ptr [wnext],WRKSZ*4
+        jb   @@w1
+        mov  word ptr [wnext],0
+@@w1:   add  di,offset WRK
+        mov  word ptr [di],1
         mov  dx,[bpx]           ; a falling house is heard by distance
         mov  bx,[bpz]
         call SFXBM2

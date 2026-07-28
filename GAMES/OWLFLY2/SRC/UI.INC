@@ -387,7 +387,7 @@ XSPLASH:
         mov  word ptr [ujx],0
         call UJET
         mov  ax,[ujz]
-        add  ax,2200            ; the wingmen hang back
+        add  ax,600            ; the wingmen hang back
         mov  [ujz],ax
         mov  word ptr [ujx],-1500
         call UJET
@@ -1049,6 +1049,600 @@ MINIMAP2:
         mov  al,19              ; red course tick
         mov  es:[di],al
         ret
+
+
+; ============================================================================
+;  THE GROUND RADAR STATIONS, evicted to UISEG the day they were written:
+;  the main segment had ~600 bytes left and the station code alone wanted
+;  more. Only the MODELS and the state words stayed home (MODELDRAW reads
+;  them with DS = the main segment); everything that only computes lives
+;  out here and knocks on the four far doors in PLANES.INC when it needs
+;  home. Far doors: RSTAINITF (once, after DSGEN), RSTADRAWF (per frame)
+;  and RSBLIPF (the scope mark; the map mark rides out with MAPHUMF).
+; ============================================================================
+RSTAINITF PROC FAR
+        call RSTAINIT
+        ret
+RSTAINITF ENDP
+RSTADRAWF PROC FAR
+        call RSTADRAW
+        ret
+RSTADRAWF ENDP
+RSBLIPF PROC FAR
+        call RSBLIP
+        ret
+RSBLIPF ENDP
+RSHITF  PROC FAR
+        call RSHIT
+        ret
+RSHITF  ENDP
+RSNOISF PROC FAR
+        call RSNOISE
+        ret
+RSNOISF ENDP
+
+; ---------------------------------------------------------------------------
+;  RSTAINIT - plant the two ground radar stations. Both stand on the
+;  map's north-south spine (x = 24576, where the squadrons form up):
+;  OURS 7000 south of the border, THEIRS 7000 north of it - deep in the
+;  rear, past the tanker's lane, so reaching the enemy's is a sortie and
+;  defending ours is a job. Runs after DSGEN: it needs the heightmap.
+; ---------------------------------------------------------------------------
+RSTAINIT:
+        mov  word ptr [rsi],0
+@@s:    mov  bx,[rsi]
+        mov  byte ptr [rsst+bx],0
+        mov  byte ptr [rshp+bx],RSHITS
+        add  bx,bx              ; word index
+        mov  word ptr [rsx+bx],24576
+        mov  ax,24576
+        cmp  word ptr [rsi],0
+        jne  @@north
+        sub  ax,7000            ; ours: the southern rear
+        jmp  @@sz
+@@north:
+        add  ax,7000            ; theirs: the mirror of it
+@@sz:   mov  [rsz+bx],ax
+        call RSTAGND
+        inc  word ptr [rsi]
+        cmp  word ptr [rsi],NRSTA
+        jb   @@s
+        mov  word ptr [rspin],0
+        ret
+
+; ---------------------------------------------------------------------------
+;  RSTAGND - a radar wants a hilltop, not a beach. Probe eight spots at
+;  1024 apart along the station's own east-west line and keep the highest
+;  ground: on an island world that also keeps it out of the sea (WORLDH
+;  clamps water to 0). in/out: [rsi] = station; writes rsx and rsy.
+; ---------------------------------------------------------------------------
+RSTAGND:
+        mov  bx,[rsi]
+        add  bx,bx
+        mov  ax,[rsx+bx]
+        mov  [ctx],ax           ; the nominal site
+        mov  word ptr [cty],-1  ; best ground so far: none
+        mov  word ptr [tpi],0
+@@p:    mov  ax,[tpi]
+        sub  ax,4
+        mov  cl,10
+        shl  ax,cl              ; (k-4)*1024
+        add  ax,[ctx]
+        mov  [ctz],ax           ; this probe's x
+        push word ptr [camx]    ; TERRH reads the camera position
+        push word ptr [camz]
+        mov  [camx],ax
+        mov  bx,[rsi]
+        add  bx,bx
+        mov  ax,[rsz+bx]
+        mov  [camz],ax
+        call FAR PTR TERRHF
+        pop  word ptr [camz]
+        pop  word ptr [camx]
+        cmp  ax,[cty]
+        jle  @@pn
+        mov  [cty],ax           ; higher ground: move the station here
+        mov  bx,[rsi]
+        add  bx,bx
+        mov  [rsy+bx],ax
+        mov  ax,[ctz]
+        mov  [rsx+bx],ax
+@@pn:   inc  word ptr [tpi]
+        cmp  word ptr [tpi],8
+        jb   @@p
+        ret
+
+; ---------------------------------------------------------------------------
+;  RSTADRAW - the standing stations: the lattice tower welded to the
+;  ground (its model yaw is simply minus ours) and the dish on top at the
+;  spin angle. Two MODELDRAW calls each, drawn after the buildings so the
+;  jets and the burning debris paint over them. ES=bufseg.
+; ---------------------------------------------------------------------------
+RSTADRAW:
+        mov  word ptr [rsi],0
+@@st:   mov  bx,[rsi]
+        cmp  byte ptr [rsst+bx],0
+        jne  @@nx               ; down: the wreck pool has it now
+        add  bx,bx
+        mov  ax,[rsx+bx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[rsz+bx]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        mov  ax,[wdx]           ; the jets' own world-space box reject
+        jns  @@q1
+        neg  ax
+@@q1:   cmp  ax,13000
+        jge  @@nx
+        mov  ax,[wdz]
+        jns  @@q2
+        neg  ax
+@@q2:   cmp  ax,13000
+        jge  @@nx
+        call FAR PTR ROTXZF
+        mov  ax,[rcz]
+        cmp  ax,-100
+        jl   @@nx               ; behind us
+        cmp  ax,12500
+        jge  @@nx               ; past the leash
+        mov  [pdz],ax
+        mov  ax,[rcx]
+        mov  [pdx],ax
+        mov  bx,[rsi]
+        add  bx,bx
+        mov  ax,[rsy+bx]
+        sub  ax,[camy]
+        mov  [pdy],ax
+        xor  ax,ax              ; the tower stands still: its yaw is ours
+        sub  ax,[heading]
+        call RSTAYAW
+        mov  word ptr [mvb],offset RBASEVT
+        mov  word ptr [mvn],RBASENV*6
+        mov  word ptr [mfb],offset RBASEFC
+        mov  word ptr [nfc],RBASENF
+        call FAR PTR MODELDRAWF
+        mov  ax,[rspin]         ; the dish, sweeping
+        sub  ax,[heading]
+        call RSTAYAW
+        mov  word ptr [mvb],offset RDISHVT
+        mov  word ptr [mvn],RDISHNV*6
+        mov  word ptr [mfb],offset RDISHFC
+        mov  word ptr [nfc],RDISHNF
+        call FAR PTR MODELDRAWF
+@@nx:   inc  word ptr [rsi]
+        cmp  word ptr [rsi],NRSTA
+        jb   @@st
+        ret
+
+; ---------------------------------------------------------------------------
+;  RSBLIP - the stations on the cockpit scope, and they are NOT aircraft:
+;  a CROSS WITH A HOLE (centre dot plus four arms two pixels out) in the
+;  owner's colour - green ours, yellow theirs. No velocity stub, because
+;  it does not fly; no blink, because it is not a warning; and nothing at
+;  all once it is down, since a wrecked antenna returns no echo. The
+;  shape cannot be read as a jet: friends are 3x3 squares, hostiles are
+;  four-point diamonds, and both of those are solid where this has a gap.
+;  Rides RBLIPS' own frame ([rbcx]/[rbcy]/[rbsh]), so it lands on the
+;  radar and on the SIT page alike. ES = bufseg.
+; ---------------------------------------------------------------------------
+RSBLIP: mov  word ptr [rsi],0
+@@l:    mov  bx,[rsi]
+        cmp  byte ptr [rsst+bx],0
+        jne  @@n                ; a dead station paints no return
+        add  bx,bx
+        mov  ax,[rsx+bx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[rsz+bx]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        call FAR PTR ROTXZF     ; rcx = right of the nose, rcz = ahead
+        mov  cl,[rbsh]          ; the scope's live zoom, then a pixel clip
+        mov  ax,[rcx]           ; (12, not 14: the arms need the margin)
+        sar  ax,cl
+        cmp  ax,12
+        jg   @@n
+        cmp  ax,-12
+        jl   @@n
+        mov  bx,[rcz]
+        sar  bx,cl
+        cmp  bx,12
+        jg   @@n
+        cmp  bx,-12
+        jl   @@n
+        add  ax,[rbcx]
+        mov  [dsx],ax
+        mov  ax,[rbcy]
+        sub  ax,bx              ; ahead = up the screen
+        call UROW
+        add  di,[dsx]
+        mov  al,95              ; ours green, theirs yellow - the IFF
+        cmp  word ptr [rsi],0   ; language the blips already speak
+        je   @@c
+        mov  al,96
+@@c:    mov  es:[di],al
+        mov  es:[di-640],al
+        mov  es:[di+640],al
+        mov  es:[di-2],al
+        mov  es:[di+2],al
+@@n:    inc  word ptr [rsi]
+        cmp  word ptr [rsi],NRSTA
+        jb   @@l
+        ret
+
+; ---------------------------------------------------------------------------
+;  RSNOISE - what the scope shows once OUR station is rubble: snow over
+;  the glass and NO RADAR across it. 150 dots of static in two greys,
+;  reseeded every BIOS tick so it crawls, scattered inside the same
+;  +-13 px the blips used; the seed is nudged by [rbcx] so the radar and
+;  the SIT page do not show the identical storm. Takes RBLIPS' place
+;  entirely - a blind set draws no returns, not even the stations.
+; ---------------------------------------------------------------------------
+RSNOISE:
+        mov  ax,[lasttk]
+        add  ax,[rbcx]
+        or   ax,1
+        mov  [tmpi],ax          ; the walking seed
+        mov  word ptr [tpi],0
+@@d:    call RSRND              ; a column...
+        mov  cl,3
+        shr  ax,cl
+        and  ax,26
+        sub  ax,13
+        add  ax,[rbcx]
+        mov  [dsx],ax
+        call RSRND              ; ...and a row
+        mov  cl,3
+        shr  ax,cl
+        and  ax,26
+        sub  ax,13
+        add  ax,[rbcy]
+        call UROW
+        add  di,[dsx]
+        call RSRND              ; two greys: dim static with a spark in it
+        mov  al,30
+        test ah,4
+        jz   @@c
+        mov  al,8
+@@c:    mov  es:[di],al
+        inc  word ptr [tpi]
+        cmp  word ptr [tpi],150
+        jb   @@d
+        mov  byte ptr [COLOR],19 ; and the word for it, in red
+        mov  ax,[rbcx]
+        sub  ax,16
+        mov  [ftx],ax
+        mov  ax,[rbcy]
+        sub  ax,3
+        mov  [fty],ax
+        mov  si,offset MSGNORAD
+        call FAR PTR FDRAWF
+        ret
+; RSRND - the snow's own LCG on [tmpi] (the scope's scratch word)
+RSRND:  mov  ax,[tmpi]
+        mov  bx,25173
+        imul bx
+        add  ax,13849
+        mov  [tmpi],ax
+        ret
+
+; ---------------------------------------------------------------------------
+;  RSHIT - did something of ours land on a station? in: rhx/rhy/rhz = the
+;  point in the world, rhdmg = what it is worth (1 a cannon shell, 4 a
+;  missile). out: AX = 1 if a STANDING station took it, and it took the
+;  damage with it; AX = 0 if the shot flew past. A box test, not a mesh
+;  one: a lattice tower is mostly air and hunting its facets with an
+;  8086 would be a joke. No friendly-fire guard - shells do not read the
+;  IFF, and a pilot who strafes his own antenna has earned the snow.
+; ---------------------------------------------------------------------------
+RSHIT:  mov  word ptr [rsi],0
+@@l:    mov  bx,[rsi]
+        cmp  byte ptr [rsst+bx],0
+        jne  @@n                ; already a ruin: nothing left to break
+        add  bx,bx
+        mov  ax,[rhx]
+        sub  ax,[rsx+bx]
+        jns  @@a1
+        neg  ax
+@@a1:   cmp  ax,RSRAD
+        jge  @@n
+        mov  ax,[rhz]
+        sub  ax,[rsz+bx]
+        jns  @@a2
+        neg  ax
+@@a2:   cmp  ax,RSRAD
+        jge  @@n
+        mov  ax,[rhy]
+        sub  ax,[rsy+bx]        ; height above its own feet
+        js   @@n                ; underground: the terrain ate it
+        cmp  ax,RSTOP
+        jg   @@n                ; over the dish
+        call RSDAM
+        mov  ax,1
+        ret
+@@n:    inc  word ptr [rsi]
+        cmp  word ptr [rsi],NRSTA
+        jb   @@l
+        xor  ax,ax
+        ret
+
+; ---------------------------------------------------------------------------
+;  RSDAM - one hit on station [rsi]. The last one takes it down: the
+;  state word flips, and the wreck pool gets it through WRKATF - the
+;  same eight tumbling slabs, fire, smoke and distance-scaled bang that
+;  a falling building gets, in scheme 0 so the debris is grey steel.
+; ---------------------------------------------------------------------------
+RSDAM:  mov  bx,[rsi]
+        mov  al,[rshp+bx]
+        sub  al,[rhdmg]
+        jbe  @@dead
+        mov  [rshp+bx],al
+        ret
+@@dead: mov  byte ptr [rshp+bx],0
+        mov  byte ptr [rsst+bx],1
+        mov  al,bl              ; and tell the wire: one shot, next tick
+        inc  al
+        mov  [rsnet],al
+        add  bx,bx
+        mov  ax,[rsx+bx]
+        mov  [bpx],ax
+        mov  ax,[rsz+bx]
+        mov  [bpz],ax
+        mov  word ptr [bschm],0 ; grey walls: steel, not brick
+        call FAR PTR WRKATF
+        ret
+
+; ---------------------------------------------------------------------------
+;  RSMAP - the stations on the centre MFD map, so you can see what you are
+;  defending without hunting for it. Same cross, one pixel across at this
+;  scale, in the owner's colour; a station that is DOWN stays on the map
+;  in trim grey - the ruin is information too. No clipping: both stations
+;  are planted at fixed coordinates that land well inside the 32x32 glass
+;  (rows 167..174, columns 158..162), and RSTAINIT is what keeps it so.
+; ---------------------------------------------------------------------------
+RSMAP:  mov  word ptr [rsi],0
+@@l:    mov  bx,[rsi]
+        mov  al,95
+        or   bx,bx
+        jz   @@c1
+        mov  al,96
+@@c1:   cmp  byte ptr [rsst+bx],0
+        je   @@c2
+        mov  al,30              ; a ruin: grey, and still worth knowing
+@@c2:   push ax
+        add  bx,bx
+        mov  ax,[rsx+bx]        ; node col/2 - MINIMAP2's own arithmetic
+        add  ax,BIAS
+        mov  cl,10
+        shr  ax,cl
+        and  ax,63
+        shr  ax,1
+        mov  dx,ax
+        mov  ax,[rsz+bx]
+        add  ax,BIAS
+        mov  cl,10
+        shr  ax,cl
+        and  ax,63
+        mov  bx,63
+        sub  bx,ax              ; row = 63 - node z, halved
+        shr  bx,1
+        mov  ax,bx
+        add  ax,155
+        call UROW
+        add  di,144
+        add  di,dx
+        pop  ax
+        mov  es:[di],al
+        mov  es:[di-320],al
+        mov  es:[di+320],al
+        mov  es:[di-1],al
+        mov  es:[di+1],al
+        inc  word ptr [rsi]
+        cmp  word ptr [rsi],NRSTA
+        jb   @@l
+        ret
+
+; RSTAYAW - model yaw in AX (any sign) -> msin/mcos. SINQ wraps it.
+RSTAYAW:
+        and  ax,255
+        push ax
+        call FAR PTR SINQF
+        mov  [msin],ax
+        pop  ax
+        add  ax,64
+        call FAR PTR SINQF
+        mov  [mcos],ax
+        ret
+
+; ============================================================================
+;  MAPHUM followed MINIMAP2F out here (2026-07-28, the radar stations):
+;  it draws ON that map and only plots glyphs, so it belongs beside it.
+;  Far door: MAPHUMF. FDRAW stayed home behind FDRAWF - the strings and
+;  NB it reads are main-segment bytes and DS is the main segment here.
+; ============================================================================
+MAPHUMF PROC FAR
+        call MAPHUM
+        call RSMAP              ; ...and the two stations, on the same glass
+        ret
+MAPHUMF ENDP
+; ============================================================================
+;  MAPHUM - the humans on the centre map: callsign letter + altitude
+;  digit (thousands) at their node, white, over the half-scale map at
+;  (144,155). ES=bufseg, DS=CS.
+; ============================================================================
+MAPHUM: xor  si,si
+@@mh:   mov  bx,si
+        shr  bx,1
+        cmp  byte ptr [premote+bx],0
+        je   @@mhn
+        cmp  byte ptr [pst+bx],0
+        jne  @@mhn
+        mov  al,[pltr+bx]
+        or   al,al
+        jz   @@mhn
+        mov  [NB],al
+        mov  ax,[pay+si]        ; the altitude digit, thousands
+        or   ax,ax
+        jns  @@mhp
+        xor  ax,ax
+@@mhp:  xor  dx,dx
+        mov  bx,1000
+        div  bx
+        cmp  ax,9
+        jbe  @@mhd
+        mov  ax,9
+@@mhd:  add  al,'0'
+        mov  [NB+1],al
+        mov  byte ptr [NB+2],0
+        mov  ax,[pax+si]        ; node col/2 on the half-scale map
+        add  ax,BIAS
+        mov  cl,10
+        shr  ax,cl
+        and  ax,63
+        shr  ax,1
+        add  ax,144-1
+        mov  [ftx],ax
+        mov  ax,[paz+si]
+        add  ax,BIAS
+        mov  cl,10
+        shr  ax,cl
+        and  ax,63
+        mov  bx,63
+        sub  bx,ax
+        shr  bx,1
+        add  bx,155-3           ; centre the glyph rows on the node...
+        cmp  bx,155
+        jge  @@mhy
+        mov  bx,155             ; ...but keep it inside the MFD glass
+@@mhy:  cmp  bx,181
+        jle  @@mhz
+        mov  bx,181
+@@mhz:  mov  [fty],bx
+        mov  byte ptr [COLOR],8
+        push si
+        mov  si,offset NB
+        call FAR PTR FDRAWF
+        pop  si
+@@mhn:  add  si,2
+        cmp  si,NPLANE*2
+        jb   @@mh
+        ret
+
+
+STATPGF PROC FAR
+        call STATPG
+        ret
+STATPGF ENDP
+; ============================================================================
+;  STATPG - the right (green) MFD as pure status: the war score row,
+;  gun rounds, missile rails, damage pips - everything the scope used
+;  to carry. ES=bufseg, DS=CS.
+; ============================================================================
+STATPG: mov  ax,156             ; green square: kills by our team
+        call UROW
+        add  di,197
+        mov  al,95
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+2],al
+        mov  es:[di+320],al
+        mov  es:[di+322],al
+        mov  es:[di+640],al
+        mov  es:[di+641],al
+        mov  es:[di+642],al
+        mov  ax,156             ; yellow diamond: kills by theirs
+        call UROW
+        add  di,234
+        mov  al,96
+        mov  es:[di+1],al
+        mov  es:[di+320],al
+        mov  es:[di+322],al
+        mov  es:[di+641],al
+        mov  byte ptr [COLOR],95
+        mov  word ptr [ftx],203
+        mov  word ptr [fty],156
+        mov  ax,[tscf]
+        call FAR PTR FNUMF
+        mov  byte ptr [COLOR],8 ; own kills, centre, white
+        mov  word ptr [ftx],216
+        mov  word ptr [fty],156
+        mov  ax,[psc]
+        call FAR PTR FNUMF
+        mov  byte ptr [COLOR],96
+        mov  word ptr [ftx],226
+        mov  word ptr [fty],156
+        mov  ax,[tsch]
+        call FAR PTR FNUMF
+        mov  byte ptr [COLOR],97 ; cannon rounds
+        mov  word ptr [ftx],197
+        mov  word ptr [fty],165
+        mov  si,offset MSGGUN
+        call FAR PTR FDRAWF
+        mov  byte ptr [COLOR],8
+        mov  word ptr [ftx],215
+        mov  ax,[gunam]
+        call FAR PTR FNUMF
+        mov  byte ptr [COLOR],97 ; missile rails: label + a pip each
+        mov  word ptr [ftx],197
+        mov  word ptr [fty],174
+        mov  si,offset MSGMSL
+        call FAR PTR FDRAWF
+        xor  si,si
+@@amo:  mov  ax,si
+        cmp  al,[pammo]
+        jae  @@amn
+        mov  ax,175
+        call UROW
+        add  di,215
+        mov  ax,si
+        add  ax,ax
+        mov  bx,ax
+        add  ax,ax
+        add  ax,bx              ; k*6
+        add  di,ax
+        mov  al,97
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+2],al
+        mov  es:[di+3],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+        mov  es:[di+322],al
+        mov  es:[di+323],al
+@@amn:  inc  si
+        cmp  si,4
+        jb   @@amo
+        mov  byte ptr [COLOR],97 ; damage: label + red pips
+        mov  word ptr [ftx],197
+        mov  word ptr [fty],182
+        mov  si,offset MSGDAM
+        call FAR PTR FDRAWF
+        xor  si,si
+@@dmp:  mov  ax,si
+        cmp  al,[pdam]
+        jae  @@dmn
+        mov  ax,183
+        call UROW
+        add  di,215
+        mov  ax,si
+        add  ax,ax
+        mov  bx,ax
+        add  ax,ax
+        add  ax,bx              ; k*6
+        add  di,ax
+        mov  al,19
+        mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+2],al
+        mov  es:[di+320],al
+        mov  es:[di+321],al
+        mov  es:[di+322],al
+@@dmn:  inc  si
+        cmp  si,5
+        jb   @@dmp
+        ret
+
 
 ; ---- THE WINDOW GUARD ------------------------------------------------------
 IF ($-GLIST) GT 8176

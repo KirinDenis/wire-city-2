@@ -384,6 +384,7 @@ MAIN:
         ; (the BSS wipe and SBINIT went up before the menu; the F15
         ; model is BAKED into the image by Obj2Inc at build time)
 
+        call FAR PTR RSTAINITF  ; plant the two ground radar stations
         ; ---- AI traffic: two squadrons scattered around the player ----
         call RESPAWNALL
         cmp  byte ptr [gbots],0 ; a botless sky is a clean arena:

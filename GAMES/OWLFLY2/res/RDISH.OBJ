@@ -1,0 +1,48 @@
+# RDISH.OBJ - the radar antenna, WIRE CITY style: a SIX-panel dish where
+# the trainer's had eight. Faceted on purpose - the whole world is built
+# of flat chunks, and a smooth bowl read as a foreign object among them.
+# Modelled around the origin: the origin IS the spin axis, and the dish
+# looks down -Z, so the game turns it by yawing the model.
+v 0.0000 21.0000 0.0000
+v 4.5000 21.0000 -1.1250
+v 9.0000 21.0000 -4.5000
+v 2.2500 24.8971 -1.1250
+v 4.5000 28.7942 -4.5000
+v -2.2500 24.8971 -1.1250
+v -4.5000 28.7942 -4.5000
+v -4.5000 21.0000 -1.1250
+v -9.0000 21.0000 -4.5000
+v -2.2500 17.1029 -1.1250
+v -4.5000 13.2058 -4.5000
+v 2.2500 17.1029 -1.1250
+v 4.5000 13.2058 -4.5000
+v -0.1800 21.0000 -0.6000
+v 0.1800 21.0000 -0.6000
+v 0.1800 21.0000 -5.7000
+v -0.1800 21.0000 -5.7000
+v -0.7500 20.2500 -4.5000
+v 0.7500 20.2500 -4.5000
+v 0.7500 21.7500 -4.5000
+v -0.7500 21.7500 -4.5000
+usemtl PAL24
+f 1 2 4
+f 2 3 5 4
+usemtl PAL25
+f 1 4 6
+f 4 5 7 6
+usemtl PAL24
+f 1 6 8
+f 6 7 9 8
+usemtl PAL25
+f 1 8 10
+f 8 9 11 10
+usemtl PAL24
+f 1 10 12
+f 10 11 13 12
+usemtl PAL25
+f 1 12 2
+f 12 13 3 2
+usemtl PAL16
+f 14 15 16 17
+usemtl PAL0
+f 18 19 20 21

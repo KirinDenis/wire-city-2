@@ -289,6 +289,23 @@ NETPOS: cmp  byte ptr [netok],0
         cmp  ax,[sentk]
         je   @@r
         mov  [sentk],ax
+        ; ---- 'R': a radar station just fell on this machine. One shot,
+        ; sent ahead of the position packet (it borrows the same SPAY);
+        ; the host's 'G' ad below is what makes it stick for everyone.
+        cmp  byte ptr [rsnet],0
+        je   @@nors
+        mov  byte ptr [SPAY],'R'
+        mov  ax,[mypid]
+        mov  word ptr [SPAY+1],ax
+        mov  ax,[ggid]
+        mov  word ptr [SPAY+3],ax
+        mov  al,[rsnet]
+        dec  al
+        mov  [SPAY+5],al
+        mov  cx,6
+        call NETXMIT
+        mov  byte ptr [rsnet],0
+@@nors:
         mov  byte ptr [SPAY],'P'
         mov  ax,[mypid]
         mov  word ptr [SPAY+1],ax
@@ -359,6 +376,14 @@ NETADS: mov  byte ptr [SPAY],'G'
         mov  [SPAY+7],ah
         mov  al,[gbots]
         mov  [SPAY+8],al
+        xor  al,al              ; +17: which stations are rubble. The ad is
+        cmp  byte ptr [rsst],0  ; the TRUTH - an 'R' packet can be lost, this
+        je   @@r0               ; one comes round again every second
+        or   al,1
+@@r0:   cmp  byte ptr [rsst+1],0
+        je   @@r1
+        or   al,2
+@@r1:   mov  [SPAY+17],al
         push es
         mov  ax,SKYSEG          ; the name rides at +9: DS gname ->
         mov  es,ax              ; our own SPAY via es:di
@@ -368,7 +393,7 @@ NETADS: mov  byte ptr [SPAY],'G'
         cld
         rep  movsb
         pop  es
-        mov  cx,17
+        mov  cx,18              ; 17 was the ad before the stations
         call NETXMIT
         ret
 
@@ -401,6 +426,18 @@ NETPOLL:
         je   @@gad
         cmp  al,'H'
         je   @@hit
+        cmp  al,'R'
+        je   @@rst
+        jmp  @@rearm
+@@rst:  ; ---- a radar station went down on somebody else's machine ----
+        mov  dx,word ptr cs:[bx+3]  ; in OUR sky?
+        cmp  dx,[ggid]
+        jne  @@rearm
+        mov  al,cs:[bx+5]
+        cmp  al,NRSTA
+        jae  @@rearm
+        xor  ah,ah
+        call RSDOWN
         jmp  @@rearm
 @@hit:  ; ---- somebody's guns found us: only WE may act on it ----
         mov  ax,word ptr cs:[bx+1]  ; is this hit addressed to us?
@@ -473,6 +510,23 @@ NETPOLL:
         mov  ax,es:[6Ch]
         pop  es
         mov  word ptr es:[GLAST+di],ax
+        ; ---- the ad also carries the radar stations. If the host says one
+        ; is rubble and ours is still standing, an 'R' went missing: take
+        ; it down now. The other way round never happens - only the owner
+        ; of the sky publishes, and nothing ever stands back up.
+        mov  dx,word ptr cs:[bx+1]
+        cmp  dx,[ggid]
+        jne  @@gz
+        mov  al,cs:[bx+17]
+        mov  dl,al
+        test al,1
+        jz   @@ga1
+        xor  ax,ax
+        call RSDOWN
+@@ga1:  test dl,2
+        jz   @@gz
+        mov  ax,1
+        call RSDOWN
 @@gz:   pop  si
         pop  es
         jmp  @@rearm
@@ -643,6 +697,19 @@ RNDOT:  mov  ax,[hsin]          ; one wall-grey dot SI px north
         mov  al,0
         mov  es:[di],al
         ret
+
+; ---- RSDOWN: the wire says station AX is rubble ----------------------------
+; Idempotent - a station never stands back up, so the second telling is a
+; no-op. Only the FIRST one asks for the fire: this segment cannot reach
+; the wreck pool (no near calls home), so it leaves a flag and NETAPPLY,
+; over in the main segment, breaks the thing up where everyone can see it.
+RSDOWN: mov  di,ax
+        cmp  byte ptr [rsst+di],0
+        jne  @@d
+        mov  byte ptr [rsst+di],1
+        inc  al
+        mov  [rsboom],al
+@@d:    ret
 
 ; ---- RSLOT: pid in AX -> remote index in DI (alloc), -1 if full ------------
 RSLOT:  push si

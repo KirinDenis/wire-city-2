@@ -1,6 +1,10 @@
 ; WORLD.INC - part of WIRE CITY (included from CITY.ASM)
 ; DEAD (flat-ground era; replaced by the TERRAIN mesh, no callers) -----------
+; Kept as READING, not as bytes: the radar stations of 2026-07-28 needed the
+; room and this routine had no callers left. IF 0 hands the whole thing to
+; the assembler's wastebasket - every line survives here, none of them ship.
 ; ----- ground grid: world-aligned lines around the camera (rotate with view)
+IF 0
 GRID:   mov  byte ptr [COLOR],6
         ; lines parallel to world-Z (fixed X = gi)
         mov  ax,[camgi]
@@ -104,7 +108,7 @@ GRID:   mov  byte ptr [COLOR],6
         cmp  ax,bx
         jle  @@gz
         ret
-
+ENDIF
 ; ----- buildings: one linear far->near walk of the BORD order table ---------
 ;  2401 cells to radius 24; empty cells drop out of RENDERCELL quickly, and
 ;  the clustered city keeps the populated count low. Real buildings all the

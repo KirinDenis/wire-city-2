@@ -22,6 +22,7 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
         call TERRPREP           ; rotate + cache the terrain nodes
         call TERRAIN            ; real 3D relief, far -> near
         call BUILDINGS          ; real buildings to the horizon (BORD walk)
+        call FAR PTR RSTADRAWF  ; the two ground radar stations, dish turning
         call WRECKDRAW          ; fallen jets burn on the ground
         call PLANESDRAW         ; AI jets own the sky
         cmp  byte ptr [chsview],0

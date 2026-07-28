@@ -80,6 +80,26 @@ The first build is byte-identical to OWL FLY (`FLYOWL2.COM` and
    type, RNG/ALT, live wireframe) on the M key; the right MFD is
    pure status (score, GUN, MSL, DAM); any human in view wears a
    white nameplate - letter + range - at any distance
+8. **done 2026-07-28** — **the radar stations**: two of them, one per
+   side, planted on the map's north-south spine 7000 either side of
+   the front line, standing on the highest ground within 4 km of
+   their mark. A lattice mast and a six-panel dish (`res/RBASE.OBJ`,
+   `res/RDISH.OBJ` through Obj2Inc, six panels not eight - this world
+   is cut from flat chunks and a smooth bowl read as a foreign
+   object), and the dish sweeps: one turn every ~4.7 s. On the scope
+   they are NOT aircraft - a cross with a hole, owner-coloured, no
+   velocity stub, no blink - and they sit on the centre-MFD map too,
+   so you can see what you are defending. Eight cannon hits or two
+   missiles and a station comes apart into the wreck pool: slabs,
+   fire, smoke, the bang scaled by distance. Then the consequences.
+   YOURS down and the scope goes to crawling snow with NO RADAR
+   across it - no blips, no stations, nothing. THEIRS down and their
+   AI is blind: 10000-unit missile shots become 2500, eyeball range.
+   Over the wire an 'R' packet reports the fall and the host's 'G' ad
+   carries the standing/rubble bits every second, so a lost packet
+   heals and a joiner arrives with the right picture. The station
+   code lives in UISEG behind six far doors - the main segment had
+   ~600 bytes left and this feature wanted more than that
 
 ## The front door (2026-07-24)
 
