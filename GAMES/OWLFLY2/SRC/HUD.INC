@@ -436,7 +436,7 @@ PANELBMP:
         jmp  @@pgd
 @@psit: call SITPG              ; heading-up close-zoom labeled radar
         jmp  @@pgd
-@@ptgt: call TGTVIEW            ; the locked target's data page
+@@ptgt: call FAR PTR TGTVIEWF   ; the locked target's data page
 @@pgd:  call FAR PTR STATPGF    ; the right MFD: score and arms
         ; ---- title strip: name, mission time, altitude ----
         mov  byte ptr [COLOR],8

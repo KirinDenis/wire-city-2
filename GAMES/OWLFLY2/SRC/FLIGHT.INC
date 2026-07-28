@@ -467,8 +467,11 @@ INPUT:
         cmp  si,0FFFFh
         je   @@nf4              ; nothing locked: nothing to orbit
         mov  [tgti],si          ; remember the star of the show
+        xor  ax,ax              ; a station has no heading to sit behind
+        cmp  si,RSLK
+        jae  @@f4az
         mov  ax,[pah+si]
-        mov  [tgaz],ax          ; start right behind the target
+@@f4az: mov  [tgaz],ax          ; start right behind the target
         mov  word ptr [tgel],12
         mov  byte ptr [tgtcam],1
         jmp  @@nf4
@@ -591,6 +594,8 @@ INPUT:
 @@lkn:  add  si,2
         cmp  si,NPLANE*2
         jb   @@lks
+        call FAR PTR RSLOCKF    ; the ground radars are targets too, and
+                                ; they play by the same nearest-wins rule
 @@nlk:
         ; --- wind drift (world space, constant breeze) ---
         mov  ax,[camx]

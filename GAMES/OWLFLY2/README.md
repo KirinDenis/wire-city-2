@@ -97,9 +97,18 @@ The first build is byte-identical to OWL FLY (`FLYOWL2.COM` and
    AI is blind: 10000-unit missile shots become 2500, eyeball range.
    Over the wire an 'R' packet reports the fall and the host's 'G' ad
    carries the standing/rubble bits every second, so a lost packet
-   heals and a joiner arrives with the right picture. The station
-   code lives in UISEG behind six far doors - the main segment had
-   ~600 bytes left and this feature wanted more than that
+   heals and a joiner arrives with the right picture. And a station
+   is a TARGET like any other: ENTER locks it by the same
+   nearest-inside-the-ring rule the jets play by, the designator ring
+   and its off-screen pointer follow it, the TGT page names it RADAR
+   and draws its dish turning in wireframe, a missile homes on it
+   (two level a station), F4 orbits it, and the lock dies with it.
+   The trick that made that cheap: a locked station rides in `locki`
+   as 0FFF0h + index*2, so the IFF parity test every reader already
+   does comes out right, and one helper - LKPOS - answers "where is
+   the target" for the ring, the page, the missile and the camera
+   alike. The station code lives in UISEG behind its far doors - the
+   main segment had ~600 bytes left and this feature wanted more
 
 ## The front door (2026-07-24)
 

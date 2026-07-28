@@ -707,6 +707,13 @@ RSDOWN: mov  di,ax
         cmp  byte ptr [rsst+di],0
         jne  @@d
         mov  byte ptr [rsst+di],1
+        push ax
+        add  ax,ax              ; a lock on it dies with it
+        add  ax,RSLK
+        cmp  ax,[locki]
+        jne  @@nl
+        mov  word ptr [locki],0FFFFh
+@@nl:   pop  ax
         inc  al
         mov  [rsboom],al
 @@d:    ret

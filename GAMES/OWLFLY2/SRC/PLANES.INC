@@ -907,6 +907,54 @@ WRKATF  PROC FAR
         call WRKAT              ; break something at bpx/bpz into the pool
         ret
 WRKATF  ENDP
+PPOINTF PROC FAR
+        call PPOINT             ; the station lock-scan projects out there
+        ret
+PPOINTF ENDP
+
+; ---------------------------------------------------------------------------
+;  LKPOS - where the locked target is, in world coordinates: lkx/lky/lkz.
+;  in: SI = a lock index - a plane offset, or RSLK+idx*2 for a ground
+;  radar station. Every reader of the lock (the ring, the TGT page, the
+;  missile's homing head, the F4 orbit camera) comes through here, which
+;  is the whole reason a station can be a target at all. A station is
+;  aimed at HALF ITS HEIGHT, not at its feet: that is where the dish is,
+;  and it is what a missile should fly into. Clobbers AX, BX.
+; ---------------------------------------------------------------------------
+LKPOS:  cmp  si,RSLK
+        jb   @@pl
+        mov  bx,si
+        sub  bx,RSLK            ; the encoding IS the word index
+        mov  ax,[rsx+bx]
+        mov  [lkx],ax
+        mov  ax,[rsy+bx]
+        add  ax,RSTOP/2
+        mov  [lky],ax
+        mov  ax,[rsz+bx]
+        mov  [lkz],ax
+        ret
+@@pl:   mov  ax,[pax+si]
+        mov  [lkx],ax
+        mov  ax,[pay+si]
+        mov  [lky],ax
+        mov  ax,[paz+si]
+        mov  [lkz],ax
+        ret
+
+; ---------------------------------------------------------------------------
+;  LKDEAD - is the locked target gone? ZF=0 (NZ) if it is. SI = lock index.
+; ---------------------------------------------------------------------------
+LKDEAD: cmp  si,RSLK
+        jb   @@pl
+        mov  bx,si
+        sub  bx,RSLK
+        shr  bx,1
+        cmp  byte ptr [rsst+bx],0
+        ret
+@@pl:   mov  bx,si
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        ret
 
 ; ---------------------------------------------------------------------------
 ;  PPOINT - project one camera-space point (yaw-rotated, not yet pitched).
@@ -1009,16 +1057,17 @@ LOCKHUD:
         cmp  si,0FFFFh
         je   @@done
         ; where is the target on screen?
-        mov  ax,[pax+si]
+        call LKPOS              ; jet or radar station: one answer
+        mov  ax,[lkx]
         sub  ax,[camx]
         mov  [wdx],ax
-        mov  ax,[paz+si]
+        mov  ax,[lkz]
         sub  ax,[camz]
         mov  [wdz],ax
         push si
         call ROTXZ
         pop  si
-        mov  dx,[pay+si]
+        mov  dx,[lky]
         sub  dx,[camy]
         mov  ax,[rcx]
         mov  cx,[rcz]
@@ -1109,7 +1158,13 @@ LOCKHUD:
 ;  CSDRAW - print the callsign of plane SI (offset) at ftx/fty in the
 ;  current COLOR: pool name (friendly/hostile by parity) + number.
 ; ---------------------------------------------------------------------------
-CSDRAW: push si
+CSDRAW: cmp  si,RSLK
+        jb   @@plane
+        mov  si,offset TYPN2    ; a station has no callsign - it IS the
+        call FDRAW              ; radar, and TYPN2 already says the word
+        ret
+@@plane:
+        push si
         mov  bx,si
         shr  bx,1
         mov  al,[pcs+bx]
@@ -1134,6 +1189,8 @@ CSDRAW: push si
 
 ; ---- TYPDRAW: the aircraft type tag at ftx/fty. in: SI = plane offset -----
 TYPDRAW:
+        cmp  si,RSLK
+        jae  @@r                ; the station said it on the line above
         mov  bx,si
         shr  bx,1
         mov  al,[ptype+bx]
@@ -1146,168 +1203,31 @@ TYPDRAW:
         call FDRAW
 @@r:    ret
 
-; ---------------------------------------------------------------------------
-;  TGTVIEW - the TGT page on the CENTRE MFD: callsign (worn in the
-;  IFF colour), type, range, target altitude and a wireframe of the
-;  jet (aspect follows its heading). No lock: the page says NO TGT.
-; ---------------------------------------------------------------------------
-TGTVIEW:
-        mov  si,[locki]
-        cmp  si,0FFFFh
-        jne  @@tgo
-        mov  byte ptr [COLOR],97 ; nothing locked: the page says so
-        mov  word ptr [ftx],148
-        mov  word ptr [fty],168
-        mov  si,offset MSGNOT
-        call FDRAW
-        ret
-@@tgo:  mov  byte ptr [COLOR],19 ; the callsign wears the IFF colour
-        test si,2
-        jnz  @@tgc
-        mov  byte ptr [COLOR],95
-@@tgc:  mov  word ptr [ftx],138
-        mov  word ptr [fty],156
-        call CSDRAW
-        mov  byte ptr [COLOR],8
-        mov  word ptr [ftx],138
-        mov  word ptr [fty],164
-        mov  si,[locki]
-        call TYPDRAW
-        mov  byte ptr [COLOR],97 ; range: octagonal max + 3*(min/8)
-        mov  word ptr [ftx],138
-        mov  word ptr [fty],172
-        mov  si,offset MSGRNG
-        call FDRAW
-        mov  si,[locki]
-        mov  ax,[pax+si]
-        sub  ax,[camx]
-        jns  @@tr1
-        neg  ax
-@@tr1:  mov  bx,[paz+si]
-        sub  bx,[camz]
-        jns  @@tr2
-        neg  bx
-@@tr2:  cmp  ax,bx
-        jae  @@tr3
-        xchg ax,bx
-@@tr3:  mov  cl,3
-        shr  bx,cl
-        add  ax,bx              ; max 32767 + 3*4095: read UNSIGNED
-        add  ax,bx
-        add  ax,bx
-        cmp  ax,30000           ; clamp before FNUMK's signed idiv era
-        jbe  @@trc
-        mov  ax,30000
-@@trc:  mov  word ptr [ftx],154
-        mov  byte ptr [COLOR],8
+; ---- the far doors the TGT page knocks on from UISEG ----------------------
+FNUMKF  PROC FAR
         call FNUMK
-        mov  byte ptr [COLOR],97 ; the target's altitude
-        mov  word ptr [ftx],138
-        mov  word ptr [fty],180
-        mov  si,offset MSGALT
-        call FDRAW
-        mov  word ptr [ftx],156
-        mov  byte ptr [COLOR],8
-        mov  si,[locki]
-        mov  ax,[pay+si]
-        or   ax,ax
-        jns  @@tr4
-        xor  ax,ax
-@@tr4:  call FNUMK
-        ; wireframe: rotate the model by its aspect, project small
-        mov  si,[locki]         ; FNUMK's font walk ate SI
-        mov  bx,si
-        shr  bx,1
-        mov  al,[ptype+bx]
-        xor  ah,ah
-        add  ax,ax
-        mov  bx,ax
-        mov  ax,[MVTAB+bx]
-        mov  [mvb],ax
-        mov  ax,[MVNTAB+bx]
-        mov  [mvn],ax
-        mov  ax,[pah+si]
-        sub  ax,[heading]
-        and  ax,255
-        push ax
-        call SINQ
-        mov  [msin],ax
-        pop  ax
-        add  ax,64
-        call SINQ
-        mov  [mcos],ax
-        xor  si,si
-        xor  di,di
-@@tv2:  mov  bx,[mvb]
-        mov  ax,[bx+si]         ; vx = (mx*mcos + mz*msin)/256
-        imul word ptr [mcos]
-        mov  cx,ax
-        mov  bx,[mvb]
-        mov  ax,[bx+si+4]
-        imul word ptr [msin]
-        add  ax,cx
-        cwd
-        mov  bx,256
-        idiv bx
-        mov  [dsx],ax
-        mov  bx,[mvb]
-        mov  ax,[bx+si]         ; vz = (mz*mcos - mx*msin)/256 + 300
-        imul word ptr [msin]
-        mov  cx,ax
-        mov  bx,[mvb]
-        mov  ax,[bx+si+4]
-        imul word ptr [mcos]
-        sub  ax,cx
-        cwd
-        mov  bx,256
-        idiv bx
-        add  ax,75
-        mov  [dsac],ax
-        mov  ax,[dsx]           ; sx = 160 + vx*64/vz (centre MFD)
-        mov  bx,64
-        imul bx
-        idiv word ptr [dsac]
-        add  ax,160
-        mov  [PVX+di],ax
-        mov  bx,[mvb]
-        mov  ax,[bx+si+2]       ; sy = 170 - vy*64/vz
-        mov  bx,64
-        imul bx
-        idiv word ptr [dsac]
-        mov  bx,170
-        sub  bx,ax
-        mov  [PVY+di],bx
-        add  si,6
-        add  di,2
-        cmp  si,[mvn]
-        jb   @@tv2
-        xor  si,si              ; sensor-green edges
-@@te:   mov  al,[WEDG+si]
-        xor  ah,ah
-        add  ax,ax
-        mov  bx,ax
-        mov  ax,[PVX+bx]
-        mov  [sx0],ax
-        mov  ax,[PVY+bx]
-        mov  [sy0],ax
-        mov  al,[WEDG+si+1]
-        xor  ah,ah
-        add  ax,ax
-        mov  bx,ax
-        mov  ax,[PVX+bx]
-        mov  [sx1],ax
-        mov  ax,[PVY+bx]
-        mov  [sy1],ax
-        mov  byte ptr [COLOR],95
-        push si
-        call CLIPLINE
-        jc   @@ten
-        call LINE
-@@ten:  pop  si
-        add  si,2
-        cmp  si,NWEDG*2
-        jb   @@te
         ret
+FNUMKF  ENDP
+CSDRAWF PROC FAR
+        call CSDRAW
+        ret
+CSDRAWF ENDP
+TYPDRAWF PROC FAR
+        call TYPDRAW
+        ret
+TYPDRAWF ENDP
+CLIPLINF PROC FAR
+        call CLIPLINE
+        ret
+CLIPLINF ENDP
+LINEF   PROC FAR
+        call LINE
+        ret
+LINEF   ENDP
+LKPOSF  PROC FAR
+        call LKPOS
+        ret
+LKPOSF  ENDP
 
 ; ---------------------------------------------------------------------------
 ;  MSLUPD - one tick of the missile: home on the lock target (or fly
@@ -1334,9 +1254,7 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         mov  si,[mstgt]
         cmp  si,0FFFFh
         je   @@str
-        mov  bx,si              ; target died mid-flight? go ballistic
-        shr  bx,1
-        cmp  byte ptr [pst+bx],0
+        call LKDEAD             ; target gone mid-flight? go ballistic
         je   @@home
         mov  word ptr [mstgt],0FFFFh
 @@str:  mov  ax,[mvx]           ; straight: the velocity set at launch
@@ -1347,13 +1265,14 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         add  [msz],ax
         jmp  @@prox
 @@home: ; chase at 32/tick, direction normalised by the dominant axis
-        mov  ax,[pax+si]
+        call LKPOS              ; a jet, or a radar station on its hill
+        mov  ax,[lkx]
         sub  ax,[msx]
         mov  [wdx],ax           ; dx
-        mov  ax,[pay+si]
+        mov  ax,[lky]
         sub  ax,[msy]
         mov  [wdz],ax           ; dy (borrowing the scratch)
-        mov  ax,[paz+si]
+        mov  ax,[lkz]
         sub  ax,[msz]
         mov  [ctx],ax           ; dz
         mov  bx,[wdx]           ; m = max of the absolutes
@@ -3378,11 +3297,12 @@ CHASESET:
         cmp  byte ptr [tgtcam],2
         je   @@twrk
         mov  si,[tgti]
-        mov  ax,[pax+si]
+        call LKPOS              ; a station can be the star of the show too
+        mov  ax,[lkx]
         mov  [pdx],ax
-        mov  ax,[pay+si]
+        mov  ax,[lky]
         mov  [pdy],ax
-        mov  ax,[paz+si]
+        mov  ax,[lkz]
         mov  [pdz],ax
         jmp  @@torb
 @@twrk: mov  bx,[tcws]          ; follow the first piece as it falls

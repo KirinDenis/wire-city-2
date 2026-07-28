@@ -57,18 +57,39 @@ spins, and a destroyed station breaks apart, burns and smokes.
   host's 'G' ad grew a byte at +17 with the standing/rubble bits, so
   a lost 'R' heals within a second and a joiner arrives correct.
 
+- **The lock** (added the same day, on the pilot's word: "для радара
+  должен работать Target как и для воздушных целей"). A locked
+  station rides in `locki` as **RSLK + index*2** = 0FFF0h / 0FFF2h.
+  Two things fall out of that encoding for free: 0FFFFh is still no
+  lock, and bit 1 - the parity every IFF test in this game already
+  reads - comes out FRIENDLY for ours and HOSTILE for theirs, so the
+  ring colour, the TGT/FRD word and the lock lamp all took it
+  without a line of change. `RSLOCK` is the second half of the ENTER
+  scan and plays by the same rule as the jet loop above it - inside
+  24 px of the ring, NEAREST WINS - so a jet crossing in front of
+  the antenna still takes the lock. `LKPOS` answers "where is the
+  locked target" for the ring, the TGT page, the missile's homing
+  head and the F4 orbit camera alike (a station is aimed at half its
+  height - that is where the dish is); `LKDEAD` answers "is it still
+  there". CSDRAW prints TYPN2 - the word RADAR was already in the
+  image - and TYPDRAW keeps quiet. The TGT page draws the DISH,
+  turning, walking its face table as closed quads since a station
+  has no edge list. The lock dies with the station, locally and over
+  the wire.
+
 ## Where it lives, and why
 
 The main segment had roughly 600 bytes free when this started and the
 station code alone wanted more. Only the MODELS, the state words and
 the few call sites stayed home; everything that merely computes lives
 in **UISEG** behind far doors - RSTAINITF, RSTADRAWF, RSBLIPF,
-RSHITF, RSNOISF, and RSMAP riding out with MAPHUMF. The far segment
-knocks back through MODELDRAWF / ROTXZF / SINQF / TERRHF / WRKATF /
-FDRAWF / FNUMF in the main segment. To pay for it: MAPHUM and STATPG
-followed MINIMAP2F out to UISEG, and the dead flat-ground `GRID` in
-WORLD.INC is now wrapped in `IF 0` - every line still readable, none
-of them shipped. Headroom afterwards: ~330 bytes under the guard.
+RSHITF, RSNOISF, RSLOCKF, and RSMAP riding out with MAPHUMF. The far
+segment knocks back through MODELDRAWF / ROTXZF / SINQF / TERRHF /
+WRKATF / PPOINTF / LKPOSF / FDRAWF / FNUMF / FNUMKF / CSDRAWF /
+TYPDRAWF / CLIPLINF / LINEF in the main segment. To pay for it:
+MAPHUM, STATPG and finally the whole TGT page followed MINIMAP2F out
+to UISEG, and the dead flat-ground `GRID` in WORLD.INC is now wrapped
+in `IF 0` - every line still readable, none of them shipped.
 
 ## Verified
 
@@ -77,8 +98,11 @@ game reads KEYS[] at 18 Hz and an instant down/up is invisible to it):
 the station standing with its dish at different angles between frames;
 both crosses on the map, north and south of the red front line; the
 cross on the scope; a cannon hit taking a hit point off; the NO RADAR
-snow; the grey ruin left on the map; and two instances on one IPX wire
-agreeing on both stations while seeing each other as humans.
+snow; the grey ruin left on the map; ENTER locking a station (FRIEND /
+RADAR under the ring, the lamp lit) and the TGT page naming it with
+its dish turning in wireframe; two missiles homing on it and putting
+the scope into snow; and two instances on one IPX wire agreeing on
+both stations while seeing each other as humans.
 
 ## Left open
 

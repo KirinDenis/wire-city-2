@@ -1080,6 +1080,10 @@ RSNOISF PROC FAR
         call RSNOISE
         ret
 RSNOISF ENDP
+RSLOCKF PROC FAR
+        call RSLOCK
+        ret
+RSLOCKF ENDP
 
 ; ---------------------------------------------------------------------------
 ;  RSTAINIT - plant the two ground radar stations. Both stand on the
@@ -1328,6 +1332,63 @@ RSRND:  mov  ax,[tmpi]
         ret
 
 ; ---------------------------------------------------------------------------
+;  RSLOCK - the second half of the ENTER lock scan: the stations. Runs
+;  after the jets and plays by the same rule - inside 24 px of the ring
+;  centre, NEAREST WINS - so it competes with the traffic honestly and a
+;  jet crossing in front of the antenna still takes the lock. A station
+;  is aimed at half its height, which is where the dish is. The winner
+;  goes into locki as RSLK + index*2. Reads/writes [lockd] like the jet
+;  loop above it. ES is whatever INPUT had; we only compute here.
+; ---------------------------------------------------------------------------
+RSLOCK: mov  word ptr [rsi],0
+@@l:    mov  bx,[rsi]
+        cmp  byte ptr [rsst+bx],0
+        jne  @@n                ; rubble locks nothing
+        add  bx,bx
+        mov  ax,[rsx+bx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,[rsz+bx]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        call FAR PTR ROTXZF
+        mov  ax,[rcz]
+        cmp  ax,NEARZ
+        jl   @@n
+        mov  [tpi],ax           ; the range, for the nearest-wins test
+        mov  bx,[rsi]
+        add  bx,bx
+        mov  dx,[rsy+bx]
+        add  dx,RSTOP/2
+        sub  dx,[camy]
+        mov  ax,[rcx]
+        mov  cx,[rcz]
+        call FAR PTR PPOINTF
+        jc   @@n
+        sub  ax,160
+        jns  @@k1
+        neg  ax
+@@k1:   cmp  ax,24
+        jg   @@n
+        sub  dx,100
+        jns  @@k2
+        neg  dx
+@@k2:   cmp  dx,24
+        jg   @@n
+        mov  ax,[tpi]
+        cmp  ax,[lockd]
+        jae  @@n
+        mov  [lockd],ax
+        mov  ax,[rsi]
+        add  ax,ax
+        add  ax,RSLK
+        mov  [locki],ax
+@@n:    inc  word ptr [rsi]
+        cmp  word ptr [rsi],NRSTA
+        jb   @@l
+        ret
+
+; ---------------------------------------------------------------------------
 ;  RSHIT - did something of ours land on a station? in: rhx/rhy/rhz = the
 ;  point in the world, rhdmg = what it is worth (1 a cannon shell, 4 a
 ;  missile). out: AX = 1 if a STANDING station took it, and it took the
@@ -1385,6 +1446,12 @@ RSDAM:  mov  bx,[rsi]
         inc  al
         mov  [rsnet],al
         add  bx,bx
+        mov  ax,bx              ; a lock on rubble is no lock
+        add  ax,RSLK
+        cmp  ax,[locki]
+        jne  @@nolk
+        mov  word ptr [locki],0FFFFh
+@@nolk:
         mov  ax,[rsx+bx]
         mov  [bpx],ax
         mov  ax,[rsz+bx]
@@ -1641,6 +1708,231 @@ STATPG: mov  ax,156             ; green square: kills by our team
 @@dmn:  inc  si
         cmp  si,5
         jb   @@dmp
+        ret
+
+
+TGTVIEWF PROC FAR
+        call TGTVIEW
+        ret
+TGTVIEWF ENDP
+; ---------------------------------------------------------------------------
+;  TGTVIEW - the TGT page on the CENTRE MFD: callsign (worn in the
+;  IFF colour), type, range, target altitude and a wireframe of the
+;  jet (aspect follows its heading). No lock: the page says NO TGT.
+; ---------------------------------------------------------------------------
+TGTVIEW:
+        mov  si,[locki]
+        cmp  si,0FFFFh
+        jne  @@tgo
+        mov  byte ptr [COLOR],97 ; nothing locked: the page says so
+        mov  word ptr [ftx],148
+        mov  word ptr [fty],168
+        mov  si,offset MSGNOT
+        call FAR PTR FDRAWF
+        ret
+@@tgo:  mov  byte ptr [COLOR],19 ; the callsign wears the IFF colour
+        test si,2
+        jnz  @@tgc
+        mov  byte ptr [COLOR],95
+@@tgc:  mov  word ptr [ftx],138
+        mov  word ptr [fty],156
+        call FAR PTR CSDRAWF
+        mov  byte ptr [COLOR],8
+        mov  word ptr [ftx],138
+        mov  word ptr [fty],164
+        mov  si,[locki]
+        call FAR PTR TYPDRAWF
+        mov  byte ptr [COLOR],97 ; range: octagonal max + 3*(min/8)
+        mov  word ptr [ftx],138
+        mov  word ptr [fty],172
+        mov  si,offset MSGRNG
+        call FAR PTR FDRAWF
+        mov  si,[locki]
+        call FAR PTR LKPOSF
+        mov  ax,[lkx]
+        sub  ax,[camx]
+        jns  @@tr1
+        neg  ax
+@@tr1:  mov  bx,[lkz]
+        sub  bx,[camz]
+        jns  @@tr2
+        neg  bx
+@@tr2:  cmp  ax,bx
+        jae  @@tr3
+        xchg ax,bx
+@@tr3:  mov  cl,3
+        shr  bx,cl
+        add  ax,bx              ; max 32767 + 3*4095: read UNSIGNED
+        add  ax,bx
+        add  ax,bx
+        cmp  ax,30000           ; clamp before FNUMK's signed idiv era
+        jbe  @@trc
+        mov  ax,30000
+@@trc:  mov  word ptr [ftx],154
+        mov  byte ptr [COLOR],8
+        call FAR PTR FNUMKF
+        mov  byte ptr [COLOR],97 ; the target's altitude
+        mov  word ptr [ftx],138
+        mov  word ptr [fty],180
+        mov  si,offset MSGALT
+        call FAR PTR FDRAWF
+        mov  word ptr [ftx],156
+        mov  byte ptr [COLOR],8
+        mov  si,[locki]
+        call FAR PTR LKPOSF
+        mov  ax,[lky]
+        or   ax,ax
+        jns  @@tr4
+        xor  ax,ax
+@@tr4:  call FAR PTR FNUMKF
+        ; wireframe: rotate the model by its aspect, project small
+        mov  si,[locki]         ; FNUMK's font walk ate SI
+        cmp  si,RSLK
+        jb   @@tpl
+        mov  word ptr [mvb],offset RDISHVT ; a station shows its DISH, and
+        mov  word ptr [mvn],RDISHNV*6      ; it turns on the page as it
+        mov  word ptr [tgzo],400           ; turns out there on the hill.
+        mov  word ptr [tgyc],64            ; It is six times a jet's size:
+        mov  ax,[rspin]                    ; stand further off, and centre
+        jmp  @@tyaw                        ; on the hub, not on the feet
+@@tpl:  mov  word ptr [tgzo],75
+        mov  word ptr [tgyc],0
+        mov  bx,si
+        shr  bx,1
+        mov  al,[ptype+bx]
+        xor  ah,ah
+        add  ax,ax
+        mov  bx,ax
+        mov  ax,[MVTAB+bx]
+        mov  [mvb],ax
+        mov  ax,[MVNTAB+bx]
+        mov  [mvn],ax
+        mov  ax,[pah+si]
+@@tyaw: sub  ax,[heading]
+        and  ax,255
+        push ax
+        call FAR PTR SINQF
+        mov  [msin],ax
+        pop  ax
+        add  ax,64
+        call FAR PTR SINQF
+        mov  [mcos],ax
+        xor  si,si
+        xor  di,di
+@@tv2:  mov  bx,[mvb]
+        mov  ax,[bx+si]         ; vx = (mx*mcos + mz*msin)/256
+        imul word ptr [mcos]
+        mov  cx,ax
+        mov  bx,[mvb]
+        mov  ax,[bx+si+4]
+        imul word ptr [msin]
+        add  ax,cx
+        cwd
+        mov  bx,256
+        idiv bx
+        mov  [dsx],ax
+        mov  bx,[mvb]
+        mov  ax,[bx+si]         ; vz = (mz*mcos - mx*msin)/256 + 300
+        imul word ptr [msin]
+        mov  cx,ax
+        mov  bx,[mvb]
+        mov  ax,[bx+si+4]
+        imul word ptr [mcos]
+        sub  ax,cx
+        cwd
+        mov  bx,256
+        idiv bx
+        add  ax,[tgzo]          ; how far the page stands off the model
+        mov  [dsac],ax
+        mov  ax,[dsx]           ; sx = 160 + vx*64/vz (centre MFD)
+        mov  bx,64
+        imul bx
+        idiv word ptr [dsac]
+        add  ax,160
+        mov  [PVX+di],ax
+        mov  bx,[mvb]
+        mov  ax,[bx+si+2]       ; sy = 170 - vy*64/vz
+        sub  ax,[tgyc]          ; a mast is modelled from its FEET up
+        mov  bx,64
+        imul bx
+        idiv word ptr [dsac]
+        mov  bx,170
+        sub  bx,ax
+        mov  [PVY+di],bx
+        add  si,6
+        add  di,2
+        cmp  si,[mvn]
+        jb   @@tv2
+        cmp  word ptr [locki],RSLK
+        jb   @@tedg
+        ; ---- the dish has no edge list: walk its FACES and close each
+        ; quad. Fourteen faces, four lines apiece - the MFD can afford it,
+        ; and it saves carrying a second table for one page ----
+        xor  si,si              ; face record (5 bytes)
+@@tf:   xor  di,di              ; corner 0..3
+@@tfc:  mov  bx,si
+        add  bx,di
+        mov  al,[RDISHFC+bx]    ; corner k...
+        xor  ah,ah
+        mov  bx,ax
+        add  bx,bx
+        mov  ax,[PVX+bx]
+        mov  [sx0],ax
+        mov  ax,[PVY+bx]
+        mov  [sy0],ax
+        mov  bx,di              ; ...to corner k+1, wrapping to close it
+        inc  bx
+        and  bx,3
+        add  bx,si
+        mov  al,[RDISHFC+bx]
+        xor  ah,ah
+        mov  bx,ax
+        add  bx,bx
+        mov  ax,[PVX+bx]
+        mov  [sx1],ax
+        mov  ax,[PVY+bx]
+        mov  [sy1],ax
+        mov  byte ptr [COLOR],95
+        push si
+        push di
+        call FAR PTR CLIPLINF
+        jc   @@tfn
+        call FAR PTR LINEF
+@@tfn:  pop  di
+        pop  si
+        inc  di
+        cmp  di,4
+        jb   @@tfc
+        add  si,5
+        cmp  si,RDISHNF*5
+        jb   @@tf
+        ret
+@@tedg: xor  si,si              ; sensor-green edges
+@@te:   mov  al,[WEDG+si]
+        xor  ah,ah
+        add  ax,ax
+        mov  bx,ax
+        mov  ax,[PVX+bx]
+        mov  [sx0],ax
+        mov  ax,[PVY+bx]
+        mov  [sy0],ax
+        mov  al,[WEDG+si+1]
+        xor  ah,ah
+        add  ax,ax
+        mov  bx,ax
+        mov  ax,[PVX+bx]
+        mov  [sx1],ax
+        mov  ax,[PVY+bx]
+        mov  [sy1],ax
+        mov  byte ptr [COLOR],95
+        push si
+        call FAR PTR CLIPLINF
+        jc   @@ten
+        call FAR PTR LINEF
+@@ten:  pop  si
+        add  si,2
+        cmp  si,NWEDG*2
+        jb   @@te
         ret
 
 

@@ -85,6 +85,12 @@ NRSTA   equ 2
 RSHITS  equ 8                   ; cannon hits it soaks (a jet takes 2..5)
 RSPINV  equ 3                   ; dish angle per tick: one turn in ~4.7 s
 RSMDMG  equ 4                   ; a missile is worth four shells: two level it
+; A locked STATION rides in locki as 0FFF0h + index*2. Two things fall out
+; of that encoding for free: 0FFFFh (no lock) is still no lock, and bit 1 -
+; the parity every IFF test in the game already reads - comes out FRIENDLY
+; for ours (0FFF0h) and HOSTILE for theirs (0FFF2h). Real plane offsets are
+; 0..78, so anything at or above RSLK is a station and nothing else.
+RSLK    equ 0FFF0h
 RSRAD   equ 90                  ; its footprint, half-width. Wider than the
                                 ;  dish (54) ON PURPOSE: a cannon round steps
                                 ;  150 units a tick, so a box thinner than
@@ -104,6 +110,11 @@ rhz     dw 0
 rhdmg   db 0                    ;  ...and how hard (1 a shell, 4 a missile)
 airng   dw 10000                ; how far the AI may shoot: its own radar
                                 ;  down and it is 2500, eyeball range
+tgzo    dw 75                   ; TGT page: stand-off and vertical centre
+tgyc    dw 0                    ;  of the model on the glass
+lkx     dw 0                    ; LKPOS: where the locked target actually is,
+lky     dw 0                    ;  jet or radar station - every reader of
+lkz     dw 0                    ;  the lock goes through here now
 rsnet   db 0                    ; a station fell HERE: tell the wire (idx+1)
 rsboom  db 0                    ; the wire says one fell THERE: light the
                                 ;  fire in the main segment (idx+1)
