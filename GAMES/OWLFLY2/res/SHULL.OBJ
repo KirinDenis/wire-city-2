@@ -1,0 +1,78 @@
+# SHULL.OBJ - the ZSU-23-4 "Shilka" CHASSIS: tracked hull, sloped glacis,
+# flat fighting deck. The turret is a SECOND model (STURR.OBJ) drawn at the
+# same world point on its own yaw - the radar station's mast/dish pattern.
+#
+# Axes as Blender exports: -Z forward, Y up; Obj2Inc maps engine Z = -obj Z,
+# so the nose points at obj -Z here and the engine sees it at +Z. The origin
+# is the CENTRE OF THE DECK at ground level: y=0 is the ground the tracks
+# stand on, which is what the game hands MODELDRAW as pdy.
+#
+# ONE OBJ UNIT = 0.2 m, and MAKE.BAT converts at -s 3, so the engine sees
+# 15 units per metre: hull 99 long, 48 wide over the tracks, deck at 21.
+# That is the SCALE LEVER the brief asked for - -s 2 is a tenth-scale-down
+# vehicle, -s 4 a third bigger - and it was picked BY EYE at gun range, not
+# by arithmetic: the F-15 is 2 units/m and a radar station about 10, but a
+# 6.5 m truck at either of those is a smudge you die to without ever seeing.
+# At -s 3 it is half a house long (buildings are 168..230 wide) and reads as
+# a vehicle at 3000 units - which is the range you must spot it from.
+#
+# 18 vertices / 14 faces, against the engine's 25 / 16 per model.
+#
+# Real proportions, in metres: 6.6 long, 3.2 over the tracks, 1.4 to the
+# deck, 0.8 to the top of the track run.
+o shull
+
+# ---- hull body: a low box, nose chamfered into the glacis ------------------
+v -6.0000 4.0000 16.5000
+v 6.0000 4.0000 16.5000
+v 6.0000 7.0000 16.5000
+v -6.0000 7.0000 16.5000
+v -6.0000 7.0000 -11.0000
+v 6.0000 7.0000 -11.0000
+v 6.0000 4.0000 -16.5000
+v -6.0000 4.0000 -16.5000
+# deck seam: splits the roof into engine deck (aft) and fighting deck
+v -6.0000 7.0000 2.5000
+v 6.0000 7.0000 2.5000
+
+# ---- left track run: outer face only. Its INNER top edge is the hull's own
+# bottom edge (verts 1/8), which is why a track costs four vertices and not
+# eight - the same trick that let the dish share the mast's cap.
+v -8.0000 0.0000 14.0000
+v -8.0000 0.0000 -14.0000
+v -8.0000 4.0000 -16.5000
+v -8.0000 4.0000 16.5000
+
+# ---- right track run ------------------------------------------------------
+v 8.0000 0.0000 14.0000
+v 8.0000 0.0000 -14.0000
+v 8.0000 4.0000 -16.5000
+v 8.0000 4.0000 16.5000
+
+# ---- the deck, seen from the air: two tones so the plan view has a shape
+usemtl PAL17
+f 9 10 6 5
+usemtl PAL16
+f 4 3 10 9
+# ---- glacis, catching the light; the sides and stern in shade
+usemtl PAL0
+f 5 6 7 8
+usemtl PAL16
+f 1 4 5 8
+f 2 3 6 7
+f 1 2 3 4
+# ---- the tracks: near-black, with the run rising fore and aft to the
+# idler and the sprocket. The end caps are triangles closing onto the hull.
+usemtl PAL3
+f 11 12 13 14
+usemtl PAL16
+f 13 14 1 8
+usemtl PAL3
+f 12 13 8
+f 11 14 1
+f 15 16 17 18
+usemtl PAL16
+f 17 18 2 7
+usemtl PAL3
+f 16 17 7
+f 15 18 2

@@ -432,7 +432,7 @@ INPUT:
         mov  [prevz],al
         test al,al
         jz   @@nzi
-        cmp  byte ptr [rzsh],8
+        cmp  byte ptr [rzsh],6
         jbe  @@nzi
         dec  byte ptr [rzsh]
 @@nzi:  mov  al,[KEYS+SC_X]
@@ -445,6 +445,22 @@ INPUT:
         jae  @@nzo
         inc  byte ptr [rzsh]
 @@nzo:
+        ; --- K: the MAP zooms, 1 / 2 / 4 pixels to a world node, cycling.
+        ; PROVISIONAL KEY - the whole keyboard is still to be laid out; K is
+        ; simply free and next to M, which pages this same screen. ---
+        mov  al,[KEYS+SC_K]
+        cmp  al,[prevk2]
+        je   @@nmz
+        mov  [prevk2],al
+        test al,al
+        jz   @@nmz
+        mov  al,[mmzs]
+        inc  al
+        cmp  al,MMZN
+        jb   @@mzs
+        xor  al,al
+@@mzs:  mov  [mmzs],al
+@@nmz:
         ; --- F5: arm/disarm the missile camera (edge) ---
         mov  al,[KEYS+SC_F5]
         cmp  al,[prevf5]
@@ -467,8 +483,8 @@ INPUT:
         cmp  si,0FFFFh
         je   @@nf4              ; nothing locked: nothing to orbit
         mov  [tgti],si          ; remember the star of the show
-        xor  ax,ax              ; a station has no heading to sit behind
-        cmp  si,RSLK
+        xor  ax,ax              ; ground targets have no heading to sit behind
+        cmp  si,SHKLK
         jae  @@f4az
         mov  ax,[pah+si]
 @@f4az: mov  [tgaz],ax          ; start right behind the target
@@ -581,8 +597,11 @@ INPUT:
         neg  ax
 @@lk1:  cmp  ax,24
         jg   @@lkn
-        sub  dx,100
-        jns  @@lk2
+        sub  dx,[horiz]         ; the RING moved to the glass centre when
+        jns  @@lk2              ; the panel grew; this test did not, so the
+                                ; game was still looking for targets around
+                                ; row 100 - a hoop forty rows below the one
+                                ; the pilot was aiming through
         neg  dx
 @@lk2:  cmp  dx,24
         jg   @@lkn
@@ -595,7 +614,9 @@ INPUT:
         cmp  si,NPLANE*2
         jb   @@lks
         call FAR PTR RSLOCKF    ; the ground radars are targets too, and
-                                ; they play by the same nearest-wins rule
+        call FAR PTR SHKLOCKF   ; so are the guns - all three legs play by
+                                ; the same nearest-wins rule, so pointing
+                                ; at a thing is how you pick it
 @@nlk:
         ; --- wind drift (world space, constant breeze) ---
         mov  ax,[camx]

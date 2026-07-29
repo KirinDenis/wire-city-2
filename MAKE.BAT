@@ -36,15 +36,36 @@ if errorlevel 1 goto err
 goto skipconv
 :convdone
 echo === 1/2 OWLFLY converters (panel + engine sample) ===
+REM OWLFLY (the first one) still rides the old Python pair. OWLFLY2 does
+REM NOT: its cockpit goes through TOOLS\Panel2Inc below - C#, per the
+REM tooling contract. Until 2026-07-29 nothing rebuilt OWLFLY2's panel at
+REM all: it carried a stale copy of OWLFLY's generated INCs, so editing
+REM its artwork changed precisely nothing.
 python GAMES\OWLFLY\res\mkpanel.py
 if errorlevel 1 goto err
 python GAMES\OWLFLY\res\mkengine.py
+if errorlevel 1 goto err
+dotnet run --project TOOLS\Panel2Inc -c Release -- GAMES\OWLFLY2\res\cockpit2.png -o GAMES\OWLFLY2\SRC -bmp GAMES\OWLFLY2\res
 if errorlevel 1 goto err
 dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY2\res\F15.OBJ -o GAMES\OWLFLY2\SRC\F15M.INC -n F15 -s 2
 if errorlevel 1 goto err
 dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY2\res\RBASE.OBJ -o GAMES\OWLFLY2\SRC\RBASEM.INC -n RBASE -s 6
 if errorlevel 1 goto err
 dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY2\res\RDISH.OBJ -o GAMES\OWLFLY2\SRC\RDISHM.INC -n RDISH -s 6
+if errorlevel 1 goto err
+REM the Shilka: chassis and turret, ONE scale between them (-s 3 = 15
+REM engine units per metre). Change both or the turret leaves the hull.
+dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY2\res\SHULL.OBJ -o GAMES\OWLFLY2\SRC\SHULLM.INC -n SHULL -s 3
+if errorlevel 1 goto err
+dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY2\res\STURR.OBJ -o GAMES\OWLFLY2\SRC\STURRM.INC -n STURR -s 3
+if errorlevel 1 goto err
+REM the Gun Dish is a THIRD model: it sweeps while the guns hold still, and
+REM one model can only carry one yaw. Same scale as the other two.
+dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY2\res\SDISH.OBJ -o GAMES\OWLFLY2\SRC\SDISHM.INC -n SDISH -s 3
+if errorlevel 1 goto err
+REM ...and a FOURTH: the barrels, which pitch at their trunnion as well as
+REM riding the turret round. Three motions, three models.
+dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY2\res\SBARR.OBJ -o GAMES\OWLFLY2\SRC\SBARRM.INC -n SBARR -s 3
 if errorlevel 1 goto err
 :skipconv
 

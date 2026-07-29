@@ -1,0 +1,33 @@
+# SDISH.OBJ - the ZSU-23-4's Gun Dish radar, its OWN model because it is
+# the part that TURNS. The guns only move when they have somewhere to
+# point; the radar sweeps all the time, and a model can only carry one
+# yaw. So this is a third table drawn at the same world point as the hull
+# and the turret, on its own bearing - exactly what the radar station
+# does with its mast and dish.
+#
+# Same frame and scale as SHULL/STURR: -Z forward, Y up, one unit = 0.2 m,
+# converted at -s 3. The origin is the turret ring, so the dish sits where
+# it sat when it was part of the turret.
+#
+# 5 vertices / 4 faces - a four-facet cone, apex down on the roof at the
+# back, mouth open forward and up about 35 deg.
+o sdish
+
+# ---- the Gun Dish: a four-facet cone, apex down on the roof at the back,
+# mouth open forward and up about 35 deg. Costs five vertices; the mount
+# is the cone itself, the way RDISH.OBJ made its own hub. 10 across and
+# 18.9 to the top - 2 m and 3.8 m, the real vehicle's radar-up height.
+v 0.0000 12.2000 6.0000
+v -5.0000 14.9000 2.4000
+v 0.0000 18.9000 5.4000
+v 5.0000 14.9000 2.4000
+v 0.0000 10.9000 -0.6000
+
+usemtl PAL24
+f 1 2 3
+usemtl PAL25
+f 1 3 4
+usemtl PAL24
+f 1 4 5
+usemtl PAL25
+f 1 5 2

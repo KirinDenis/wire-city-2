@@ -2,7 +2,36 @@
 ; ============================================================================
 ;  RENDER THE WORLD
 ; ============================================================================
-RENDER: ; camera cell (needed by GRID and BUILDINGS)
+; ---------------------------------------------------------------------------
+;  SETHORIZ - put the view's centre where the pilot can actually SEE.
+;  The world was projected about row 100, the middle of the screen. But with
+;  the cockpit up the glass ends at row 121, so the horizon sat almost on
+;  the panel's edge: nearly all the window was sky and the ground got twenty
+;  rows. Centring on the GLASS instead of the screen turns that into sixty.
+;  Everything already follows [horiz] - the projection, the roll pivot, the
+;  sky bands, the pitch ladder, the gunsight - so this is the only place
+;  that has to know. The cinema views (chase, orbit, missile, the death
+;  fall) show the whole screen and keep the old centre.
+; ---------------------------------------------------------------------------
+SETHORIZ:
+        mov  word ptr [horiz],100
+        cmp  word ptr [pimgo],0
+        je   @@shd              ; no cockpit bitmap: nothing covers the view
+        cmp  byte ptr [cockpit],0
+        je   @@shd
+        cmp  byte ptr [dying],0
+        jne  @@shd
+        cmp  byte ptr [mcact],0
+        jne  @@shd
+        cmp  byte ptr [tgtcam],0
+        jne  @@shd
+        cmp  byte ptr [chsview],0
+        jne  @@shd
+        mov  word ptr [horiz],PZGLASSC
+@@shd:  ret
+
+RENDER: call SETHORIZ           ; where the glass is, before anything uses it
+        ; camera cell (needed by GRID and BUILDINGS)
         mov  ax,[camx]
         add  ax,BIAS
         mov  cl,8
@@ -23,6 +52,7 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
         call TERRAIN            ; real 3D relief, far -> near
         call BUILDINGS          ; real buildings to the horizon (BORD walk)
         call FAR PTR RSTADRAWF  ; the two ground radar stations, dish turning
+        call FAR PTR SHKDRAWF   ; the six Shilkas, turrets turning
         call WRECKDRAW          ; fallen jets burn on the ground
         call PLANESDRAW         ; AI jets own the sky
         cmp  byte ptr [chsview],0

@@ -57,13 +57,13 @@ CROSS:  cmp  byte ptr [chsview],0
         mov  ax,160             ; right wing of the bar
         add  ax,[dsx]
         mov  [sx0],ax
-        mov  ax,100
+        mov  ax,[horiz]
         add  ax,[dsy]
         mov  [sy0],ax
         mov  ax,160
         add  ax,[ctx]
         mov  [sx1],ax
-        mov  ax,100
+        mov  ax,[horiz]
         add  ax,[cty]
         mov  [sy1],ax
         call CLIPLINE
@@ -72,13 +72,13 @@ CROSS:  cmp  byte ptr [chsview],0
 @@l2:   mov  ax,160             ; left wing
         sub  ax,[dsx]
         mov  [sx0],ax
-        mov  ax,100
+        mov  ax,[horiz]
         sub  ax,[dsy]
         mov  [sy0],ax
         mov  ax,160
         sub  ax,[ctx]
         mov  [sx1],ax
-        mov  ax,100
+        mov  ax,[horiz]
         sub  ax,[cty]
         mov  [sy1],ax
         call CLIPLINE
@@ -114,13 +114,13 @@ CROSS:  cmp  byte ptr [chsview],0
         mov  ax,160
         add  ax,[dsx]
         mov  [sx0],ax
-        mov  ax,100
+        mov  ax,[horiz]
         add  ax,[dsy]
         mov  [sy0],ax
         mov  ax,160
         add  ax,[ctx]
         mov  [sx1],ax
-        mov  ax,100
+        mov  ax,[horiz]
         add  ax,[cty]
         mov  [sy1],ax
         call CLIPLINE
@@ -162,7 +162,7 @@ CROSS:  cmp  byte ptr [chsview],0
         imul word ptr [dsac]
         mov  bx,256
         idiv bx
-        add  ax,100
+        add  ax,[horiz]
         mov  [cty],ax
         mov  ax,[rcos]          ; +-30 along the horizon direction
         mov  bx,30

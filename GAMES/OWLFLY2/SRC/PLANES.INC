@@ -17,6 +17,7 @@ PLANESUPD:
         add  ax,RSPINV
         and  ax,255
         mov  [rspin],ax
+        call FAR PTR SHKTICKF   ; and the Shilkas' turrets turn on it too
         xor  si,si              ; plane offset (words)
 @@pl:
         mov  bx,si              ; the dead stay dead - attrition war
@@ -534,7 +535,7 @@ PLANESDRAW:
 @@mr1:  mov  [dsac],ax          ; half-size
         test word ptr [pidx],2
         jnz  @@hst
-        ; friendly: green square (red when locked)
+        ; friendly: green square, red when it is the locked one
         mov  byte ptr [COLOR],95
         mov  ax,[locki]
         cmp  ax,[pidx]
@@ -586,7 +587,11 @@ PLANESDRAW:
         mov  [sy1],ax
         call @@mln              ; right
         jmp  @@mlbl
-@@hst:  ; hostile: yellow diamond (red when locked)
+@@hst:  ; hostile: yellow diamond, RED when it is the locked one. I painted
+        ; it red once, to match the scope - and lost the lock, because red
+        ; was already what "locked" meant out here. The two glasses speak
+        ; different dialects ON PURPOSE: the scope has only one thing to
+        ; say (whose), the world has two (whose, and which one is mine).
         mov  byte ptr [COLOR],96
         mov  ax,[locki]
         cmp  ax,[pidx]
@@ -742,12 +747,54 @@ MODELDRAW:
         ; ---- transform this model's vertices into the PV cache ----
         xor  si,si              ; model table offset (6 bytes/vertex)
         xor  di,di              ; cache offset (2 bytes/vertex)
-@@tv:   mov  bx,[mvb]           ; the model being drawn
+@@tv:   ; ---- the PITCH pass, before the yaw. A model normally only yaws;
+        ; a gun barrel has to ELEVATE as well, and it elevates about its
+        ; trunnion, not about the world. So: rotate this vertex's y and z
+        ; about (mpy,mpz) first, then let the yaw below carry the result
+        ; round with the turret. The barrels are a vector bolted to the
+        ; turret's matrix with one more angle at the joint - which is
+        ; exactly what a real mount is. Gated on [mpon]: the jets, the
+        ; buildings and the hulls skip it and pay two MOVs a vertex.
+        mov  bx,[mvb]
+        mov  ax,[bx+si+2]
+        mov  [mtvy],ax
+        mov  ax,[bx+si+4]
+        mov  [mtvz],ax
+        cmp  byte ptr [mpon],0
+        je   @@nopt
+        mov  ax,[mtvy]
+        sub  ax,[mtpy]           ; about the trunnion, so the roots stay put
+        mov  [mtvy2],ax
+        mov  ax,[mtvz]
+        sub  ax,[mtpz]
+        mov  [mtvz2],ax
+        mov  ax,[mtvy2]          ; y' = ty + dy*cos + dz*sin
+        imul word ptr [mpcs]
+        mov  cx,ax
+        mov  ax,[mtvz2]
+        imul word ptr [mpsn]
+        add  ax,cx
+        cwd
+        mov  bx,256
+        idiv bx
+        add  ax,[mtpy]
+        mov  [mtvy],ax
+        mov  ax,[mtvy2]          ; z' = tz - dy*sin + dz*cos
+        imul word ptr [mpsn]
+        mov  cx,ax
+        mov  ax,[mtvz2]
+        imul word ptr [mpcs]
+        sub  ax,cx
+        cwd
+        mov  bx,256
+        idiv bx
+        add  ax,[mtpz]
+        mov  [mtvz],ax
+@@nopt: mov  bx,[mvb]           ; the model being drawn
         mov  ax,[bx+si]         ; vx = (mx*mcos + mz*msin)/256 + pdx
         imul word ptr [mcos]
         mov  cx,ax
-        mov  bx,[mvb]
-        mov  ax,[bx+si+4]
+        mov  ax,[mtvz]
         imul word ptr [msin]
         add  ax,cx
         cwd
@@ -755,16 +802,14 @@ MODELDRAW:
         idiv bx
         add  ax,[pdx]
         mov  [PVX+di],ax
-        mov  bx,[mvb]
-        mov  ax,[bx+si+2]       ; vy = my + pdy
+        mov  ax,[mtvy]           ; vy = my + pdy
         add  ax,[pdy]
         mov  [PVY+di],ax
         mov  bx,[mvb]
         mov  ax,[bx+si]         ; vz = (mz*mcos - mx*msin)/256 + pdz
         imul word ptr [msin]
         mov  cx,ax
-        mov  bx,[mvb]
-        mov  ax,[bx+si+4]
+        mov  ax,[mtvz]
         imul word ptr [mcos]
         sub  ax,cx
         cwd
@@ -899,6 +944,18 @@ SINQF   PROC FAR
         call SINQ
         ret
 SINQF   ENDP
+HBLDF   PROC FAR                ; the scope asks the world what stands in a
+        call HBLD               ; cell. There is no list of buildings in
+        ret                     ; this game - they are computed from the
+HBLDF   ENDP                    ; cell's own hash, every time they are drawn
+RND16F  PROC FAR                ; the Shilkas fire from UISEG and need the
+        call RND16              ; same dice and the same death the jets use
+        ret
+RND16F  ENDP
+CRASHF  PROC FAR
+        call CRASHHANDLE
+        ret
+CRASHF  ENDP
 TERRHF  PROC FAR
         call TERRH
         ret
@@ -922,7 +979,7 @@ PPOINTF ENDP
 ;  and it is what a missile should fly into. Clobbers AX, BX.
 ; ---------------------------------------------------------------------------
 LKPOS:  cmp  si,RSLK
-        jb   @@pl
+        jb   @@grd
         mov  bx,si
         sub  bx,RSLK            ; the encoding IS the word index
         mov  ax,[rsx+bx]
@@ -932,6 +989,12 @@ LKPOS:  cmp  si,RSLK
         mov  [lky],ax
         mov  ax,[rsz+bx]
         mov  [lkz],ax
+        ret
+@@grd:  cmp  si,SHKLK           ; a Shilka: its state lives in UISEG, so
+        jb   @@pl               ; the door out there fills lkx/lky/lkz
+        mov  bx,si
+        sub  bx,SHKLK
+        call FAR PTR SHKLKPOSF
         ret
 @@pl:   mov  ax,[pax+si]
         mov  [lkx],ax
@@ -945,11 +1008,16 @@ LKPOS:  cmp  si,RSLK
 ;  LKDEAD - is the locked target gone? ZF=0 (NZ) if it is. SI = lock index.
 ; ---------------------------------------------------------------------------
 LKDEAD: cmp  si,RSLK
-        jb   @@pl
+        jb   @@grd
         mov  bx,si
         sub  bx,RSLK
         shr  bx,1
         cmp  byte ptr [rsst+bx],0
+        ret
+@@grd:  cmp  si,SHKLK
+        jb   @@pl
+        xor  bx,bx              ; a Shilka cannot be killed yet, so it is
+        cmp  bx,bx              ; never gone. ZF=1 = still there.
         ret
 @@pl:   mov  bx,si
         shr  bx,1
@@ -999,7 +1067,7 @@ PPOINT: mov  [dsx],ax           ; rx
         ret
 
 ; ---------------------------------------------------------------------------
-;  LOCKHUD - the aiming ring at (160,100), r=20 dotted. White when free;
+;  LOCKHUD - the aiming ring at (160,horiz), r=20 dotted. White when free;
 ;  IFF-coloured when locked. A locked target off the screen gets a small
 ;  block riding the ring edge toward it; TARGET/FRIEND + callsign are
 ;  printed under the ring.
@@ -1043,7 +1111,7 @@ LOCKHUD:
         imul bx
         mov  bx,256
         idiv bx
-        mov  bx,100
+        mov  bx,[horiz]
         sub  bx,ax
         mov  ax,bx
         call ROW320
@@ -1087,7 +1155,7 @@ LOCKHUD:
 @@offs: mov  ax,160             ; behind us: point straight down
         mov  dx,192
 @@dir:  sub  ax,160             ; shrink the direction onto the ring edge
-        sub  dx,100
+        sub  dx,[horiz]
 @@hv:   mov  bx,ax
         or   bx,bx
         jns  @@a1
@@ -1104,7 +1172,7 @@ LOCKHUD:
         sar  dx,1
         jmp  @@hv
 @@pt:   add  ax,160
-        add  dx,100
+        add  dx,[horiz]
         mov  [dsx],ax
         mov  ax,dx
         call ROW320
@@ -1159,9 +1227,14 @@ LOCKHUD:
 ;  current COLOR: pool name (friendly/hostile by parity) + number.
 ; ---------------------------------------------------------------------------
 CSDRAW: cmp  si,RSLK
-        jb   @@plane
+        jb   @@grnd
         mov  si,offset TYPN2    ; a station has no callsign - it IS the
         call FDRAW              ; radar, and TYPN2 already says the word
+        ret
+@@grnd: cmp  si,SHKLK
+        jb   @@plane
+        mov  si,offset MSGFLAK  ; nor has a gun battery
+        call FDRAW
         ret
 @@plane:
         push si
@@ -1189,8 +1262,8 @@ CSDRAW: cmp  si,RSLK
 
 ; ---- TYPDRAW: the aircraft type tag at ftx/fty. in: SI = plane offset -----
 TYPDRAW:
-        cmp  si,RSLK
-        jae  @@r                ; the station said it on the line above
+        cmp  si,SHKLK
+        jae  @@r                ; ground units said it on the line above
         mov  bx,si
         shr  bx,1
         mov  al,[ptype+bx]
@@ -1248,9 +1321,9 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
 @@mv:   mov  ax,[msx]           ; remember the old spot (exhaust puff)
         mov  [mpx],ax
         mov  ax,[msy]
-        mov  [mpy],ax
+        mov  [mtpy],ax
         mov  ax,[msz]
-        mov  [mpz],ax
+        mov  [mtpz],ax
         mov  si,[mstgt]
         cmp  si,0FFFFh
         je   @@str
@@ -1259,9 +1332,9 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         mov  word ptr [mstgt],0FFFFh
 @@str:  mov  ax,[mvx]           ; straight: the velocity set at launch
         add  [msx],ax
-        mov  ax,[mvy]
+        mov  ax,[mtvy]
         add  [msy],ax
-        mov  ax,[mvz]
+        mov  ax,[mtvz]
         add  [msz],ax
         jmp  @@prox
 @@home: ; chase at 32/tick, direction normalised by the dominant axis
@@ -1329,7 +1402,7 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         idiv bx
         mov  [ctz],ax           ; dvx*cos
         mov  ax,[msz]
-        sub  ax,[mpz]
+        sub  ax,[mtpz]
         imul word ptr [ctx]
         mov  bx,256
         idiv bx
@@ -1406,7 +1479,12 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         mov  byte ptr [rhdmg],RSMDMG
         call FAR PTR RSHITF
         or   ax,ax
+        jnz  @@mbk
+        mov  byte ptr [rhdmg],SHKMDMG
+        call FAR PTR SHKHITF    ; ...and so does a gun battery
+        or   ax,ax
         jz   @@mbp
+@@mbk:
         call MCEND              ; spent in the lattice, camera and all
         mov  byte ptr [msact],0
         ret
@@ -1938,8 +2016,11 @@ WRECKDRAW:
         inc  word ptr [pfc]
         cmp  word ptr [pfc],NFACE
         jb   @@wface
-        ; ---- fire and smoke while it burns ----
-        cmp  word ptr [di],600
+        ; ---- fire and smoke while it burns. The window is the SMOKE's now
+        ; (900 ticks, near fifty seconds); the flames stop earlier, below,
+        ; so a wreck settles into a smoking hulk instead of going out all
+        ; at once ----
+        cmp  word ptr [di],900
         jae  @@wdn
         ; ---- the glass goes first: a burst of window shards thrown
         ; out of the block in the opening second, bright against the
@@ -2043,10 +2124,13 @@ WRECKDRAW:
         mov  bx,ax
         add  bx,di
         add  bx,WFP             ; -> face record
-        ; fire: flickering glow block right at the piece
-        mov  ax,[lasttk]
-        test ax,2
-        jz   @@wfm
+        ; fire, right at the piece. It used to be gated on the clock -
+        ; test lasttk,2 - which skipped the WHOLE flame every other pair
+        ; of ticks, so a wreck blinked on and off instead of burning. The
+        ; six tongues below already carry their own flicker phases; the
+        ; outer switch was doing nothing but putting the fire out.
+        cmp  word ptr [di],520  ; the flames go out before the smoke does
+        jae  @@wfm
         mov  ax,[bx]
         sub  ax,[camx]
         mov  [wdx],ax
@@ -2150,9 +2234,10 @@ WRECKDRAW:
         ; swaying wider the higher they climb (the lab's vortex, one
         ; SINQ), swelling as they cool through the stroke greys - and
         ; by night that ramp reverses into fire-lit bright at the base,
-        ; for free. The smoke dies at 500 ticks (~27 s), before the
-        ; embers do.
-        cmp  word ptr [di],500
+        ; for free. The smoke outlasts the embers now - 900 ticks, near
+        ; fifty seconds - so a kill leaves a mark on the landscape you can
+        ; still navigate by after the fire has died down.
+        cmp  word ptr [di],900
         jae  @@wsn
         mov  [ctx],bx           ; the face record: HLINE2 eats BX
         push di
@@ -2295,7 +2380,10 @@ WRECKDRAW:
         mov  [COLOR],al
         call SCANPOLY
 @@wpn:  inc  word ptr [wpi]
-        cmp  word ptr [wpi],12  ; twelve petals to a column, not four
+        cmp  word ptr [wpi],20  ; twenty petals to a column - a burning
+                                ; vehicle should be findable from the air
+                                ; by its smoke alone, which is how you find
+                                ; one in life
         jb   @@wpf
         pop  di
         mov  bx,[ctx]
@@ -2347,11 +2435,11 @@ MSLDRAW:
 @@puff: mov  ax,[mpx]
         sub  ax,[camx]
         mov  [wdx],ax
-        mov  ax,[mpz]
+        mov  ax,[mtpz]
         sub  ax,[camz]
         mov  [wdz],ax
         call ROTXZ
-        mov  dx,[mpy]
+        mov  dx,[mtpy]
         sub  dx,[camy]
         mov  ax,[rcx]
         mov  cx,[rcz]
@@ -2729,8 +2817,12 @@ TRCUPD: xor  bx,bx
         mov  byte ptr [rhdmg],1 ; one shell, one point
         push bx
         call FAR PTR RSHITF
-        pop  bx
         or   ax,ax
+        jnz  @@hit
+        mov  byte ptr [rhdmg],1
+        call FAR PTR SHKHITF    ; the batteries stop shells too - and until
+@@hit:  pop  bx                 ; now nothing did, so they could be shot at
+        or   ax,ax              ; all day for no effect
         jz   @@n
         mov  byte ptr [trcact+bx],0 ; the round is spent in the lattice
 @@n:    inc  bx

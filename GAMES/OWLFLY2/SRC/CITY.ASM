@@ -138,6 +138,9 @@ SC_LSH  equ 2Ah                 ; the shifts, for the throttle gates
 SC_RSH  equ 36h
 SC_ALT  equ 38h                 ; Alt: the Alt-Q exit chord
 SC_X    equ 2Dh                 ; X: radar unzoom (Z zooms - the manual)
+SC_K    equ 25h                 ; K: map zoom (PROVISIONAL - the keyboard
+                                ;  layout is still open; K is free and sits
+                                ;  next to M, which pages the same screen)
 WRKSZ   equ 300                 ; wreck slot size (see the BSS block)
 WCL     equ 292                 ; face colours offset inside a slot
 BSSCLR  equ 2488                ; (BSSEND-WRK)/2 - keep in sync with BSS!
@@ -177,8 +180,9 @@ MAIN:
         ; it. SKYSEG gets a full 8K window (CS+1000h..CS+11FFh) with
         ; its own assemble-time guard, and the far map starts past it.
         mov  ax,cs
-        add  ax,1400h           ; past SKYSEG (CS+1000h) and UISEG
-        mov  [bufseg],ax        ; (CS+1200h), both 8K and guarded
+        add  ax,1800h           ; past SKYSEG (CS+1000h, 8K), UISEG
+        mov  [bufseg],ax        ; (CS+1200h, SIXTEEN K) and SYMSEG
+                                ; (CS+1600h, 8K) - each with its own guard
 
         ; hook INT 9
         mov  ax,3509h
@@ -192,8 +196,17 @@ MAIN:
         ; (no PIT reprogram, no INT 8 hook - we only read the stock BIOS tick)
 
         ; ---- load CITY.DAT into its own segment (resources: font, ...) ----
+        ; PAST THE BACK BUFFER, and mind the arithmetic: the buffer is
+        ; 64000 bytes = 0FA0h paragraphs, so from CS+1600h it reaches
+        ; CS+27A0h from CS+1800h. This sat at 2400h while the buffer began
+        ; at 1400h;
+        ; opening SYMSEG pushed the buffer up 200h and it ate the front of
+        ; the loaded CITY.DAT. The panel is blitted OUT of that image, so
+        ; the world drawn into the bottom of the buffer came straight back
+        ; up as the top of the cockpit - pixel for pixel, which is what
+        ; made it look like an effect rather than a fault.
         mov  ax,cs
-        add  ax,2400h           ; past the back-buffer at CS+1400h
+        add  ax,2800h           ; past the back-buffer at CS+1800h
         mov  [resseg],ax
         mov  dx,offset FNAME
         mov  ax,3D00h           ; open read-only
@@ -385,6 +398,7 @@ MAIN:
         ; model is BAKED into the image by Obj2Inc at build time)
 
         call FAR PTR RSTAINITF  ; plant the two ground radar stations
+        call FAR PTR SHKINITF   ; and the six Shilkas over the lines
         ; ---- AI traffic: two squadrons scattered around the player ----
         call RESPAWNALL
         cmp  byte ptr [gbots],0 ; a botless sky is a clean arena:
@@ -462,6 +476,9 @@ GAMELOOP:
         call RENDER
         call CHASERST           ; give the pilot's world back to physics
         call LERPRST            ; ...and the true un-lerped state too
+        call HUD                ; the no-cockpit readouts, in OUR font - so
+                                ; they go in BEFORE the blit now, not after
+                                ; it through the BIOS
         call BLIT               ; to video memory
         ; nozzle fire: re-write DAC entry 94 (the F-15 SE II trick - the
         ; engines burn by palette cycling, not by drawing anything)
@@ -482,7 +499,6 @@ GAMELOOP:
         mov  al,[GLOWT+bx+2]
         out  dx,al
         call SNDENG             ; the engine follows the throttle
-        call HUD                ; text overlay (BIOS)
         call WAITV              ; tearing guard only (does not gate physics)
         ; the exit is Alt-Q, the MicroProse way (F-15 SE II manual).
         ; ESC is deliberately DEAD: players kept quitting whole sorties
@@ -538,6 +554,13 @@ KEYS    db 128 dup(0)
 ; real uninitialized bytes, or it settles SKYSEG right on top of it.
 BSS     label byte
         db  22695 dup(?)        ; the buffers (see the equ map below)
+        ; HOW MUCH ROOM IS LEFT: this label costs the image nothing (it is
+        ; a name in the OBJ, not a byte in the EXE) and BUILDQ links OWLFLY2
+        ; with /m, so SRC\CITY.MAP prints its address - and that address IS
+        ; BSSEND-START. Free bytes = 0FDEEh - that. Beats the %OUT ladder
+        ; the radar work used, which had to be written and then deleted.
+        PUBLIC BSSMARK
+BSSMARK label byte
 HMAP    equ  byte ptr BSS           ; 4096 bytes: world heightmap
 ; (the baked minimap lives at [scrseg]:0 - a far 64K page - not here)
 TRX     equ  word ptr BSS+4096      ; 1681 words: rotated node X
@@ -586,6 +609,7 @@ CODE    ENDS
 
         INCLUDE SKY.INC         ; the NEWTON sky, in its own segment
         INCLUDE UI.INC          ; the front door: splash + sky list
+        INCLUDE SYM.INC         ; the fourth segment: the scope's symbols
         INCLUDE NET.INC         ; the wire (appends SKYSEG; writes GLIST)
 
         END START

@@ -1,84 +1,25 @@
 ; HUD.INC - part of WIRE CITY (included from CITY.ASM)
 ; ============================================================================
-;  HUD (BIOS text overlay on top of the frame)
+;  HUD - the readouts for the NO-COCKPIT view. It printed them through
+;  the BIOS teletype in the 8x8 ROM font: twice the height of the game's
+;  own letters, locked to a character grid, and drawn straight to video
+;  memory AFTER the blit, so it could never share a row with anything.
+;  It hands off to TOPSTRIP/BOTSTRIP now - same words, the game's own 4x6
+;  font, into the back buffer like everything else. With the cockpit UP it
+;  draws nothing at all: the panel already says it, in its own places.
 ; ============================================================================
 HUD:    cmp  byte ptr [cockpit],0
-        je   @@hgo
+        je   @@hgo              ; cockpit down: THIS view carries the words
         cmp  word ptr [pimgo],0
-        je   @@hgo
-        ret                     ; photo cockpit covers the BIOS text rows
-@@hgo:  mov  byte ptr [HCOL],8
-        mov  ah,02h
-        mov  bh,0
-        mov  dh,0
-        mov  dl,0
-        int  10h
-        mov  si,offset MSGTITLE
-        call PRSTR
-        mov  ah,02h
-        mov  bh,0
-        mov  dh,0
-        mov  dl,28
-        int  10h
-        mov  si,offset MSGALT
-        call PRSTR
-        mov  ax,[camy]
-        call PRNUM
-        mov  ah,02h
-        mov  bh,0
-        mov  dh,24
-        mov  dl,0
-        int  10h
-        cmp  byte ptr [cockpit],0
-        jne  @@pantxt
-        mov  si,offset MSGHDG
-        call PRSTR
-        mov  ax,[heading]
-        call PRNUM
-        mov  si,offset MSGSPD   ; airspeed (vel units, jet-style number)
-        call PRSTR
-        mov  ax,[vel]
-        call PRNUM
-        mov  si,offset MSGFUE   ; fuel as 0..100 percent
-        call PRSTR
-        mov  ax,[fuel]
-        xor  dx,dx
-        mov  bx,60
-        div  bx
-        call PRNUM
-        mov  si,offset MSGTHR   ; throttle as 0..100 percent
-        call PRSTR
-        mov  ax,[throt]
-        mov  bx,100
-        imul bx
-        mov  bx,64
-        idiv bx
-        call PRNUM
-        cmp  byte ptr [abon],0  ; '+' marks a lit afterburner
-        je   @@nab
-        mov  al,'+'
-        call PRCH
-@@nab:  jmp  @@toprow
-@@pantxt:                       ; panel text is drawn by PANEL (font)
-@@toprow:
-        ; real-time seconds (BIOS tick, 18.2 Hz) - compare against a stopwatch
-        mov  ah,02h
-        mov  bh,0
-        mov  dh,0
-        mov  dl,15
-        int  10h
-        mov  si,offset MSGT
-        call PRSTR
-        push es
-        mov  ax,40h
-        mov  es,ax
-        mov  ax,es:[6Ch]       ; BIOS tick low word (18.2 Hz)
-        pop  es
-        xor  dx,dx
-        mov  bx,18
-        div  bx                ; ax ~= seconds
-        call PRNUM
+        je   @@hgo              ; no panel bitmap: same
+        ret                     ; the panel says it all, and better
+@@hgo:  call FAR PTR TOPSTRIPF
+        call FAR PTR BOTSTRIPF
         ret
+
+; (PRSTR/PRCH/PRNUM below drove the BIOS teletype this used to print with.
+;  They are the crash screen's now - see CRASHHANDLE - and nothing else
+;  uses INT 10h for text on the flying glass any more.)
 
 PRSTR:  lodsb
         test al,al
@@ -136,7 +77,7 @@ PANEL:  cmp  word ptr [pimgo],0
 ;  follow the NOSE, not the long-gone horizon. ES = back buffer;
 ;  hcur/cx0/sinr/cosr are the frame's horizon pivot from CLEARBUF.
 ; ============================================================================
-LADR:   mov  ax,100
+LADR:   mov  ax,[horiz]        ; the glass centre, not the screen's
         sub  ax,[hcur]
         imul word ptr [cosr]
         mov  cx,256
@@ -393,14 +334,50 @@ FNUM:   mov  di,offset NB+5
         ret
 
 ; ============================================================================
+;  FNUMZ - the same, but padded with LEADING ZEROS to CX digits. The new
+;  cockpit bakes '888' under each readout to show how wide the field is, so
+;  a bare '0' for heading leaves two of the artist's eights showing through
+;  beside it. Leading zeros cover the field exactly - and that is what a
+;  seven-segment gauge does anyway. CX 1..5; a value too big for the field
+;  simply runs long rather than lie about itself.
+; ============================================================================
+FNUMZ:  mov  di,offset NB+5
+        mov  byte ptr [di],0
+        mov  bx,10
+@@z:    xor  dx,dx
+        div  bx
+        add  dl,'0'
+        dec  di
+        mov  [di],dl
+        dec  cx
+        test ax,ax
+        jnz  @@z
+        cmp  cx,0               ; SIGNED: a number wider than its field
+        jle  @@zd               ; drives cx below zero, and must not wrap
+@@zp:   dec  di                 ; still short of the field: pad it out
+        mov  byte ptr [di],'0'
+        loop @@zp
+@@zd:   mov  si,di
+        call FDRAW
+        ret
+
+
+; (TOPSTRIP / BOTSTRIP moved to SYMSEG on 2026-07-29: the stack guard
+;  fired and they were the newest, coldest, most self-contained thing in
+;  this segment - text for ONE view, calling nothing the far doors do not
+;  already carry. HUD reaches them through TOPSTRIPF / BOTSTRIPF.)
+
+
+; ============================================================================
 ;  PANELBMP - the photo cockpit (CITY.DAT resource 2) over the rendered
-;  world, instruments placed by the res\panel2.bmp markup (run
-;  res\mkpanel.py to reprint the zones after moving them):
-;    radar 51..123 x 153..188      ADI 136..183 x 155..187 (centre 160,171)
-;    map 195..239 x 153..188       readouts 241..272 x 156..188
-;    title strip 96..223 x 0..9    AB strip 141..176 x 14..20
-;    lamps: FUEL 3,2 13x8  STALL 7,107 10x10  TERR 19,123 10x10
-;    throttle ladder 43..49 x 162..187.  ES=bufseg, DS=CS.
+;  world. NO COORDINATE IS TYPED HERE ANY MORE: TOOLS\Panel2Inc finds the
+;  three screens in res\cockpit2.png every build and writes PANELZON.INC,
+;  and everything that draws on glass reads PZRDR/PZADI/PZMAP from it. Move
+;  a screen in the picture and the instruments follow. The rest of the
+;  furniture - the digit row, the two annunciator columns, the throttle
+;  ladder - is still measured by hand in DATA.INC, because the artwork does
+;  not mark it yet; paint those as cyan blocks and the tool will report
+;  them too. ES=bufseg, DS=CS.
 ; ============================================================================
 PANELBMP:
         cld
@@ -438,53 +415,10 @@ PANELBMP:
         jmp  @@pgd
 @@ptgt: call FAR PTR TGTVIEWF   ; the locked target's data page
 @@pgd:  call FAR PTR STATPGF    ; the right MFD: score and arms
-        ; ---- title strip: name, mission time, altitude ----
-        mov  byte ptr [COLOR],8
-        mov  word ptr [ftx],100
-        mov  word ptr [fty],2
-        mov  si,offset MSGTITLE
-        call FDRAW
-        mov  byte ptr [COLOR],97
-        mov  word ptr [ftx],146
-        mov  si,offset MSGT2
-        call FDRAW
-        mov  byte ptr [COLOR],8
-        mov  word ptr [ftx],154
-        mov  ax,[lasttk]        ; BIOS ticks -> seconds
-        xor  dx,dx
-        mov  bx,18
-        div  bx
-        call FNUM
-        mov  byte ptr [COLOR],97
-        mov  word ptr [ftx],178
-        mov  si,offset MSGALT
-        call FDRAW
-        mov  byte ptr [COLOR],8
-        mov  ax,[camy]
-        call FNUM
-        cmp  byte ptr [mslcam],0 ; missile camera armed: amber M
-        je   @@nm5
-        mov  byte ptr [COLOR],97
-        mov  word ptr [ftx],216
-        mov  word ptr [fty],2
-        mov  si,offset MSGM2
-        call FDRAW
-@@nm5:
-        cmp  byte ptr [sbok],0  ; sound-mode letter: amber = all sounds,
-        je   @@ns5              ; white = effects only, red = silence
-        mov  byte ptr [COLOR],97
-        mov  al,[sndmod]
-        cmp  al,2
-        je   @@sc5
-        mov  byte ptr [COLOR],8
-        cmp  al,1
-        je   @@sc5
-        mov  byte ptr [COLOR],19
-@@sc5:  mov  word ptr [ftx],226
-        mov  word ptr [fty],2
-        mov  si,offset MSGS3
-        call FDRAW
-@@ns5:
+        ; (the title strip moved out of here on 2026-07-29: with the new
+        ; panel it sat on the overhead bank, doubling what the readouts
+        ; below already said. It is TOPSTRIP now, and only the no-cockpit
+        ; view draws it - see HUD.)
         ; ---- afterburner strip ----
         cmp  byte ptr [abon],0
         je   @@ab
@@ -494,21 +428,28 @@ PANELBMP:
         mov  si,offset MSGABON
         call FDRAW
 @@ab:
-        ; ---- caution lights: FUEL (top left), STALL and TERR (left strut)
-        mov  word ptr [lampx],3
-        mov  word ptr [lampy],2
-        mov  word ptr [dsx],13
-        mov  word ptr [dsy],8
+        ; ---- caution lights, now in the panel's own annunciator stacks.
+        ; They used to ride the old cockpit's canopy struts; on this panel
+        ; those coordinates are open sky, and a warning lamp hanging in
+        ; mid-air is worse than none. LEFT column: fuel, then lock. RIGHT
+        ; column, where the artwork already prints its alarm words: stall
+        ; and terrain. Single letters still - a slot is 16x10 px and the
+        ; font steps four, so five characters is the whole budget and a
+        ; blinking letter reads faster than a squeezed word.
+        mov  word ptr [lampx],PZLCX
+        mov  word ptr [lampy],PZLAMPY+PZLAMPH*3
+        mov  word ptr [dsx],PZLCW
+        mov  word ptr [dsy],PZLAMPH
         xor  cx,cx
         cmp  word ptr [fuel],1200
         jge  @@lf
         mov  cx,19              ; low fuel: red
 @@lf:   mov  si,offset MSGF2
         call LAMP2
-        mov  word ptr [lampx],7
-        mov  word ptr [lampy],107
-        mov  word ptr [dsx],10
-        mov  word ptr [dsy],10
+        mov  word ptr [lampx],PZRCX
+        mov  word ptr [lampy],PZLAMPY
+        mov  word ptr [dsx],PZRCW
+        mov  word ptr [dsy],PZLAMPH
         xor  cx,cx
         mov  ax,[vel]
         cmp  ax,VSTALL
@@ -516,10 +457,10 @@ PANELBMP:
         mov  cx,19              ; stall: red
 @@ls:   mov  si,offset MSGS2
         call LAMP2
-        mov  word ptr [lampx],19
-        mov  word ptr [lampy],123
-        mov  word ptr [dsx],10
-        mov  word ptr [dsy],10
+        mov  word ptr [lampx],PZRCX
+        mov  word ptr [lampy],PZLAMPY+PZLAMPH
+        mov  word ptr [dsx],PZRCW
+        mov  word ptr [dsy],PZLAMPH
         xor  cx,cx
         mov  ax,[camy]
         sub  ax,[lgnd]
@@ -528,10 +469,10 @@ PANELBMP:
         mov  cx,97              ; terrain close: amber
 @@lt:   mov  si,offset MSGT2
         call LAMP2
-        mov  word ptr [lampx],289 ; lock lamp: top right strut square
-        mov  word ptr [lampy],1
-        mov  word ptr [dsx],10
-        mov  word ptr [dsy],9
+        mov  word ptr [lampx],PZLCX ; lock lamp: left column, top slot
+        mov  word ptr [lampy],PZLAMPY
+        mov  word ptr [dsx],PZLCW
+        mov  word ptr [dsy],PZLAMPH
         xor  cx,cx
         mov  ax,[locki]
         cmp  ax,0FFFFh
@@ -549,7 +490,7 @@ PANELBMP:
         mov  cl,4
         shr  ax,cl              ; lit segments = throt*3/16 (0..12)
         mov  dx,ax
-        mov  word ptr [dsx],186 ; current segment row
+        mov  word ptr [dsx],PZTHRY ; current segment row
         xor  si,si              ; segment index
 @@tb:   cmp  si,12
         jae  @@tbd
@@ -557,7 +498,7 @@ PANELBMP:
         jae  @@tbd              ; above the setting: the artwork shows through
         mov  ax,[dsx]
         call ROW320
-        add  di,44
+        add  di,PZTHRX
         mov  al,97              ; lit amber segment
         mov  cx,5
         rep  stosb
@@ -574,11 +515,16 @@ PANELBMP:
         ; mind.
         ; -- the grid first, under everything (far code: the scope's
         ; grey rose lives in the sky segment, the stack guard's rent) --
-        call FAR PTR RGRIDF
-        mov  word ptr [rbcx],87 ; the scope frame: centre + live zoom
-        mov  word ptr [rbcy],171
+        ; the frame goes up FIRST now: the range rose reads it too, and it
+        ; used to carry the old screen's centre as a pair of immediates
+        mov  word ptr [rbcx],PZRDRCX ; the scope frame: centre, reach, zoom
+        mov  word ptr [rbcy],PZRDRCY
+        mov  word ptr [rbrad],PZRDRR
+        mov  word ptr [rbradn],-PZRDRR
         mov  al,[rzsh]
         mov  [rbsh],al
+        call FAR PTR BQCITYF    ; the town goes down first, under everything
+        call FAR PTR RGRIDF
         call RBLIPS
         jmp  RDOUT              ; the readouts, past the blip engine
 
@@ -592,14 +538,35 @@ RBLIPS: cmp  byte ptr [rsst],0  ; OUR station down = no returns at all:
         je   @@live             ; the glass goes to snow and says so
         call FAR PTR RSNOISF
         ret
-@@live: mov  ax,[rbcy]          ; own ship: the 2 px tick
-        inc  ax
+@@live: ; own ship: the same aeroplane symbol, in trim grey, always pointing
+        ; up - the scope is heading-up, so our own nose is the reference
+        ; every other symbol on the glass is measured against. And it obeys
+        ; the SAME zoom ladder as everything else: it used to be an
+        ; aeroplane at every setting, which made our own jet the biggest
+        ; thing on a scope where every other contact was a dot.
+        mov  ax,[rbcx]
+        mov  [bqx],ax
+        mov  ax,[rbcy]
+        mov  [bqy],ax
+        mov  word ptr [bqa],0
+        mov  byte ptr [COLOR],0
+        mov  ax,[rbcy]
         call ROW320
         add  di,[rbcx]
-        mov  al,8
-        mov  es:[di],al
-        mov  es:[di-320],al
-        xor  si,si
+        mov  al,[rbsh]
+        cmp  al,BQZICON
+        jbe  @@livi
+        mov  al,0
+        cmp  byte ptr [rbsh],BQZCROS
+        ja   @@livd
+        mov  es:[di-320],al     ; the middle setting: a cross, like theirs
+        mov  es:[di+320],al
+        mov  es:[di-1],al
+        mov  es:[di+1],al
+@@livd: mov  es:[di],al         ; wound right out: one pixel
+        jmp  @@livn
+@@livi: call FAR PTR BQJETF
+@@livn: xor  si,si
 @@rdr:  mov  bx,si              ; the dead do not paint on the radar
         shr  bx,1
         cmp  byte ptr [pst+bx],0
@@ -616,15 +583,15 @@ RBLIPS: cmp  byte ptr [rsst],0  ; OUR station down = no returns at all:
         mov  cl,[rbsh]          ; the zoom, then a PIXEL-space clip
         mov  ax,[rcx]
         sar  ax,cl
-        cmp  ax,14
+        cmp  ax,[rbrad]
         jg   @@rn
-        cmp  ax,-14
+        cmp  ax,[rbradn]
         jl   @@rn
         mov  bx,[rcz]
         sar  bx,cl
-        cmp  bx,14
+        cmp  bx,[rbrad]
         jg   @@rn
-        cmp  bx,-14
+        cmp  bx,[rbradn]
         jl   @@rn
         add  ax,[rbcx]
         mov  [dsx],ax           ; blip column
@@ -633,80 +600,67 @@ RBLIPS: cmp  byte ptr [rsst],0  ; OUR station down = no returns at all:
         mov  [dsy],ax           ; keep the row: the letter needs it
         call ROW320
         add  di,[dsx]
-        mov  al,95              ; friendly: green
+        mov  al,95              ; our side: green
         test si,2
         jz   @@fr
-        mov  al,96              ; hostile: yellow
-@@fr:   mov  bx,si
-        shr  bx,1
-        cmp  byte ptr [premote+bx],0
-        je   @@iff
-        mov  al,8               ; a human wears white - people first
-@@iff:  xor  ah,ah
-        mov  [dsac],ax          ; the colour must survive SINQ below
-        ; allegiance is the SHAPE now (the score legend's language):
-        ; friends fly squares, hostiles diamonds. Type shapes retired -
-        ; the lock ring names the type in words anyway.
-        test si,2
-        jnz  @@shd
-        mov  es:[di-321],al     ; friend: 3x3 outline square
-        mov  es:[di-320],al
-        mov  es:[di-319],al
-        mov  es:[di-1],al
-        mov  es:[di+1],al
-        mov  es:[di+319],al
-        mov  es:[di+320],al
-        mov  es:[di+321],al
+        mov  al,19              ; theirs: RED. It was yellow, and yellow is
+                                ; a caution colour, not an enemy one
+@@fr:   xor  ah,ah
+        mov  [dsac],ax          ; the colour must survive the symbol call
+        ; The symbol is an AEROPLANE, swung to the contact's own heading -
+        ; squares and diamonds said which side but never which way, and a
+        ; bandit's heading is the first thing a pilot reads off a scope.
+        ; Colour carries the side, and it is NOT overridden for a human
+        ; any more: people take sides here too, and painting them white
+        ; threw that away. A human gets a pip above the symbol instead.
+        mov  [COLOR],al
+        ; how much symbol: the SCOPE'S ZOOM decides it, for everything on
+        ; the glass at once. Not each contact by its own range - that made
+        ; one scope carry three languages and read as a mess.
+        mov  al,[rbsh]
+        cmp  al,BQZICON
+        jbe  @@ricon
+        cmp  al,BQZCROS
+        jbe  @@rmid
+        mov  ax,[dsac]          ; wound right out: one pixel, and no more
+        mov  es:[di],al
         jmp  @@vst
-@@shd:  mov  es:[di-320],al     ; hostile: the four diamond points
+@@rmid: mov  ax,[dsac]          ; the middle setting: a cross
+        mov  es:[di],al
+        mov  es:[di-320],al
+        mov  es:[di+320],al
         mov  es:[di-1],al
         mov  es:[di+1],al
-        mov  es:[di+320],al
-@@vst:  ; -- velocity stub: two pixels out along the blip's own nose --
+        jmp  @@vst
+@@ricon:
+        mov  ax,[dsx]
+        mov  [bqx],ax
+        mov  ax,[dsy]
+        mov  [bqy],ax
         mov  ax,[pah+si]
         sub  ax,[heading]       ; the scope is heading-up
         and  ax,255
-        push si                 ; SINQ eats SI
-        push ax
-        call SINQ
-        mov  [wdx],ax           ; screen RIGHT per unit = sin(rel)
-        pop  ax
-        add  ax,64
-        call SINQ
-        mov  [wdz],ax           ; screen UP per unit = cos(rel)
+        mov  [bqa],ax
+        push si
+        push di
+        call FAR PTR BQJETF
+        pop  di
         pop  si
-        mov  word ptr [tmpi],2  ; pixels 2 and 3 out (clear of the shape)
-@@vsp:  mov  ax,[tmpi]
-        imul word ptr [wdx]
-        add  ax,128             ; round, not truncate: a diagonal stub
-        mov  cl,8               ; must actually leave the axis
-        sar  ax,cl
-        mov  bx,ax              ; px right
-        mov  ax,[tmpi]
-        imul word ptr [wdz]
-        add  ax,128
-        sar  ax,cl
-        mov  cx,ax              ; px up
-        mov  ax,320
-        imul cx
-        sub  bx,ax              ; bx = dx - 320*dy
-        mov  ax,[dsac]
-        mov  es:[bx+di],al
-        inc  word ptr [tmpi]
-        cmp  word ptr [tmpi],4
-        jb   @@vsp
-        ; -- altitude tick, pushed out past the shape ring --
+@@vst:  ; -- altitude tick. Six rows out, not two: the symbol is an
+        ; aeroplane now and a tick at two rows would land on its own wing --
         mov  bx,[pay+si]        ; above = higher, below = lower than us
         sub  bx,[camy]          ; (dead band +-200)
         mov  ax,[dsac]
         cmp  bx,200
         jle  @@ral
-        mov  es:[di-640],al
+        mov  es:[di-1920],al
         jmp  @@ltr
 @@ral:  cmp  bx,-200
         jge  @@ltr
-        mov  es:[di+640],al
-@@ltr:  ; -- the callsign letter beside a human blip --
+        mov  es:[di+1920],al
+@@ltr:  ; -- the callsign letter beside a human blip. THIS is what marks a
+        ; live pilot now; his symbol keeps his side's colour like everyone
+        ; else's, because on this wire humans have sides too --
         mov  bx,si
         shr  bx,1
         cmp  byte ptr [premote+bx],0
@@ -717,10 +671,10 @@ RBLIPS: cmp  byte ptr [rsst],0  ; OUR station down = no returns at all:
         mov  [NB],al            ; a one-letter nameplate, white
         mov  byte ptr [NB+1],0
         mov  ax,[dsx]
-        add  ax,3
+        add  ax,6               ; clear of the wing
         mov  [ftx],ax
         mov  ax,[dsy]
-        sub  ax,2
+        sub  ax,3
         mov  [fty],ax
         mov  byte ptr [COLOR],8
         push si
@@ -757,6 +711,7 @@ RBLIPS: cmp  byte ptr [rsst],0  ; OUR station down = no returns at all:
 @@rmn:  inc  si
         cmp  si,NAMSL
         jb   @@rml
+        call FAR PTR SHKBLIPF   ; the flak, with its barrels where they point
         call FAR PTR RSBLIPF    ; last, over everything: the ground radars
         ret                     ; the blip engine is done
 @@rblip:                        ; plot one amber spark from wdx/wdz
@@ -764,15 +719,15 @@ RBLIPS: cmp  byte ptr [rsst],0  ; OUR station down = no returns at all:
         mov  cl,[rbsh]          ; sparks ride the same zoom
         mov  ax,[rcx]
         sar  ax,cl
-        cmp  ax,14
+        cmp  ax,[rbrad]
         jg   @@rbx
-        cmp  ax,-14
+        cmp  ax,[rbradn]
         jl   @@rbx
         mov  bx,[rcz]
         sar  bx,cl
-        cmp  bx,14
+        cmp  bx,[rbrad]
         jg   @@rbx
-        cmp  bx,-14
+        cmp  bx,[rbradn]
         jl   @@rbx
         add  ax,[rbcx]
         mov  [dsx],ax
@@ -785,61 +740,47 @@ RBLIPS: cmp  byte ptr [rsst],0  ; OUR station down = no returns at all:
 @@rbx:  ret
 ; (the scope's furniture - score, pips, rounds - moved to the right
 ;  MFD: STATPG. Blips fly alone on the glass now.)
-RDOUT:  ; ---- readouts right of the map: S/T/F/H rows ----
-        mov  byte ptr [COLOR],97
-        mov  word ptr [ftx],242
-        mov  word ptr [fty],157
-        mov  si,offset MSGSPD2
-        call FDRAW
-        mov  byte ptr [COLOR],8
-        mov  word ptr [ftx],256
+RDOUT:  ; ---- the strip under the centre screen: IAS / ALT / HDG / VERT ----
+        ; The new panel PRINTS those four words and a row of 8s beneath
+        ; them, so this routine no longer draws its own labels - it just
+        ; overwrites the placeholders. Green, to read as the seven-segment
+        ; display the picture is imitating. (The old S/T/F/H block lived
+        ; where the right screen now is; throttle kept its ladder, and
+        ; fuel moved onto the status page, which is where status belongs.)
+        mov  byte ptr [COLOR],95
+        mov  word ptr [fty],PZDIGY
+        mov  word ptr [ftx],PZDIG0
         mov  ax,[vel]
-        call FNUM
-        mov  byte ptr [COLOR],97
-        mov  word ptr [ftx],242
-        mov  word ptr [fty],165
-        mov  si,offset MSGTHR2
-        call FDRAW
-        mov  byte ptr [COLOR],8
-        mov  word ptr [ftx],256
-        mov  ax,[throt]
-        mov  bx,100
-        imul bx
-        mov  bx,64
-        idiv bx
-        call FNUM
-        cmp  byte ptr [abon],0
-        je   @@nab
-        mov  byte ptr [COLOR],97
-        mov  si,offset MSGAB    ; '+' right after the percentage
-        call FDRAW
-@@nab:  mov  byte ptr [COLOR],97
-        cmp  word ptr [fuel],1200
-        jge  @@fok
-        mov  byte ptr [COLOR],19
-@@fok:  mov  word ptr [ftx],242
-        mov  word ptr [fty],173
-        mov  si,offset MSGFUE2
-        call FDRAW
-        mov  word ptr [ftx],260
-        mov  byte ptr [COLOR],8
-        cmp  word ptr [fuel],1200
-        jge  @@fv
-        mov  byte ptr [COLOR],19
-@@fv:   mov  ax,[fuel]
-        xor  dx,dx
-        mov  bx,60
-        div  bx
-        call FNUM
-        mov  byte ptr [COLOR],97
-        mov  word ptr [ftx],242
-        mov  word ptr [fty],181
-        mov  si,offset MSGHDG2
-        call FDRAW
-        mov  byte ptr [COLOR],8
-        mov  word ptr [ftx],256
+        mov  cx,3
+        call FNUMZ
+        mov  word ptr [ftx],PZDIG1
+        mov  ax,[camy]
+        mov  cx,5
+        call FNUMZ
+        mov  word ptr [ftx],PZDIG2
         mov  ax,[heading]
-        call FNUM
+        mov  cx,3
+        call FNUMZ
+        ; VERT is the only signed one, and it always wears its sign - so
+        ; the field is four wide whichever way the jet is going, and the
+        ; artist's four eights are covered either way. FNUMZ divides, so
+        ; it is handed a magnitude; FDRAW steps ftx by four on its own.
+        mov  word ptr [ftx],PZDIG3
+        mov  ax,[vvy]
+        test ax,ax
+        js   @@vdn
+        push ax
+        mov  si,offset MSGAB    ; climbing: '+'
+        call FDRAW
+        pop  ax
+        jmp  @@vup
+@@vdn:  push ax
+        mov  si,offset MSGMIN2
+        call FDRAW
+        pop  ax
+        neg  ax
+@@vup:  mov  cx,3
+        call FNUMZ
         ret
         ; (the compact ADI died here 2026-07-27: it duplicated the HUD
         ; ladder and horizon exactly, and the centre MFD carries the
@@ -856,19 +797,26 @@ FNUMF   PROC FAR
         ret
 FNUMF   ENDP
 
+FNUMZF  PROC FAR
+        call FNUMZ
+        ret
+FNUMZF  ENDP
+
 ; ============================================================================
 ;  SITPG - the SIT page: the same blip engine on the centre MFD at a
 ;  fixed close zoom (1 px = 256 units), heading-up - Falcon's SAD
 ;  idea on 1990 hardware. ES=bufseg, DS=CS.
 ; ============================================================================
-SITPG:  mov  word ptr [rbcx],160
-        mov  word ptr [rbcy],171
+SITPG:  mov  word ptr [rbcx],PZADICX
+        mov  word ptr [rbcy],PZADICY
+        mov  word ptr [rbrad],PZADIR
+        mov  word ptr [rbradn],-PZADIR
         mov  al,8               ; fixed close zoom
         mov  [rbsh],al
         call RBLIPS
         mov  byte ptr [COLOR],97 ; the page name, amber, top left
-        mov  word ptr [ftx],138
-        mov  word ptr [fty],156
+        mov  word ptr [ftx],PZADIX0+2
+        mov  word ptr [fty],PZADIY0+2
         mov  si,offset MSGSIT
         call FDRAW
         ret
@@ -945,6 +893,30 @@ FNUM3:  xor  dx,dx
         call FDRAW
         ret
 
+
+; ---------------------------------------------------------------------------
+;  HBLN - lean one element of a tape so the tape follows the canopy bow it
+;  lives beside. Only the POSITION leans: the tick is still a level line and
+;  the number is still upright. The bow was measured off the artwork at 17
+;  pixels across 60 rows; HBLEAN/32 is that slope.
+;   in: AX = row, BX = the upright x, [hbslp] = the lean (signed, 0 = none)
+;   out: BX = the leaned x. Everything else survives.
+; ---------------------------------------------------------------------------
+HBLN:   push ax
+        push cx
+        push dx
+        mov  cx,ax
+        mov  ax,HBPIV
+        sub  ax,cx              ; rows above the tape's middle
+        imul word ptr [hbslp]
+        mov  cx,32
+        idiv cx
+        add  bx,ax
+        pop  dx
+        pop  cx
+        pop  ax
+        ret
+
 HUDBARS:
         cmp  byte ptr [chsview],0
         jne  @@hboff
@@ -972,9 +944,18 @@ HUDBARS:
         mov  word ptr [hbat1],230
         mov  word ptr [hbat2],232
         mov  word ptr [hbacx],227
-        mov  word ptr [hbscur],94  ; current values INBOARD - the eye
-        mov  word ptr [hbacur],206 ; reads them without leaving centre
-        jmp  @@lay
+        mov  word ptr [hbscur],104 ; current values INBOARD - the eye
+        mov  word ptr [hbacur],198 ; reads them without leaving centre.
+                                   ; Pushed in once the tapes leaned: at
+                                   ; row 80 the bows stand at x 87..100 and
+                                   ; 218..231 and were eating the digits.
+                                   ; Both numbers are drawn LEFT-aligned,
+                                   ; so the right one had to be set by its
+                                   ; far end: four digits from 198 stop at
+                                   ; 214, four clear of the bow - the same
+                                   ; gap the speed has on its own side.
+        mov  word ptr [hbslp],-HBLEAN  ; the left bow leans this way; the
+        jmp  @@lay                     ; altitude tape flips the sign below
 @@f2l:  mov  word ptr [hbsx],68   ; F2: the full pane
         mov  word ptr [hbslb],38  ; scale outboard...
         mov  word ptr [hbst1],62
@@ -987,6 +968,7 @@ HUDBARS:
         mov  word ptr [hbacx],253
         mov  word ptr [hbscur],72  ; ...current inboard, same law
         mov  word ptr [hbacur],230
+        mov  word ptr [hbslp],0   ; no cockpit, no bows: tapes stand upright
 @@lay:
         ; ================= compass tape: top centre =================
         mov  ax,[heading]
@@ -1044,11 +1026,20 @@ HUDBARS:
 
         ; ================= speed tape: left =================
         mov  ax,48              ; the spine (12 rows higher: the tapes
-        mov  bx,[hbsx]          ; sit UP in the glass, off the nose)
-        mov  [dsx],bx
-        mov  cx,71
-        mov  bl,8
-        call VLINE2
+        mov  bx,[hbsx]          ; sit UP in the glass, off the nose) - and
+        call HBLN               ; leaning now, along the bow beside it
+        mov  [sx0],bx
+        mov  word ptr [sy0],48
+        mov  ax,118
+        mov  bx,[hbsx]
+        call HBLN
+        mov  [sx1],bx
+        mov  word ptr [sy1],118
+        mov  byte ptr [COLOR],8
+        call CLIPLINE
+        jc   @@sspn
+        call LINE
+@@sspn:
         mov  ax,[vel]           ; first tick: multiple of 25 >= vel-140
         sub  ax,140
         jns  @@s0
@@ -1093,14 +1084,17 @@ HUDBARS:
 @@slb:  mov  ax,[cty]
         sub  ax,2
         mov  [fty],ax
-        mov  ax,[hbslb]
-        mov  [ftx],ax
+        mov  bx,[hbslb]
+        mov  ax,[cty]
+        call HBLN
+        mov  [ftx],bx
         mov  byte ptr [COLOR],8
         mov  ax,[ctx]
         call FNUMK
         jmp  @@spn
 @@smin: mov  ax,[cty]           ; minor: same anchor, shorter
         mov  bx,[hbst2]
+        call HBLN
         mov  [dsx],bx
         mov  cx,4
         mov  bl,8
@@ -1123,6 +1117,7 @@ HUDBARS:
         jg   @@snc
         mov  ax,bx
         mov  bx,[hbcx]
+        call HBLN
         mov  [dsx],bx
         mov  cx,9
         mov  bl,19
@@ -1149,12 +1144,25 @@ HUDBARS:
         call FNUM
 
         ; ================= altitude tape: right =================
-        mov  ax,48              ; the spine, 12 rows higher too
+        mov  word ptr [hbslp],HBLEAN ; the RIGHT bow leans the other way
+        cmp  byte ptr [cockpit],0
+        jne  @@aspl
+        mov  word ptr [hbslp],0
+@@aspl: mov  ax,48              ; the spine, 12 rows higher too
         mov  bx,[hbax]
-        mov  [dsx],bx
-        mov  cx,71
-        mov  bl,8
-        call VLINE2
+        call HBLN
+        mov  [sx0],bx
+        mov  word ptr [sy0],48
+        mov  ax,118
+        mov  bx,[hbax]
+        call HBLN
+        mov  [sx1],bx
+        mov  word ptr [sy1],118
+        mov  byte ptr [COLOR],8
+        call CLIPLINE
+        jc   @@aspn
+        call LINE
+@@aspn:
         mov  ax,[camy]          ; first tick: multiple of 50 >= camy-280
         sub  ax,280
         jns  @@a0
@@ -1188,6 +1196,7 @@ HUDBARS:
         jnz  @@amin
         mov  ax,[cty]           ; major divider (a touch longer)
         mov  bx,[hbat1]
+        call HBLN
         mov  [dsx],bx
         mov  cx,6
         mov  bl,8
@@ -1200,14 +1209,17 @@ HUDBARS:
 @@alb:  mov  ax,[cty]
         sub  ax,2
         mov  [fty],ax
-        mov  ax,[hbalb]
-        mov  [ftx],ax
+        mov  bx,[hbalb]
+        mov  ax,[cty]
+        call HBLN
+        mov  [ftx],bx
         mov  byte ptr [COLOR],8
         mov  ax,[ctx]
         call FNUMK
         jmp  @@apn
 @@amin: mov  ax,[cty]           ; minor divider
         mov  bx,[hbat2]
+        call HBLN
         mov  [dsx],bx
         mov  cx,4
         mov  bl,8
@@ -1231,6 +1243,7 @@ HUDBARS:
         jg   @@anc
         mov  ax,bx
         mov  bx,[hbacx]
+        call HBLN
         mov  [dsx],bx
         mov  cx,9
         mov  bl,19
@@ -1248,6 +1261,7 @@ HUDBARS:
         jl   @@anc2
         mov  ax,bx
         mov  bx,[hbacx]
+        call HBLN
         mov  [dsx],bx
         mov  cx,9
         mov  bl,19
@@ -1287,6 +1301,7 @@ HUDBARS:
         add  ax,83
         mov  bx,[hbax]
         inc  bx
+        call HBLN               ; it rides the spine, and the spine leans
         mov  [dsx],bx
         mov  cx,3
         mov  bl,LCYN
@@ -1317,9 +1332,10 @@ HUDBARS:
         mov  [GBUF+1],al
         add  dl,'0'
         mov  [GBUF+3],dl
-        mov  ax,[hbscur]
-        mov  [ftx],ax
-        mov  word ptr [fty],123
+        mov  ax,[hbscur]        ; row 123 vanished under the panel once it
+        add  ax,12              ; grew. The glass runs to row 108 across
+        mov  [ftx],ax           ; the middle and the bow reaches x 109 by
+        mov  word ptr [fty],101 ; then, so: inboard of one, above the other
         mov  byte ptr [COLOR],8
         mov  si,offset GBUF
         call FDRAW

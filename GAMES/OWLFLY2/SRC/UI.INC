@@ -11,8 +11,11 @@
 ;  on gives you the 20v20 war to dive into, bots off is a clean PvP
 ;  arena, Counter-Strike manners.
 ;
-;  UISEG lives at CS+1200h in an 8K window (the buffer moved to
-;  CS+1400h to make room); SKYSEG is PADDED to its full 8K so the
+;  UISEG lives at CS+1200h in a SIXTEEN-K window - it outgrew eight on
+;  2026-07-29 and the answer in this project is to give a segment more
+;  room, not to shave what is in it. Everything behind it simply moved up:
+;  SYMSEG to CS+1600h, the buffer to CS+1800h, CITY.DAT to CS+2800h.
+;  SKYSEG is PADDED to its full 8K so the
 ;  linker parks us exactly here. Like the sky segment, code here runs
 ;  with DS = the main segment: it reads KEYS, FONTBUF, COLOR and
 ;  writes gname/gact/gbots directly; what it cannot do is near-call
@@ -60,6 +63,70 @@ ujx     dw 0                    ; the jet being drawn: world x offset
 ujz     dw 0                    ; ...and its depth
 ujsx    dw 0                    ; projected vertex scratch
 ujsy    dw 0
+; The map's two lookup tables (see MMSETUP). They are HERE, in UISEG, and
+; read through CS: on purpose - the blit runs with DS on the far scratch
+; segment that holds the baked world, so a main-segment table would be
+; unreachable from the one loop that needs it most.
+MMCOLT  db 64 dup(0)            ; dest column -> world node column
+MMROWT  dw 64 dup(0)            ; dest row    -> world row base (node*64)
+; ---- THE SHILKAS. Every word of their state lives HERE, in UISEG, not in
+; the main segment the way the radar stations' did: the two models alone
+; cost that segment 403 of its 597 remaining bytes, and a vehicle that will
+; grow a course, a target and a magazine cannot also rent space there. The
+; price is a cs: on every access - code out here runs with DS = the main
+; segment, so an unprefixed [shkx] would read the wrong 64K and say nothing
+; about it. If a Shilka ever misbehaves, look for a missing cs: first.
+shkx    dw NSHILK dup(0)        ; where each one stands...
+shky    dw NSHILK dup(0)        ;  (shky = the ground under its tracks)
+shkz    dw NSHILK dup(0)
+shkh    db NSHILK dup(0)        ; the hull's heading, 0..255
+shkt    db NSHILK dup(0)        ; the turret's bearing - its OWN, and the
+                                ;  whole point of the second model
+shkd    db NSHILK dup(0)        ; the RADAR's bearing. This is the part that
+                                ;  turns by itself; the guns only move when
+                                ;  they have somewhere to point
+shkel   db NSHILK dup(0)        ; and how high the barrels are pointing
+; ---- THE CONTROL LAYER. These are INPUTS, not behaviour: a demanded
+; heading, a demanded turret bearing and elevation, and a trigger. SHKAI
+; fills them today; the day the pilot climbs into one of these, HIS hands
+; fill them instead and nothing below has to change. That is the whole
+; reason they are named and separate.
+shkhd   db NSHILK dup(0)        ; heading DEMAND - where it wants to be going
+shktrg  db NSHILK dup(0)        ; trigger: 1 = firing this tick
+shkft   db NSHILK dup(0)        ; ticks until the gun will feed again
+shklgt  db NSHILK dup(0)        ; ticks left on this patrol leg
+shktgt  dw NSHILK dup(0)        ; who it is shooting at (0FFFFh = the pilot)
+shkax   dw NSHILK dup(0)        ; the post it patrols around - it always
+shkaz   dw NSHILK dup(0)        ;  comes back to this
+shkst   db NSHILK dup(0)        ; 0 = fighting, 1 = burning
+shkhp   db NSHILK dup(SHKHITS)  ; what it has left in it
+shki    dw 0                    ; the vehicle being planted, ticked or drawn
+shkp    dw 0                    ; SHKGND: probe counter...
+shkb    dw 0                    ;  ...the nominal site...
+shkc    dw 0                    ;  ...and the best ground found so far
+shke    dw 0                    ; SHKAIM: which side we are on...
+shkg    dw 0                    ;  ...and the best target it found
+shkq    dw 0                    ;  ...its bearing, while the pitch is worked
+shkv    dw 0                    ;  ...and our own roof height
+; Their sites, as offsets from the map centre (24576,24576) - the same
+; spine the squadrons and the radar stations form up on. Ours south of the
+; front line, theirs north, mirrored so neither side is handed the ground:
+; two flanks 6000 out and a picket pushed forward on the centreline.
+; INTERLEAVED: even slots ours, odd slots theirs. This game reads a side
+; off the SLOT'S PARITY everywhere - the jets do it, the radar stations do
+; it through their lock encoding - and a Shilka that broke the rule would
+; need its own IFF test in every place that draws or targets one. So the
+; six alternate: 0/2/4 south of the line, 1/3/5 north, mirrored.
+; Ten a side, in two belts, interleaved by slot so the parity rule holds.
+; The FORWARD belt sits over the towns near the line; the REAR belt sits
+; back where each side's radar mast stands, so the mast is never naked.
+; Everything is an offset from the map centre, and the two sides mirror.
+SHKPX   dw -12000,-12000, -6000,-6000,     0,    0,  6000, 6000
+        dw  12000, 12000, -9000,-9000, -3000,-3000,  3000, 3000
+        dw   9000,  9000,     0,    0
+SHKPZ   dw  -2500,  2500, -2500, 2500, -2500, 2500, -2500, 2500
+        dw  -2500,  2500, -6800, 6800, -6800, 6800, -6800, 6800
+        dw  -6800,  6800, -7400, 7400
 ; the strings live HERE and UFDRAW/UBIG read CS:SI - the main segment
 ; pays nothing for the front door's words (its stack guard insisted)
 UWIRE0  db 'NO IPX',0
@@ -941,10 +1008,344 @@ APPLYPALF ENDP
 ;  near calls home - so it pays rent out here. White plane blip, red
 ;  course tick, the front line in red. ES = bufseg (the caller's).
 ; ============================================================================
+UROWF   PROC FAR                ; SYMSEG draws on the same glass and needs
+        call UROW               ; the same row arithmetic; a near call
+        ret                     ; cannot cross a segment, six bytes can
+UROWF   ENDP
 MINIMAP2F PROC FAR
         call MINIMAP2
         ret
 MINIMAP2F ENDP
+
+; ============================================================================
+;  The scope symbols used to live here. They moved to SYMSEG (SRC\SYM.INC)
+;  on 2026-07-29 when UISEG filled its 8K window - they were the cleanest
+;  tenants to move, being pure drawing with no CS-relative data of their
+;  own. What stays is SHKBLIP, which cannot: it walks the Shilkas' state,
+;  and that state IS CS-relative to this segment.
+; ============================================================================
+SHKBLIPF PROC FAR
+        call SHKBLIP
+        ret
+SHKBLIPF ENDP
+SHKLKPOSF PROC FAR
+        call SHKLKPOS
+        ret
+SHKLKPOSF ENDP
+SHKLOCKF PROC FAR
+        call SHKLOCK
+        ret
+SHKLOCKF ENDP
+SHKHITF PROC FAR
+        call SHKHIT
+        ret
+SHKHITF ENDP
+SHKTBRGF PROC FAR               ; in: BX = Shilka index. out: AX = turret
+        mov  al,cs:[shkt+bx]    ; bearing, 0..255. The TGT page draws the
+        xor  ah,ah              ; model with it, so the page shows where
+        ret                     ; the gun actually looks.
+SHKTBRGF ENDP
+
+; ---------------------------------------------------------------------------
+;  SHKLKPOS - where a locked Shilka is, for the ring, the missile head and
+;  the orbit camera. LKPOS lives in the main segment and cannot see this
+;  vehicle's position - the state is CS-relative to UISEG - so it knocks
+;  here instead. Aimed at half the vehicle's height: the turret, which is
+;  what a missile should fly into and what the eye looks for.
+;   in: BX = the Shilka's WORD index. Writes lkx/lky/lkz (main segment).
+; ---------------------------------------------------------------------------
+SHKLKPOS:
+        mov  ax,cs:[shkx+bx]
+        mov  [lkx],ax
+        mov  ax,cs:[shky+bx]
+        add  ax,SHKTOP/2
+        mov  [lky],ax
+        mov  ax,cs:[shkz+bx]
+        mov  [lkz],ax
+        ret
+
+; ---------------------------------------------------------------------------
+;  SHKLOCK - the third leg of the ENTER scan, after the jets and the radar
+;  stations, and it plays by the same rule they do: inside 24 px of the
+;  ring, NEAREST WINS. So a jet crossing in front of a battery still takes
+;  the lock, and picking the gun that is actually shooting at you is a
+;  matter of pointing at it. Reads/writes [lockd] like the loops above.
+; ---------------------------------------------------------------------------
+SHKLOCK:
+        mov  word ptr cs:[shki],0
+@@sl:   mov  bx,cs:[shki]
+        cmp  byte ptr cs:[shkst+bx],0
+        jne  @@sln              ; rubble locks nothing
+        add  bx,bx
+        mov  ax,cs:[shkx+bx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,cs:[shkz+bx]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        call FAR PTR ROTXZF
+        mov  ax,[rcz]
+        cmp  ax,NEARZ
+        jl   @@sln
+        mov  [tpi],ax           ; the range, for the nearest-wins test
+        mov  bx,cs:[shki]
+        add  bx,bx
+        mov  dx,cs:[shky+bx]
+        add  dx,SHKTOP/2
+        sub  dx,[camy]
+        mov  ax,[rcx]
+        mov  cx,[rcz]
+        call FAR PTR PPOINTF
+        jc   @@sln
+        sub  ax,160
+        jns  @@sl1
+        neg  ax
+@@sl1:  cmp  ax,24
+        jg   @@sln
+        sub  dx,[horiz]
+        jns  @@sl2
+        neg  dx
+@@sl2:  cmp  dx,24
+        jg   @@sln
+        mov  ax,[tpi]
+        cmp  ax,[lockd]
+        jae  @@sln
+        mov  [lockd],ax
+        mov  ax,cs:[shki]
+        add  ax,ax
+        add  ax,SHKLK
+        mov  [locki],ax
+@@sln:  inc  word ptr cs:[shki]
+        cmp  word ptr cs:[shki],NSHILK
+        jb   @@sl
+        ret
+
+; ---------------------------------------------------------------------------
+SHKBLIP:
+        cmp  byte ptr [rsst],0  ; our own radar out: no returns at all
+        jne  @@sbd
+        mov  word ptr [shki],0
+@@sb:   mov  bx,cs:[shki]
+        cmp  byte ptr cs:[shkst+bx],0
+        jne  @@sbn              ; a wreck paints no return
+        add  bx,bx
+        mov  ax,cs:[shkx+bx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,cs:[shkz+bx]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        call FAR PTR ROTXZF
+        mov  cl,[rbsh]
+        mov  ax,[rcx]
+        sar  ax,cl
+        cmp  ax,[rbrad]
+        jg   @@sbn
+        cmp  ax,[rbradn]
+        jl   @@sbn
+        mov  bx,[rcz]
+        sar  bx,cl
+        cmp  bx,[rbrad]
+        jg   @@sbn
+        cmp  bx,[rbradn]
+        jl   @@sbn
+        add  ax,[rbcx]
+        mov  [bqx],ax
+        mov  [dsx],ax
+        mov  ax,[rbcy]
+        sub  ax,bx              ; ahead = up the screen
+        mov  [bqy],ax
+        mov  ax,cs:[shki]       ; even ours, odd theirs - the parity rule
+        test ax,1
+        mov  al,95
+        jz   @@sbc
+        mov  al,19
+@@sbc:  mov  [COLOR],al
+        mov  ah,al
+        mov  al,[rbsh]
+        cmp  al,BQZICON
+        jbe  @@sbi
+        mov  al,ah              ; wound out: a dot like everything else
+        mov  bx,cs:[shki]
+        mov  ax,[bqy]
+        call UROW
+        add  di,[dsx]
+        mov  al,ah
+        mov  es:[di],al
+        jmp  @@sbn
+@@sbi:  mov  bx,cs:[shki]       ; the turret's real bearing, less ours
+        mov  al,cs:[shkt+bx]
+        xor  ah,ah
+        sub  ax,[heading]
+        and  ax,255
+        mov  [bqa],ax
+        call FAR PTR BQSHKF
+@@sbn:  inc  word ptr cs:[shki]
+        cmp  word ptr cs:[shki],NSHILK
+        jb   @@sb
+@@sbd:  ret
+
+; ---------------------------------------------------------------------------
+;  MMSETUP - decide the window and build the two lookup tables the map and
+;  everything drawn on it walk. Centres the window on the jet, in NODE
+;  space, and lets it run off the world: every index is masked to 0..63, so
+;  the map wraps and there is never a margin to leave grey. The tables live
+;  in UISEG and are read with a CS override, which matters - the blit runs
+;  with DS pointing at the far scratch segment where the baked map lives,
+;  and could not reach a main-segment table at all.
+; ---------------------------------------------------------------------------
+MMSETUP:
+        ; how many nodes the glass covers. On the whole-world step there is
+        ; no window at all - the map IS the world, all 64 of it, and every
+        ; mark on it is in view by definition.
+        mov  cl,[mmzs]
+        or   cl,cl
+        jnz  @@mz1
+        mov  word ptr [mmspx],64
+        mov  word ptr [mmspy],64
+        xor  ax,ax
+        mov  [mmcol0],ax
+        mov  [mmrow0],ax
+        jmp  @@mtab
+@@mz1:  dec  cl                 ; steps 1..3 are 1, 2 and 4 pixels a node
+        mov  ax,PZADIW
+        shr  ax,cl
+        mov  [mmspx],ax
+        mov  bx,ax
+        shr  bx,1
+        mov  ax,[camx]          ; the jet's own node column
+        add  ax,BIAS
+        mov  cl,2
+        shr  ax,cl
+        mov  cl,8
+        shr  ax,cl
+        sub  ax,bx              ; ...half a window to its left
+        and  ax,63
+        mov  [mmcol0],ax
+        mov  cl,[mmzs]
+        dec  cl
+        mov  ax,PZADIH
+        shr  ax,cl
+        mov  [mmspy],ax
+        mov  bx,ax
+        shr  bx,1
+        mov  ax,[camz]
+        add  ax,BIAS
+        mov  cl,2
+        shr  ax,cl
+        mov  cl,8
+        shr  ax,cl
+        and  ax,63
+        mov  dx,63
+        sub  dx,ax              ; screen rows run south, the world runs north
+        mov  ax,dx
+        sub  ax,bx
+        and  ax,63
+        mov  [mmrow0],ax
+        ; ---- dest column -> source node column
+@@mtab: xor  bx,bx              ; dest x
+@@ct:   mov  ax,bx
+        call MMSCL
+        add  ax,[mmcol0]
+        and  ax,63
+        mov  cs:[MMCOLT+bx],al
+        inc  bx
+        cmp  bx,PZADIW
+        jb   @@ct
+        ; ---- dest row -> source ROW BASE (node row * 64), ready to index
+        xor  bx,bx
+@@rt:   mov  ax,bx
+        call MMSCL
+        add  ax,[mmrow0]
+        and  ax,63
+        mov  cl,6
+        shl  ax,cl              ; *64: the baked map is 64 bytes a row
+        mov  si,bx
+        add  si,si
+        mov  cs:[MMROWT+si],ax
+        inc  bx
+        cmp  bx,PZADIH
+        jb   @@rt
+        ret
+
+; ---------------------------------------------------------------------------
+;  MMSCL / MMSCLI - screen pixel <-> world node, at the current zoom step.
+;  Step 0 is the odd one: four nodes to three pixels, so the whole 64-node
+;  world lands on a 48-pixel side and the glass is filled by wrapping. The
+;  rest are plain powers of two. Both directions live here so they cannot
+;  disagree - the map is drawn through one and every mark on it through the
+;  other, and a disagreement would float the marks off the ground.
+;   MMSCL:  AX = pixel  -> AX = node offset
+;   MMSCLI: AX = node   -> AX = pixel offset
+; ---------------------------------------------------------------------------
+MMSCL:  push cx
+        mov  cl,[mmzs]
+        or   cl,cl
+        jnz  @@s1
+        mov  cx,4               ; *4/3
+        imul cx
+        mov  cx,3
+        cwd
+        idiv cx
+        pop  cx
+        ret
+@@s1:   dec  cl
+        shr  ax,cl
+        pop  cx
+        ret
+MMSCLI: push cx
+        mov  cl,[mmzs]
+        or   cl,cl
+        jnz  @@i1
+        mov  cx,3               ; *3/4
+        imul cx
+        mov  cx,4
+        cwd
+        idiv cx
+        pop  cx
+        ret
+@@i1:   dec  cl
+        shl  ax,cl
+        pop  cx
+        ret
+
+; ---------------------------------------------------------------------------
+;  MMPTX / MMPTY - one world node to its pixel on the map, or CARRY SET if
+;  that node is not in the window. Every mark goes through these: the front
+;  line, the two radar stations, the human nameplates and the jet's own
+;  blip. They used to each do their own shift, and the day the scale changed
+;  was the day they would have quietly drifted off the terrain.
+;   in: AX = node column (MMPTX) or node row (MMPTY), 0..63
+; ---------------------------------------------------------------------------
+;  They PRESERVE CX. That is not politeness: the front line walks the glass
+;  with CX as its column counter, and a helper that quietly loaded CL with a
+;  shift count turned that loop into an infinite one.
+MMPTX:  push cx
+        sub  ax,[mmcol0]
+        and  ax,63
+        cmp  ax,[mmspx]
+        jae  @@xoff
+        call MMSCLI
+        add  ax,PZMMX
+        pop  cx
+        clc
+        ret
+@@xoff: pop  cx
+        stc
+        ret
+MMPTY:  push cx
+        sub  ax,[mmrow0]
+        and  ax,63
+        cmp  ax,[mmspy]
+        jae  @@yoff
+        call MMSCLI
+        add  ax,PZMMY
+        pop  cx
+        clc
+        ret
+@@yoff: pop  cx
+        stc
+        ret
 ; UROW - AX = row -> DI = row*320 (the main segment's ROW320, cloned:
 ; a near CALL cannot cross segments; nine bytes can)
 UROW:   mov  di,ax
@@ -957,50 +1358,67 @@ UROW:   mov  di,ax
         ret
 MINIMAP2:
         cld
-        mov  ax,155
+        call MMSETUP            ; window, zoom and the two lookup tables
+        mov  ax,PZMMY
         call UROW
-        add  di,144
-        push ds                 ; the map lives in the far scratch segment
-        mov  ax,[scrseg]
-        mov  ds,ax
-        xor  si,si
-        mov  dx,32              ; dest rows
-@@row:  mov  cx,32
-@@px:   lodsb                   ; every other source column
-        inc  si
+        add  di,PZMMX
+        push ds                 ; the baked world lives in the far scratch
+        mov  ax,[scrseg]        ; segment; the tables it is read through are
+        mov  ds,ax              ; in UISEG and reached with CS:
+        xor  dx,dx              ; dest row
+@@row:  mov  bx,dx
+        add  bx,bx
+        mov  si,cs:[MMROWT+bx]  ; this row's base in the baked map
+        xor  cx,cx              ; dest column
+@@px:   mov  bx,cx
+        mov  bl,cs:[MMCOLT+bx]
+        xor  bh,bh
+        mov  al,[si+bx]
         stosb
-        loop @@px
-        add  si,64              ; skip the odd source row
-        add  di,320-32
-        dec  dx
-        jnz  @@row
+        inc  cx
+        cmp  cx,PZADIW
+        jb   @@px
+        add  di,320-PZADIW
+        inc  dx
+        cmp  dx,PZADIH
+        jb   @@row
         pop  ds
         ; the front line, half scale
+        ; the front line, a pixel column at a time. The column table already
+        ; says which world node each pixel shows, so the band comes straight
+        ; off it - and the line wraps with everything else.
         xor  cx,cx
-@@bd2:  mov  bx,cx
-        shr  bx,1               ; band = (col*2)/4
+@@bd2:  push cx                 ; CX is the column: nothing below may touch
+        mov  bx,cx              ; it, and CL is a shift count twice over
+        mov  bl,cs:[MMCOLT+bx]  ; the node under this pixel column
+        xor  bh,bh
+        shr  bx,1
+        shr  bx,1               ; four nodes to a border band
         add  bx,bx
         mov  ax,[bordz+bx]
         add  ax,24576+BIAS
-        push cx
         mov  cl,10
         shr  ax,cl
         and  ax,63
         mov  bx,63
         sub  bx,ax
-        shr  bx,1
         mov  ax,bx
-        add  ax,155
+        call MMPTY
+        pop  cx
+        jc   @@bdn              ; this stretch of the line is off the window
+        push cx
         call UROW
         pop  cx
-        add  di,144
+        add  di,PZMMX
         add  di,cx
         mov  al,19
         mov  es:[di],al
-        inc  cx
-        cmp  cx,32
+@@bdn:  inc  cx
+        cmp  cx,PZADIW
         jb   @@bd2
-        ; plane blip at node (camx,camz), halved
+        ; the jet's own blip. The window is centred on it, so this lands in
+        ; the middle of the glass and stays there - the map moves under the
+        ; aeroplane now, which is the whole point of a moving map.
         mov  ax,[camx]
         add  ax,BIAS
         mov  cl,2
@@ -1008,8 +1426,9 @@ MINIMAP2:
         mov  cl,8
         shr  ax,cl
         and  ax,63
-        shr  ax,1
-        mov  bx,ax              ; col/2
+        call MMPTX
+        jc   @@nbl
+        mov  bx,ax              ; the jet's own column
         mov  ax,[camz]
         add  ax,BIAS
         mov  cl,2
@@ -1019,25 +1438,31 @@ MINIMAP2:
         and  ax,63
         mov  dx,63
         sub  dx,ax              ; row = 63 - node z
-        shr  dx,1
         mov  ax,dx
-        add  ax,155
+        push bx
+        call MMPTY
+        pop  bx
+        jc   @@nbl
         push bx
         call UROW
         pop  bx
-        add  di,144
         add  di,bx
         mov  al,8               ; white blip
         mov  es:[di],al
-        ; course tick 1-2 px ahead of the blip
+        ; course tick a couple of pixels up the nose - and it grows with the
+        ; zoom, or at four pixels to a node it would sit inside the blip
+        mov  cl,[mmzs]
+        inc  cl
         mov  ax,[hsin]
-        add  ax,ax              ; hsin*2 -> -2..2 screen px
+        shl  ax,cl
         mov  bx,256
         cwd
         idiv bx
         mov  si,ax
+        mov  cl,[mmzs]
+        inc  cl
         mov  ax,[hcos]
-        add  ax,ax
+        shl  ax,cl
         cwd
         idiv bx                 ; dz -> minus one row per unit (+Z is up)
         mov  cx,320
@@ -1048,7 +1473,7 @@ MINIMAP2:
         add  di,ax
         mov  al,19              ; red course tick
         mov  es:[di],al
-        ret
+@@nbl:  ret
 
 
 ; ============================================================================
@@ -1124,36 +1549,17 @@ RSTAGND:
         mov  bx,[rsi]
         add  bx,bx
         mov  ax,[rsx+bx]
-        mov  [ctx],ax           ; the nominal site
-        mov  word ptr [cty],-1  ; best ground so far: none
-        mov  word ptr [tpi],0
-@@p:    mov  ax,[tpi]
-        sub  ax,4
-        mov  cl,10
-        shl  ax,cl              ; (k-4)*1024
-        add  ax,[ctx]
-        mov  [ctz],ax           ; this probe's x
-        push word ptr [camx]    ; TERRH reads the camera position
-        push word ptr [camz]
-        mov  [camx],ax
-        mov  bx,[rsi]
-        add  bx,bx
+        mov  [ctx],ax
         mov  ax,[rsz+bx]
-        mov  [camz],ax
-        call FAR PTR TERRHF
-        pop  word ptr [camz]
-        pop  word ptr [camx]
-        cmp  ax,[cty]
-        jle  @@pn
-        mov  [cty],ax           ; higher ground: move the station here
-        mov  bx,[rsi]
+        mov  [ctz],ax
+        call FINDGND            ; the same rule the batteries follow: a mast
+        mov  bx,[rsi]           ; standing in the sea was the old behaviour
         add  bx,bx
         mov  [rsy+bx],ax
-        mov  ax,[ctz]
+        mov  ax,[ctx]
         mov  [rsx+bx],ax
-@@pn:   inc  word ptr [tpi]
-        cmp  word ptr [tpi],8
-        jb   @@p
+        mov  ax,[ctz]
+        mov  [rsz+bx],ax
         ret
 
 ; ---------------------------------------------------------------------------
@@ -1214,6 +1620,26 @@ RSTADRAW:
         mov  word ptr [mfb],offset RDISHFC
         mov  word ptr [nfc],RDISHNF
         call FAR PTR MODELDRAWF
+        mov  bx,[rsi]           ; RELOAD it: MODELDRAW clobbers BX, and this
+        add  bx,bx              ; read the station's height through whatever
+        mov  ax,[rsy+bx]        ; was left in it - which is why the marker
+        add  ax,RSTOP/2         ; jumped above and below the mast instead of
+        sub  ax,[camy]          ; sitting on the dish
+        mov  [pdy],ax
+        mov  byte ptr [COLOR],95
+        mov  byte ptr [gmks],0
+        cmp  word ptr [rsi],0
+        je   @@nmk
+        mov  byte ptr [COLOR],96
+        mov  byte ptr [gmks],1
+@@nmk:  mov  ax,[rsi]           ; and RED once it is the locked one - the
+        add  ax,ax              ; world's own language, which the ground
+        add  ax,RSLK            ; now speaks too: green ours, yellow theirs,
+        cmp  ax,[locki]         ; red the one you have
+        jne  @@nmk2
+        mov  byte ptr [COLOR],19
+@@nmk2: mov  word ptr [gmkn],14000
+        call FAR PTR GNDMARKF
 @@nx:   inc  word ptr [rsi]
         cmp  word ptr [rsi],NRSTA
         jb   @@st
@@ -1245,31 +1671,27 @@ RSBLIP: mov  word ptr [rsi],0
         mov  cl,[rbsh]          ; the scope's live zoom, then a pixel clip
         mov  ax,[rcx]           ; (12, not 14: the arms need the margin)
         sar  ax,cl
-        cmp  ax,12
+        cmp  ax,[rbrad]
         jg   @@n
-        cmp  ax,-12
+        cmp  ax,[rbradn]
         jl   @@n
         mov  bx,[rcz]
         sar  bx,cl
-        cmp  bx,12
+        cmp  bx,[rbrad]
         jg   @@n
-        cmp  bx,-12
+        cmp  bx,[rbradn]
         jl   @@n
         add  ax,[rbcx]
-        mov  [dsx],ax
+        mov  [bqx],ax
         mov  ax,[rbcy]
         sub  ax,bx              ; ahead = up the screen
-        call UROW
-        add  di,[dsx]
-        mov  al,95              ; ours green, theirs yellow - the IFF
-        cmp  word ptr [rsi],0   ; language the blips already speak
+        mov  [bqy],ax
+        mov  al,95              ; ours green, theirs RED - the same two
+        cmp  word ptr [rsi],0   ; colours the whole scope speaks now
         je   @@c
-        mov  al,96
-@@c:    mov  es:[di],al
-        mov  es:[di-640],al
-        mov  es:[di+640],al
-        mov  es:[di-2],al
-        mov  es:[di+2],al
+        mov  al,19
+@@c:    mov  [COLOR],al
+        call FAR PTR BQSTAF     ; the lozenge with a dish, and it never turns
 @@n:    inc  word ptr [rsi]
         cmp  word ptr [rsi],NRSTA
         jb   @@l
@@ -1289,18 +1711,28 @@ RSNOISE:
         or   ax,1
         mov  [tmpi],ax          ; the walking seed
         mov  word ptr [tpi],0
+        ; The snow fills whatever the scope's reach is. It used to be a
+        ; fixed +/-13 box, which on this screen would leave a clean border
+        ; of glass around the interference - and a radar that is out does
+        ; not politely stay off the edges.
 @@d:    call RSRND              ; a column...
         mov  cl,3
         shr  ax,cl
-        and  ax,26
-        sub  ax,13
+        and  ax,63
+        imul word ptr [rbrad]
+        mov  cl,5
+        sar  ax,cl              ; 0..63 -> 0..2*rbrad
+        sub  ax,[rbrad]
         add  ax,[rbcx]
         mov  [dsx],ax
         call RSRND              ; ...and a row
         mov  cl,3
         shr  ax,cl
-        and  ax,26
-        sub  ax,13
+        and  ax,63
+        imul word ptr [rbrad]
+        mov  cl,5
+        sar  ax,cl
+        sub  ax,[rbrad]
         add  ax,[rbcy]
         call UROW
         add  di,[dsx]
@@ -1370,7 +1802,7 @@ RSLOCK: mov  word ptr [rsi],0
         neg  ax
 @@k1:   cmp  ax,24
         jg   @@n
-        sub  dx,100
+        sub  dx,[horiz]         ; the ring sits on the glass, not the screen
         jns  @@k2
         neg  dx
 @@k2:   cmp  dx,24
@@ -1473,18 +1905,19 @@ RSMAP:  mov  word ptr [rsi],0
         mov  al,95
         or   bx,bx
         jz   @@c1
-        mov  al,96
+        mov  al,19              ; theirs: red, like everywhere else now
 @@c1:   cmp  byte ptr [rsst+bx],0
         je   @@c2
         mov  al,30              ; a ruin: grey, and still worth knowing
 @@c2:   push ax
         add  bx,bx
-        mov  ax,[rsx+bx]        ; node col/2 - MINIMAP2's own arithmetic
+        mov  ax,[rsx+bx]        ; the map's own arithmetic, shared
         add  ax,BIAS
         mov  cl,10
         shr  ax,cl
         and  ax,63
-        shr  ax,1
+        call MMPTX
+        jc   @@nx
         mov  dx,ax
         mov  ax,[rsz+bx]
         add  ax,BIAS
@@ -1492,12 +1925,13 @@ RSMAP:  mov  word ptr [rsi],0
         shr  ax,cl
         and  ax,63
         mov  bx,63
-        sub  bx,ax              ; row = 63 - node z, halved
-        shr  bx,1
+        sub  bx,ax              ; row = 63 - node z
         mov  ax,bx
-        add  ax,155
+        push dx
+        call MMPTY
+        pop  dx
+        jc   @@nx
         call UROW
-        add  di,144
         add  di,dx
         pop  ax
         mov  es:[di],al
@@ -1505,9 +1939,63 @@ RSMAP:  mov  word ptr [rsi],0
         mov  es:[di+320],al
         mov  es:[di-1],al
         mov  es:[di+1],al
-        inc  word ptr [rsi]
+        jmp  @@nn
+@@nx:   pop  ax                 ; this station is off the window: keep the
+@@nn:   inc  word ptr [rsi]     ; stack straight and move to the next
         cmp  word ptr [rsi],NRSTA
         jb   @@l
+        ret
+
+; ---------------------------------------------------------------------------
+;  SHKMAP - the Shilkas on the map. Same two colours as everything else -
+;  ours green, theirs red - and the same shape language as the scope: a
+;  small solid block, because a battery is a place, not a heading. Close in
+;  it is a three-pixel cross with a body; wound out to the whole world it
+;  is one pixel, or six of them would smear into a single blob.
+; ---------------------------------------------------------------------------
+SHKMAP: mov  word ptr cs:[shki],0
+@@sm:   mov  bx,cs:[shki]
+        cmp  byte ptr cs:[shkst+bx],0
+        jne  @@smn              ; a wreck is off the map
+        add  bx,bx
+        mov  ax,cs:[shkx+bx]
+        add  ax,BIAS
+        mov  cl,10
+        shr  ax,cl
+        and  ax,63
+        call MMPTX
+        jc   @@smn
+        mov  dx,ax
+        mov  bx,cs:[shki]
+        add  bx,bx
+        mov  ax,cs:[shkz+bx]
+        add  ax,BIAS
+        mov  cl,10
+        shr  ax,cl
+        and  ax,63
+        mov  bx,63
+        sub  bx,ax
+        mov  ax,bx
+        push dx
+        call MMPTY
+        pop  dx
+        jc   @@smn
+        call UROW
+        add  di,dx
+        mov  ax,cs:[shki]       ; even ours, odd theirs - the parity rule
+        test ax,1
+        mov  al,95
+        jz   @@smc
+        mov  al,19
+@@smc:  mov  es:[di],al
+        cmp  byte ptr [mmzs],MMZALL
+        je   @@smn              ; whole world: one pixel is the whole mark
+        mov  es:[di-1],al
+        mov  es:[di+1],al
+        mov  es:[di-320],al
+@@smn:  inc  word ptr cs:[shki]
+        cmp  word ptr cs:[shki],NSHILK
+        jb   @@sm
         ret
 
 ; RSTAYAW - model yaw in AX (any sign) -> msin/mcos. SINQ wraps it.
@@ -1523,6 +2011,901 @@ RSTAYAW:
         ret
 
 ; ============================================================================
+;  THE SHILKAS - ZSU-23-4 self-propelled anti-aircraft guns, three a side.
+;
+;  This is MILESTONE ONE: the vehicle stands in the world and its turret
+;  turns. It does not drive yet, it does not track, it does not shoot and
+;  it cannot be killed - each of those is its own build, the way the radar
+;  station was done. What is settled here is the SHAPE and the SEAM: two
+;  models at one world point, the chassis on the driving heading and the
+;  turret on its own bearing, so when the tracking arrives it has only to
+;  write shkt and the vehicle already knows how to show it.
+;
+;  It sits below RSTAYAW because it calls it, and a one-pass assembler is
+;  happier reading downhill. Everything here is cs:-relative state (see the
+;  block up top) plus the far doors home: ROTXZF, SINQF, TERRHF, MODELDRAWF.
+;
+;  Far doors OUT: SHKINITF (once, after DSGEN - it needs the heightmap),
+;  SHKTICKF (the physics clock) and SHKDRAWF (per frame).
+; ============================================================================
+SHKINITF PROC FAR
+        call SHKINIT
+        ret
+SHKINITF ENDP
+SHKTICKF PROC FAR
+        call SHKTICK
+        ret
+SHKTICKF ENDP
+SHKDRAWF PROC FAR
+        call SHKDRAW
+        ret
+SHKDRAWF ENDP
+
+; ---------------------------------------------------------------------------
+;  SHKINIT - park the six. Site from SHKPX/SHKPZ, ground from SHKGND, and
+;  a hull heading and turret bearing fanned out by index so that no two of
+;  them stand at the same angle: six identical vehicles all pointing north
+;  read as wallpaper, six at their own angles read as a deployment. Runs
+;  after DSGEN, beside RSTAINIT.
+; ---------------------------------------------------------------------------
+SHKINIT:
+        mov  word ptr cs:[shki],0
+@@v:    mov  bx,cs:[shki]
+        mov  ax,bx              ; hull heading = i*43 + 16, turret = i*37:
+        mov  cx,43              ; two different strides, so the turret is
+        imul cx                 ; never parked square with its own hull
+        add  ax,16
+        mov  cs:[shkh+bx],al
+        mov  ax,bx
+        mov  cx,37
+        imul cx
+        mov  cs:[shkt+bx],al
+        add  bx,bx              ; word index
+        mov  ax,cs:[SHKPX+bx]
+        add  ax,24576
+        mov  cs:[shkx+bx],ax
+        mov  ax,cs:[SHKPZ+bx]
+        add  ax,24576
+        mov  cs:[shkz+bx],ax
+        call SHKGND
+        mov  bx,cs:[shki]       ; the post it will always come back to
+        add  bx,bx
+        mov  ax,cs:[shkx+bx]
+        mov  cs:[shkax+bx],ax
+        mov  ax,cs:[shkz+bx]
+        mov  cs:[shkaz+bx],ax
+        mov  bx,cs:[shki]
+        mov  al,cs:[shkh+bx]
+        mov  cs:[shkhd+bx],al   ; start out driving the way it is parked
+        inc  word ptr cs:[shki]
+        cmp  word ptr cs:[shki],NSHILK
+        jb   @@v
+        ret
+
+; ---------------------------------------------------------------------------
+;  SHKGND - a gun wants ground, not sea. Probe eight spots 128 apart along
+;  this vehicle's east-west line and keep the HIGHEST: on an island world
+;  that also keeps it dry, since WORLDH clamps water to 0. The same trick
+;  RSTAGND plays for the stations, at an EIGHTH of the spacing. That is
+;  deliberate: a station may hunt four thousand units for a hilltop because
+;  nobody has to find it again, but a battery that teleports 130 m off its
+;  post is not covering anything, and the pilot who put it there should be
+;  able to find his own flak. +/-512 is under six vehicle lengths.
+;  in/out: cs:[shki] = the vehicle; writes shkx and shky.
+; ---------------------------------------------------------------------------
+; ---------------------------------------------------------------------------
+;  FINDGND - walk out from a nominal spot until the ground is worth standing
+;  on: out of the water, off the mountain. Sixteen candidates on a widening
+;  ring, and it keeps the BEST one it saw rather than the first, so a site
+;  lands on a rise instead of the first patch of legal dirt.
+;   in:  [ctx]/[ctz] the nominal spot
+;   out: [ctx]/[ctz] moved to the chosen spot, AX = its height,
+;        CF set if nothing legal was found at all (open sea).
+; ---------------------------------------------------------------------------
+FINDGND:
+        mov  ax,[ctx]
+        mov  cs:[shkb],ax       ; the nominal centre, kept
+        mov  ax,[ctz]
+        mov  cs:[shkc],ax
+        mov  word ptr cs:[shkq],0       ; best height so far (0 = none)
+        mov  word ptr cs:[shkp],0       ; ring step
+@@fr:   mov  word ptr cs:[shke],0       ; the eight points of this ring
+@@fp:   mov  ax,cs:[shke]       ; a crude compass: dx and dz from a 3x3 box
+        and  ax,3
+        dec  ax                 ; -1, 0, 1, 2 -> use -1..1
+        cmp  ax,2
+        jne  @@f1
+        xor  ax,ax
+@@f1:   mov  dx,cs:[shkp]
+        inc  dx
+        imul dx
+        mov  cx,10
+        imul cx                 ; step out 10 world units per ring per unit
+        mov  bx,ax
+        mov  ax,cs:[shke]
+        mov  cl,2
+        shr  ax,cl
+        and  ax,3
+        dec  ax
+        cmp  ax,2
+        jne  @@f2
+        xor  ax,ax
+@@f2:   mov  dx,cs:[shkp]
+        inc  dx
+        imul dx
+        mov  cx,10
+        imul cx
+        push ax                 ; dz
+        mov  ax,cs:[shkb]
+        add  ax,bx
+        mov  [ctx],ax
+        pop  ax
+        add  ax,cs:[shkc]
+        mov  [ctz],ax
+        push word ptr [camx]    ; TERRH reads the camera position
+        push word ptr [camz]
+        mov  ax,[ctx]
+        mov  [camx],ax
+        mov  ax,[ctz]
+        mov  [camz],ax
+        call FAR PTR TERRHF
+        pop  word ptr [camz]
+        pop  word ptr [camx]
+        cmp  ax,GNDLO
+        jb   @@fn               ; in the sea
+        cmp  ax,GNDHI
+        ja   @@fn               ; up the mountain
+        cmp  ax,cs:[shkq]
+        jbe  @@fn
+        mov  cs:[shkq],ax       ; the best legal ground so far
+        mov  ax,[ctx]
+        mov  cs:[shkg],ax
+        mov  ax,[ctz]
+        mov  cs:[shkv],ax
+@@fn:   inc  word ptr cs:[shke]
+        cmp  word ptr cs:[shke],16
+        jb   @@fp
+        cmp  word ptr cs:[shkq],0
+        jne  @@fd               ; found something on this ring: stop widening
+        inc  word ptr cs:[shkp]
+        cmp  word ptr cs:[shkp],40      ; out to 400 units a step, 16 tries
+        jb   @@fr
+        mov  ax,cs:[shkb]       ; nothing legal anywhere near: leave it where
+        mov  [ctx],ax           ; it was and say so
+        mov  ax,cs:[shkc]
+        mov  [ctz],ax
+        xor  ax,ax
+        stc
+        ret
+@@fd:   mov  ax,cs:[shkg]
+        mov  [ctx],ax
+        mov  ax,cs:[shkv]
+        mov  [ctz],ax
+        mov  ax,cs:[shkq]
+        clc
+        ret
+
+SHKGND: mov  bx,cs:[shki]
+        add  bx,bx
+        mov  ax,cs:[shkx+bx]
+        mov  [ctx],ax
+        mov  ax,cs:[shkz+bx]
+        mov  [ctz],ax
+        call FINDGND            ; out of the water, off the mountain
+        mov  bx,cs:[shki]
+        add  bx,bx
+        mov  cs:[shky+bx],ax
+        mov  ax,[ctx]
+        mov  cs:[shkx+bx],ax
+        mov  ax,[ctz]
+        mov  cs:[shkz+bx],ax
+        ret
+
+; ---------------------------------------------------------------------------
+;  SHKTICK - one physics tick. For now the ONLY moving part is the turret,
+;  and it sweeps: each vehicle at its own rate, 2..5 of 256 a tick, so the
+;  six are never in step and one turn takes 3.5..7 seconds. That rate IS
+;  the character of the thing - a turret that snaps to its target is a
+;  gun mount, one that lags is a Shilka - so the tracking that replaces
+;  this sweep will keep the same ceiling and only change the direction.
+; ---------------------------------------------------------------------------
+SHKTICK:
+        mov  word ptr cs:[shki],0
+@@t:    mov  bx,cs:[shki]
+        cmp  byte ptr cs:[shkst+bx],0
+        jne  @@tn               ; burning: nothing turns any more
+        mov  al,cs:[shkd+bx]    ; THE RADAR sweeps, steadily, always. This
+        add  al,SHKDSPN         ; is the part that spins - it was the guns
+        mov  cs:[shkd+bx],al    ; doing it, which read as a nervous tic
+        call SHKAI              ; decide where to drive
+        call SHKMOVE            ; ...and drive there
+        mov  bx,cs:[shki]
+        mov  byte ptr cs:[shktrg+bx],0
+        call SHKAIM             ; in reach? -> CX bearing, DX elevation
+        jc   @@tn               ; nothing: the guns hold where they are
+        push cx
+        mov  bx,cs:[shki]       ; the barrels rise or fall toward it, and
+        mov  al,cs:[shkel+bx]   ; no faster than SHKELEV either
+        xor  ah,ah
+        sub  dx,ax
+        cmp  dx,SHKELEV
+        jle  @@te1
+        mov  dx,SHKELEV
+@@te1:  cmp  dx,-SHKELEV
+        jge  @@te2
+        mov  dx,-SHKELEV
+@@te2:  add  ax,dx
+        jns  @@te3
+        xor  ax,ax
+@@te3:  cmp  ax,SHKELMX
+        jle  @@te4
+        mov  ax,SHKELMX
+@@te4:  mov  cs:[shkel+bx],al
+        pop  cx
+        mov  bx,cs:[shki]       ; slew toward it, and no faster than SHKTRAV
+        mov  al,cs:[shkt+bx]
+        xor  ah,ah
+        mov  dx,cx
+        sub  dx,ax              ; the shorter way round, signed
+        and  dx,255
+        cmp  dx,128
+        jb   @@tp
+        sub  dx,256
+@@tp:   cmp  dx,SHKTRAV         ; a full turn takes about seven seconds,
+        jle  @@tm               ; and that lag IS the character of the thing
+        mov  dx,SHKTRAV
+@@tm:   cmp  dx,-SHKTRAV
+        jge  @@ta
+        mov  dx,-SHKTRAV
+@@ta:   add  ax,dx
+        mov  cs:[shkt+bx],al
+        call SHKGUN             ; on the mark? then fire
+@@tn:   inc  word ptr cs:[shki]
+        cmp  word ptr cs:[shki],NSHILK
+        jb   @@t
+        ret
+
+; ---------------------------------------------------------------------------
+;  SHKAIM - the nearest ENEMY aircraft this battery can reach.
+;   in: cs:[shki] = the vehicle
+;   out: CF clear and CX = the bearing to it; CF set if the sky is empty.
+;  "Enemy" is the parity rule again: an even slot is ours, so it hunts odd
+;  aircraft, and an odd one hunts even. The player counts as slot 0 - he is
+;  on the even side - so the odd batteries are the ones that want him.
+; ---------------------------------------------------------------------------
+SHKAIM: mov  bx,cs:[shki]
+        add  bx,bx
+        mov  ax,cs:[shkx+bx]
+        mov  cs:[shkb],ax       ; our own place, for the range tests
+        mov  ax,cs:[shkz+bx]
+        mov  cs:[shkc],ax
+        mov  ax,cs:[shky+bx]
+        add  ax,SHKTOP
+        mov  cs:[shkv],ax       ; our own roof: the guns sit up here
+        mov  word ptr cs:[shkp],32767   ; best range so far
+        mov  word ptr cs:[shkg],0FFFFh  ; ...and who had it
+        mov  bx,cs:[shki]
+        and  bx,1               ; our side; we want the other one
+        mov  cs:[shke],bx
+        ; THE PILOT FIRST. He is not in the plane array at all - he is the
+        ; camera - so a loop over pst would never have found him, and the
+        ; guns would have politely ignored the one aircraft that matters.
+        ; He flies for the even side, so the odd batteries want him.
+        or   bx,bx
+        jz   @@axp
+        cmp  byte ptr [dying],0
+        jne  @@axp
+        mov  ax,[camx]
+        sub  ax,cs:[shkb]
+        jns  @@ap1
+        neg  ax
+@@ap1:  cmp  ax,SHKGRNG
+        jg   @@axp
+        mov  dx,ax
+        mov  ax,[camz]
+        sub  ax,cs:[shkc]
+        jns  @@ap2
+        neg  ax
+@@ap2:  cmp  ax,SHKGRNG
+        jg   @@axp
+        add  ax,dx
+        mov  cs:[shkp],ax
+        mov  word ptr cs:[shkg],0FFFFh
+@@axp:  xor  si,si
+@@ax:   mov  bx,si              ; the player rides slot 0 like everyone
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        jne  @@axn              ; dead men are not targets
+        mov  ax,si
+        shr  ax,1
+        and  ax,1
+        cmp  ax,cs:[shke]
+        je   @@axn              ; same side: not ours to shoot
+        mov  ax,[pax+si]
+        sub  ax,cs:[shkb]
+        jns  @@ax1
+        neg  ax
+@@ax1:  cmp  ax,SHKGRNG
+        jg   @@axn
+        mov  dx,ax
+        mov  ax,[paz+si]
+        sub  ax,cs:[shkc]
+        jns  @@ax2
+        neg  ax
+@@ax2:  cmp  ax,SHKGRNG
+        jg   @@axn
+        add  ax,dx              ; a cheap taxicab range: this is a decision,
+        cmp  ax,cs:[shkp]       ; not a firing solution
+        jae  @@axn
+        mov  cs:[shkp],ax
+        mov  cs:[shkg],si
+@@axn:  add  si,2
+        cmp  si,NPLANE*2
+        jb   @@ax
+        mov  si,cs:[shkg]
+        cmp  si,0FFFFh
+        jne  @@axw
+        cmp  word ptr cs:[shkp],32767   ; FFFF means the pilot - unless
+        je   @@axe                      ; nothing was found at all
+        mov  ax,[camx]
+        sub  ax,cs:[shkb]
+        mov  [wdx],ax
+        mov  ax,[camz]
+        sub  ax,cs:[shkc]
+        mov  [wdz],ax
+        jmp  @@axb
+@@axw:  mov  ax,[pax+si]        ; bearing to him, world frame
+        sub  ax,cs:[shkb]
+        mov  [wdx],ax
+        mov  ax,[paz+si]
+        sub  ax,cs:[shkc]
+        mov  [wdz],ax
+@@axb:
+        call FAR PTR SHKBRGF
+        mov  cs:[shkq],ax       ; the bearing; now how high to look
+        mov  si,cs:[shkg]
+        mov  ax,[wdx]           ; the horizontal leg we already have
+        or   ax,ax
+        jns  @@ah1
+        neg  ax
+@@ah1:  mov  bx,[wdz]
+        or   bx,bx
+        jns  @@ah2
+        neg  bx
+@@ah2:  cmp  ax,bx              ; octagonal ground range: max + half the min
+        jge  @@ah3
+        xchg ax,bx
+@@ah3:  shr  bx,1
+        add  ax,bx
+        mov  bx,ax
+        mov  bx,cs:[shki]       ; remember him for the gun
+        add  bx,bx
+        mov  cs:[shktgt+bx],si
+        cmp  si,0FFFFh
+        jne  @@ahp
+        mov  ax,[camy]
+        jmp  @@ahq
+@@ahp:  mov  ax,[pay+si]        ; how far above our own roof he is
+@@ahq:  sub  ax,cs:[shkv]
+        jg   @@ah4
+        xor  ax,ax              ; at or below us: the guns come down flat
+@@ah4:  call SHKPITCH           ; -> AX = 0..64
+        mov  dx,ax
+        mov  cx,cs:[shkq]
+        clc
+        ret
+@@axe:  stc
+        ret
+
+; ---------------------------------------------------------------------------
+;  SHKPITCH - the angle up to a thing AX high at ground range BX, as 0..64
+;  of the compass (0 = level, 64 = straight up). Same table and the same
+;  reasoning as the bearing: the smaller leg over the larger picks a row,
+;  and which leg was smaller says which half of the quadrant we are in.
+; ---------------------------------------------------------------------------
+SHKPITCH:
+        or   bx,bx
+        jnz  @@p1
+        mov  ax,64              ; directly overhead
+        ret
+@@p1:   cmp  ax,bx
+        ja   @@psteep
+        push cx                 ; shallow: angle = atan(h/range)
+        mov  cl,5
+        shl  ax,cl
+        xor  dx,dx
+        div  bx
+        mov  bx,ax
+        mov  al,cs:[SHKATN+bx]
+        xor  ah,ah
+        pop  cx
+        ret
+@@psteep:                       ; steep: 64 - atan(range/h)
+        push cx
+        xchg ax,bx
+        mov  cl,5
+        shl  ax,cl
+        xor  dx,dx
+        div  bx
+        mov  bx,ax
+        mov  al,cs:[SHKATN+bx]
+        xor  ah,ah
+        mov  bx,64
+        sub  bx,ax
+        mov  ax,bx
+        pop  cx
+        ret
+
+
+; ---------------------------------------------------------------------------
+;  SHKAI - fill the DRIVING inputs for vehicle cs:[shki]. Today this is the
+;  only thing that writes them; the day the pilot climbs in, his hands do,
+;  and SHKMOVE below never learns the difference.
+;  A leg lasts a few seconds and then it picks a new heading. But it is on
+;  a LEASH: past SHKLSH from its post it stops choosing and turns for home.
+;  It is meant to cover a place, not to go for a drive.
+; ---------------------------------------------------------------------------
+SHKAI:  mov  bx,cs:[shki]
+        add  bx,bx
+        mov  ax,cs:[shkx+bx]    ; how far off its post are we?
+        sub  ax,cs:[shkax+bx]
+        jns  @@a1
+        neg  ax
+@@a1:   mov  dx,ax
+        mov  ax,cs:[shkz+bx]
+        sub  ax,cs:[shkaz+bx]
+        jns  @@a2
+        neg  ax
+@@a2:   add  ax,dx
+        cmp  ax,SHKLSH
+        jb   @@aleg
+        mov  ax,cs:[shkax+bx]   ; too far: steer for the post, every tick,
+        sub  ax,cs:[shkx+bx]    ; until it is back inside the leash
+        mov  [wdx],ax
+        mov  ax,cs:[shkaz+bx]
+        sub  ax,cs:[shkz+bx]
+        mov  [wdz],ax
+        call FAR PTR SHKBRGF
+        mov  bx,cs:[shki]
+        mov  cs:[shkhd+bx],al
+        ret
+@@aleg: mov  bx,cs:[shki]       ; inside the leash: run the leg out, then
+        dec  byte ptr cs:[shklgt+bx]
+        jnz  @@ad
+        mov  byte ptr cs:[shklgt+bx],SHKLEG
+        push bx
+        call FAR PTR RND16F
+        pop  bx
+        and  al,63
+        sub  al,32              ; a new leg, up to 45 degrees off this one
+        add  al,cs:[shkhd+bx]
+        mov  cs:[shkhd+bx],al
+@@ad:   ret
+
+; ---------------------------------------------------------------------------
+;  SHKMOVE - one tick of driving, from the inputs and nothing else. Turn the
+;  hull toward its demanded heading at SHKSTR, roll forward at SHKSPD, and
+;  sit down on whatever ground is under the new spot. That last part is why
+;  it costs a TERRH a tick: a tracked vehicle floating over a hill looks
+;  worse than one that never moved.
+; ---------------------------------------------------------------------------
+SHKMOVE:
+        mov  bx,cs:[shki]
+        mov  al,cs:[shkhd+bx]
+        xor  ah,ah
+        mov  dx,ax
+        mov  al,cs:[shkh+bx]
+        xor  ah,ah
+        sub  dx,ax              ; the shorter way round, signed
+        and  dx,255
+        cmp  dx,128
+        jb   @@m1
+        sub  dx,256
+@@m1:   cmp  dx,SHKSTR
+        jle  @@m2
+        mov  dx,SHKSTR
+@@m2:   cmp  dx,-SHKSTR
+        jge  @@m3
+        mov  dx,-SHKSTR
+@@m3:   add  ax,dx
+        mov  cs:[shkh+bx],al
+        and  ax,255             ; forward, along the hull's own nose
+        push ax
+        call FAR PTR SINQF
+        mov  cx,SHKSPD
+        imul cx
+        mov  cx,256
+        idiv cx
+        mov  bx,cs:[shki]
+        add  bx,bx
+        add  cs:[shkx+bx],ax
+        pop  ax
+        add  ax,64
+        call FAR PTR SINQF
+        mov  cx,SHKSPD
+        imul cx
+        mov  cx,256
+        idiv cx
+        mov  bx,cs:[shki]
+        add  bx,bx
+        add  cs:[shkz+bx],ax
+        push word ptr [camx]    ; and sit down on the new ground
+        push word ptr [camz]
+        mov  ax,cs:[shkx+bx]
+        mov  [camx],ax
+        mov  ax,cs:[shkz+bx]
+        mov  [camz],ax
+        call FAR PTR TERRHF
+        pop  word ptr [camz]
+        pop  word ptr [camx]
+        mov  bx,cs:[shki]
+        add  bx,bx
+        mov  cs:[shky+bx],ax
+        ret
+
+; ---------------------------------------------------------------------------
+;  SHKGUN - fire, if the mount has actually arrived. The drum must be inside
+;  SHKAPER of where it was asked to point: a gun that shoots while it is
+;  still slewing never hits, and one that waits until it is ON the mark is
+;  what makes a low pass frightening. Four rounds into the SHARED tracer
+;  pool - the same one the jets use, so the rounds fly and draw through
+;  machinery that already existed.
+;   in: cs:[shki], CX = the demanded bearing; shkel is already slewed.
+; ---------------------------------------------------------------------------
+SHKGUN: mov  bx,cs:[shki]
+        cmp  byte ptr cs:[shkft+bx],0
+        je   @@g0
+        dec  byte ptr cs:[shkft+bx]
+        ret                     ; still feeding
+@@g0:   mov  al,cs:[shkt+bx]    ; is the drum on the mark?
+        xor  ah,ah
+        sub  ax,cx
+        and  ax,255
+        cmp  ax,128
+        jb   @@g1
+        sub  ax,256
+@@g1:   or   ax,ax
+        jns  @@g2
+        neg  ax
+@@g2:   cmp  ax,SHKAPER
+        jg   @@gno
+        add  bx,bx              ; shktgt is words
+        mov  si,cs:[shktgt+bx]  ; where to send them
+        cmp  si,0FFFFh
+        jne  @@gai
+        mov  ax,[camx]
+        mov  [ctx],ax
+        mov  ax,[camy]
+        mov  [cty],ax
+        mov  ax,[camz]
+        mov  [ctz],ax
+        jmp  @@gd
+@@gai:  mov  ax,[pax+si]
+        mov  [ctx],ax
+        mov  ax,[pay+si]
+        mov  [cty],ax
+        mov  ax,[paz+si]
+        mov  [ctz],ax
+@@gd:   mov  bx,cs:[shki]
+        add  bx,bx              ; from the muzzles, not from the tracks
+        mov  ax,cs:[shkx+bx]
+        mov  cs:[shkb],ax
+        mov  ax,cs:[shky+bx]
+        add  ax,SHKTOP
+        mov  cs:[shkv],ax
+        mov  ax,cs:[shkz+bx]
+        mov  cs:[shkc],ax
+        mov  ax,[ctx]
+        sub  ax,cs:[shkb]
+        mov  [ctx],ax
+        mov  ax,[cty]
+        sub  ax,cs:[shkv]
+        mov  [cty],ax
+        mov  ax,[ctz]
+        sub  ax,cs:[shkc]
+        mov  [ctz],ax
+        mov  bx,[ctx]           ; m = the largest leg, for the unit vector
+        or   bx,bx
+        jns  @@gm1
+        neg  bx
+@@gm1:  mov  ax,[cty]
+        or   ax,ax
+        jns  @@gm2
+        neg  ax
+@@gm2:  cmp  ax,bx
+        jle  @@gm3
+        mov  bx,ax
+@@gm3:  mov  ax,[ctz]
+        or   ax,ax
+        jns  @@gm4
+        neg  ax
+@@gm4:  cmp  ax,bx
+        jle  @@gm5
+        mov  bx,ax
+@@gm5:  or   bx,bx
+        jz   @@gno
+        mov  [wcc],bx
+        mov  bx,cs:[shki]
+        mov  byte ptr cs:[shkft+bx],SHKFRAT
+        mov  byte ptr cs:[shktrg+bx],1
+        mov  word ptr [tpi],4   ; a four-round burst, as the jets fire
+@@gb:   mov  bx,[trnext]
+        inc  word ptr [trnext]
+        and  word ptr [trnext],NTRC-1
+        mov  byte ptr [trcact+bx],1
+        add  bx,bx
+        mov  word ptr [trlif+bx],48
+        mov  ax,cs:[shkb]
+        mov  [tcx+bx],ax
+        mov  ax,cs:[shkv]
+        mov  [tcy+bx],ax
+        mov  ax,cs:[shkc]
+        mov  [tcz+bx],ax
+        mov  ax,[ctx]
+        mov  cx,75
+        imul cx
+        idiv word ptr [wcc]
+        mov  [trvx+bx],ax
+        mov  ax,[cty]
+        mov  cx,75
+        imul cx
+        idiv word ptr [wcc]
+        mov  [trvy+bx],ax
+        mov  ax,[ctz]
+        mov  cx,75
+        imul cx
+        idiv word ptr [wcc]
+        mov  [trvz+bx],ax
+        push bx                 ; a little spread, or it is a laser
+        call FAR PTR RND16F
+        pop  bx
+        and  ax,7
+        sub  ax,3
+        add  [trvx+bx],ax
+        push bx
+        call FAR PTR RND16F
+        pop  bx
+        and  ax,7
+        sub  ax,3
+        add  [trvy+bx],ax
+        push bx
+        call FAR PTR RND16F
+        pop  bx
+        and  ax,7
+        sub  ax,3
+        add  [trvz+bx],ax
+        ; ---- and START IT CLEAR OF THE GUN. The round used to appear at
+        ; the muzzle, which is INSIDE this vehicle's own hit box: 90 across
+        ; and 120 tall, against a muzzle barely 50 up. So the first shell of
+        ; the first burst hit the thing that fired it, four shells took four
+        ; points, and a Shilka blew itself up the moment it opened fire.
+        ; Two ticks of flight down the line puts it past its own box on any
+        ; bearing, and the tracer still reads as leaving the barrels.
+        mov  ax,[trvx+bx]
+        add  ax,ax
+        add  [tcx+bx],ax
+        mov  ax,[trvy+bx]
+        add  ax,ax
+        add  [tcy+bx],ax
+        mov  ax,[trvz+bx]
+        add  ax,ax
+        add  [tcz+bx],ax
+        dec  word ptr [tpi]
+        jnz  @@gb
+        ; ---- and whether it told: one burst in two, against the jets and
+        ; their one in four. A battery that has settled on you SHOULD be
+        ; the thing you fly away from.
+        call FAR PTR RND16F
+        and  ax,1
+        cmp  ax,SHKHITC
+        jne  @@gno
+        mov  bx,cs:[shki]
+        add  bx,bx
+        mov  si,cs:[shktgt+bx]
+        cmp  si,0FFFFh
+        jne  @@ghai
+        cmp  byte ptr [dying],0
+        jne  @@gno              ; he is already going down
+        inc  byte ptr [pdam]
+        mov  word ptr [phit],9
+        cmp  byte ptr [pdam],5
+        jb   @@gno
+        call FAR PTR CRASHF     ; five hits and the flak got him
+        ret
+@@ghai: mov  bx,si
+        shr  bx,1
+        dec  byte ptr [php+bx]
+@@gno:  ret
+
+; ---------------------------------------------------------------------------
+;  SHKHIT - did something of ours land on a Shilka? Same shape as RSHIT:
+;  a box test, not a mesh one. in: rhx/rhy/rhz the point, rhdmg its worth.
+;  out: AX = 1 if a LIVE battery took it. No friendly-fire guard - a shell
+;  does not read the IFF, and neither does the gun that fired it.
+; ---------------------------------------------------------------------------
+SHKHIT: mov  word ptr cs:[shki],0
+@@h:    mov  bx,cs:[shki]
+        cmp  byte ptr cs:[shkst+bx],0
+        jne  @@hn               ; already burning
+        add  bx,bx
+        mov  ax,[rhx]
+        sub  ax,cs:[shkx+bx]
+        jns  @@h1
+        neg  ax
+@@h1:   cmp  ax,SHKRAD
+        jge  @@hn
+        mov  ax,[rhz]
+        sub  ax,cs:[shkz+bx]
+        jns  @@h2
+        neg  ax
+@@h2:   cmp  ax,SHKRAD
+        jge  @@hn
+        mov  ax,[rhy]
+        sub  ax,cs:[shky+bx]    ; height above its own tracks
+        js   @@hn               ; underground
+        cmp  ax,SHKHBOX
+        jg   @@hn
+        call SHKDAM
+        mov  ax,1
+        ret
+@@hn:   inc  word ptr cs:[shki]
+        cmp  word ptr cs:[shki],NSHILK
+        jb   @@h
+        xor  ax,ax
+        ret
+
+; ---------------------------------------------------------------------------
+;  SHKDAM - one hit on Shilka cs:[shki]. The last one burns it, through the
+;  same wreck pool a building and a radar station use: eight tumbling slabs
+;  in grey steel, fire, smoke and a bang scaled by how far away it is.
+; ---------------------------------------------------------------------------
+SHKDAM: mov  bx,cs:[shki]
+        mov  al,cs:[shkhp+bx]
+        sub  al,[rhdmg]
+        jbe  @@dead
+        mov  cs:[shkhp+bx],al
+        ret
+@@dead: mov  byte ptr cs:[shkhp+bx],0
+        mov  byte ptr cs:[shkst+bx],1
+        mov  ax,bx              ; a lock on a burning gun is no lock
+        add  ax,ax
+        add  ax,SHKLK
+        cmp  ax,[locki]
+        jne  @@nl
+        mov  word ptr [locki],0FFFFh
+@@nl:   add  bx,bx
+        mov  ax,cs:[shkx+bx]
+        mov  [bpx],ax
+        mov  ax,cs:[shkz+bx]
+        mov  [bpz],ax
+        mov  word ptr [bschm],0 ; grey walls: steel, not brick
+        call FAR PTR WRKATF
+        ret
+
+; ---------------------------------------------------------------------------
+;  SHKDRAW - the standing vehicles: the chassis at its driving heading and
+;  the turret at its bearing, both at the same world point, two MODELDRAW
+;  calls each. Drawn with the radar stations - after the buildings, so the
+;  jets and the burning debris paint over them. MODELDRAW clobbers SI and
+;  DI, which is why the index is re-read from cs:[shki] each time it is
+;  wanted. ES = bufseg.
+; ---------------------------------------------------------------------------
+SHKDRAW:
+        mov  word ptr cs:[shki],0
+@@v:    mov  bx,cs:[shki]
+        cmp  byte ptr cs:[shkst+bx],0
+        jne  @@nx               ; burning: the wreck pool has it now
+        add  bx,bx
+        mov  ax,cs:[shkx+bx]
+        sub  ax,[camx]
+        mov  [wdx],ax
+        mov  ax,cs:[shkz+bx]
+        sub  ax,[camz]
+        mov  [wdz],ax
+        mov  ax,[wdx]           ; the jets' own world-space box reject
+        jns  @@q1
+        neg  ax
+@@q1:   cmp  ax,13000
+        jge  @@nx
+        mov  ax,[wdz]
+        jns  @@q2
+        neg  ax
+@@q2:   cmp  ax,13000
+        jge  @@nx
+        call FAR PTR ROTXZF
+        mov  ax,[rcz]
+        cmp  ax,-100
+        jl   @@nx               ; behind us
+        cmp  ax,12500
+        jge  @@nx               ; past the leash
+        mov  [pdz],ax
+        mov  ax,[rcx]
+        mov  [pdx],ax
+        mov  bx,cs:[shki]
+        add  bx,bx
+        mov  ax,cs:[shky+bx]
+        sub  ax,[camy]
+        mov  [pdy],ax
+        mov  bx,cs:[shki]       ; the chassis, on its driving heading
+        mov  al,cs:[shkh+bx]
+        xor  ah,ah
+        sub  ax,[heading]
+        call RSTAYAW
+        mov  word ptr [mvb],offset SHULLVT
+        mov  word ptr [mvn],SHULLNV*6
+        mov  word ptr [mfb],offset SHULLFC
+        mov  word ptr [nfc],SHULLNF
+        call FAR PTR MODELDRAWF
+        mov  bx,cs:[shki]       ; the turret, on its own bearing
+        mov  al,cs:[shkt+bx]
+        xor  ah,ah
+        sub  ax,[heading]
+        call RSTAYAW
+        mov  word ptr [mvb],offset STURRVT
+        mov  word ptr [mvn],STURRNV*6
+        mov  word ptr [mfb],offset STURRFC
+        mov  word ptr [nfc],STURRNF
+        call FAR PTR MODELDRAWF
+        mov  bx,cs:[shki]       ; the BARRELS: the turret's bearing again,
+        mov  al,cs:[shkt+bx]    ; but pitched at their trunnion on the way
+        xor  ah,ah
+        sub  ax,[heading]
+        call RSTAYAW
+        mov  bx,cs:[shki]
+        mov  al,cs:[shkel+bx]
+        xor  ah,ah
+        push ax
+        call FAR PTR SINQF
+        mov  [mpsn],ax
+        pop  ax
+        add  ax,64
+        call FAR PTR SINQF
+        mov  [mpcs],ax
+        mov  word ptr [mtpy],SHKTRNY
+        mov  word ptr [mtpz],SHKTRNZ
+        mov  byte ptr [mpon],1
+        mov  word ptr [mvb],offset SBARRVT
+        mov  word ptr [mvn],SBARRNV*6
+        mov  word ptr [mfb],offset SBARRFC
+        mov  word ptr [nfc],SBARRNF
+        call FAR PTR MODELDRAWF
+        mov  byte ptr [mpon],0  ; nothing else in the game has a second joint
+        mov  bx,cs:[shki]       ; and the RADAR, sweeping on its own - the
+        mov  al,cs:[shkd+bx]    ; part that is supposed to be turning
+        xor  ah,ah
+        sub  ax,[heading]
+        call RSTAYAW
+        mov  word ptr [mvb],offset SDISHVT
+        mov  word ptr [mvn],SDISHNV*6
+        mov  word ptr [mfb],offset SDISHFC
+        mov  word ptr [nfc],SDISHNF
+        call FAR PTR MODELDRAWF
+        mov  bx,cs:[shki]       ; and its marker - even ours, odd theirs
+        add  bx,bx
+        mov  ax,cs:[shky+bx]
+        add  ax,SHKTOP/2
+        sub  ax,[camy]
+        mov  [pdy],ax
+        mov  byte ptr [COLOR],95
+        mov  byte ptr [gmks],0
+        test word ptr cs:[shki],1
+        jz   @@smk
+        mov  byte ptr [COLOR],96
+        mov  byte ptr [gmks],1
+@@smk:  mov  ax,cs:[shki]       ; red once it is the locked one
+        add  ax,ax
+        add  ax,SHKLK
+        cmp  ax,[locki]
+        jne  @@smk2
+        mov  byte ptr [COLOR],19
+@@smk2: mov  word ptr [gmkn],5000
+        call FAR PTR GNDMARKF
+@@nx:   inc  word ptr cs:[shki]
+        cmp  word ptr cs:[shki],NSHILK
+        jb   @@v
+        ret
+
+; ============================================================================
 ;  MAPHUM followed MINIMAP2F out here (2026-07-28, the radar stations):
 ;  it draws ON that map and only plots glyphs, so it belongs beside it.
 ;  Far door: MAPHUMF. FDRAW stayed home behind FDRAWF - the strings and
@@ -1531,6 +2914,7 @@ RSTAYAW:
 MAPHUMF PROC FAR
         call MAPHUM
         call RSMAP              ; ...and the two stations, on the same glass
+        call SHKMAP             ; ...and the flak batteries
         ret
 MAPHUMF ENDP
 ; ============================================================================
@@ -1562,13 +2946,14 @@ MAPHUM: xor  si,si
 @@mhd:  add  al,'0'
         mov  [NB+1],al
         mov  byte ptr [NB+2],0
-        mov  ax,[pax+si]        ; node col/2 on the half-scale map
+        mov  ax,[pax+si]        ; the map's own arithmetic, shared
         add  ax,BIAS
         mov  cl,10
         shr  ax,cl
         and  ax,63
-        shr  ax,1
-        add  ax,144-1
+        call MMPTX
+        jc   @@mhn              ; this pilot is off the window
+        dec  ax
         mov  [ftx],ax
         mov  ax,[paz+si]
         add  ax,BIAS
@@ -1577,14 +2962,17 @@ MAPHUM: xor  si,si
         and  ax,63
         mov  bx,63
         sub  bx,ax
-        shr  bx,1
-        add  bx,155-3           ; centre the glyph rows on the node...
-        cmp  bx,155
+        mov  ax,bx
+        call MMPTY
+        jc   @@mhn
+        mov  bx,ax
+        sub  bx,3               ; centre the glyph rows on the node...
+        cmp  bx,PZMMY
         jge  @@mhy
-        mov  bx,155             ; ...but keep it inside the MFD glass
-@@mhy:  cmp  bx,181
+        mov  bx,PZMMY           ; ...but keep it inside the MFD glass
+@@mhy:  cmp  bx,PZMMY+PZADIH-6
         jle  @@mhz
-        mov  bx,181
+        mov  bx,PZMMY+PZADIH-6
 @@mhz:  mov  [fty],bx
         mov  byte ptr [COLOR],8
         push si
@@ -1606,9 +2994,9 @@ STATPGF ENDP
 ;  gun rounds, missile rails, damage pips - everything the scope used
 ;  to carry. ES=bufseg, DS=CS.
 ; ============================================================================
-STATPG: mov  ax,156             ; green square: kills by our team
+STATPG: mov  ax,PZMAPY0+3             ; green square: kills by our team
         call UROW
-        add  di,197
+        add  di,PZMAPX0+2
         mov  al,95
         mov  es:[di],al
         mov  es:[di+1],al
@@ -1618,50 +3006,50 @@ STATPG: mov  ax,156             ; green square: kills by our team
         mov  es:[di+640],al
         mov  es:[di+641],al
         mov  es:[di+642],al
-        mov  ax,156             ; yellow diamond: kills by theirs
+        mov  ax,PZMAPY0+3             ; yellow diamond: kills by theirs
         call UROW
-        add  di,234
+        add  di,PZMAPX0+39
         mov  al,96
         mov  es:[di+1],al
         mov  es:[di+320],al
         mov  es:[di+322],al
         mov  es:[di+641],al
         mov  byte ptr [COLOR],95
-        mov  word ptr [ftx],203
-        mov  word ptr [fty],156
+        mov  word ptr [ftx],PZMAPX0+8
+        mov  word ptr [fty],PZMAPY0+3
         mov  ax,[tscf]
         call FAR PTR FNUMF
         mov  byte ptr [COLOR],8 ; own kills, centre, white
-        mov  word ptr [ftx],216
-        mov  word ptr [fty],156
+        mov  word ptr [ftx],PZMAPX0+21
+        mov  word ptr [fty],PZMAPY0+3
         mov  ax,[psc]
         call FAR PTR FNUMF
         mov  byte ptr [COLOR],96
-        mov  word ptr [ftx],226
-        mov  word ptr [fty],156
+        mov  word ptr [ftx],PZMAPX0+31
+        mov  word ptr [fty],PZMAPY0+3
         mov  ax,[tsch]
         call FAR PTR FNUMF
         mov  byte ptr [COLOR],97 ; cannon rounds
-        mov  word ptr [ftx],197
-        mov  word ptr [fty],165
+        mov  word ptr [ftx],PZMAPX0+2
+        mov  word ptr [fty],PZMAPY0+12
         mov  si,offset MSGGUN
         call FAR PTR FDRAWF
         mov  byte ptr [COLOR],8
-        mov  word ptr [ftx],215
+        mov  word ptr [ftx],PZMAPX0+20
         mov  ax,[gunam]
         call FAR PTR FNUMF
         mov  byte ptr [COLOR],97 ; missile rails: label + a pip each
-        mov  word ptr [ftx],197
-        mov  word ptr [fty],174
+        mov  word ptr [ftx],PZMAPX0+2
+        mov  word ptr [fty],PZMAPY0+21
         mov  si,offset MSGMSL
         call FAR PTR FDRAWF
         xor  si,si
 @@amo:  mov  ax,si
         cmp  al,[pammo]
         jae  @@amn
-        mov  ax,175
+        mov  ax,PZMAPY0+22
         call UROW
-        add  di,215
+        add  di,PZMAPX0+20
         mov  ax,si
         add  ax,ax
         mov  bx,ax
@@ -1681,17 +3069,17 @@ STATPG: mov  ax,156             ; green square: kills by our team
         cmp  si,4
         jb   @@amo
         mov  byte ptr [COLOR],97 ; damage: label + red pips
-        mov  word ptr [ftx],197
-        mov  word ptr [fty],182
+        mov  word ptr [ftx],PZMAPX0+2
+        mov  word ptr [fty],PZMAPY0+29
         mov  si,offset MSGDAM
         call FAR PTR FDRAWF
         xor  si,si
 @@dmp:  mov  ax,si
         cmp  al,[pdam]
         jae  @@dmn
-        mov  ax,183
+        mov  ax,PZMAPY0+30
         call UROW
-        add  di,215
+        add  di,PZMAPX0+20
         mov  ax,si
         add  ax,ax
         mov  bx,ax
@@ -1708,6 +3096,26 @@ STATPG: mov  ax,156             ; green square: kills by our team
 @@dmn:  inc  si
         cmp  si,5
         jb   @@dmp
+        ; ---- fuel, which used to sit in the readout block. That block is
+        ; four fields wide now and the artwork names them IAS/ALT/HDG/VERT,
+        ; so the tank came here - this page IS the status page, and the new
+        ; screen is fifteen rows taller than the one it replaced. Red under
+        ; the same 1200 the warning lamp uses, so lamp and number agree.
+        mov  byte ptr [COLOR],97
+        mov  word ptr [ftx],PZMAPX0+2
+        mov  word ptr [fty],PZMAPY0+38
+        mov  si,offset MSGFUE2
+        call FAR PTR FDRAWF
+        mov  byte ptr [COLOR],8
+        cmp  word ptr [fuel],1200
+        jge  @@fu1
+        mov  byte ptr [COLOR],19
+@@fu1:  mov  word ptr [ftx],PZMAPX0+20
+        mov  ax,[fuel]
+        xor  dx,dx
+        mov  bx,60
+        div  bx
+        call FAR PTR FNUMF
         ret
 
 
@@ -1725,8 +3133,8 @@ TGTVIEW:
         cmp  si,0FFFFh
         jne  @@tgo
         mov  byte ptr [COLOR],97 ; nothing locked: the page says so
-        mov  word ptr [ftx],148
-        mov  word ptr [fty],168
+        mov  word ptr [ftx],PZADIX0+12
+        mov  word ptr [fty],PZADIY0+15
         mov  si,offset MSGNOT
         call FAR PTR FDRAWF
         ret
@@ -1734,17 +3142,17 @@ TGTVIEW:
         test si,2
         jnz  @@tgc
         mov  byte ptr [COLOR],95
-@@tgc:  mov  word ptr [ftx],138
-        mov  word ptr [fty],156
+@@tgc:  mov  word ptr [ftx],PZADIX0+2
+        mov  word ptr [fty],PZADIY0+3
         call FAR PTR CSDRAWF
         mov  byte ptr [COLOR],8
-        mov  word ptr [ftx],138
-        mov  word ptr [fty],164
+        mov  word ptr [ftx],PZADIX0+2
+        mov  word ptr [fty],PZADIY0+11
         mov  si,[locki]
         call FAR PTR TYPDRAWF
         mov  byte ptr [COLOR],97 ; range: octagonal max + 3*(min/8)
-        mov  word ptr [ftx],138
-        mov  word ptr [fty],172
+        mov  word ptr [ftx],PZADIX0+2
+        mov  word ptr [fty],PZADIY0+19
         mov  si,offset MSGRNG
         call FAR PTR FDRAWF
         mov  si,[locki]
@@ -1768,15 +3176,15 @@ TGTVIEW:
         cmp  ax,30000           ; clamp before FNUMK's signed idiv era
         jbe  @@trc
         mov  ax,30000
-@@trc:  mov  word ptr [ftx],154
+@@trc:  mov  word ptr [ftx],PZADIX0+18
         mov  byte ptr [COLOR],8
         call FAR PTR FNUMKF
         mov  byte ptr [COLOR],97 ; the target's altitude
-        mov  word ptr [ftx],138
-        mov  word ptr [fty],180
+        mov  word ptr [ftx],PZADIX0+2
+        mov  word ptr [fty],PZADIY0+27
         mov  si,offset MSGALT
         call FAR PTR FDRAWF
-        mov  word ptr [ftx],156
+        mov  word ptr [ftx],PZADIX0+20
         mov  byte ptr [COLOR],8
         mov  si,[locki]
         call FAR PTR LKPOSF
@@ -1788,13 +3196,24 @@ TGTVIEW:
         ; wireframe: rotate the model by its aspect, project small
         mov  si,[locki]         ; FNUMK's font walk ate SI
         cmp  si,RSLK
-        jb   @@tpl
+        jb   @@tshk
         mov  word ptr [mvb],offset RDISHVT ; a station shows its DISH, and
         mov  word ptr [mvn],RDISHNV*6      ; it turns on the page as it
         mov  word ptr [tgzo],400           ; turns out there on the hill.
         mov  word ptr [tgyc],64            ; It is six times a jet's size:
         mov  ax,[rspin]                    ; stand further off, and centre
         jmp  @@tyaw                        ; on the hub, not on the feet
+@@tshk: cmp  si,SHKLK
+        jb   @@tpl
+        mov  word ptr [mvb],offset STURRVT ; a Shilka shows its TURRET, on
+        mov  word ptr [mvn],STURRNV*6      ; the bearing it is really at -
+        mov  word ptr [tgzo],150           ; so the page answers the only
+        mov  word ptr [tgyc],40            ; question worth asking about a
+        mov  bx,si                         ; gun: is it pointing at me
+        sub  bx,SHKLK
+        shr  bx,1
+        call FAR PTR SHKTBRGF   ; its turret bearing lives out in UISEG
+        jmp  @@tyaw
 @@tpl:  mov  word ptr [tgzo],75
         mov  word ptr [tgyc],0
         mov  bx,si
@@ -1844,19 +3263,19 @@ TGTVIEW:
         idiv bx
         add  ax,[tgzo]          ; how far the page stands off the model
         mov  [dsac],ax
-        mov  ax,[dsx]           ; sx = 160 + vx*64/vz (centre MFD)
+        mov  ax,[dsx]           ; sx = screen centre + vx*64/vz (centre MFD)
         mov  bx,64
         imul bx
         idiv word ptr [dsac]
-        add  ax,160
+        add  ax,PZADICX
         mov  [PVX+di],ax
         mov  bx,[mvb]
-        mov  ax,[bx+si+2]       ; sy = 170 - vy*64/vz
+        mov  ax,[bx+si+2]       ; sy = screen centre - vy*64/vz
         sub  ax,[tgyc]          ; a mast is modelled from its FEET up
         mov  bx,64
         imul bx
         idiv word ptr [dsac]
-        mov  bx,170
+        mov  bx,PZADICY
         sub  bx,ax
         mov  [PVY+di],bx
         add  si,6
@@ -1937,9 +3356,15 @@ TGTVIEW:
 
 
 ; ---- THE WINDOW GUARD ------------------------------------------------------
-IF ($-GLIST) GT 8176
-        %OUT *** UISEG overflows its 8K window before the buffer ***
+IF ($-GLIST) GT 16368
+        %OUT *** UISEG overflows its 16K window before the buffer ***
         .ERR
 ENDIF
+        ORG  3FF0h              ; and CLAIM the window, the way SKYSEG does.
+        db   16 dup(0)          ; It never had to before - it was the last
+                                ; segment and the buffer simply started past
+                                ; it. SYMSEG is behind us now, and the linker
+                                ; will only park it at CS+1400h if we take
+                                ; every paragraph we were given.
 
 UISEG   ENDS

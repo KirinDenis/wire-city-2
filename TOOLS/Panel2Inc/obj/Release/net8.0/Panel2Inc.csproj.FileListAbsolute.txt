@@ -1,0 +1,15 @@
+C:\DOSFiles\wire-city-2\TOOLS\Panel2Inc\bin\Release\net8.0\Panel2Inc.exe
+C:\DOSFiles\wire-city-2\TOOLS\Panel2Inc\bin\Release\net8.0\Panel2Inc.deps.json
+C:\DOSFiles\wire-city-2\TOOLS\Panel2Inc\bin\Release\net8.0\Panel2Inc.runtimeconfig.json
+C:\DOSFiles\wire-city-2\TOOLS\Panel2Inc\bin\Release\net8.0\Panel2Inc.dll
+C:\DOSFiles\wire-city-2\TOOLS\Panel2Inc\bin\Release\net8.0\Panel2Inc.pdb
+C:\DOSFiles\wire-city-2\TOOLS\Panel2Inc\obj\Release\net8.0\Panel2Inc.GeneratedMSBuildEditorConfig.editorconfig
+C:\DOSFiles\wire-city-2\TOOLS\Panel2Inc\obj\Release\net8.0\Panel2Inc.AssemblyInfoInputs.cache
+C:\DOSFiles\wire-city-2\TOOLS\Panel2Inc\obj\Release\net8.0\Panel2Inc.AssemblyInfo.cs
+C:\DOSFiles\wire-city-2\TOOLS\Panel2Inc\obj\Release\net8.0\Panel2Inc.csproj.CoreCompileInputs.cache
+C:\DOSFiles\wire-city-2\TOOLS\Panel2Inc\obj\Release\net8.0\Panel2Inc.sourcelink.json
+C:\DOSFiles\wire-city-2\TOOLS\Panel2Inc\obj\Release\net8.0\Panel2Inc.dll
+C:\DOSFiles\wire-city-2\TOOLS\Panel2Inc\obj\Release\net8.0\refint\Panel2Inc.dll
+C:\DOSFiles\wire-city-2\TOOLS\Panel2Inc\obj\Release\net8.0\Panel2Inc.pdb
+C:\DOSFiles\wire-city-2\TOOLS\Panel2Inc\obj\Release\net8.0\Panel2Inc.genruntimeconfig.cache
+C:\DOSFiles\wire-city-2\TOOLS\Panel2Inc\obj\Release\net8.0\ref\Panel2Inc.dll

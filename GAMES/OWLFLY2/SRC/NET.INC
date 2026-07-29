@@ -644,20 +644,20 @@ RGRID:  mov  word ptr [rgk],-4
         mov  cl,[rzsh]
         mov  ax,[cldu]
         sar  ax,cl
-        cmp  ax,14
+        cmp  ax,[rbrad]
         jg   @@gn
-        cmp  ax,-14
+        cmp  ax,[rbradn]
         jl   @@gn
         mov  bx,[cldd]
         sar  bx,cl
-        cmp  bx,14
+        cmp  bx,[rbrad]
         jg   @@gn
-        cmp  bx,-14
+        cmp  bx,[rbradn]
         jl   @@gn
-        add  ax,87
-        push ax
-        mov  ax,171
-        sub  ax,bx
+        add  ax,[rbcx]          ; the rose rides the scope frame now - it
+        push ax                 ; used to carry 87,171 as immediates and
+        mov  ax,[rbcy]          ; sat off-centre the moment the artwork
+        sub  ax,bx              ; moved the screen
         call ROWAD
         mov  di,ax
         pop  ax
@@ -670,10 +670,15 @@ RGRID:  mov  word ptr [rgk],-4
         inc  word ptr [rgk]
         cmp  word ptr [rgk],5
         jl   @@gx
-        ; -- the north anchor: two brighter dots up the N radius --
-        mov  si,13
+        ; -- the north anchor: two brighter dots up the N radius, set from
+        ; the scope's own reach so they stay at its rim, not marooned in
+        ; the middle of a screen that has since grown --
+        mov  si,[rbrad]
+        dec  si
+        dec  si
         call RNDOT
-        mov  si,10
+        mov  si,[rbrad]
+        sub  si,6
         call RNDOT
         ret
 RNDOT:  mov  ax,[hsin]          ; one wall-grey dot SI px north
@@ -681,14 +686,14 @@ RNDOT:  mov  ax,[hsin]          ; one wall-grey dot SI px north
         imul si
         mov  cx,256
         idiv cx
-        add  ax,87
+        add  ax,[rbcx]
         push ax
         mov  ax,[hcos]
         imul si
         mov  cx,256
         idiv cx
         mov  bx,ax
-        mov  ax,171
+        mov  ax,[rbcy]
         sub  ax,bx
         call ROWAD
         mov  di,ax
