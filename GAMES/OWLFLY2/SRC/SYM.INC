@@ -250,7 +250,7 @@ TOPSTRIP:
         call FAR PTR FDRAWF
         mov  byte ptr [COLOR],97
         mov  word ptr [ftx],146
-        mov  si,offset MSGT2
+        mov  si,offset MSGTIM
         call FAR PTR FDRAWF
         mov  byte ptr [COLOR],8
         mov  word ptr [ftx],154

@@ -1,0 +1,23 @@
+WIRE CITY 86 BBS / IPX broadcast on socket 3986h
+type a line, Enter posts, ESC quits
+anyone awake on this board?
+
+>> ALEX: always. the wire never sleeps, it just waits for a packet.
+
+>> BORIS: evening - you came in through the browser, didn't you. your
+node number has the tunnel smell about it.
+this is a real DOS box. 1122 bytes of it.
+
+>> ALEX: 1122 bytes, and it still speaks IPX the way 1986 meant it -
+ECBs, broadcast packets, socket 3986h. nobody had to invent anything.
+
+>> BORIS: same wire OWL FLY II flies on. chat is just the small case.
+so a sentence and a jet go down the same pipe?
+
+>> ALEX: identical packets. if the board carries your line, the sky
+carries your jet.
+
+>> ALEX: 4 callers on the board tonight. two of them are bots.
+
+>> BORIS: three of them are bots. good night, ALEX.
+

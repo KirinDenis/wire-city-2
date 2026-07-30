@@ -45,7 +45,22 @@ python GAMES\OWLFLY\res\mkpanel.py
 if errorlevel 1 goto err
 python GAMES\OWLFLY\res\mkengine.py
 if errorlevel 1 goto err
-dotnet run --project TOOLS\Panel2Inc -c Release -- GAMES\OWLFLY2\res\cockpit2.png -o GAMES\OWLFLY2\SRC -bmp GAMES\OWLFLY2\res
+REM The cockpit source. cockpit2.png is the big original (1586x992); the
+REM converter shrinks it. cockpit2_edit.png, if it exists, WINS - that is
+REM the hand-worked 320x200 panel, and pixel work at final resolution is
+REM the only way to place a three-pixel lamp lens or a five-pixel letter.
+REM Both go down the same path: the tool takes any size from 320x200 up,
+REM and at exactly 320x200 the shrink is a straight copy.
+REM DO NOT edit cockpit2_art.bmp or cockpit2_mark.bmp - the tool REWRITES
+REM both of them on every build, and an afternoon of retouching goes with
+REM them. _mark.bmp is however the right thing to START from: it is the
+REM panel at 320x200 with the three screen markers painted back in and the
+REM transparent viewport in pure white, which is exactly what comes back
+REM in. Save it as cockpit2_edit.png and it is yours.
+set PANELSRC=GAMES\OWLFLY2\res\cockpit2.png
+if exist GAMES\OWLFLY2\res\cockpit2_edit.png set PANELSRC=GAMES\OWLFLY2\res\cockpit2_edit.png
+echo panel source: %PANELSRC%
+dotnet run --project TOOLS\Panel2Inc -c Release -- %PANELSRC% -o GAMES\OWLFLY2\SRC -bmp GAMES\OWLFLY2\res
 if errorlevel 1 goto err
 dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY2\res\F15.OBJ -o GAMES\OWLFLY2\SRC\F15M.INC -n F15 -s 2
 if errorlevel 1 goto err

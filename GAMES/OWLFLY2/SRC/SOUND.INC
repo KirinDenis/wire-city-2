@@ -387,7 +387,7 @@ SNDBEEP:cmp  byte ptr [sbok],0
         or   bx,bx
         jnz  @@f
         mov  ax,[vel]           ; slot 0: STALL
-        cmp  ax,VSTALL
+        cmp  ax,[vstl]
         jge  @@r
         mov  bl,7
         jmp  @@go

@@ -24,6 +24,21 @@
   .src{font-size:12px;color:#9bf}
   .now{font-size:11px;color:#f96}
   h3{color:#9bf;letter-spacing:2px;margin:22px 0 8px;font-size:14px}
+  h3 .sub{color:#678;letter-spacing:0;font-size:12px;font-weight:normal}
+  .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
+  .filt{background:#070b18;border:1px solid #234;color:#9ab;font-family:monospace;
+        font-size:12px;letter-spacing:1px;padding:5px 14px;cursor:pointer}
+  .filt:hover{border-color:#46c;color:#cdf}
+  .filt.on{background:#123;border-color:#46c;color:#cdf}
+  .filt .n{color:#567}
+  .filt.on .n{color:#89b}
+  .tags{display:flex;gap:6px;flex-wrap:wrap}
+  .tg{font-size:10px;letter-spacing:1px;padding:1px 6px;border:1px solid #345;
+      color:#89b;background:#0a1020}
+  .tg.t3d{border-color:#356;color:#8bd}
+  .tg.tphysics{border-color:#653;color:#db8}
+  .tg.tnetwork{border-color:#2a5;color:#8db}
+  .card.hide{display:none}
   .bbsbar{display:flex;align-items:center;gap:12px;margin:4px 0 16px;
           padding:10px 16px;border:1px solid #2a5;background:#081408;
           text-decoration:none;font-size:16px;font-weight:bold;letter-spacing:2px}
@@ -31,6 +46,9 @@
   .bbsarrow{color:#5f7}
   .bbstitle{color:#9fb;text-shadow:0 0 6px #142}
   .bbsstat{margin-left:auto;font-weight:normal;letter-spacing:0;font-size:12px}
+  .bbsnote{margin:-10px 0 18px;padding:0 16px;font-size:13px;line-height:1.5;
+           color:#abc;max-width:760px}
+  .bbsnote b{color:#9fb}
   .foot{margin-top:22px;font-size:12px;color:#789;line-height:1.6}
   a{color:#9bf}
 </style>
@@ -46,8 +64,17 @@
   <a class="bbsbar" href="bbs.html" id="bbslink" title="the 1986 bulletin board — chat with the crew over IPX">
     <span class="bbsarrow">&#9654;</span>
     <span class="bbstitle">ENTER&nbsp; THE&nbsp; WIRE&nbsp; CITY&nbsp; BBS</span>
-    <span class="bbsstat" id="bbsstat"></span>
+    <span class="bbsstat" id="bbsstat" data-bbsstat></span>
   </a>
+  <p class="bbsnote">
+    <b>The board is a real DOS program, not a web chat.</b> A 1986-style
+    terminal that speaks IPX &mdash; the same wire OWL FLY II flies on,
+    tunneled through WebSocket &mdash; so a DOSBox in your browser, a real
+    machine on a real LAN and the OWLOS regulars all end up on one board.
+    Nothing to install, no account: type a handle, press &#9654;, you are on
+    the wire. It is also the honest proof the network layer works: if the
+    chat carries your line, the multiplayer sky will carry your jet.
+  </p>
 
   <h3>GAMES</h3>
   <div class="grid">
@@ -106,11 +133,35 @@
     </div>
   </div>
 
-  <h3>THE TEACHING MACHINES</h3>
-  <div class="grid">
-    <div class="card">
+  <h3>EXAMPLES <span class="sub">&mdash; the teaching machines: one idea each,
+      a few KB apiece, source open</span></h3>
+  <div class="filters" id="filters">
+    <button class="filt on" data-f="all">ALL <span class="n">5</span></button>
+    <button class="filt" data-f="3d">3D <span class="n">2</span></button>
+    <button class="filt" data-f="physics">PHYSICS <span class="n">2</span></button>
+    <button class="filt" data-f="network">NETWORK <span class="n">1</span></button>
+  </div>
+  <div class="grid" id="exgrid">
+    <div class="card" data-tags="network">
+      <img src="shots/bbs.png" alt="the board: two regulars and a caller on the wire">
+      <h2>THE WIRE CITY BBS <span class="kb">1.1 KB &middot; ON THE WIRE</span></h2>
+      <div class="tags"><span class="tg tnetwork">NETWORK</span></div>
+      <p>The 1986 bulletin board, and the smallest honest network program
+         here: a real DOS terminal that hands its lines to the IPX driver and
+         prints what comes back. Tunneled through WebSocket, so your browser,
+         a real machine on a real LAN and the OWLOS bots share one board.
+         Nothing to install, no account &mdash; and it is the same wire
+         OWL FLY II flies on.</p>
+      <div class="row">
+        <a class="play" href="bbs.html">&#9654; ENTER</a>
+        <a class="src" href="https://github.com/KirinDenis/wire-city-2/blob/main/EXAMPLES/BBS.ASM">source</a>
+        <span class="now" data-bbsstat></span>
+      </div>
+    </div>
+    <div class="card" data-tags="3d">
       <img src="shots/jet.png" alt="jet">
       <h2>THE HANGAR <span class="kb">5.4 KB</span></h2>
+      <div class="tags"><span class="tg t3d">3D</span></div>
       <p>All five aircraft with ROM-font spec sheets. Up/Down to cycle,
          arrows to spin, Space blows one apart - and the painter's sort
          keeps ordering the debris.</p>
@@ -119,9 +170,10 @@
         <a class="src" href="https://github.com/KirinDenis/wire-city-2/blob/main/EXAMPLES/JET.ASM">source</a>
       </div>
     </div>
-    <div class="card">
+    <div class="card" data-tags="3d">
       <img src="shots/terra.png" alt="terra">
       <h2>THE ISLAND FACTORY <span class="kb">5 KB</span></h2>
+      <div class="tags"><span class="tg t3d">3D</span></div>
       <p>Diamond-Square on a torus, seeded by the clock: any key mints a
          fresh island. The generator the games fly over - and the one that
          taught us two number-theory lessons.</p>
@@ -130,9 +182,10 @@
         <a class="src" href="https://github.com/KirinDenis/wire-city-2/blob/main/EXAMPLES/TERRA.ASM">source</a>
       </div>
     </div>
-    <div class="card">
+    <div class="card" data-tags="physics">
       <img src="shots/avio.png" alt="avio">
       <h2>THE AVIONICS <span class="kb">3.5 KB</span></h2>
+      <div class="tags"><span class="tg tphysics">PHYSICS</span></div>
       <p>A flying instrument panel with no world attached: artificial
          horizon, tapes with the red stall line, a compass, a toy flight
          model. Arrows are the stick.</p>
@@ -141,14 +194,13 @@
         <a class="src" href="https://github.com/KirinDenis/wire-city-2/blob/main/EXAMPLES/AVIO.ASM">source</a>
       </div>
     </div>
-  </div>
-
-  <div class="grid" style="margin-top:14px">
-    <div class="card">
-      <h2>THE FIRE+SMOKE LAB <span class="kb">4.9 KB</span></h2>
+    <div class="card" data-tags="physics">
+      <img src="shots/smoke.png" alt="fire and smoke">
+      <h2>THE FIRE+SMOKE LAB <span class="kb">5.2 KB</span></h2>
+      <div class="tags"><span class="tg tphysics">PHYSICS</span></div>
       <p>A particle laboratory: fire ages into spinning polygonal smoke
          puffs under buoyancy, drag, vortex and turbulence. Physics and
-         render run on separate clocks - W/S scales physics, [ ] sets the
+         render run on separate clocks - W/S scales physics, +/- sets the
          particle count, the readout shows both rates live. Orbit with
          the arrows, tune, discuss.</p>
       <div class="row">
@@ -188,23 +240,81 @@
     var origin = new URLSearchParams(location.search).get('bbs')
       || (location.hostname === 'localhost' || location.hostname === '127.0.0.1'
           ? '' : 'https://view.owlos.sk');
-    var stat = document.getElementById('bbsstat');
+    // Two places show the board status now: the header bar and the duplicate
+    // card down in EXAMPLES. Paint both from the one poll.
+    var stats = document.querySelectorAll('[data-bbsstat]');
     var link = document.getElementById('bbslink');
+    function say(html) {
+      for (var i = 0; i < stats.length; i++) stats[i].innerHTML = html;
+    }
     function paint() {
       fetch(origin + '/api/bbs/status', { cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (d) {
           var n = 0; for (var k in d) n += d[k];
-          stat.innerHTML = ' <span style="color:#5f7">● online</span>' +
-            ' <span style="color:#789">· ' + n + ' on the board' + (n === 1 ? '' : 's') + '</span>';
+          say(' <span style="color:#5f7">● online</span>' +
+              ' <span style="color:#789">· ' + n + (n === 1 ? ' caller' : ' callers') +
+              ' on the board</span>');
           link.style.color = '#7f7';
         })
         .catch(function () {
-          stat.innerHTML = ' <span style="color:#556">○ offline</span>';
+          say(' <span style="color:#556">○ offline</span>');
           link.style.color = '';
         });
     }
     paint(); setInterval(paint, 15000);
+  })();
+
+  // EXAMPLES filter: ALL / 3D / PHYSICS / NETWORK. Cards carry data-tags
+  // (space-separated), so a card can sit in more than one bucket. The counts
+  // in the buttons are read off the grid, not hard-coded - add a card and the
+  // numbers follow. ?f=network deep-links a filtered view.
+  (function () {
+    var grid = document.getElementById('exgrid');
+    var cards = grid.querySelectorAll('.card');
+    var btns = document.querySelectorAll('#filters .filt');
+
+    function tagsOf(c) { return (c.dataset.tags || '').split(/\s+/); }
+
+    // recount, so the labels can never drift from the markup
+    for (var i = 0; i < btns.length; i++) {
+      var f = btns[i].dataset.f, n = 0;
+      for (var j = 0; j < cards.length; j++) {
+        if (f === 'all' || tagsOf(cards[j]).indexOf(f) >= 0) n++;
+      }
+      btns[i].querySelector('.n').textContent = n;
+    }
+
+    function apply(f) {
+      for (var i = 0; i < cards.length; i++) {
+        var show = f === 'all' || tagsOf(cards[i]).indexOf(f) >= 0;
+        cards[i].classList.toggle('hide', !show);
+      }
+      for (var k = 0; k < btns.length; k++) {
+        btns[k].classList.toggle('on', btns[k].dataset.f === f);
+      }
+    }
+
+    for (var b = 0; b < btns.length; b++) {
+      btns[b].addEventListener('click', function () {
+        var f = this.dataset.f;
+        apply(f);
+        // keep the view shareable without reloading (file:// hosts can refuse
+        // replaceState - the filter must not die with it)
+        try {
+          var u = new URL(location.href);
+          if (f === 'all') u.searchParams.delete('f'); else u.searchParams.set('f', f);
+          history.replaceState(null, '', u);
+        } catch (e) {}
+      });
+    }
+
+    // ?f= comes from the URL: sanitise before it ever reaches a selector
+    var want = (new URLSearchParams(location.search).get('f') || '').toLowerCase();
+    if (!/^[a-z0-9]{1,16}$/.test(want) || !grid.querySelector('[data-tags~="' + want + '"]')) {
+      want = 'all';
+    }
+    apply(want);
   })();
 </script>
 </body>

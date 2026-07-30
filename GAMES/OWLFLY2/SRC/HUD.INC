@@ -17,37 +17,12 @@ HUD:    cmp  byte ptr [cockpit],0
         call FAR PTR BOTSTRIPF
         ret
 
-; (PRSTR/PRCH/PRNUM below drove the BIOS teletype this used to print with.
-;  They are the crash screen's now - see CRASHHANDLE - and nothing else
-;  uses INT 10h for text on the flying glass any more.)
-
-PRSTR:  lodsb
-        test al,al
-        jz   @@e
-        call PRCH
-        jmp  PRSTR
-@@e:    ret
-
-PRCH:   mov  ah,0Eh
-        mov  bl,[HCOL]
-        mov  bh,0
-        int  10h
-        ret
-
-PRNUM:  mov  cx,0
-        mov  bx,10
-@@d:    xor  dx,dx
-        div  bx
-        push dx
-        inc  cx
-        test ax,ax
-        jnz  @@d
-@@p:    pop  dx
-        add  dl,'0'
-        mov  al,dl
-        call PRCH
-        loop @@p
-        ret
+; (PRSTR/PRCH/PRNUM stood here: the BIOS teletype this used to print
+;  through. Nothing called them once HUD moved to the game's own font -
+;  I left them in on the assumption the crash screen still wanted them,
+;  and it does not; it draws its words with FDRAW like everything else.
+;  Deleted 2026-07-29, which is also how the orbit-camera work paid its
+;  way past the stack guard: the cheapest bytes are always the dead ones.)
 
 ; ============================================================================
 ;  PANEL - the cockpit. Three-tier stepped deck (uneven top reads as a real
@@ -428,61 +403,15 @@ PANELBMP:
         mov  si,offset MSGABON
         call FDRAW
 @@ab:
-        ; ---- caution lights, now in the panel's own annunciator stacks.
-        ; They used to ride the old cockpit's canopy struts; on this panel
-        ; those coordinates are open sky, and a warning lamp hanging in
-        ; mid-air is worse than none. LEFT column: fuel, then lock. RIGHT
-        ; column, where the artwork already prints its alarm words: stall
-        ; and terrain. Single letters still - a slot is 16x10 px and the
-        ; font steps four, so five characters is the whole budget and a
-        ; blinking letter reads faster than a squeezed word.
-        mov  word ptr [lampx],PZLCX
-        mov  word ptr [lampy],PZLAMPY+PZLAMPH*3
-        mov  word ptr [dsx],PZLCW
-        mov  word ptr [dsy],PZLAMPH
-        xor  cx,cx
-        cmp  word ptr [fuel],1200
-        jge  @@lf
-        mov  cx,19              ; low fuel: red
-@@lf:   mov  si,offset MSGF2
-        call LAMP2
-        mov  word ptr [lampx],PZRCX
-        mov  word ptr [lampy],PZLAMPY
-        mov  word ptr [dsx],PZRCW
-        mov  word ptr [dsy],PZLAMPH
-        xor  cx,cx
-        mov  ax,[vel]
-        cmp  ax,VSTALL
-        jge  @@ls
-        mov  cx,19              ; stall: red
-@@ls:   mov  si,offset MSGS2
-        call LAMP2
-        mov  word ptr [lampx],PZRCX
-        mov  word ptr [lampy],PZLAMPY+PZLAMPH
-        mov  word ptr [dsx],PZRCW
-        mov  word ptr [dsy],PZLAMPH
-        xor  cx,cx
-        mov  ax,[camy]
-        sub  ax,[lgnd]
-        cmp  ax,150
-        jge  @@lt
-        mov  cx,97              ; terrain close: amber
-@@lt:   mov  si,offset MSGT2
-        call LAMP2
-        mov  word ptr [lampx],PZLCX ; lock lamp: left column, top slot
-        mov  word ptr [lampy],PZLAMPY
-        mov  word ptr [dsx],PZLCW
-        mov  word ptr [dsy],PZLAMPH
-        xor  cx,cx
-        mov  ax,[locki]
-        cmp  ax,0FFFFh
-        je   @@llk
-        mov  cx,95              ; friendly under lock: green warning
-        test ax,2
-        jz   @@llk
-        mov  cx,19              ; hostile locked: red
-@@llk:  mov  si,offset MSGL2
-        call LAMP2
+        ; ---- the caution lights moved OUT of here on 2026-07-30. They were
+        ; four blinking single letters - F, L, S, T - because the slot was
+        ; measured at 16 px and a word would not fit. The slot is 23 px: the
+        ; hand measurement was of the bezel, not of the plate inside it, and
+        ; 23 px is five characters of this font. So they are words now, ten
+        ; of them, in the two columns, and they live in UISEG as SIDEPNL -
+        ; drawn on the same trip out as the overhead lamps. Deleting the four
+        ; blocks and LAMP2 with them gave this segment back about two hundred
+        ; bytes, which is what paid for the flaps, the gear and the airbrake.
         ; ---- throttle ladder: 12 segments up from y=186 at x=44 ----
         mov  ax,[throt]
         mov  bx,3
@@ -821,33 +750,8 @@ SITPG:  mov  word ptr [rbcx],PZADICX
         call FDRAW
         ret
 
-; ============================================================================
-;  LAMP2 - caution light as a bare blinking letter. in: [lampx]/[lampy] =
-;  zone top-left, [dsx]/[dsy] = zone size (the letter is centred in it),
-;  CX = colour (0 = off, draws nothing), SI -> one-letter label. The
-;  artwork provides the socket; the game only lights the glyph up.
-; ============================================================================
-LAMP2:  jcxz @@no
-        mov  ax,[lasttk]
-        test ax,2               ; blink: dark phase shows the artwork
-        jz   @@no
-        mov  [dsac],cx
-        mov  ax,[lampx]         ; centre the letter in the zone
-        mov  bx,[dsx]
-        sub  bx,4
-        shr  bx,1
-        add  ax,bx
-        mov  [ftx],ax
-        mov  ax,[lampy]
-        mov  bx,[dsy]
-        sub  bx,6
-        shr  bx,1
-        add  ax,bx
-        mov  [fty],ax
-        mov  ax,[dsac]
-        mov  [COLOR],al
-        call FDRAW
-@@no:   ret
+; (LAMP2 was here: the one-letter caution light. SIDEPNL in UI.INC prints
+;  whole words in the same sockets now, and nothing called this any more.)
 
 ; ============================================================================
 ;  HUD tapes (F-15 style, projected on the glass). Compass on top, speed
@@ -1101,8 +1005,8 @@ HUDBARS:
         call HLINE2
 @@spn:  add  word ptr [ctx],25
         jmp  @@sp
-@@spd:  mov  ax,VSTALL          ; the stall line, red
-        sub  ax,[vel]
+@@spd:  mov  ax,[vstl]          ; the stall line, red - it MOVES with the
+        sub  ax,[vel]           ;  flaps, so the tape shows what they bought
         cmp  ax,140
         jg   @@snc
         cmp  ax,-140

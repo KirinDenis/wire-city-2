@@ -12,6 +12,11 @@
   #dos{width:min(96vw,1000px);aspect-ratio:4/3;background:#000}
   .hint{font-size:13px;color:#89b}
   a{color:#9bf}
+  #about{width:min(96vw,1000px);font-size:13px;line-height:1.5;color:#abc}
+  #about h2{color:#9bf;letter-spacing:2px;margin:16px 0 6px;font-size:14px}
+  #about p{margin:0 0 8px}
+  #about b{color:#dfe}
+  .keys{color:#dfe}
 </style>
 </head>
 <body>
@@ -20,6 +25,7 @@
   <div class="hint">click the screen first to grab the keyboard &middot; <a href="index.html">back to the arcade</a></div>
   <div id="dos"></div>
   <div class="hint" id="sub"></div>
+  <div id="about"></div>
 </div>
 <script src="coi-serviceworker.js"></script>
 <script src="jsdos/js-dos.js"></script>
@@ -29,29 +35,138 @@
   // stays inside this IIFE: the minified js-dos.js READS the global
   // single-letter variable "g" - a top-level "var g" here broke Dos()
   // with createElement('[object Object]'). Found the hard way.
+  // Every machine carries its own description: t = title, s = the keys line,
+  // d = what it is and why it is worth a look (HTML), r = repo path for the
+  // source link. Without d a visitor arriving straight from a shared link
+  // sees a black screen and no idea what it is.
+  var GH = "https://github.com/KirinDenis/wire-city-2/";
   var machines = {
     wirecity: {b:"wirecity_v4.jsdos", t:"WIRE CITY (1986 original)",
-               s:"the ancestor: a 5.5 KB wireframe night-flight - arrows steer, banking turns"},
+               s:"the ancestor: a 5.5 KB wireframe night-flight - arrows steer, banking turns",
+               r:"tree/main/GAMES/WIRECITY",
+               d:"<h2>WHAT THIS IS</h2><p>The program that started the whole" +
+                 " arcade: a night flight over a wireframe megacity, minted" +
+                 " procedurally rather than drawn by hand. Arrows steer, the" +
+                 " horizon banks with you, the towers slide past in the" +
+                 " correct order.</p><h2>WHY IT IS WORTH A LOOK</h2><p>It is" +
+                 " <b>5.5 KB and one source file</b> &mdash; small enough to" +
+                 " read end to end in a sitting, yet it already contains the" +
+                 " three ideas every later machine here is built from: the" +
+                 " fixed-point 3-D pipeline, hidden lines by the painter's" +
+                 " algorithm, and a world generated from a seed instead of" +
+                 " stored. Start here if you want to understand the rest.</p>"},
     jet:      {b:"jet_v2.jsdos", t:"THE HANGAR",
-               s:"Up/Down cycle the air force, arrows spin, Space blows it apart"},
+               s:"Up/Down cycle the air force, arrows spin, Space blows it apart",
+               r:"blob/main/EXAMPLES/JET.ASM",
+               d:"<h2>WHAT THIS IS</h2><p>A model viewer: all five aircraft" +
+                 " the combat sims fly, each with a spec sheet drawn in the" +
+                 " ROM font. Cycle the air force, spin any airframe in your" +
+                 " hands, and press Space to blow it apart.</p>" +
+                 "<h2>WHY IT IS WORTH A LOOK</h2><p>This is where you can" +
+                 " actually <b>see</b> what the games only flash past you at" +
+                 " 400 knots &mdash; and where the depth sort proves itself:" +
+                 " after the explosion the painter's algorithm keeps ordering" +
+                 " every tumbling fragment correctly, with no z-buffer and no" +
+                 " floating point. The airframes come through the" +
+                 " Blender &rarr; OBJ &rarr; 8086 precompiler, so a new plane" +
+                 " is a modelling job, not an assembly job.</p>"},
     terra:    {b:"terra_v2.jsdos", t:"THE ISLAND FACTORY",
-               s:"any key mints a fresh Diamond-Square island, ESC quits"},
+               s:"any key mints a fresh Diamond-Square island, ESC quits",
+               r:"blob/main/EXAMPLES/TERRA.ASM",
+               d:"<h2>WHAT THIS IS</h2><p>The terrain generator on its own," +
+                 " with the world stripped away: Diamond-Square wrapped on a" +
+                 " torus, seeded from the clock. Any key mints a fresh island," +
+                 " ESC quits.</p><h2>WHY IT IS WORTH A LOOK</h2><p>Every" +
+                 " island you have flown over in this arcade came out of this" +
+                 " 5 KB of code, and it costs <b>two bytes of seed</b>" +
+                 " instead of a megabyte of heightmap. That is also the trick" +
+                 " behind instant multiplayer: OWL FLY II's sky" +
+                 " advertisement carries the seed, your machine rebuilds the" +
+                 " identical island, and you are in the same world as" +
+                 " everyone else without downloading it.</p>"},
     field:    {b:"field_v32.jsdos", t:"THE FLIGHT SCHOOL",
-               s:"W/S or +/- throttle, arrows steer: F=flaps G=gear B=brakes V=view R=reset"},
+               s:"W/S or +/- throttle, arrows steer: F=flaps G=gear B=brakes V=view R=reset",
+               r:"tree/main/GAMES/TRAINER",
+               d:"<h2>WHAT THIS IS</h2><p>An airfield and a trainer: a" +
+                 " numbered runway, taxiway, hangars, a control tower in" +
+                 " obstruction stripes and a radar dish that turns. Take off," +
+                 " fly the pattern, put it back down on the numbers.</p>" +
+                 "<h2>WHY IT IS WORTH A LOOK</h2><p><b>Nobody is shooting at" +
+                 " you</b>, so the flight model is the whole subject &mdash;" +
+                 " and it is a real one: rotation speed, the stall, and the" +
+                 " ground cushion that floats you in the last few feet. Flaps," +
+                 " gear and brakes all do what they do on a real aeroplane." +
+                 " Learn the landing here and OWL FLY stops eating your jets" +
+                 " on the way home.</p>"},
     smoke:    {b:"smoke_v7.jsdos", t:"THE FIRE+SMOKE LAB",
-               s:"arrows orbit, +/- zoom, W/S physics speed, [ ] particle count"},
+               s:"arrows orbit, +/- particle count, W/S physics speed, [ ] zoom, F/G/V/B wind",
+               r:"blob/main/EXAMPLES/SMOKE.ASM",
+               d:"<h2>WHAT THIS IS</h2><p>A particle laboratory: fire ages" +
+                 " into spinning polygonal smoke puffs under buoyancy, drag," +
+                 " a vortex and turbulence. Orbit it with the arrows and tune" +
+                 " the physics while it runs.</p><h2>WHY IT IS WORTH A LOOK" +
+                 "</h2><p>Physics and rendering run on <b>separate clocks</b>," +
+                 " and the lab lets you drive them apart by hand: W/S scales" +
+                 " the physics rate, + and - change the particle count, and" +
+                 " the readout shows both rates live. It is the cheapest way" +
+                 " to feel why a simulation that looks smooth on one machine" +
+                 " goes wrong on a faster one &mdash; the lesson that keeps" +
+                 " the games honest on hardware from 1986 to WASM.</p>"},
     avio:     {b:"avio_v2.jsdos", t:"THE AVIONICS",
-               s:"arrows = stick, +/- = throttle - fly the instruments themselves"}
+               s:"arrows = stick, +/- = throttle - fly the instruments themselves",
+               r:"blob/main/EXAMPLES/AVIO.ASM",
+               d:"<h2>WHAT THIS IS</h2><p>An instrument panel with no world" +
+                 " attached: artificial horizon, speed and altitude tapes with" +
+                 " the red stall line, a compass, and a toy flight model" +
+                 " underneath. The arrows are the stick.</p>" +
+                 "<h2>WHY IT IS WORTH A LOOK</h2><p>3.5 KB, and it teaches" +
+                 " the half of a flight sim that <b>is not 3-D at all</b>." +
+                 " Fly it on the instruments alone and you learn to read the" +
+                 " glass the way the combat sims expect: the horizon in a" +
+                 " roll, the speed bleeding off toward the red line, the" +
+                 " altitude tape unwinding. Same tapes, same logic, no" +
+                 " terrain in the way.</p>"}
   };
   var pick = machines[new URLSearchParams(location.search).get("g")] || machines.wirecity;
   document.getElementById("ttl").textContent = pick.t;
-  document.getElementById("sub").textContent = pick.s;
+  document.getElementById("sub").innerHTML = '<span class="keys">keys:</span> ' +
+    pick.s;
+  document.getElementById("about").innerHTML = pick.d +
+    '<p><a href="' + GH + pick.r + '" target="_blank" rel="noopener">source' +
+    '</a> &middot; <a href="index.html">back to the arcade</a> &middot; a real' +
+    ' DOS program in 8086 assembly, running in DOSBox compiled to WebAssembly' +
+    ' via <a href="https://js-dos.com" target="_blank" rel="noopener">js-dos' +
+    '</a></p>';
+  // The '+' fix, same as owlfly2.html: js-dos has KBD_equals/KBD_minus
+  // constants but no "Equal"/"Minus" entry in its DOM-code table, so the
+  // physical +/-/= keys never reach DOSBox. They work in native DOSBox and
+  // die in the browser. Without this, three machines here have dead keys
+  // we document: SMOKE's particle count, AVIO's and FIELD's throttle.
+  var KBDFIX = { Equal: 61, Minus: 45, NumpadAdd: 334, NumpadSubtract: 333 };
+  var kbdDown = {};
+  window.addEventListener("keydown", function (e) {
+    var k = KBDFIX[e.code];
+    if (!k || !window.__ci) return;
+    e.preventDefault();
+    if (kbdDown[e.code]) return;        // ignore auto-repeat: DOS wants one press
+    kbdDown[e.code] = true;
+    window.__ci.sendKeyEvent(k, true);
+  }, true);
+  window.addEventListener("keyup", function (e) {
+    var k = KBDFIX[e.code];
+    if (!k || !window.__ci) return;
+    e.preventDefault();
+    kbdDown[e.code] = false;
+    window.__ci.sendKeyEvent(k, false);
+  }, true);
+
   Dos(document.getElementById("dos"), {
     url: pick.b,
     pathPrefix: "jsdos/emulators/",
     theme: "dark",
     imageRendering: "pixelated",
-    scaleControls: 0.2
+    scaleControls: 0.2,
+    onEvent: function (e, ci) { if (e === "ci-ready") window.__ci = ci; }
   });
 })();
 </script>

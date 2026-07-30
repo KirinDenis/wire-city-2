@@ -141,6 +141,9 @@ SC_X    equ 2Dh                 ; X: radar unzoom (Z zooms - the manual)
 SC_K    equ 25h                 ; K: map zoom (PROVISIONAL - the keyboard
                                 ;  layout is still open; K is free and sits
                                 ;  next to M, which pages the same screen)
+SC_F    equ 21h                 ; F: flaps
+SC_L    equ 26h                 ; L: landing gear
+SC_B    equ 30h                 ; B: airbrake
 WRKSZ   equ 300                 ; wreck slot size (see the BSS block)
 WCL     equ 292                 ; face colours offset inside a slot
 BSSCLR  equ 2488                ; (BSSEND-WRK)/2 - keep in sync with BSS!

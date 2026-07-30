@@ -3404,20 +3404,18 @@ CHASESET:
         mov  [pdy],ax
         mov  ax,[bx+WFP+4]
         mov  [pdz],ax
-@@torb: mov  ax,[tgel]          ; H = sin(el)*100/256
+@@torb: mov  ax,[tgel]          ; H = sin(el)*tgrad/256
         and  ax,255
         call SINQ
-        mov  bx,100
-        imul bx
+        imul word ptr [tgrad]
         mov  bx,256
         idiv bx
         mov  [cty],ax
-        mov  ax,[tgel]          ; R = cos(el)*100/256
+        mov  ax,[tgel]          ; R = cos(el)*tgrad/256
         add  ax,64
         and  ax,255
         call SINQ
-        mov  bx,100
-        imul bx
+        imul word ptr [tgrad]
         mov  bx,256
         idiv bx
         mov  [ctx],ax
@@ -3441,7 +3439,19 @@ CHASESET:
         mov  ax,[pdy]
         add  ax,[cty]
         mov  [camy],ax
-        mov  ax,[tgaz]          ; look at the target
+        ; ...and NEVER below the ground. Orbiting something that sits on a
+        ; hillside used to put the camera inside the hill, which is what a
+        ; ground target looked like from F4: nothing but dirt.
+        push ax
+        call TERRH              ; reads camx/camz, which are now the camera
+        mov  bx,ax
+        pop  ax
+        add  bx,45
+        cmp  ax,bx
+        jge  @@torc
+        mov  ax,bx
+        mov  [camy],ax
+@@torc: mov  ax,[tgaz]          ; look at the target
         mov  [heading],ax
         mov  ax,[tgel]
         neg  ax

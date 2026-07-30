@@ -35,6 +35,7 @@ int SPANCAP = 399;               // see the span check at the bottom
 
 string src = null, outDir = null, bmpDir = null;
 bool probe = false;
+int ditherArg = -1;              // -1 = decide from the source size, below
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
@@ -42,12 +43,14 @@ for (int i = 0; i < args.Length; i++)
         case "-o": outDir = args[++i]; break;
         case "-bmp": bmpDir = args[++i]; break;
         case "-probe": probe = true; break;
+        case "-dither": ditherArg = 1; break;
+        case "-nodither": ditherArg = 0; break;
         default: src = args[i]; break;
     }
 }
 if (src == null || outDir == null)
 {
-    Console.Error.WriteLine("usage: Panel2Inc cockpit.png -o SRCDIR [-bmp RESDIR] [-probe]");
+    Console.Error.WriteLine("usage: Panel2Inc cockpit.png -o SRCDIR [-bmp RESDIR] [-probe] [-dither|-nodither]");
     return 1;
 }
 
@@ -217,6 +220,22 @@ var pal = MedianCut(art, clear, OW, OH, NPAL);
 for (int i = 0; i < pal.Length; i++)
     pal[i] = ((pal[i].r >> 2) << 2, (pal[i].g >> 2) << 2, (pal[i].b >> 2) << 2);
 
+// DITHER, or not. Floyd-Steinberg is right for a photograph being shrunk:
+// it trades a lie about any one pixel for the truth about the average. It
+// is WRONG for artwork drawn at 320x200 by hand, where every pixel was
+// chosen and the average is nobody's business - and it fails worst exactly
+// where such artwork is most deliberate. A one-pixel bezel between a flat
+// black plate and the panel feeds its own error downward, pixel by pixel,
+// until the line drifts off its true colour: that is how a warm grey
+// border (88,68,44 in the source, with slot 37 sitting at 84,68,44 for the
+// taking) came out as 138,12,4 and the panel grew a red edge.
+// So: off when the source is already the output size, on when it is being
+// shrunk, and -dither / -nodither to say so outright.
+bool dither = ditherArg == -1 ? !(img.W == OW && img.H == OH) : ditherArg == 1;
+Console.WriteLine(dither
+    ? "dither: ON (the source is being shrunk - error diffusion helps)"
+    : "dither: OFF (source is already 320x200 - nearest colour, your pixels)");
+
 var data = new byte[OW * OH];
 var err = new double[OW * OH * 3];
 for (int y = 0; y < OH; y++)
@@ -240,8 +259,11 @@ for (int y = 0; y < OH; y++)
             int q = (ny * OW + nx) * 3;
             err[q] += er * f; err[q + 1] += eg * f; err[q + 2] += eb * f;
         }
-        Spill(x + 1, y, 7.0 / 16); Spill(x - 1, y + 1, 3.0 / 16);
-        Spill(x, y + 1, 5.0 / 16); Spill(x + 1, y + 1, 1.0 / 16);
+        if (dither)
+        {
+            Spill(x + 1, y, 7.0 / 16); Spill(x - 1, y + 1, 3.0 / 16);
+            Spill(x, y + 1, 5.0 / 16); Spill(x + 1, y + 1, 1.0 / 16);
+        }
     }
 
 // ---------------------------------------------------------------------------

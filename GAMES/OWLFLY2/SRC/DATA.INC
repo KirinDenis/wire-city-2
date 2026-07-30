@@ -10,6 +10,17 @@ lasttk  dw 0                    ; BIOS tick (0040:006C low word) at previous fra
 
 ; ---- flight state ----
 vel     dw CRUISE               ; airspeed, *16 fixed point
+; The three things a pilot puts OUT into the airstream. Each one is a
+; toggle, each one costs speed, and the flaps buy a slower stall for it -
+; which is the whole trade and the reason they exist. F, L and B; the
+; annunciator column on the left says which of them are hanging out.
+flaps   db 0                    ; F: high lift, high drag, low stall
+gear    db 0                    ; L: three legs in the wind
+abrk    db 0                    ; B: the airbrake
+prevfl  db 0                    ; ...their key-down edges
+prevgr  db 0
+prevbr  db 0
+vstl    dw VSTALL               ; stall speed AS FLOWN: flaps lower it
 fuel    dw FUELMAX              ; remaining fuel (burn 1/tick)
 rho     dw 256                  ; air density factor 64..256 (from altitude)
 teff    dw 0                    ; effective thrust this tick (scratch)
@@ -258,6 +269,15 @@ rhz     dw 0
 rhdmg   db 0                    ;  ...and how hard (1 a shell, 4 a missile)
 airng   dw 10000                ; how far the AI may shoot: its own radar
                                 ;  down and it is 2500, eyeball range
+; The F4 orbit camera used to sit a flat 100 units out, which is four
+; wingspans from a jet and INSIDE a Shilka - the vehicle is 100 long by
+; itself. Worse, at that distance the camera lands a few dozen units above
+; the ground and any rise between it and the target swallows it: that is
+; the "camera appears somewhere odd" on a ground target. It is a variable
+; now, set by what is being orbited, and Z/X move it while you watch.
+tgrad   dw 100                  ; how far the orbit camera stands off
+TGRMIN  equ 70                  ; ...and how close or far it may be wound
+TGRMAX  equ 2400
 tgzo    dw 75                   ; TGT page: stand-off and vertical centre
 tgyc    dw 0                    ;  of the model on the glass
 lkx     dw 0                    ; LKPOS: where the locked target actually is,
@@ -1417,15 +1437,16 @@ MSGMIN2  db '-',0              ; VERT is the one readout that goes negative
 MSGSTL   db 'STALL',0
 MSGTER   db 'TERR',0
 MSGAB2   db 'AB',0
-MSGT2    db 'T',0
-MSGF2    db 'F',0
 MSGD20   db '20',0
 MSGD0    db '0',0
 MSGRDR   db 'RDR OFF',0
-MSGS2    db 'S',0
 MSGH2    db 'H',0
 MSGABON  db 'AB ON',0
-MSGL2    db 'L',0
+MSGTIM   db 'T',0              ; the no-cockpit strip's clock label. It used
+                               ;  to borrow MSGT2, the TERR lamp's letter -
+                               ;  two unrelated things sharing one byte
+; (MSGT2/F2/S2/L2 - the four one-letter caution labels - went with LAMP2.
+;  SIDEPNL keeps its words in UISEG, where there is room for whole ones.)
 lampx    dw 0                   ; lamp/bar scratch: x or lit-count
 lampy    dw 0                   ; lamp y / bar x
 lampc    db 0                   ; current lamp/segment colour

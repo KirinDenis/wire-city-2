@@ -2987,8 +2987,325 @@ MAPHUM: xor  si,si
 
 STATPGF PROC FAR
         call STATPG
+        call WARNLMP            ; ...and the overhead lamps, on the same trip
+        call SIDEPNL            ; out, and the two word columns beside them.
+        ret                     ; A far door apiece would have cost five
+STATPGF ENDP                    ; bytes each of a segment with eight left
+
+; ===========================================================================
+;  SIDEPNL - the two ANNUNCIATOR COLUMNS, in whole words.
+;
+;  They used to be four blinking single letters, F L S T, because the slot
+;  was written down as 16 px wide. It is not: 16 px is the bezel, and the
+;  black plate inside it runs x 10..32 on the left and 286..308 on the
+;  right - 23 px both, which is FIVE characters of this font with a pixel
+;  to spare. So STALL is STALL now, and FLAPS is FLAPS.
+;
+;  Every caption is always readable, dark grey, the way a real annunciator
+;  is a printed legend that happens to light up. When its condition comes
+;  true it goes to colour and BLINKS, so the eye is caught by the change
+;  and not asked to notice an absence.
+;
+;  LEFT is what the pilot has DONE - the things hanging in the airstream,
+;  green when they are out. RIGHT is what the aeroplane has to SAY - the
+;  warnings, red, except the target call which is only ever information.
+;   ES = bufseg, DS = the main segment (UISEG's own words take cs:).
+; ===========================================================================
+SPLX    equ 12                  ; left column: five glyphs centred in 10..32
+SPRX    equ 288                 ; right column, the same inside 286..308
+SPY0    equ 131                 ; first slot; five of them, eleven apart
+SPDY    equ 11
+SPDARK  equ 30                  ; the legend when it is not lit: 'cockpit
+                                ;  panel trim', printed and not glowing.
+                                ;  Fixed in PALDAY, NOT out of 31..93 - see
+                                ;  the warning over WLGREY
+SPTXT   db 'FLAPS',0,'GEAR ',0,'BRAKE',0,'BURN ',0,'     ',0
+        db 'STALL',0,'FUEL ',0,'TERR ',0,'FIRE ',0,'LOCK ',0
+spmsk   dw 0                    ; which of the ten are live this frame
+spcol   db 0                    ; colour for the slot being drawn
+
+SIDEPNL:
+        mov  word ptr cs:[spmsk],0
+        cmp  byte ptr [flaps],0 ; ---- left: what is hanging out ----
+        je   @@spg
+        or   word ptr cs:[spmsk],1
+@@spg:  cmp  byte ptr [gear],0
+        je   @@spb
+        or   word ptr cs:[spmsk],2
+@@spb:  cmp  byte ptr [abrk],0
+        je   @@spa
+        or   word ptr cs:[spmsk],4
+@@spa:  cmp  byte ptr [abon],0
+        je   @@sps
+        or   word ptr cs:[spmsk],8
+@@sps:  mov  ax,[vel]           ; ---- right: what the aeroplane says ----
+        cmp  ax,[vstl]
+        jge  @@spf
+        or   word ptr cs:[spmsk],32
+@@spf:  cmp  word ptr [fuel],1200
+        jge  @@spt
+        or   word ptr cs:[spmsk],64
+@@spt:  mov  ax,[camy]
+        sub  ax,[lgnd]
+        cmp  ax,300
+        jge  @@spi
+        or   word ptr cs:[spmsk],128
+@@spi:  cmp  byte ptr [pdam],4
+        jb   @@spk
+        or   word ptr cs:[spmsk],256
+@@spk:  cmp  word ptr [locki],0FFFFh
+        je   @@spd
+        or   word ptr cs:[spmsk],512
+@@spd:  xor  si,si              ; ---- and print all ten ----
+@@spl:  mov  cx,si
+        mov  ax,1
+        shl  ax,cl
+        mov  byte ptr cs:[spcol],SPDARK
+        test cs:[spmsk],ax
+        jz   @@spp              ; idle: the legend still shows, unlit
+        test word ptr [lasttk],4
+        jz   @@spp              ; live, dark half of the blink: same again
+        mov  byte ptr cs:[spcol],95     ; a system that is OUT reads green
+        cmp  si,5
+        jb   @@spp
+        mov  byte ptr cs:[spcol],19     ; a warning reads red...
+        cmp  si,9
+        jne  @@spp
+        mov  byte ptr cs:[spcol],97     ; ...but a lock is news, not alarm
+@@spp:  mov  ax,SPLX            ; where this slot sits
+        cmp  si,5
+        jb   @@spx
+        mov  ax,SPRX
+@@spx:  mov  [ftx],ax
+        mov  ax,si
+        cmp  ax,5
+        jb   @@spy
+        sub  ax,5
+@@spy:  mov  bx,SPDY
+        imul bx
+        add  ax,SPY0
+        mov  [fty],ax
+        mov  di,si              ; the string: six bytes a slot
+        add  di,di
+        mov  bx,di
+        add  di,di
+        add  di,bx
+@@spc:  mov  al,cs:[SPTXT+di]
+        test al,al
+        jz   @@spn
+        ; LETTERS ONLY, and the test is a range, not a check for a space.
+        ; The A/B caption carried a slash, and 'A'-10 subtracted off it gave
+        ; a glyph index of 248 - six times that is a read a kilobyte and a
+        ; half past the end of FONTBUF. It drew nothing visible, which is
+        ; the worst way for a bad read to behave. Anything that is not a
+        ; capital now simply steps the pen, the way the padding spaces do.
+        cmp  al,'A'
+        jb   @@spv
+        cmp  al,'Z'
+        ja   @@spv
+        sub  al,'A'-10
+        xor  ah,ah
+        mov  bx,ax
+        add  ax,ax
+        add  ax,ax
+        add  ax,bx
+        add  ax,bx              ; *6 rows a glyph
+        push si
+        push di
+        mov  si,offset FONTBUF
+        add  si,ax
+        mov  ax,[fty]
+        call UROW
+        add  di,[ftx]
+        mov  cx,6
+@@spr:  mov  al,[si]
+        mov  ah,cs:[spcol]
+        test al,80h
+        jz   @@sp1
+        mov  es:[di],ah
+@@sp1:  test al,40h
+        jz   @@sp2
+        mov  es:[di+1],ah
+@@sp2:  test al,20h
+        jz   @@sp3
+        mov  es:[di+2],ah
+@@sp3:  inc  si
+        add  di,320
+        loop @@spr
+        pop  di
+        pop  si
+@@spv:  add  word ptr [ftx],4
+        inc  di
+        jmp  @@spc
+@@spn:  inc  si
+        cmp  si,10
+        jb   @@spl
         ret
-STATPGF ENDP
+
+; ===========================================================================
+;  WARNLMP - the OVERHEAD ANNUNCIATOR STRIP: seven lamps across the top of
+;  the panel, four to the left of the blank display and three to the right.
+;  Dead paint until now - the artwork drew some of them lit and some dark
+;  and the game never touched one of them.
+;
+;  The picture draws every lens DARK; we only ever LIGHT one. That way the
+;  artwork owns the off state, the bezel and the caption plate, and the
+;  code owns nothing but the three-by-three of colour - there is no unlit
+;  shade to keep in step between a .png and an .INC.
+;
+;  The captions are the picture's job too: a lens is three pixels wide and
+;  the font steps four, so no word fits here. Left to right they read
+;  MSTR MSL AAA DMG | FUEL FIRE GND, and every one of them is wired to
+;  state the game already keeps - nothing here is a light that lies.
+;   ES = bufseg, DS = the main segment (UISEG's own words take cs:).
+; ===========================================================================
+WLMPY   equ 10                  ; the lens row, in 320x200 panel coords
+WLCAPY  equ 4                   ; ...and the caption row above it
+; NEVER take a UI colour out of 31..93. That range is the PHOTO COCKPIT's
+; palette and Panel2Inc re-cuts it from the artwork on every build: slot 69
+; was 40,40,40 grey when this was written and became 53,22,1 orange the
+; first time the picture was retouched, which turned the whole caption row
+; orange. 105 is hand-written in PALDAY/PALNITE and cannot move - and it
+; dims by itself at night, which is what a lit legend should do anyway.
+WLGREY  equ 105                 ; HUD dim grey: fixed, outside the generated
+wlmsk   dw 0                    ; which lamps want to be lit this frame
+WLMPX   dw 98,110,121,133,185,197,210
+WLMPC   db 97,19,19,97,97,19,19 ; amber for a caution, red for a threat
+WLMPB   db 1,1,0,0,0,1,1        ; ...and which of them flash rather than sit
+; The captions, in OUR font, over the artwork's own unreadable ones. TWO
+; letters, and that is the hard ceiling: the glyph is three pixels and the
+; step is four, the caption plate is nine wide and the lamps are pitched
+; twelve apart. Three letters ink eleven pixels, which fits the pitch but
+; leaves ONE pixel between one word and the next - tried it, and the strip
+; read as MSTMSLAAADMG in one breath. Two letters ink seven and land inside
+; the plate with two clear pixels of bezel either side. Widen the plates in
+; the picture and these strings can grow; until then, short is legible and
+; long is not. Drawn every frame, so the artwork can lose its own baked-in
+; lettering completely and these become the only words up there.
+WLMPT   db 'MC',0,0,'MW',0,0,'AA',0,0,'DM',0,0,'FU',0,0,'FR',0,0,'GD',0,0
+
+WARNLMP:
+        mov  word ptr cs:[wlmsk],0
+        xor  si,si              ; MSL: an AI missile is chasing US. amtgt is
+@@wms:  mov  bx,si              ;  a plane offset and the pilot is plane 0
+        shr  bx,1
+        cmp  byte ptr [amact+bx],0
+        je   @@wmsn
+        cmp  word ptr [amtgt+si],0
+        jne  @@wmsn
+        or   word ptr cs:[wlmsk],2
+@@wmsn: add  si,2
+        cmp  si,NAMSL*2
+        jb   @@wms
+        xor  si,si              ; AAA: a live Shilka has the pilot on its gun
+@@waa:  mov  bx,si
+        shr  bx,1
+        cmp  byte ptr cs:[shkst+bx],0
+        jne  @@waan             ; burning: it is not shooting anybody
+        cmp  word ptr cs:[shktgt+si],0FFFFh
+        jne  @@waan
+        or   word ptr cs:[wlmsk],4
+@@waan: add  si,2
+        cmp  si,NSHILK*2
+        jb   @@waa
+        cmp  byte ptr [pdam],0  ; DMG: anything broken at all
+        je   @@wdm
+        or   word ptr cs:[wlmsk],8
+@@wdm:  cmp  word ptr [fuel],1200
+        jge  @@wfu              ; FUEL: under a fifth of the tank
+        or   word ptr cs:[wlmsk],16
+@@wfu:  cmp  byte ptr [pdam],4  ; FIRE: four hits of the five that kill -
+        jb   @@wfi              ;  the next one is the last one
+        or   word ptr cs:[wlmsk],32
+@@wfi:  mov  ax,[camy]          ; GND: the ground is coming up
+        sub  ax,[lgnd]
+        cmp  ax,300
+        jge  @@wgn
+        or   word ptr cs:[wlmsk],64
+@@wgn:  cmp  word ptr cs:[wlmsk],0
+        je   @@wdr              ; MSTR: master caution, lit by all the rest
+        or   word ptr cs:[wlmsk],1
+@@wdr:  xor  si,si
+@@wdl:  mov  cx,si
+        mov  ax,1
+        shl  ax,cl
+        test cs:[wlmsk],ax
+        jz   @@wdn
+        cmp  byte ptr cs:[WLMPB+si],0
+        je   @@wdon
+        test word ptr [lasttk],4 ; the urgent ones flash, about twice a second
+        jz   @@wdn
+@@wdon: mov  ax,WLMPY
+        call UROW
+        mov  bx,si
+        add  bx,bx
+        add  di,cs:[WLMPX+bx]
+        mov  al,cs:[WLMPC+si]
+        mov  cx,3
+@@wdr2: mov  es:[di],al
+        mov  es:[di+1],al
+        mov  es:[di+2],al
+        add  di,320
+        loop @@wdr2
+@@wdn:  inc  si
+        cmp  si,7
+        jb   @@wdl
+        ; ---- and the captions over them. FDRAW cannot be used: it walks
+        ; its string with DS:SI, DS is the MAIN segment in here, and these
+        ; words live in UISEG. Moving them home was not on the table - the
+        ; main segment has eight bytes left. So the glyph blitter is copied
+        ; here instead, reading the SAME FONTBUF (a main-segment buffer, so
+        ; plain DS) and costing that segment nothing at all ----
+        xor  si,si              ; lamp index
+@@wct:  mov  bx,si
+        add  bx,bx
+        mov  ax,cs:[WLMPX+bx]
+        sub  ax,2               ; seven pixels of ink, centred on the lens
+        mov  [ftx],ax
+        mov  di,si              ; the string cursor: four bytes a caption
+        add  di,di
+        add  di,di
+@@wcc:  mov  al,cs:[WLMPT+di]
+        test al,al
+        jz   @@wce
+        sub  al,'A'-10          ; the font puts the letters after the digits
+        xor  ah,ah
+        mov  bx,ax
+        add  ax,ax
+        add  ax,ax
+        add  ax,bx
+        add  ax,bx              ; *6: six rows a glyph
+        push si
+        push di
+        mov  si,offset FONTBUF
+        add  si,ax
+        mov  ax,WLCAPY
+        call UROW
+        add  di,[ftx]
+        mov  cx,6
+@@wcr:  mov  al,[si]
+        mov  ah,WLGREY
+        test al,80h
+        jz   @@wc1
+        mov  es:[di],ah
+@@wc1:  test al,40h
+        jz   @@wc2
+        mov  es:[di+1],ah
+@@wc2:  test al,20h
+        jz   @@wc3
+        mov  es:[di+2],ah
+@@wc3:  inc  si
+        add  di,320
+        loop @@wcr
+        pop  di
+        pop  si
+        add  word ptr [ftx],4
+        inc  di
+        jmp  @@wcc
+@@wce:  inc  si
+        cmp  si,7
+        jb   @@wct
+        ret
 ; ============================================================================
 ;  STATPG - the right (green) MFD as pure status: the war score row,
 ;  gun rounds, missile rails, damage pips - everything the scope used
@@ -3199,6 +3516,8 @@ TGTVIEW:
         jb   @@tshk
         mov  word ptr [mvb],offset RDISHVT ; a station shows its DISH, and
         mov  word ptr [mvn],RDISHNV*6      ; it turns on the page as it
+        mov  word ptr [mfb],offset RDISHFC
+        mov  word ptr [nfc],RDISHNF
         mov  word ptr [tgzo],400           ; turns out there on the hill.
         mov  word ptr [tgyc],64            ; It is six times a jet's size:
         mov  ax,[rspin]                    ; stand further off, and centre
@@ -3207,9 +3526,14 @@ TGTVIEW:
         jb   @@tpl
         mov  word ptr [mvb],offset STURRVT ; a Shilka shows its TURRET, on
         mov  word ptr [mvn],STURRNV*6      ; the bearing it is really at -
-        mov  word ptr [tgzo],150           ; so the page answers the only
-        mov  word ptr [tgyc],40            ; question worth asking about a
-        mov  bx,si                         ; gun: is it pointing at me
+        mov  word ptr [mfb],offset STURRFC ; and by its own FACES. It used to
+        mov  word ptr [nfc],STURRNF        ; borrow WEDG, the aeroplane edge
+        mov  word ptr [tgzo],150           ; list, which indexes vertices up
+        mov  word ptr [tgyc],40            ; to the 23rd - and the drum has
+        mov  bx,si                         ; EIGHT. The rest of the cache was
+                                           ; last frame's aeroplane, so the
+                                           ; page drew lines off into stale
+                                           ; numbers: the Shilka fell apart
         sub  bx,SHKLK
         shr  bx,1
         call FAR PTR SHKTBRGF   ; its turret bearing lives out in UISEG
@@ -3282,16 +3606,20 @@ TGTVIEW:
         add  di,2
         cmp  si,[mvn]
         jb   @@tv2
-        cmp  word ptr [locki],RSLK
+        cmp  word ptr [locki],SHKLK
         jb   @@tedg
-        ; ---- the dish has no edge list: walk its FACES and close each
-        ; quad. Fourteen faces, four lines apiece - the MFD can afford it,
-        ; and it saves carrying a second table for one page ----
+        ; ---- the GROUND models have no edge list: walk their FACES and
+        ; close each quad. Four lines a face - the MFD can afford it, and
+        ; it saves carrying a second table per page. Driven off mfb/nfc,
+        ; so the dish and the gun drum share the one walk; only aeroplanes
+        ; still take WEDG below, and WEDG is the only table that ever fit
+        ; them ----
         xor  si,si              ; face record (5 bytes)
 @@tf:   xor  di,di              ; corner 0..3
 @@tfc:  mov  bx,si
         add  bx,di
-        mov  al,[RDISHFC+bx]    ; corner k...
+        add  bx,[mfb]
+        mov  al,[bx]            ; corner k...
         xor  ah,ah
         mov  bx,ax
         add  bx,bx
@@ -3303,7 +3631,8 @@ TGTVIEW:
         inc  bx
         and  bx,3
         add  bx,si
-        mov  al,[RDISHFC+bx]
+        add  bx,[mfb]
+        mov  al,[bx]
         xor  ah,ah
         mov  bx,ax
         add  bx,bx
@@ -3323,7 +3652,12 @@ TGTVIEW:
         cmp  di,4
         jb   @@tfc
         add  si,5
-        cmp  si,RDISHNF*5
+        mov  ax,[nfc]           ; nfc*5, the length of this face table
+        mov  bx,ax
+        shl  ax,1
+        shl  ax,1
+        add  ax,bx
+        cmp  si,ax
         jb   @@tf
         ret
 @@tedg: xor  si,si              ; sensor-green edges

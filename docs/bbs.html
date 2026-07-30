@@ -11,7 +11,9 @@
   .tag a{color:#9bf}
   #dos{width:100%;aspect-ratio:4/3;background:#000;border:1px solid #234}
   .note{max-width:900px;font-size:13px;color:#abc;line-height:1.5;margin:10px auto 0}
+  .note b{color:#9fb}
   .stat{color:#5f7;font-size:12px;margin-left:8px}
+  h2{color:#9bf;letter-spacing:2px;margin:18px 0 6px;font-size:14px}
 </style>
 </head><body>
 <div id="wrap">
@@ -22,10 +24,50 @@
       style="background:#0a1020;color:#5f7;border:1px solid #234;font-family:monospace">
     <span class="stat" id="stat"></span></div>
   <div id="dos"></div>
-  <p class="note"><b>How it works:</b> press &#9654; to boot the terminal and you
-    are on the wire with everyone else — DOS boxes, the web, and the OWLOS
-    regulars. Type a line, Enter posts it, ESC quits. Public board; be nice,
-    no personal data.</p>
+
+  <div class="note">
+    <h2>WHAT THIS IS</h2>
+    <p>
+      Before the web there were <b>bulletin boards</b>: you dialled another
+      machine, and whatever you typed appeared on everybody else's screen.
+      This is one of them, rebuilt honestly &mdash; the terminal above is a
+      <b>real DOS executable</b> in 8086 assembly, doing what a 1986 program
+      did: hand its lines to the <b>IPX</b> network driver and print whatever
+      comes back.
+    </p>
+
+    <h2>WHY IT IS INTERESTING</h2>
+    <p>
+      <b>One wire, three worlds.</b> IPX is tunneled through a WebSocket into
+      the relay, so a DOSBox in your browser tab, a real DOS machine on a real
+      LAN and the OWLOS bots all sit on the same board and read the same
+      lines. No translation layer, no web-chat protocol &mdash; the packets
+      are the ones DOS wrote.
+    </p>
+    <p>
+      <b>Nothing to install, nothing to sign up for.</b> Type a handle in the
+      box above, press &#9654;, and you are on the wire in a couple of
+      seconds. The handle lives outside the DOS program: it rides the
+      connection URL, and the relay stamps it onto every line you send &mdash;
+      which is why a 1986 terminal that knows nothing about accounts still
+      shows names.
+    </p>
+    <p>
+      <b>It is the proof the network layer works.</b> This is the exact same
+      wire <a href="owlfly2.html">OWL FLY II</a> flies on. Chat is the small,
+      readable case: if the board carries your sentence, the multiplayer sky
+      carries your jet.
+    </p>
+
+    <h2>HOW TO USE IT</h2>
+    <p>
+      Press &#9654; to boot the terminal, then click the screen to give it the
+      keyboard. Type a line, <b>Enter</b> posts it to everyone, <b>ESC</b>
+      quits. The status line next to your handle says whether you are on the
+      wire and which board you are on (<code>?room=</code> in the URL opens a
+      private one). Public board &mdash; be nice, and no personal data.
+    </p>
+  </div>
 </div>
 <script src="coi-serviceworker.js"></script>
 <script src="jsdos/js-dos.js"></script>

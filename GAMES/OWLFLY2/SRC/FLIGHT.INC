@@ -132,12 +132,64 @@ INPUT:
 @@nofu: mov  byte ptr [abon],0  ; tanks dry: no burner glow either
 @@noth: mov  [teff],cx
 
+        ; --- F / L / B: flaps, gear, airbrake. Three edges, three toggles.
+        ; Nothing is interlocked and nothing is refused - put the gear down
+        ; at six hundred knots if you like, and wear the drag ---
+        mov  al,[KEYS+SC_F]
+        cmp  al,[prevfl]
+        je   @@nfp
+        mov  [prevfl],al
+        test al,al
+        jz   @@nfp
+        xor  byte ptr [flaps],1
+@@nfp:  mov  al,[KEYS+SC_L]
+        cmp  al,[prevgr]
+        je   @@ngr
+        mov  [prevgr],al
+        test al,al
+        jz   @@ngr
+        xor  byte ptr [gear],1
+@@ngr:  mov  al,[KEYS+SC_B]
+        cmp  al,[prevbr]
+        je   @@nbr
+        mov  [prevbr],al
+        test al,al
+        jz   @@nbr
+        xor  byte ptr [abrk],1
+@@nbr:  mov  ax,VSTALL          ; flaps buy a slower stall - three quarters
+        cmp  byte ptr [flaps],0 ;  of it - and that is what they are FOR
+        je   @@nvs
+        mov  ax,VSTALL*3/4
+@@nvs:  mov  [vstl],ax
+
         ; --- drag = vel*rho/DRAGK ; net force = thrust - drag ---
         mov  ax,[vel]
         imul word ptr [rho]     ; DX:AX = vel*rho
         mov  bx,DRAGK
         idiv bx
         mov  bx,ax              ; bx = drag
+        ; ...and everything hanging in the airstream adds its share of it.
+        ; A quarter for the flaps, a half for the gear, the whole of it
+        ; again for the board: full dirty is nearly three times clean, so
+        ; the jet washes speed off in a hurry and will not get it back
+        ; until the pilot cleans up.
+        mov  ax,bx
+        mov  cl,2
+        shr  ax,cl              ; a quarter
+        cmp  byte ptr [flaps],0
+        je   @@dgr
+        add  bx,ax
+@@dgr:  cmp  byte ptr [gear],0
+        je   @@dbk
+        add  bx,ax
+        add  bx,ax              ; a half
+@@dbk:  cmp  byte ptr [abrk],0
+        je   @@ddn
+        add  bx,ax
+        add  bx,ax
+        add  bx,ax
+        add  bx,ax              ; and the board doubles the clean figure
+@@ddn:
         mov  ax,[teff]
         sub  ax,bx              ; ax = net force (+/-)
 
@@ -368,9 +420,10 @@ INPUT:
         jns  @@ve
         xor  bx,bx
 @@ve:   mov  [vel],bx
-        ; --- stall: below VSTALL the nose falls through on its own ---
+        ; --- stall: below the stall speed AS FLOWN (flaps lower it) the
+        ; nose falls through on its own ---
         mov  ax,[vel]
-        cmp  ax,VSTALL
+        cmp  ax,[vstl]
         jge  @@nst
         mov  ax,[pitch]
         cmp  ax,-48
@@ -425,8 +478,39 @@ INPUT:
         jz   @@nf3
         xor  byte ptr [chsview],1
 @@nf3:
-        ; --- Z / X: the scope zooms in and out, the manual's way ---
-        mov  al,[KEYS+SC_Z]
+        ; --- Z / X: the scope zooms in and out, the manual's way - EXCEPT
+        ; while the orbit camera is up, when they walk the camera in and
+        ; out instead. Same two fingers, and the scope is not on the glass
+        ; in that view anyway, so nothing is taken away. Held, not tapped:
+        ; a camera dolly wants a continuous pull, not an edge.
+        cmp  byte ptr [tgtcam],0
+        je   @@nzk
+        cmp  byte ptr [KEYS+SC_Z],0
+        je   @@nzk1
+        mov  ax,[tgrad]         ; in, by a twelfth a tick: smooth at any
+        mov  bx,ax              ; distance, and it never crawls when far
+        mov  cl,4
+        shr  bx,cl
+        inc  bx
+        sub  ax,bx
+        cmp  ax,TGRMIN
+        jge  @@nzk2
+        mov  ax,TGRMIN
+@@nzk2: mov  [tgrad],ax
+@@nzk1: cmp  byte ptr [KEYS+SC_X],0
+        je   @@nzo
+        mov  ax,[tgrad]         ; ...and out
+        mov  bx,ax
+        mov  cl,4
+        shr  bx,cl
+        inc  bx
+        add  ax,bx
+        cmp  ax,TGRMAX
+        jle  @@nzk3
+        mov  ax,TGRMAX
+@@nzk3: mov  [tgrad],ax
+        jmp  @@nzo
+@@nzk:  mov  al,[KEYS+SC_Z]
         cmp  al,[prevz]
         je   @@nzi
         mov  [prevz],al
@@ -483,10 +567,21 @@ INPUT:
         cmp  si,0FFFFh
         je   @@nf4              ; nothing locked: nothing to orbit
         mov  [tgti],si          ; remember the star of the show
+        ; How far to stand off depends on WHAT is being orbited, and the
+        ; old flat 100 was a jet's number. A Shilka is 100 units long by
+        ; itself and a radar mast is 190 tall, so the camera was born
+        ; INSIDE them - that was "the camera appears somewhere odd". One
+        ; threshold buys both, and Z/X trims from there. Written this
+        ; tight (BX, one compare) because the main segment had 21 bytes
+        ; of stack-guard headroom left and the readable ladder cost 28.
         xor  ax,ax              ; ground targets have no heading to sit behind
+        mov  bx,100             ; a jet is small: four wingspans out
         cmp  si,SHKLK
-        jae  @@f4az
-        mov  ax,[pah+si]
+        jb   @@f4pl
+        mov  bx,450             ; a Shilka or a mast: clear of the thing
+        jmp  @@f4rd
+@@f4pl: mov  ax,[pah+si]
+@@f4rd: mov  [tgrad],bx
 @@f4az: mov  [tgaz],ax          ; start right behind the target
         mov  word ptr [tgel],12
         mov  byte ptr [tgtcam],1
@@ -955,7 +1050,7 @@ INPUT:
 @@md2:  add  bx,ax
         add  bx,bx              ; scale the kick
         mov  ax,[vel]
-        cmp  ax,VSTALL
+        cmp  ax,[vstl]
         jge  @@md3
         add  bx,4               ; stall buffet shakes the engine note
 @@md3:  mov  ax,[mlvl]          ; decay 1/16 per tick, add the kick
@@ -1147,6 +1242,10 @@ PLAYERRESET:
         mov  byte ptr [msact],0
         mov  word ptr [gunam],250
         mov  byte ptr [pdam],0
+        mov  byte ptr [flaps],0 ; a fresh jet is a CLEAN jet
+        mov  byte ptr [gear],0
+        mov  byte ptr [abrk],0
+        mov  word ptr [vstl],VSTALL
         mov  word ptr [flbcnt],0
         call FLBSEED            ; a fresh black box for a fresh jet
         ret
