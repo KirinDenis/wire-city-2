@@ -98,6 +98,11 @@ shklgt  db NSHILK dup(0)        ; ticks left on this patrol leg
 shktgt  dw NSHILK dup(0)        ; who it is shooting at (0FFFFh = the pilot)
 shkax   dw NSHILK dup(0)        ; the post it patrols around - it always
 shkaz   dw NSHILK dup(0)        ;  comes back to this
+mprow   dw 0                    ; the map row a mark landed on. MMPTY hands
+                                ;  it back in AX and UROW consumes AX, so a
+                                ;  symbol that wants the row as well as the
+                                ;  buffer offset has to be given somewhere
+                                ;  to keep it
 shkst   db NSHILK dup(0)        ; 0 = fighting, 1 = burning
 shkhp   db NSHILK dup(SHKHITS)  ; what it has left in it
 shki    dw 0                    ; the vehicle being planted, ticked or drawn
@@ -931,6 +936,20 @@ PALDAY  db 36,37,40          ;0  wall N/S (light grey)
                              ;    ground (white vanishes in cumulus)
         db 30,58,63          ;106 HUD cyan: the IVV caret
         db  0, 0, 0          ;107 true black (the front door's night)
+        ; ---- THE PANEL'S OWN COLOURS. The legends were being drawn in HUD
+        ; colours, and that is why they jumped out of the picture: HUD
+        ; colours are made to survive being projected over a bright sky and
+        ; have to shout. A legend printed inside a dark cockpit is read at
+        ; arm's length off black plastic and should barely glow. Same words,
+        ; different job, so: different colours.
+        db 22,23,26          ;108 panel legend, the lamp captions
+        db 14,14,16          ;109 panel legend, unlit
+        db 10,40,12          ;110 panel green: a system is OUT
+        db 44,31, 4          ;111 panel amber: a caution
+        db 44, 5, 5          ;112 panel red: a warning
+        db  5,20, 6          ;113 ...and each one's shadow, for the round
+        db 22,15, 2          ;114 lenses on the option-select columns
+        db 22, 3, 3          ;115
 
 PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db 12,18,40          ;1  far stroke
@@ -978,6 +997,14 @@ PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db 20,22,27          ;105 HUD dim ladder, night-lit
         db 16,38,48          ;106 HUD cyan IVV, dimmed for the night
         db  0, 0, 0          ;107 true black
+        db 13,14,16          ;108 panel legend, the lamp captions - and it
+        db  8, 8,10          ;109 panel legend, unlit. Both dimmer again by
+        db  6,24, 7          ;110 panel green: a cockpit at night is lit by
+        db 26,18, 2          ;111 panel amber: its own instruments and
+        db 26, 3, 3          ;112 panel red: nothing else
+        db  3,12, 3          ;113 the shadows, dimmer again
+        db 13, 9, 1          ;114
+        db 13, 2, 2          ;115
 
 APPLYPALF PROC FAR
         push ds
@@ -1447,8 +1474,11 @@ MINIMAP2:
         call UROW
         pop  bx
         add  di,bx
-        mov  al,8               ; white blip
-        mov  es:[di],al
+        mov  al,8               ; white blip. It was briefly an aeroplane at
+        mov  es:[di],al         ;  the closest zoom, and went back: a blip
+                                ;  with a course tick is the clearer thing
+                                ;  to look for when what you want off a map
+                                ;  is "where am I", not "what am I"
         ; course tick a couple of pixels up the nose - and it grows with the
         ; zoom, or at four pixels to a node it would sit inside the blip
         mov  cl,[mmzs]
@@ -1931,10 +1961,19 @@ RSMAP:  mov  word ptr [rsi],0
         call MMPTY
         pop  dx
         jc   @@nx
+        mov  cs:[mprow],ax      ; the symbol wants the row, UROW eats it
         call UROW
         add  di,dx
         pop  ax
-        mov  es:[di],al
+        cmp  byte ptr [mmzs],MMZICO
+        jb   @@cr               ; wound out: the plus sign, as before
+        mov  [COLOR],al         ; close in: the mast and its dish, the same
+        mov  [bqx],dx           ; picture the scope draws
+        mov  ax,cs:[mprow]
+        mov  [bqy],ax
+        call FAR PTR BQSTAF
+        jmp  @@nn
+@@cr:   mov  es:[di],al
         mov  es:[di-320],al
         mov  es:[di+320],al
         mov  es:[di-1],al
@@ -1980,6 +2019,7 @@ SHKMAP: mov  word ptr cs:[shki],0
         call MMPTY
         pop  dx
         jc   @@smn
+        mov  cs:[mprow],ax
         call UROW
         add  di,dx
         mov  ax,cs:[shki]       ; even ours, odd theirs - the parity rule
@@ -1987,7 +2027,15 @@ SHKMAP: mov  word ptr cs:[shki],0
         mov  al,95
         jz   @@smc
         mov  al,19
-@@smc:  mov  es:[di],al
+@@smc:  cmp  byte ptr [mmzs],MMZICO
+        jb   @@smb              ; wound out: the block, as before
+        mov  [COLOR],al         ; close in: the vehicle from the side, the
+        mov  [bqx],dx           ; same picture the scope draws
+        mov  ax,cs:[mprow]
+        mov  [bqy],ax
+        call FAR PTR BQSHKF
+        jmp  @@smn
+@@smb:  mov  es:[di],al
         cmp  byte ptr [mmzs],MMZALL
         je   @@smn              ; whole world: one pixel is the whole mark
         mov  es:[di-1],al
@@ -2291,9 +2339,17 @@ SHKAIM: mov  bx,cs:[shki]
         ; camera - so a loop over pst would never have found him, and the
         ; guns would have politely ignored the one aircraft that matters.
         ; He flies for the even side, so the odd batteries want him.
+        ;
+        ; ...AND SO DO HIS OWN, if he has switched the transponder off. That
+        ; is the whole of IFF: the battery does not know a friend from a
+        ; target, it only knows what answers the interrogation. Leave the box
+        ; off over your own flak and your own flak will shoot you down, and
+        ; it will be right to.
         or   bx,bx
-        jz   @@axp
-        cmp  byte ptr [dying],0
+        jnz  @@ifok
+        cmp  byte ptr [swiff],0
+        jne  @@axp              ; transponder up: our own guns leave us be
+@@ifok: cmp  byte ptr [dying],0
         jne  @@axp
         mov  ax,[camx]
         sub  ax,cs:[shkb]
@@ -2342,7 +2398,37 @@ SHKAIM: mov  bx,cs:[shki]
 @@axn:  add  si,2
         cmp  si,NPLANE*2
         jb   @@ax
-        mov  si,cs:[shkg]
+        ; GROUND COMMS. A battery on the pilot's side, with the army net up,
+        ; shoots at what HE is pointing at rather than at whatever happens to
+        ; be closest to it. That is the entire point of a radio: one man's
+        ; eyes become the battery's. The range gate still applies - the net
+        ; carries a designation, not a longer barrel - so a call about
+        ; something twenty kilometres away is simply not actionable.
+        cmp  byte ptr [swgnd],0
+        je   @@axf
+        cmp  word ptr cs:[shke],0
+        jne  @@axf              ; the other side is not on our net
+        mov  di,[locki]
+        cmp  di,NPLANE*2
+        jae  @@axf              ; no lock, or a ground target: nothing to say
+        mov  bx,di
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        jne  @@axf              ; already dead: let the battery choose again
+        mov  ax,[pax+di]
+        sub  ax,cs:[shkb]
+        jns  @@ag1
+        neg  ax
+@@ag1:  cmp  ax,SHKGRNG
+        jg   @@axf
+        mov  ax,[paz+di]
+        sub  ax,cs:[shkc]
+        jns  @@ag2
+        neg  ax
+@@ag2:  cmp  ax,SHKGRNG
+        jg   @@axf
+        mov  cs:[shkg],di       ; designated: this one, and never mind range
+@@axf:  mov  si,cs:[shkg]
         cmp  si,0FFFFh
         jne  @@axw
         cmp  word ptr cs:[shkp],32767   ; FFFF means the pilot - unless
@@ -2912,8 +2998,15 @@ SHKDRAW:
 ;  NB it reads are main-segment bytes and DS is the main segment here.
 ; ============================================================================
 MAPHUMF PROC FAR
+        ; The TRAFFIC is deliberately not here. Aeroplane symbols were drawn
+        ; on this map for a day and taken off again: the map answers "what
+        ; is on the ground and where am I over it", and the scope beside it
+        ; already answers "who is in the air". Two instruments saying the
+        ; same thing is one instrument's worth of information and two
+        ; instruments' worth of clutter. Ground only: the baked city, the
+        ; batteries and the stations.
         call MAPHUM
-        call RSMAP              ; ...and the two stations, on the same glass
+        call RSMAP              ; the two stations, on the same glass
         call SHKMAP             ; ...and the flak batteries
         ret
 MAPHUMF ENDP
@@ -2984,11 +3077,17 @@ MAPHUM: xor  si,si
         jb   @@mh
         ret
 
+; (MAPJETS lived here for one afternoon: the traffic drawn on the map as
+;  aeroplane symbols, north-up. It came off again - see the note in
+;  MAPHUMF. The scope carries the air picture; this glass carries the
+;  ground. The symbols themselves were fine and are still on the scope.)
+
 
 STATPGF PROC FAR
         call STATPG
         call WARNLMP            ; ...and the overhead lamps, on the same trip
-        call SIDEPNL            ; out, and the two word columns beside them.
+        call SIDEPNL            ; out, the two word columns beside them,
+        call OSBLAMP            ; and the six lamp columns by the screens.
         ret                     ; A far door apiece would have cost five
 STATPGF ENDP                    ; bytes each of a segment with eight left
 
@@ -3015,12 +3114,300 @@ SPLX    equ 12                  ; left column: five glyphs centred in 10..32
 SPRX    equ 288                 ; right column, the same inside 286..308
 SPY0    equ 131                 ; first slot; five of them, eleven apart
 SPDY    equ 11
-SPDARK  equ 30                  ; the legend when it is not lit: 'cockpit
-                                ;  panel trim', printed and not glowing.
-                                ;  Fixed in PALDAY, NOT out of 31..93 - see
-                                ;  the warning over WLGREY
+SPDARK  equ PNLDIM              ; the panel's own set, defined once in
+SPGRN   equ PNLGRN              ;  DATA.INC beside the zone constants so
+SPAMB   equ PNLAMB              ;  both segments read the same numbers
+SPRED   equ PNLRED
 SPTXT   db 'FLAPS',0,'GEAR ',0,'BRAKE',0,'BURN ',0,'     ',0
         db 'STALL',0,'FUEL ',0,'TERR ',0,'FIRE ',0,'LOCK ',0
+; ---- the bottom switch row: the three radios ------------------------------
+; The artwork's buttons are ~11 px of black between bright dividers at
+; x 53/65/76/88/99/111. Three characters ink eleven pixels, which FILLS a
+; button - tried it on three neighbouring plates and the row read as one
+; word, GNDAIRIFF, exactly the way the overhead captions did at three
+; letters. So they sit on every OTHER button: a whole empty plate between
+; words, thirteen clear pixels, and the three spare buttons are there for
+; the next three switches anyway.
+; Green when the box is up, panel grey when it is not, so the row reads as
+; a state and not as a legend.
+; Twelve buttons, six a side. The left row is the up-front control panel -
+; the radios, the beacon, the transponder and the master mode; the right is
+; the self-protection suite. Two of them are not toggles at all: A-A and
+; A-G are one mode switch shown on two plates, so exactly one is ever lit.
+; The plates, measured off the artwork's own dividers. Left row starts at
+; 42, right row at 210; both are pitched about 11.6 px.
+;
+; Each plate carries its own WORD, in our font: three letters ink eleven
+; pixels and a plate is eleven pixels, so a label fills its plate exactly
+; and the artwork's divider is all that separates one from the next. That
+; is tight - the row was tried this way once and read as GNDAIRIFF - but
+; the colours are the panel's dim set now rather than the HUD's, which
+; takes most of the shout out of it, and the pilot is retouching the plates
+; anyway. Widen them in the picture and there is nothing to change here.
+SWX     dw 42,54,66,77,89,100
+        dw 210,221,233,244,256,267
+SWY     equ 186                 ; the label row, inside the plate
+SWTXT   db 'GND',0,'AIR',0,'TAC',0,'IFF',0,'A-A',0,'A-G',0
+        db 'A-P',0,'T-R',0,'ECM',0,'JMR',0,'CHF',0,'FLR',0
+; What each plate reports. 0 = the master mode, handled apart; 0FFFFh = a
+; box that exists on the panel but not yet in the game, and an unlit plate
+; is an honest way to say so.
+SWLIT   dw offset swgnd, offset swair, offset swtac, offset swiff
+        dw 0, 0
+        dw offset swap,  offset swtr,  offset swecm, offset swjmr
+        dw 0FFFFh, 0FFFFh
+
+; ---------------------------------------------------------------------------
+;  SWKEYS - every plain on/off switch on the aeroplane, off one table.
+;
+;  Written out longhand a switch is twenty bytes, and twelve of them is a
+;  hundred and forty in a segment that had TEN left. Out here the loop and
+;  the table together cost nothing that matters and the thirteenth switch is
+;  a five-byte row. The FLAGS stayed in the main segment - half the game
+;  reads them with DS pointing there - so this writes home through DS and
+;  keeps only the table and the key-edge bytes in its own segment.
+;   Each row: scancode, the cs:-relative edge byte, the DS-relative flag.
+; ---------------------------------------------------------------------------
+SWNK    equ 12
+swprev  db SWNK dup(0)          ; last state of each switch's key
+SWKTAB  db SC_F
+        dw offset flaps
+        db SC_L
+        dw offset gear
+        db SC_B
+        dw offset abrk
+        db SC_G
+        dw offset swgnd
+        db SC_U
+        dw offset swair
+        db SC_I
+        dw offset swiff
+        db SC_T
+        dw offset swtac
+        db SC_O
+        dw offset swmode
+        db SC_P
+        dw offset swap
+        db SC_R
+        dw offset swtr
+        db SC_J
+        dw offset swecm
+        db SC_Y
+        dw offset swjmr
+
+; ===========================================================================
+;  OSBLAMP - the six columns of little buttons flanking the three screens.
+;
+;  On a real aeroplane these are the Option Select Buttons and their legends
+;  are printed INSIDE the glass beside each key. We have no room for that at
+;  320x200, so they do the other job a column of small lamps does well:
+;  each one reports something about the screen it stands next to, as a bar
+;  you read without focusing. Zoom is the obvious one - it is a setting with
+;  no number anywhere on the panel, and it changes what every symbol means.
+;
+;  Eight slots a column, pitch six, a lamp four by three inside the plate.
+;  Amber for a setting, green for a stores count, red for damage - the
+;  panel's own dim set, so they sit down at night with everything else.
+; ===========================================================================
+OSBX    dw 41,106,122,187,204,269
+OSBLX   equ 4                   ; the lens sits four in from the plate's left
+; The CENTRE screen sits three pixels lower than the other two in the
+; artwork (129 against 126), and so do the two columns flanking it. One
+; table with a per-column offset lands on all six; the first attempt used
+; the radar column's rows for everything and missed four columns out of
+; six by exactly that three.
+OSBDY   db 0,0,3,3,0,0
+; Seven plates a column, and the rows are NOT on a regular pitch - the
+; artwork drifts, so they were measured off it rather than computed. These
+; are the TOP row of each lens; the artwork's own lamp centre is one lower.
+OSBYT   dw 132,138,144,149,155,161,167
+OSBN    equ 7
+osbm    dw 0                    ; which lamps are lit
+osbr    dw 0                    ; ...which of them are RED whatever the
+                                ;  column's colour is - the bottom division
+                                ;  of a fuel gauge is painted red on every
+                                ;  aeroplane ever built
+osbf    dw 0                    ; ...and which of them FLASH
+osbc    db 0                    ; the column's own colour
+osbyo   db 0                    ; ...and how far down the artwork put it.
+                                ;  NOT 'osbdy': TASM folds case, and that
+                                ;  is the OSBDY table three lines up
+
+; BAR - AX slots lit, counted UP from the bottom of the column, into osbm.
+OSBBAR: mov  cx,ax
+        xor  ax,ax
+        jcxz @@bd
+        cmp  cx,OSBN
+        jbe  @@b1
+        mov  cx,OSBN
+@@b1:   push cx
+@@b2:   stc                     ; a run of CX ones, at the low bits...
+        rcl  ax,1
+        loop @@b2
+        pop  cx
+        mov  bx,OSBN            ; ...shifted down to the bottom slots, since
+        sub  bx,cx              ;  bit 0 is the TOP lamp of the column
+        mov  cx,bx
+        jcxz @@bd
+        shl  ax,cl
+@@bd:   mov  cs:[osbm],ax
+        ret
+
+OSBLAMP:
+        cld
+        mov  word ptr cs:[osbr],0   ; no red and no flash unless a column
+        mov  word ptr cs:[osbf],0   ;  asks for them
+        ; ---- column 0: the RADAR's zoom. rzsh runs 6 close .. 10 wide, so
+        ; a tight scope shows a tall bar - more rungs, more detail ----
+        mov  al,11
+        sub  al,[rzsh]
+        xor  ah,ah
+        call OSBBAR
+        mov  byte ptr cs:[osbc],PNLAMB
+        xor  bx,bx
+        call OSBCOL
+        ; ---- column 1: FUEL, beside the scope where the eye already is.
+        ; The bottom division is red the way it is red on a real gauge, and
+        ; it FLASHES once it is the only one left - which is the moment the
+        ; number stops being information and starts being a decision ----
+        mov  ax,[fuel]
+        mov  bx,7
+        imul bx                 ; seven divisions of tank
+        mov  bx,FUELMAX
+        xor  dx,dx
+        div  bx
+        push ax
+        call OSBBAR
+        mov  word ptr cs:[osbr],40h ; the bottom lamp, always red
+        pop  ax
+        cmp  ax,2
+        jae  @@ol1
+        mov  word ptr cs:[osbf],40h ; ...and flashing, on the last division
+@@ol1:  mov  byte ptr cs:[osbc],PNLAMB
+        mov  bx,1
+        call OSBCOL
+        mov  word ptr cs:[osbr],0
+        mov  word ptr cs:[osbf],0
+        ; ---- column 2: which PAGE the centre screen is showing ----
+        mov  al,[mfdmode]
+        xor  ah,ah
+        mov  cx,ax
+        mov  ax,1
+        shl  ax,cl              ; one lamp, counted from the top
+        mov  cs:[osbm],ax
+        mov  byte ptr cs:[osbc],PNLGRN
+        mov  bx,2
+        call OSBCOL
+        ; ---- column 3: the MAP's own zoom, next to the map ----
+        mov  al,[mmzs]
+        inc  al
+        xor  ah,ah
+        call OSBBAR
+        mov  byte ptr cs:[osbc],PNLAMB
+        mov  bx,3
+        call OSBCOL
+        ; ---- column 4: missiles left on the rails ----
+        mov  al,[pammo]
+        xor  ah,ah
+        call OSBBAR
+        mov  byte ptr cs:[osbc],PNLGRN
+        mov  bx,4
+        call OSBCOL
+        ; ---- column 5: damage taken, filling DOWNWARD from the top - a
+        ; bar that grows toward you reads as something getting worse ----
+        mov  al,[pdam]
+        xor  ah,ah
+        mov  cx,ax
+        xor  ax,ax
+        jcxz @@ol5
+@@ol4:  stc
+        rcl  ax,1
+        loop @@ol4
+@@ol5:  mov  cs:[osbm],ax
+        mov  cs:[osbf],ax       ; damage FLASHES, all of it. A hit you have
+        mov  byte ptr cs:[osbc],PNLRED  ; already taken is not news; a hit
+        mov  bx,5               ; you are still carrying is
+        call OSBCOL
+        mov  word ptr cs:[osbf],0
+        ret
+
+; OSBCOL - paint one column. in: BX = column 0..5, and cs:[osbm]/[osbr]/
+;  [osbf]/[osbc]. Each lamp is a four by three ROUND LENS: the corners are
+;  left alone so the silhouette is not a square, the top-left is the core
+;  colour and the bottom-right is its shadow. That is what makes something
+;  this small look like a piece of moulded plastic with light behind it
+;  rather than a coloured brick.
+OSBCOL: mov  al,cs:[OSBDY+bx]   ; this column's own vertical offset
+        mov  cs:[osbyo],al
+        add  bx,bx
+        mov  ax,cs:[OSBX+bx]
+        add  ax,OSBLX
+        mov  [dsx],ax
+        xor  si,si              ; slot, 0 = top
+@@cl:   mov  cx,si
+        mov  ax,1
+        shl  ax,cl
+        test cs:[osbm],ax
+        jz   @@cn
+        test cs:[osbf],ax       ; a flashing lamp is dark half the time
+        jz   @@ck
+        test word ptr [lasttk],4
+        jz   @@cn
+@@ck:   mov  ah,cs:[osbc]       ; red overrides the column's own colour
+        test cs:[osbr],ax
+        jz   @@cc
+        mov  ah,PNLRED
+@@cc:   mov  al,ah
+        add  ah,PNLSHAD         ; AL = core, AH = its shadow
+        mov  bx,si
+        add  bx,bx
+        push ax
+        mov  ax,cs:[OSBYT+bx]
+        mov  bl,cs:[osbyo]
+        xor  bh,bh
+        add  ax,bx
+        call UROW
+        pop  ax
+        add  di,[dsx]
+        mov  es:[di+1],al       ; . C C .
+        mov  es:[di+2],al
+        mov  es:[di+320],al     ; C C C R
+        mov  es:[di+321],al
+        mov  es:[di+322],al
+        mov  es:[di+323],ah
+        mov  es:[di+641],ah     ; . R R .
+        mov  es:[di+642],ah
+@@cn:   inc  si
+        cmp  si,OSBN
+        jb   @@cl
+        ret
+
+SWKEYSF PROC FAR
+        call SWKEYS
+        ret
+SWKEYSF ENDP
+SWKEYS: xor  si,si              ; row index 0..SWNK-1
+@@k:    mov  bx,si
+        add  bx,bx
+        add  bx,si              ; *3 bytes a row
+        mov  bl,cs:[SWKTAB+bx]
+        xor  bh,bh
+        mov  al,[KEYS+bx]       ; KEYS is at home, and DS points home
+        mov  bx,si
+        cmp  al,cs:[swprev+bx]
+        je   @@kn
+        mov  cs:[swprev+bx],al
+        test al,al
+        jz   @@kn               ; key-up edge: nothing happens
+        mov  bx,si
+        add  bx,bx
+        add  bx,si
+        mov  di,word ptr cs:[SWKTAB+bx+1]
+        xor  byte ptr [di],1
+@@kn:   inc  si
+        cmp  si,SWNK
+        jb   @@k
+        ret
 spmsk   dw 0                    ; which of the ten are live this frame
 spcol   db 0                    ; colour for the slot being drawn
 
@@ -3065,13 +3452,13 @@ SIDEPNL:
         jz   @@spp              ; idle: the legend still shows, unlit
         test word ptr [lasttk],4
         jz   @@spp              ; live, dark half of the blink: same again
-        mov  byte ptr cs:[spcol],95     ; a system that is OUT reads green
+        mov  byte ptr cs:[spcol],SPGRN  ; a system that is OUT reads green
         cmp  si,5
         jb   @@spp
-        mov  byte ptr cs:[spcol],19     ; a warning reads red...
+        mov  byte ptr cs:[spcol],SPRED  ; a warning reads red...
         cmp  si,9
         jne  @@spp
-        mov  byte ptr cs:[spcol],97     ; ...but a lock is news, not alarm
+        mov  byte ptr cs:[spcol],SPAMB  ; ...but a lock is news, not alarm
 @@spp:  mov  ax,SPLX            ; where this slot sits
         cmp  si,5
         jb   @@spx
@@ -3140,6 +3527,87 @@ SIDEPNL:
 @@spn:  inc  si
         cmp  si,10
         jb   @@spl
+        ; ---- and the twelve buttons under the screens ----
+        cld
+        xor  si,si
+@@swl:  xor  al,al              ; is THIS plate lit?
+        cmp  si,4
+        je   @@swaa
+        cmp  si,5
+        je   @@swag
+        cmp  si,10
+        jae  @@swd              ; chaff and flares: on the panel, not yet
+        mov  bx,si              ;  in the game, and left honestly dark
+        add  bx,bx
+        mov  di,cs:[SWLIT+bx]
+        mov  al,[di]
+        jmp  @@swd
+@@swaa: mov  al,[swmode]        ; A-A: lit when the mode is NOT air-to-ground
+        xor  al,1
+        jmp  @@swd
+@@swag: mov  al,[swmode]        ; A-G: the other half of the same switch
+@@swd:  mov  byte ptr cs:[spcol],SPDARK
+        test al,al
+        jz   @@swp
+        mov  byte ptr cs:[spcol],SPGRN
+@@swp:  mov  bx,si
+        add  bx,bx
+        mov  ax,cs:[SWX+bx]
+        mov  [ftx],ax
+        mov  di,si              ; four bytes a label
+        add  di,di
+        add  di,di
+@@swt:  mov  al,cs:[SWTXT+di]
+        test al,al
+        jz   @@swn
+        ; the font keeps its punctuation after the letters: '-' is glyph
+        ; 37, and A-A cannot be written without it
+        mov  ah,37
+        cmp  al,'-'
+        je   @@swg
+        cmp  al,'A'
+        jb   @@swv
+        cmp  al,'Z'
+        ja   @@swv
+        sub  al,'A'-10
+        mov  ah,al
+@@swg:  mov  al,ah
+        xor  ah,ah
+        mov  bx,ax
+        add  ax,ax
+        add  ax,ax
+        add  ax,bx
+        add  ax,bx              ; *6 rows a glyph
+        push si
+        push di
+        mov  si,offset FONTBUF
+        add  si,ax
+        mov  ax,SWY
+        call UROW
+        add  di,[ftx]
+        mov  cx,6
+@@swr:  mov  al,[si]
+        mov  ah,cs:[spcol]
+        test al,80h
+        jz   @@sw1
+        mov  es:[di],ah
+@@sw1:  test al,40h
+        jz   @@sw2
+        mov  es:[di+1],ah
+@@sw2:  test al,20h
+        jz   @@sw3
+        mov  es:[di+2],ah
+@@sw3:  inc  si
+        add  di,320
+        loop @@swr
+        pop  di
+        pop  si
+@@swv:  add  word ptr [ftx],4
+        inc  di
+        jmp  @@swt
+@@swn:  inc  si
+        cmp  si,12
+        jb   @@swl
         ret
 
 ; ===========================================================================
@@ -3161,13 +3629,9 @@ SIDEPNL:
 ; ===========================================================================
 WLMPY   equ 10                  ; the lens row, in 320x200 panel coords
 WLCAPY  equ 4                   ; ...and the caption row above it
-; NEVER take a UI colour out of 31..93. That range is the PHOTO COCKPIT's
-; palette and Panel2Inc re-cuts it from the artwork on every build: slot 69
-; was 40,40,40 grey when this was written and became 53,22,1 orange the
-; first time the picture was retouched, which turned the whole caption row
-; orange. 105 is hand-written in PALDAY/PALNITE and cannot move - and it
-; dims by itself at night, which is what a lit legend should do anyway.
-WLGREY  equ 105                 ; HUD dim grey: fixed, outside the generated
+; The warning about not taking a colour out of 31..93 now lives with the
+; PNL* equs in DATA.INC, where the numbers are.
+WLGREY  equ PNLCAP
 wlmsk   dw 0                    ; which lamps want to be lit this frame
 WLMPX   dw 98,110,121,133,185,197,210
 WLMPC   db 97,19,19,97,97,19,19 ; amber for a caution, red for a threat
@@ -3702,3 +4166,4 @@ ENDIF
                                 ; every paragraph we were given.
 
 UISEG   ENDS
+

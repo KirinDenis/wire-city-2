@@ -412,7 +412,13 @@ PANELBMP:
         ; drawn on the same trip out as the overhead lamps. Deleting the four
         ; blocks and LAMP2 with them gave this segment back about two hundred
         ; bytes, which is what paid for the flaps, the gear and the airbrake.
-        ; ---- throttle ladder: 12 segments up from y=186 at x=44 ----
+        ; ---- throttle ladder: 12 rungs climbing from PZTHRY. Each rung is
+        ; SHADED like the lamps on the option columns - lit along the top,
+        ; its own shadow underneath - so the ladder belongs to the same
+        ; panel as everything else instead of being a stack of bright bars.
+        ; The bottom two rungs and the top two are RED: idle at one end,
+        ; the burner at the other, and both are places you want to KNOW you
+        ; are in without reading a number. ----
         mov  ax,[throt]
         mov  bx,3
         imul bx
@@ -425,12 +431,28 @@ PANELBMP:
         jae  @@tbd
         cmp  si,dx
         jae  @@tbd              ; above the setting: the artwork shows through
+        mov  al,PNLAMB          ; the working range
+        cmp  si,2
+        jb   @@tbr
+        cmp  si,10
+        jb   @@tbc
+@@tbr:  mov  al,PNLRED          ; ...and the two ends of the quadrant
+@@tbc:  mov  [lampc],al         ; ROW320 CLOBBERS BX, and it clobbered the
+                                ;  colour when it was held there - the same
+                                ;  trap VLINE2 already carries a note about
         mov  ax,[dsx]
         call ROW320
         add  di,PZTHRX
-        mov  al,97              ; lit amber segment
-        mov  cx,5
-        rep  stosb
+        push di
+        mov  al,[lampc]
+        mov  cx,PZTHRW
+        rep  stosb              ; the lit face...
+        pop  di
+        add  di,320
+        mov  al,[lampc]
+        add  al,PNLSHAD
+        mov  cx,PZTHRW
+        rep  stosb              ; ...and its shadow on the row below
         sub  word ptr [dsx],2
         inc  si
         jmp  @@tb
@@ -463,10 +485,14 @@ PANELBMP:
 ;  heading-up scope. in: [rbcx]/[rbcy] = scope centre, [rbsh] = zoom
 ;  shift. ES=bufseg. Serves both the radar and the SIT page.
 ; ============================================================================
-RBLIPS: cmp  byte ptr [rsst],0  ; OUR station down = no returns at all:
-        je   @@live             ; the glass goes to snow and says so
-        call FAR PTR RSNOISF
-        ret
+RBLIPS: cmp  byte ptr [swtr],0  ; EMISSIONS OFF is the same picture as a
+        je   @@snow             ; dead station, and for the same reason:
+        cmp  byte ptr [rsst],0  ; a radar that is not transmitting has
+        je   @@live             ; nothing to receive. Switch it off to stop
+@@snow: call FAR PTR RSNOISF    ; painting yourself on other people's
+        ret                     ; scopes and you fly blind - that is the
+                                ; trade, and it is the whole point of the
+                                ; switch. OUR station down does it too.
 @@live: ; own ship: the same aeroplane symbol, in trim grey, always pointing
         ; up - the scope is heading-up, so our own nose is the reference
         ; every other symbol on the glass is measured against. And it obeys
@@ -676,8 +702,9 @@ RDOUT:  ; ---- the strip under the centre screen: IAS / ALT / HDG / VERT ----
         ; display the picture is imitating. (The old S/T/F/H block lived
         ; where the right screen now is; throttle kept its ladder, and
         ; fuel moved onto the status page, which is where status belongs.)
-        mov  byte ptr [COLOR],95
-        mov  word ptr [fty],PZDIGY
+        mov  byte ptr [COLOR],PNLGRN ; the PANEL's green, not the HUD's -
+        mov  word ptr [fty],PZDIGY   ;  these digits sit on black plastic
+                                     ;  under a canopy, not on the glass
         mov  word ptr [ftx],PZDIG0
         mov  ax,[vel]
         mov  cx,3

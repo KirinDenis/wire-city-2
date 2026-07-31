@@ -21,6 +21,31 @@ prevfl  db 0                    ; ...their key-down edges
 prevgr  db 0
 prevbr  db 0
 vstl    dw VSTALL               ; stall speed AS FLOWN: flaps lower it
+; ---- the avionics that are SWITCHES, not lamps ----------------------------
+; Each of these changes how the war behaves, and each can be turned off. A
+; box that only reports is decoration; these three make other people act.
+swgnd   db 1                    ; G: ground comms. Friendly batteries shoot
+                                ;  at whatever the pilot has locked, instead
+                                ;  of at whatever is nearest to them
+swair   db 1                    ; U: air comms. Friendly bots launch at the
+                                ;  pilot's designated target
+swiff   db 1                    ; I: IFF. Turn it off and your own side stops
+                                ;  recognising you - the flak will engage you
+swtac   db 0                    ; T: TACAN - the steer home on the glass
+swmode  db 0                    ; O: master mode. 0 = air-to-air, 1 = air-
+                                ;  to-ground. ONE state on TWO buttons, the
+                                ;  way a real mode switch is: A-A lit or
+                                ;  A-G lit, never both and never neither
+swap    db 0                    ; P: autopilot
+swtr    db 1                    ; R: emissions. Down, and nobody sees you -
+                                ;  including you: your own scope goes dark
+swecm   db 0                    ; J: ECM
+swjmr   db 0                    ; Y: noise jammer
+; (the key-down edge bytes and the table that walks them moved to UISEG on
+;  2026-07-30 - see SWKEYS there. Twelve switches written out longhand cost
+;  a hundred and forty bytes of a segment that had ten. The FLAGS stay
+;  here, because half the game reads them with DS pointing at this
+;  segment; only the machinery had to leave.)
 fuel    dw FUELMAX              ; remaining fuel (burn 1/tick)
 rho     dw 256                  ; air density factor 64..256 (from altitude)
 teff    dw 0                    ; effective thrust this tick (scratch)
@@ -131,9 +156,31 @@ RSRAD   equ 90                  ; its footprint, half-width. Wider than the
 ; paints them, they live here and have to be re-measured if the picture
 ; moves. The digit row is the IAS/ALT/HDG/VERT strip under the centre
 ; screen; the two columns are the annunciator stacks at the panel's ends.
-PZDIGY  equ 191                 ; the seven-segment row, y (the baked 888s
-                                ;  run 191..195 and a digit is five rows of
-                                ;  the six, so this covers them exactly)
+PZDIGY  equ 193                 ; the seven-segment row, y. Two lower than
+                                ;  it was: the pilot put printed SPD / ALT /
+                                ;  HDG / G legends above the row when he
+                                ;  retouched the panel, and the digits were
+                                ;  crowding them
+; ---- THE PANEL'S OWN COLOURS (DAC 108..112, set in PALDAY/PALNITE) --------
+; NEVER take one of these out of 31..93: that range is the photo cockpit's
+; palette and Panel2Inc re-cuts it from the artwork on every build. These
+; five are hand-written and cannot move. They are also a long way dimmer
+; than the HUD set, on purpose - the HUD is projected over a bright sky and
+; has to shout; a panel is read off black plastic at arm's length.
+PNLCAP  equ 108                 ; the lamp captions
+PNLDIM  equ 109                 ; a legend that is not lit
+PNLGRN  equ 110                 ; a system is on / out
+PNLAMB  equ 111                 ; a caution
+PNLRED  equ 112                 ; a warning
+; ...and the SHADED half of each, exactly three slots higher, so a lamp
+; only has to know its bright colour and add three for its own shadow.
+; A lamp on this panel is a round lens, not a square: lit at the top left
+; and falling away to the bottom right, which is what makes four pixels
+; read as something with a volume instead of a blob of colour.
+PNLSHAD equ 3                   ; core colour + this = its shadow
+PNLGRN2 equ 113
+PNLAMB2 equ 114
+PNLRED2 equ 115
 PZDIG0  equ 124                 ; IAS
 PZDIG1  equ 141                 ; ALT (five digits of room)
 PZDIG2  equ 164                 ; HDG
@@ -159,8 +206,12 @@ hbslp   dw 0                    ; the lean in force: -HBLEAN on the left
                                 ;  cockpit down (no bows to follow)
 PZLAMPY equ 129                 ; first lamp slot, five of them 10 apart
 PZLAMPH equ 10
-PZTHRX  equ 38                  ; throttle ladder: the strip of metal
-PZTHRY  equ 174                 ;  between the column and the left screen
+PZTHRX  equ 34                  ; throttle ladder. It used to stand at 38,
+PZTHRY  equ 176                 ;  where its right-hand pixels climbed onto
+                                ;  the radar screen's bezel. Moved in beside
+                                ;  the FLAPS/GEAR column, on the bare strip
+                                ;  of metal that is actually free
+PZTHRW  equ 5                   ; ...and how wide a rung is
 ; ---- the moving map ------------------------------------------------------
 ; The map fills the WHOLE centre screen now and it zooms. Two things made
 ; that easy, and both come from the world itself: it is 64x64 nodes, and it
@@ -178,6 +229,15 @@ PZMMY   equ PZADIY0
 ; part of it". The other three are 1, 2 and 4 pixels a node.
 MMZN    equ 4
 MMZALL  equ 0                   ; the index of the whole-world step
+MMZICO  equ 3                   ; ...and the step from which the MAP stops
+                                ;  drawing marks and starts drawing the same
+                                ;  symbols the scope uses. The CLOSEST step
+                                ;  only. It was tried at 2 as well: a symbol
+                                ;  is ten pixels wide and step 2 puts four
+                                ;  pixels on a node, so a flight of bots came
+                                ;  out as one long green chain instead of as
+                                ;  aeroplanes. Eight pixels a node gives them
+                                ;  room to be read one at a time
 ; How far the radar scope reaches, in pixels from its centre. It was a flat
 ; 14 everywhere - sized to a 36-row screen that no longer exists - and the
 ; grey range rose was worse, drawn at a hardcoded 87,171. Now the frame is
@@ -1410,9 +1470,12 @@ HCOL    db 8
 ;            8 HUD       9 sky band    10 ground     11 field/ground band
 ;            12 haze     13 mountains  14 water      15 forest
 ;            16 wall E/W (shade)       17 roof
-NPALC   equ 108                 ; 31 game + 63 cockpit + glow + 2 IFF +
+NPALC   equ 116                 ; 31 game + 63 cockpit + glow + 2 IFF +
                                 ; amber + 7 NEWTON sky (SKYZ..SKYZ+6) +
                                 ; ladder dim + HUD cyan + true black
+                                ; + 5 PANEL colours (108..112): the cockpit
+                                ; legends, deliberately far dimmer than the
+                                ; HUD set they used to borrow
 ; (PALDAY/PALNITE moved to UISEG 2026-07-27 with SETPAL: 648 bytes of
 ;  once-at-startup DAC data - the stack guard's rent for the SA pages.
 ;  The tables and the loader live in UI.INC as APPLYPALF.)

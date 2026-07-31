@@ -144,6 +144,15 @@ SC_K    equ 25h                 ; K: map zoom (PROVISIONAL - the keyboard
 SC_F    equ 21h                 ; F: flaps
 SC_L    equ 26h                 ; L: landing gear
 SC_B    equ 30h                 ; B: airbrake
+SC_G    equ 22h                 ; G: ground comms  (VHF-FM, the army net)
+SC_U    equ 16h                 ; U: air comms     (UHF, the squadron net)
+SC_I    equ 17h                 ; I: IFF transponder
+SC_T    equ 14h                 ; T: TACAN
+SC_O    equ 18h                 ; O: master mode, A-A <-> A-G
+SC_P    equ 19h                 ; P: autopilot
+SC_R    equ 13h                 ; R: emissions (transmit / receive)
+SC_J    equ 24h                 ; J: ECM
+SC_Y    equ 15h                 ; Y: noise jammer
 WRKSZ   equ 300                 ; wreck slot size (see the BSS block)
 WCL     equ 292                 ; face colours offset inside a slot
 BSSCLR  equ 2488                ; (BSSEND-WRK)/2 - keep in sync with BSS!

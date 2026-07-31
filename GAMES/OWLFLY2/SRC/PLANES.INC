@@ -2496,7 +2496,36 @@ AMSLUPD:
         cmp  byte ptr [rsst+bx],0
         je   @@rok
         mov  word ptr [airng],2500
-@@rok:  mov  dx,si              ; hunt the OTHER team
+@@rok:  ; AIR COMMS. A shooter on the pilot's side, with the squadron net
+        ; up, launches at whatever the pilot has DESIGNATED - his lock is an
+        ; order. Same range gate as any other shot: the net passes a name,
+        ; not a longer motor. Off, and the squadron goes back to shooting at
+        ; whoever it noticed first, which is what it did before there was a
+        ; radio in the game at all.
+        test si,2
+        jnz  @@rno              ; the other side is not on our net
+        cmp  byte ptr [swair],0
+        je   @@rno
+        mov  di,[locki]
+        cmp  di,NPLANE*2
+        jae  @@rno              ; no lock, or a ground target
+        mov  bx,di
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        jne  @@rno
+        mov  ax,[pax+di]
+        sub  ax,[pax+si]
+        jns  @@rd1
+        neg  ax
+@@rd1:  mov  bx,ax
+        mov  ax,[paz+di]
+        sub  ax,[paz+si]
+        jns  @@rd2
+        neg  ax
+@@rd2:  add  bx,ax
+        cmp  bx,[airng]
+        jl   @@shoot            ; in reach: the order stands
+@@rno:  mov  dx,si              ; hunt the OTHER team
         and  dx,2
         xor  dx,2
         xor  di,di

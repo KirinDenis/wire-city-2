@@ -135,28 +135,9 @@ INPUT:
         ; --- F / L / B: flaps, gear, airbrake. Three edges, three toggles.
         ; Nothing is interlocked and nothing is refused - put the gear down
         ; at six hundred knots if you like, and wear the drag ---
-        mov  al,[KEYS+SC_F]
-        cmp  al,[prevfl]
-        je   @@nfp
-        mov  [prevfl],al
-        test al,al
-        jz   @@nfp
-        xor  byte ptr [flaps],1
-@@nfp:  mov  al,[KEYS+SC_L]
-        cmp  al,[prevgr]
-        je   @@ngr
-        mov  [prevgr],al
-        test al,al
-        jz   @@ngr
-        xor  byte ptr [gear],1
-@@ngr:  mov  al,[KEYS+SC_B]
-        cmp  al,[prevbr]
-        je   @@nbr
-        mov  [prevbr],al
-        test al,al
-        jz   @@nbr
-        xor  byte ptr [abrk],1
-@@nbr:  mov  ax,VSTALL          ; flaps buy a slower stall - three quarters
+        call FAR PTR SWKEYSF    ; every plain on/off switch on the panel,
+                                ;  read off one table out in UISEG
+        mov  ax,VSTALL          ; flaps buy a slower stall - three quarters
         cmp  byte ptr [flaps],0 ;  of it - and that is what they are FOR
         je   @@nvs
         mov  ax,VSTALL*3/4
@@ -661,6 +642,14 @@ INPUT:
         jz   @@nlk
         mov  word ptr [locki],0FFFFh
         mov  word ptr [lockd],7FFFh
+        ; The master mode used to gate this scan - A-A saw only aircraft,
+        ; A-G only the ground - and that was wrong, for a reason worth
+        ; writing down: LOOKING IS THE PILOT'S OWN CAPABILITY. He points the
+        ; aeroplane at a thing and the ring locks it, always. What the boxes
+        ; on the panel decide is whether ANYONE ELSE hears about it and acts
+        ; on it - that is what a radio is - and whether he is recognised.
+        ; A switch may take away other people's help. It may not take away
+        ; his own eyes.
         xor  si,si
 @@lks:  mov  bx,si              ; cannot lock a dead jet
         shr  bx,1
