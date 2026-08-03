@@ -52,8 +52,15 @@ Debug/log/*
 !Debug/log/.gitkeep
 Debug/FlyDbg.exe
 
+# .NET build output, ANYWHERE. The C# tools (TOOLS\Obj2Inc, TOOLS\Panel2Inc)
+# and the relay all leave bin\ and obj\ trees behind, and sixty files of
+# MSBuild droppings were riding in the repo until 2026-08-03. Nothing needs
+# them: MAKE.BAT runs "dotnet run --project", which builds from source.
+# NB this is the DIRECTORY obj\, not the *.obj rule above - that one is for
+# TASM output and has its own un-ignores for the Wavefront models.
+**/bin/
+**/obj/
+
 # WireCityChat: local API key and runtime artifacts stay out of the repo
 relay/WireCityChat/settings.local.json
 relay/WireCityChat/logs/
-relay/**/bin/
-relay/**/obj/

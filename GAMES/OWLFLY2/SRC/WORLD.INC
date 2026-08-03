@@ -426,6 +426,18 @@ RENDERCELL:
 ;  two units the forest/water/field patches use.
 ; ============================================================================
 ROADCELL:
+        mov  ax,[cdi]           ; ---- the cheap cull FIRST. Everything below
+        or   ax,ax              ; costs four rotations and a big fill, and
+        jns  @@d1               ; there are a thousand street cells in the
+        neg  ax                 ; walk. Chebyshev on the cell offsets: no
+@@d1:   cmp  ax,ROADR           ; multiply, no projection, just two compares.
+        jg   @@x
+        mov  ax,[cdj]
+        or   ax,ax
+        jns  @@d2
+        neg  ax
+@@d2:   cmp  ax,ROADR
+        jg   @@x
         mov  ax,[gi]            ; cell centre: gi*256 + 128 - BIAS
         mov  cl,8
         shl  ax,cl
@@ -461,7 +473,8 @@ ROADCELL:
         jg   @@r                ; tarmac reaches further than the traffic
         mov  word ptr [vmode],0 ; draw them, do not test them
         call FAR PTR TRAFFICF
-@@r:    ret
+@@r:
+@@x:    ret
 
 ; ============================================================================
 ;  ROTCUL - shared box setup: world bounds from (wcx,wcz,bhw,bhd), rotate the

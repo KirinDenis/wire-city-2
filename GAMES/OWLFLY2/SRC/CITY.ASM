@@ -87,13 +87,16 @@ CART    equ 2*(CARG+CARCLR)     ; the whole signal cycle (~21 s)
 CARRST  equ 200                 ; how far into its cell a stopped vehicle
                                 ; waits - just short of the next crossing
 LANEOF  equ 96                  ; lane centre from the avenue centre
-ROADZ   equ 5200                ; how far the tarmac reaches. It is what
-                                ; makes a city read as a city from the air,
-                                ; so it goes out a long way; it is also
-                                ; only laid on BUILT blocks, which is what
-                                ; makes that affordable.
-CARZ    equ 3000                ; the traffic stops nearer - past this a car
-                                ; is one pixel and costs a whole box
+; ---- HOW FAR THE ROAD REACHES, and this is a BUDGET, not a taste.
+; The buildings walk is 2401 cells and nearly half of a city block is
+; street. At ROADZ 5200 every one of those streets inside twenty cells ran
+; a full ROTCUL - four rotations - and then filled a large ground quad,
+; hundreds of them a frame. That is what a frozen web build looks like.
+; ROADR culls by CELL first, before any of that arithmetic happens.
+ROADR   equ 9                   ; cells: the cheap cull, done on cdi/cdj
+ROADZ   equ 2400                ; units: the fine cull, after ROTCUL
+CARZ    equ 2200                ; the traffic stops nearer still - past this
+                                ; a car is one pixel and costs a whole box
 ASPHALT equ 120                 ; DAC: the road surface
 VCOL0   equ 121                 ; DAC: first vehicle colour (8 lit/shade)
 NKILL   equ 8                   ; vehicles that can be dead at once
