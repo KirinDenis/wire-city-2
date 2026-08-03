@@ -41,11 +41,46 @@ FOCAL   equ 220                 ; the game's lens
 NEARZ   equ 40                  ; near clip plane
 FARZ    equ 21600               ; far clip distance
 BIAS    equ 8192                ; world->cell bias (the game's convention)
-RAD     equ 8                   ; painter walk radius, in cells
-NORD    equ (2*RAD+1)*(2*RAD+1) ; cells in the walk (289)
-MAXD2   equ RAD*RAD*2           ; biggest squared cell distance in it
-BLK0    equ 24                  ; the lab block: cells BLK0..BLK1 both axes
-BLK1    equ 39                  ; 16x16 = four superblocks = four districts
+RAD     equ 16                  ; painter walk radius, in cells. It has to
+NORD    equ (2*RAD+1)*(2*RAD+1) ; reach ACROSS the block from outside it,
+MAXD2   equ RAD*RAD*2           ; or you stand off and see one row of houses
+                                ; with the rest of the city missing (which
+                                ; is exactly what RAD 8 did, 2026-08-03).
+NCOL    equ 4                   ; panes across a wall...
+NROW    equ 8                   ; ...and down it. Both went up when a
+                                ; building grew to own a 2x2 plot: 3x5 on a
+                                ; wall twice the size is not windows, it is
+                                ; garage doors.
+NSTR    equ 8                   ; lattice row stride - a POWER OF TWO, kept
+                                ; separate from NCOL+1 so the index stays a
+                                ; shift. NCOL may be anything under it.
+NLAT    equ NSTR*(NROW+1)       ; the corner lattice the panes share
+WMINPX  equ 6                   ; a wall thinner than this carries no glass
+WQUADPX equ 5                   ; ...and below this many pixels per CELL the
+                                ; whole facade drops to lit dots
+DGRAIN  equ 3                   ; the stipple a wall wears everywhere: just
+                                ; enough to stop it being one flat index
+DSHADE  equ 9                   ; ...and where down the wall (of 16) the real
+                                ; darkening starts. Above this, grain only.
+; ---- traffic. CARV*CARG = 2048 = eight cells = ONE BLOCK per green, and
+; that identity is what the whole scheme rests on (see TRAFFIC).
+TKSUB   equ 12                  ; traffic-clock steps per BIOS tick (18.2 Hz)
+CARV    equ 1                   ; units per clock step while moving
+CARG    equ 2048                ; clock steps of green
+CARCLR  equ 256                 ; all-red clearance between the two greens
+CART    equ 2*(CARG+CARCLR)     ; the whole signal cycle (~21 s)
+CARRST  equ 200                 ; how far into its cell a stopped vehicle
+                                ; waits - just short of the next crossing
+LANEOF  equ 96                  ; lane centre from the avenue centre
+VCOL0   equ 126                 ; first vehicle colour (8 lit/shade pairs)
+NPALLAB equ 22                  ; the lab's own DAC entries, from 120 up
+                                ; (an immediate, so it must be declared here:
+                                ;  TASM reads this file once, top to bottom)
+BLK0    equ 24                  ; the lab block: cells BLK0..BLK1 both axes.
+BLK1    equ 35                  ; 12x12 straddles the superblock boundary at
+                                ; 32, so the block carries more than one
+                                ; district - residential, downtown, industry
+                                ; side by side to compare.
 
 SC_ESC  equ 01h
 SC_UP   equ 48h
@@ -60,6 +95,8 @@ SC_CMA  equ 33h                 ; slide left
 SC_PER  equ 34h                 ; slide right
 SC_W    equ 11h                 ; windows on/off
 SC_E    equ 12h                 ; outlines on/off
+SC_T    equ 14h                 ; wall shading on/off
+SC_C    equ 2Eh                 ; traffic on/off
 SC_LSH  equ 2Ah
 SC_RSH  equ 36h
 
@@ -106,9 +143,10 @@ START:  cld
         mov  ax,es:[6Ch]
         pop  es
         mov  [labtk],ax
+        call CCLOCK
         call MOVECAM
-        cmp  byte ptr [KEYS+SC_ESC],0
-        jne  @@quit
+        cmp  byte ptr [HITS+SC_ESC],0   ; the event, not the held state:
+        jne  @@quit                     ; a tap must never be missed
         call SETTRIG            ; heading/pitch -> trig, horizon offset
         mov  ax,[bufseg]
         mov  es,ax
@@ -141,19 +179,34 @@ START:  cld
 ;  table draws far before near. Translation does not change relative order,
 ;  so ONE table serves every camera position - the world costs no sort per
 ;  frame. A counting pass, not a sort: for each key from MAXD2 down to 0,
-;  emit every cell that has it.
+;  emit every cell that has it. That is MAXD2 sweeps of the whole square,
+;  so the squares get tabulated first and the inner loop never multiplies.
 ; ============================================================================
 BUILDORD:
+        mov  word ptr [odi],-RAD ; SQD[di+RAD] = di*di, once
+@@sq:   mov  ax,[odi]
+        imul word ptr [odi]
+        mov  si,[odi]
+        add  si,RAD
+        add  si,si
+        mov  [SQD+si],ax
+        inc  word ptr [odi]
+        cmp  word ptr [odi],RAD
+        jle  @@sq
         mov  word ptr [ordn],0
         mov  word ptr [okey],MAXD2
 @@k:    mov  word ptr [odi],-RAD
-@@i:    mov  word ptr [odj],-RAD
-@@j:    mov  ax,[odi]
-        imul word ptr [odi]
-        mov  bx,ax
-        mov  ax,[odj]
-        imul word ptr [odj]
-        add  ax,bx
+@@i:    mov  si,[odi]
+        add  si,RAD
+        add  si,si
+        mov  ax,[SQD+si]
+        mov  [disq],ax
+        mov  word ptr [odj],-RAD
+@@j:    mov  si,[odj]
+        add  si,RAD
+        add  si,si
+        mov  ax,[SQD+si]
+        add  ax,[disq]
         cmp  ax,[okey]
         jne  @@nx
         mov  si,[ordn]
@@ -289,14 +342,18 @@ MOVECAM:
         mov  ax,[camz]
         call FENCE
         mov  [camz],ax
-        ; ---- the two lab switches, on the key EDGE (hold does nothing) ----
+        ; ---- the two lab switches ----
         mov  bl,SC_W
         mov  si,offset winon
-        mov  di,offset wlat
         call TOGGLE
         mov  bl,SC_E
         mov  si,offset edgeon
-        mov  di,offset elat
+        call TOGGLE
+        mov  bl,SC_T
+        mov  si,offset texon
+        call TOGGLE
+        mov  bl,SC_C
+        mov  si,offset caron
         call TOGGLE
         ret
 
@@ -308,18 +365,17 @@ FENCE:  cmp  ax,6000            ; keep the camera inside the lab's room
         mov  ax,-6000
 @@n2:   ret
 
-; TOGGLE - BL=scancode, SI=the flag, DI=its latch. Flips the flag once per
-; press: without the latch a switch would buzz at the frame rate.
+; TOGGLE - BL=scancode, SI=the flag. Flips it once per press and takes the
+; press from HITS, not KEYS: a switch is an EVENT. Polling KEYS once a frame
+; misses any tap shorter than a frame - which a real finger never is, but an
+; automated one always is (the screenshot rig, 2026-08-03) - and a held key
+; would flip the switch at the frame rate. HITS is set by the interrupt and
+; cleared here, so no press is ever lost and none is ever counted twice.
 TOGGLE: xor  bh,bh              ; BL is the scancode, BH must not be junk
-        mov  al,[KEYS+bx]
-        or   al,al
-        jz   @@up
-        cmp  byte ptr [di],0
-        jne  @@d
-        mov  byte ptr [di],1
+        cmp  byte ptr [HITS+bx],0
+        je   @@d
+        mov  byte ptr [HITS+bx],0
         xor  byte ptr [si],1
-        ret
-@@up:   mov  byte ptr [di],0
 @@d:    ret
 
 ; ============================================================================
@@ -417,6 +473,14 @@ CELLSET:
 @@out:  stc
         ret
 
+; PAIRC - shift the centre to the middle of the 2x2 plot. Buildings own the
+; pair; the flat patches are still one cell each and keep the cell centre.
+; (It goes AFTER CELLSET's last label, not inside it: a non-local label
+;  closes the @@ scope, and @@out went undefined the first time.)
+PAIRC:  add  word ptr [wcx],128
+        add  word ptr [wcz],128
+        ret
+
 ; ============================================================================
 ;  GROUNDPASS - one flat quad per cell: asphalt on the avenues, pavement on
 ;  the plots. A whole layer of its own, drawn before any house, exactly as
@@ -435,13 +499,9 @@ GROUNDPASS:
         sub  ax,[camy]
         mov  [bry1],ax
         mov  byte ptr [COLOR],121
-        mov  ax,[gi]
-        and  ax,3
-        jz   @@road
-        mov  ax,[gj]
-        and  ax,3
-        jnz  @@put
-@@road: mov  byte ptr [COLOR],120
+        call ISROAD             ; the SAME test LHBLD uses, or the asphalt
+        jnc  @@put              ; and the houses disagree about the plan
+        mov  byte ptr [COLOR],120
 @@put:  call FACETOPC
         call FACEFILL
 @@nx:   inc  word ptr [ordi]
@@ -472,7 +532,15 @@ RENDERCELL:
         call LHBLD
         mov  ax,[bstreet]
         cmp  ax,1
-        je   @@ret              ; plain street cell -> nothing to draw
+        jne  @@built
+        call TRAFFIC            ; a road cell: whatever is driving on it
+        jmp  @@ret
+@@built:
+        mov  byte ptr [roofc],17
+        cmp  ax,0
+        jne  @@nopair
+        call PAIRC              ; a building owns the 2x2 plot; the flat
+@@nopair:                       ; patches are still one cell each
         call ROTCUL             ; bounds -> rotate corners -> cull
         jc   @@ret
         mov  word ptr [gbase],0 ; flat ground. In the game this is the
@@ -496,6 +564,9 @@ RENDERCELL:
         mov  [wallL],al
         mov  al,[WSCH+bx+1]
         mov  [wallS],al
+        mov  bx,[bschm]         ; the third rung, the lab's own
+        mov  al,[WDRK+bx]
+        mov  [wallD],al
         mov  ax,[wcx]           ; composites move the centre - remember it
         mov  [pwcx],ax
         mov  ax,[wcz]
@@ -515,19 +586,19 @@ RENDERCELL:
         call DRAWBOX
         jmp  @@ret
 @@bspire:                       ; slim tall block + antenna spike
-        mov  word ptr [bhw],56
-        mov  word ptr [bhd],56
+        mov  word ptr [bhw],112
+        mov  word ptr [bhd],112
         mov  word ptr [boxb],0
         mov  ax,[bhgt2]
-        add  ax,60
+        add  ax,120
         mov  [boxt],ax
         call DRAWBOX
-        mov  word ptr [bhw],14
-        mov  word ptr [bhd],14
+        mov  word ptr [bhw],28
+        mov  word ptr [bhd],28
         mov  ax,[bhgt2]
-        add  ax,60
+        add  ax,120
         mov  [boxb],ax
-        add  ax,90
+        add  ax,180
         mov  [boxt],ax
         call DRAWBOX
         jmp  @@ret
@@ -551,30 +622,30 @@ RENDERCELL:
         jmp  @@ret
 @@barch:                        ; gate building: two legs + lintel on top
         mov  ax,[bhgt2]
-        cmp  ax,240
+        cmp  ax,480
         jle  @@ba1
-        mov  ax,240
+        mov  ax,480
 @@ba1:  mov  [boxt],ax
-        mov  word ptr [bhw],34
-        mov  word ptr [bhd],80
+        mov  word ptr [bhw],68
+        mov  word ptr [bhd],160
         mov  word ptr [boxb],0
         mov  ax,[pwcx]
-        sub  ax,76
+        sub  ax,152
         mov  [wcx],ax
         call DRAWBOX
         mov  ax,[pwcx]
-        add  ax,76
+        add  ax,152
         mov  [wcx],ax
         call DRAWBOX
         mov  ax,[pwcx]
         mov  [wcx],ax
-        mov  word ptr [bhw],110
+        mov  word ptr [bhw],220
         mov  bx,[boxt]
         mov  ax,bx
-        sub  ax,44
+        sub  ax,88
         mov  [boxb],ax
         mov  ax,bx
-        add  ax,6
+        add  ax,12
         mov  [boxt],ax
         call DRAWBOX
         jmp  @@ret
@@ -583,16 +654,16 @@ RENDERCELL:
         mov  ax,[bhgt2]
         mov  [boxt],ax
         call DRAWBOX
-        mov  word ptr [bhw],13
-        mov  word ptr [bhd],13
+        mov  word ptr [bhw],26
+        mov  word ptr [bhd],26
         mov  ax,[pwcx]
-        add  ax,64
+        add  ax,128
         mov  [wcx],ax
         mov  ax,[pwcz]
-        add  ax,40
+        add  ax,80
         mov  [wcz],ax
         mov  word ptr [boxb],0
-        mov  word ptr [boxt],180
+        mov  word ptr [boxt],360
         call DRAWBOX            ; chimney
         mov  word ptr [puffk],0
 @@pf:   mov  si,[puffk]
@@ -604,14 +675,14 @@ RENDERCELL:
         cmp  ax,50
         ja   @@pnx              ; old puff has dissolved
         mov  bx,ax
-        mov  cl,2
+        mov  cl,1
         shr  bx,cl
-        add  bx,7               ; puffs grow as they rise
+        add  bx,14              ; puffs grow as they rise
         mov  [bhw],bx
         mov  [bhd],bx
-        add  ax,180             ; chimney top + age
+        add  ax,360            ; chimney top + age
         mov  [boxb],ax
-        add  ax,10
+        add  ax,20
         mov  [boxt],ax
         call PUFFBOX
 @@pnx:  inc  word ptr [puffk]
@@ -627,12 +698,18 @@ RENDERCELL:
 ;  to search). EVERY number that decides how the building LOOKS is the
 ;  game's, and so is the hash - these are the game's own cells.
 ; ============================================================================
-LHBLD:  mov  ax,[gi]
-        and  ax,3
-        jz   @@st               ; gi on an avenue -> street
-        mov  ax,[gj]
-        and  ax,3
-        jz   @@st               ; gj on an avenue -> street
+LHBLD:  call ISROAD
+        jc   @@st
+        ; ---- ONE BUILDING TO EVERY 2x2 CELLS. A 256-unit plot beside a
+        ; 512-unit avenue is what made the city look microscopic: the road
+        ; was twice the width of the thing it served. Widening the building
+        ; inside its own cell cannot fix that - at half-width 230 it would
+        ; already be standing in the near traffic lane. So the building
+        ; takes the pair and the other three cells are its garden.
+        mov  ax,[gi]
+        or   ax,[gj]
+        test ax,1
+        jnz  @@st
         call CELLHASH
         mov  bx,ax
         and  bx,31              ; hash 7/8/9 of 32 -> flat terrain patches
@@ -642,24 +719,45 @@ LHBLD:  mov  ax,[gi]
         je   @@water
         cmp  bx,9
         je   @@field
-        push ax
-        call SBHASH             ; the district still comes from the block
+        ; ---- the district: the BLOCK sets the flavour, the CELL gets a
+        ; say. A pure district is the thing that makes a procedural city
+        ; look drawn by a zoning computer: eighty identical sheds, then
+        ; eighty identical houses. Three cells in eight take a neighbour's
+        ; district instead, so a machine shop stands behind the houses and
+        ; a shed leans on a tower - and the block still reads as what it
+        ; mostly is.
+        push ax                 ; the cell hash is wanted after this
+        call SBHASH
         mov  [sbh],ax
-        pop  ax
-        mov  bx,[sbh]
         mov  cl,4
-        shr  bx,cl
-        and  bx,3               ; 0/3 residential, 1 downtown, 2 industry
-        mov  [bdist],bx
+        shr  ax,cl
+        and  ax,3               ; 0/3 residential, 1 downtown, 2 industry
+        mov  [bdist],ax
+        call DHASH              ; the cell's own opinion
         mov  bx,ax
-        and  bx,31              ; bits[0..4]  -> half width  84..115
-        add  bx,84
+        and  bx,7
+        cmp  bx,5
+        jb   @@dok
+        mov  bx,ax
+        mov  cl,3
+        shr  bx,cl
+        and  bx,3
+        inc  bx                 ; +1..4, so never its own district again
+        add  bx,[bdist]
+        and  bx,3
+        mov  [bdist],bx
+@@dok:  pop  ax
+        mov  bx,ax              ; footprint, on the 2x2 plot: half size
+        and  bx,31              ; 168..230, so the building is 336..460
+        add  bx,bx              ; across in a 512 plot and still keeps its
+        add  bx,168             ; feet out of the road
         mov  [bhw],bx
         mov  bx,ax
         mov  cl,5
         shr  bx,cl
-        and  bx,31              ; bits[5..9]  -> half depth  84..115
-        add  bx,84
+        and  bx,31
+        add  bx,bx
+        add  bx,168
         mov  [bhd],bx
         mov  bx,ax              ; wall scheme 0..3 (grey/blue/red/white)
         mov  cl,13
@@ -681,7 +779,8 @@ LHBLD:  mov  ax,[gi]
         mov  word ptr [btype],2
 @@rh:   mov  bx,ax
         and  bx,63
-        add  bx,60              ; height 60..123
+        add  bx,bx              ; height 120..246 - twice the old, or the
+        add  bx,120             ; doubled footprint reads as a paving slab
         mov  [bhgt2],bx
         jmp  @@bdone
 @@com:  mov  word ptr [btype],0 ; --- downtown: a tall mixed skyline
@@ -711,14 +810,15 @@ LHBLD:  mov  ax,[gi]
 @@a2:   add  si,bx              ; manhattan dist to the centre, 0..8
         mov  ax,8
         sub  ax,si
-        mov  bx,36
-        imul bx                 ; downtown bonus 0..288
+        mov  bx,60              ; the plot doubled, so the skyline follows -
+        imul bx                 ; downtown bonus 0..480
         mov  si,ax
         pop  ax
         mov  bx,ax
         and  bx,63
-        add  bx,50
-        add  bx,si              ; height 50..401
+        add  bx,bx
+        add  bx,100
+        add  bx,si              ; height 100..706
         mov  [bhgt2],bx
         jmp  @@bdone
 @@ind:  mov  word ptr [bschm],0 ; --- industry: smoking factories, always grey
@@ -728,7 +828,8 @@ LHBLD:  mov  ax,[gi]
         mov  word ptr [btype],0 ; 5..7 plain shed
 @@ih:   mov  bx,ax
         and  bx,31
-        add  bx,50              ; low industry: 50..81
+        add  bx,bx
+        add  bx,100             ; low industry: 100..162
         mov  [bhgt2],bx
 @@bdone:
         mov  word ptr [bstreet],0
@@ -747,6 +848,415 @@ LHBLD:  mov  ax,[gi]
         mov  word ptr [bhw],116
         mov  word ptr [bhd],116
         mov  word ptr [bstreet],2
+        ret
+
+; ============================================================================
+;  TRAFFIC - the vehicles standing on, or driving through, one road cell.
+;
+;  THERE IS NO LIST OF VEHICLES, exactly as there is no list of buildings.
+;  A vehicle's position is a function of (lane, slot, time) and nothing is
+;  stored: the same argument that lets the world ship as a recipe lets the
+;  traffic ship as one too. Two clients of the same sky compute identical
+;  traffic from the tick with no network traffic at all.
+;
+;  THE LANE, NOT THE CELL, CARRIES THE PHASE. Hash the phase per cell and a
+;  vehicle jumps sideways every time it crosses a cell boundary. So: slots
+;  are spaced one cell apart ALONG A LANE and numbered globally, and a cell
+;  works out which slot happens to be inside it right now. A vehicle stays
+;  the same vehicle - same size, same paint - all the way down the street.
+;
+;  THE RULES, and they are the interesting part:
+;
+;  * Right-hand traffic falls out of the geometry. An avenue is two cells
+;    (512 units) wide; the two lanes sit at +-LANEOF from its centre, and
+;    which lane goes which way is fixed so that a driver's right hand is
+;    always toward the kerb.
+;
+;  * The lights are a function of time, so they need no state either. The
+;    north-south avenues take the first green, the east-west ones the
+;    second, with an all-red clearance between. A whole lane starts and
+;    stops together - which is what a signalled platoon actually looks
+;    like - so one closed form serves every vehicle on it.
+;
+;  * A green is worth EXACTLY ONE BLOCK: CARV*CARG = 2048 = 8 cells. That
+;    identity is the trick the rest hangs on. Because a slot advances a
+;    whole number of blocks per cycle, and a block is 8 cells, THE CELL A
+;    SLOT RESTS IN NEVER CHANGES MODULO 8. So "does this slot stop on a
+;    crossing?" is answered once, by s AND 7, and forever. Ban those two
+;    slots in eight and the junction box is clear at every red, for free,
+;    with no vehicle ever having to look at another one.
+;
+;  Stopped vehicles wait at CARRST into their cell - just short of the
+;  stop line - so a red leaves a proper queue behind it rather than a row
+;  of cars parked on cell boundaries.
+; ============================================================================
+TRAFFIC:
+        cmp  byte ptr [caron],0
+        je   @@d
+        mov  word ptr [gbase],0 ; the lab's road is flat. In the game this
+                                ; is GETH under the cell, like a building.
+        mov  ax,[gi]
+        and  ax,7
+        cmp  ax,2
+        jge  @@ew
+        call NSAVE
+@@ew:   mov  ax,[gj]
+        and  ax,7
+        cmp  ax,2
+        jge  @@d
+        call EWAVE
+@@d:    ret
+
+; ---- a north-south avenue: the lanes run along Z, the cell index along
+; the lane is gj, and the light takes the first green ------------------------
+NSAVE:  mov  ax,[gi]            ; the avenue's centre line
+        and  ax,0FFF8h
+        inc  ax
+        mov  cl,8
+        shl  ax,cl
+        sub  ax,BIAS
+        mov  [vcen],ax
+        mov  word ptr [vstart],0
+        call CARTIME
+        mov  ax,[gi]
+        and  ax,0FFF8h
+        mov  [vlane],ax
+        mov  word ptr [vaxis],0
+        mov  ax,[gj]            ; the cell's own start along the lane
+        mov  cl,8
+        shl  ax,cl
+        sub  ax,BIAS
+        mov  [vcell],ax
+        ; ---- the +Z lane, kerb to its right
+        mov  ax,[vcen]
+        add  ax,LANEOF
+        mov  [wcx],ax
+        mov  ax,[vcell]
+        add  ax,[voff]
+        mov  [wcz],ax
+        mov  ax,[gj]
+        sub  ax,32
+        sub  ax,[vadv]
+        mov  [vslot],ax
+        mov  word ptr [vdir],1
+        call VEHICLE
+        ; ---- the -Z lane, mirrored inside its own cell so it runs the
+        ; other way and hands over to the cell behind it, not ahead
+        mov  ax,[vcen]
+        sub  ax,LANEOF
+        mov  [wcx],ax
+        mov  ax,255
+        sub  ax,[voff]
+        add  ax,[vcell]
+        mov  [wcz],ax
+        mov  ax,[gj]
+        sub  ax,32
+        add  ax,[vadv]
+        mov  [vslot],ax
+        inc  word ptr [vlane]   ; the other side of the road is its own lane
+        mov  word ptr [vdir],-1
+        call VEHICLE
+        ret
+
+; ---- an east-west avenue: everything swapped, and the second green --------
+EWAVE:  mov  ax,[gj]
+        and  ax,0FFF8h
+        inc  ax
+        mov  cl,8
+        shl  ax,cl
+        sub  ax,BIAS
+        mov  [vcen],ax
+        mov  word ptr [vstart],CARG+CARCLR
+        call CARTIME
+        mov  ax,[gj]
+        and  ax,0FFF8h
+        add  ax,200             ; keep the two axes' lane keys apart
+        mov  [vlane],ax
+        mov  word ptr [vaxis],1
+        mov  ax,[gi]
+        mov  cl,8
+        shl  ax,cl
+        sub  ax,BIAS
+        mov  [vcell],ax
+        ; ---- the +X lane. Facing +X the kerb is at -Z, so this one takes
+        ; the near side of the road and the -X lane the far side
+        mov  ax,[vcen]
+        sub  ax,LANEOF
+        mov  [wcz],ax
+        mov  ax,[vcell]
+        add  ax,[voff]
+        mov  [wcx],ax
+        mov  ax,[gi]
+        sub  ax,32
+        sub  ax,[vadv]
+        mov  [vslot],ax
+        mov  word ptr [vdir],1
+        call VEHICLE
+        ; ---- the -X lane
+        mov  ax,[vcen]
+        add  ax,LANEOF
+        mov  [wcz],ax
+        mov  ax,255
+        sub  ax,[voff]
+        add  ax,[vcell]
+        mov  [wcx],ax
+        mov  ax,[gi]
+        sub  ax,32
+        add  ax,[vadv]
+        mov  [vslot],ax
+        inc  word ptr [vlane]
+        mov  word ptr [vdir],-1
+        call VEHICLE
+        ret
+
+; ============================================================================
+;  CCLOCK - the traffic clock: the BIOS tick, interpolated by counting
+;  frames inside it. The game already does this for the camera, and traffic
+;  needs it for TWO separate reasons:
+;
+;   - moving on the raw 18.2 Hz tick judders, because the world around it
+;     is being redrawn three or four times as often;
+;   - moving per FRAME makes the signal cycle a measurement of the
+;     renderer. That is not a hypothetical: at first pass the lights ran on
+;     frames, the scene got heavy enough to drop to a dozen frames a
+;     second, and a twenty-second cycle quietly became a minute and a half.
+;     The cross street never went green in half a minute of watching.
+;
+;  So: ctick/cfrm measure how many frames the last tick lasted, and cstep
+;  hands the difference to cartf. Time comes from the clock; smoothness
+;  comes from the frame rate; neither borrows from the other.
+; ============================================================================
+CCLOCK: mov  ax,[labtk]
+        cmp  ax,[ctick]
+        je   @@same
+        mov  [ctick],ax
+        mov  ax,[cfrm]          ; how many frames that tick lasted
+        cmp  ax,1
+        jge  @@r1
+        mov  ax,1
+@@r1:   cmp  ax,60
+        jle  @@r2
+        mov  ax,60
+@@r2:   mov  [crate],ax
+        mov  word ptr [cfrm],0
+        mov  ax,TKSUB           ; close the tick out exactly, whatever the
+        sub  ax,[cfrac]         ; interpolation had guessed
+        mov  [cstep],ax
+        mov  word ptr [cfrac],0
+        jmp  @@adv
+@@same: inc  word ptr [cfrm]
+        mov  ax,[cfrm]
+        mov  bx,TKSUB
+        imul bx
+        idiv word ptr [crate]
+        cmp  ax,TKSUB-1
+        jle  @@f1
+        mov  ax,TKSUB-1         ; never run past the tick we are inside
+@@f1:   mov  bx,ax
+        sub  ax,[cfrac]
+        mov  [cstep],ax
+        mov  [cfrac],bx
+@@adv:  mov  ax,[cstep]
+        cmp  ax,0
+        jle  @@d
+        add  [cartf],ax
+@@w:    cmp  word ptr [cartf],CART
+        jb   @@d
+        sub  word ptr [cartf],CART
+        add  word ptr [caradv],8
+        jmp  @@w
+@@d:    ret
+
+; ============================================================================
+;  CARTIME - where this lane's platoon has got to.
+;   in:  vstart - the frame in the cycle when this lane's green begins
+;   out: voff - how far into its cell a vehicle is (0..255)
+;        vadv - how many cells the platoon has advanced, all time
+;  d = CARV * clamp(frame - start, 0, CARG) + CARRST, plus the whole blocks
+;  banked in caradv. Two clamps and a multiply: a closed form, so no vehicle
+;  has to be simulated and nothing has to be remembered.
+; ============================================================================
+CARTIME:
+        mov  ax,[cartf]
+        sub  ax,[vstart]
+        jge  @@c1
+        xor  ax,ax              ; the light has not gone green yet
+@@c1:   cmp  ax,CARG
+        jle  @@c2
+        mov  ax,CARG            ; ...and now it is red again
+@@c2:   mov  bx,CARV
+        imul bx
+        add  ax,CARRST
+        mov  bx,ax
+        and  ax,255
+        mov  [voff],ax
+        mov  cl,8
+        shr  bx,cl
+        add  bx,[caradv]
+        mov  [vadv],bx
+        ret
+
+; ============================================================================
+;  VEHICLE - is there one in this slot, and if so, put it on the road.
+;  wcx/wcz are its centre; vaxis says which way its length runs; vdir which
+;  way it points.
+; ============================================================================
+VEHICLE:
+        mov  ax,[vslot]
+        and  ax,7
+        cmp  ax,2
+        jl   @@no               ; this slot comes to rest ON a crossing.
+                                ; It simply does not exist - which is how
+                                ; the junction stays clear at every red
+                                ; without one vehicle ever looking at
+                                ; another.
+        call VHASH
+        mov  [vh],ax
+        and  ax,3
+        jz   @@no               ; a gap in the traffic
+        mov  ax,[vh]
+        mov  cl,4
+        shr  ax,cl
+        and  ax,7               ; 0..4 car, 5 bus, 6..7 truck
+        mov  [vtype],ax
+        mov  ax,[vh]            ; the paint: eight lit/shade pairs
+        mov  cl,8
+        shr  ax,cl
+        and  ax,7
+        add  ax,ax
+        add  ax,VCOL0
+        mov  [wallL],al
+        mov  [roofc],al
+        inc  ax
+        mov  [wallS],al
+        mov  ax,[wcx]           ; a two-box vehicle moves its own centre
+        mov  [vcx0],ax
+        mov  ax,[wcz]
+        mov  [vcz0],ax
+        mov  ax,[vtype]
+        cmp  ax,5
+        je   @@bus
+        cmp  ax,6
+        jge  @@truck
+        ; ---- a car: a low body with a cabin sat on it ---------------------
+        mov  ax,31
+        mov  bx,13
+        call VSIZE
+        mov  word ptr [boxb],0
+        mov  word ptr [boxt],14
+        call DRAWBOX
+        mov  ax,15
+        mov  bx,12
+        call VSIZE
+        mov  word ptr [boxb],14
+        mov  word ptr [boxt],26
+        call DRAWBOX
+        ret
+@@bus:  ; ---- a bus IS a box, and there is no shame in that ----------------
+        mov  ax,82
+        mov  bx,18
+        call VSIZE
+        mov  word ptr [boxb],0
+        mov  word ptr [boxt],46
+        call DRAWBOX
+        ret
+@@truck:; ---- a truck: a tall cab in front, a longer body behind it --------
+        mov  ax,16
+        mov  bx,17
+        call VSIZE
+        mov  word ptr [boxb],0
+        mov  word ptr [boxt],42
+        mov  ax,40
+        call VSHIFT
+        call DRAWBOX
+        mov  ax,40
+        mov  bx,18
+        call VSIZE
+        mov  word ptr [boxb],6
+        mov  word ptr [boxt],46
+        mov  ax,-22
+        call VSHIFT
+        call DRAWBOX
+@@no:   ret
+
+; VSIZE - AX = half length along the lane, BX = half width across it
+VSIZE:  cmp  word ptr [vaxis],0
+        jne  @@ew
+        mov  [bhd],ax
+        mov  [bhw],bx
+        ret
+@@ew:   mov  [bhw],ax
+        mov  [bhd],bx
+        ret
+
+; VSHIFT - AX = how far to move along the lane from the vehicle's centre,
+; forward positive. Which world axis that is, and which sign, is vaxis/vdir.
+VSHIFT: imul word ptr [vdir]
+        cmp  word ptr [vaxis],0
+        jne  @@ew
+        add  ax,[vcz0]
+        mov  [wcz],ax
+        ret
+@@ew:   add  ax,[vcx0]
+        mov  [wcx],ax
+        ret
+
+; VHASH - what this slot on this lane is carrying. A third hash, so that a
+; vehicle's paint is not tied to the shape of the block it is passing.
+VHASH:  mov  ax,[vlane]
+        mov  bx,2503
+        imul bx
+        mov  si,ax
+        mov  ax,[vslot]
+        mov  bx,7919
+        imul bx
+        add  ax,si
+        mov  bx,ax
+        mov  cl,6
+        shr  bx,cl
+        xor  ax,bx
+        ret
+
+; ============================================================================
+;  ISROAD - is cell [gi],[gj] road rather than a plot?  CF=1 = road.
+;  TWO cells in every eight, so an avenue is 512 units across - twice the
+;  old one. The built fraction is untouched: (6/8) squared is exactly what
+;  (3/4) squared gave. Wider streets and blocks twice the size, the same
+;  amount of city. Streets are what a city is SEEN through; at one cell the
+;  buildings on the far side stood right on top of the ones in front.
+;  The 8-cell period also lines up with the downtown height bonus, which
+;  already measures its distance from the block centre with gi&7.
+;  Clobbers AX.  (Game divergence: HBLD still tests gi&3 - see README.)
+; ============================================================================
+ISROAD: mov  ax,[gi]
+        and  ax,7
+        cmp  ax,2
+        jl   @@yes
+        mov  ax,[gj]
+        and  ax,7
+        cmp  ax,2
+        jl   @@yes
+        clc
+        ret
+@@yes:  stc
+        ret
+
+; DHASH - a SECOND, independent hash of the cell. The first one's bits are
+; all spoken for (width, depth, selector, scheme), and reusing them would
+; tie a cell's district to its shape - tall buildings would always be the
+; ones that changed district, and the eye finds that sort of thing.
+DHASH:  mov  ax,[gi]
+        mov  bx,3121
+        imul bx
+        mov  si,ax
+        mov  ax,[gj]
+        mov  bx,6151
+        imul bx
+        add  ax,si
+        mov  bx,ax
+        mov  cl,9
+        shr  bx,cl
+        xor  ax,bx
         ret
 
 ; SBHASH / CELLHASH - the game's, character for character. These are what
@@ -802,12 +1312,23 @@ DRAWBOX:
         add  ax,[boxt]
         sub  ax,[camy]
         mov  [bry1],ax
-        mov  byte ptr [COLOR],17 ; sun-lit roof
+        mov  al,[roofc]         ; 17 for a building, its own paint for a
+        mov  [COLOR],al         ; vehicle
+
         mov  ax,[gbase]
         add  ax,[boxt]
         cmp  [camy],ax
         jle  @@nf
         call FACETOPC
+        cmp  byte ptr [texon],0
+        je   @@rflat
+        mov  byte ptr [dcolA],17 ; a roof is horizontal: no gradient to run
+        mov  byte ptr [dcolB],0  ; down it, just gravel. 17 against 0 rather
+        mov  byte ptr [dgrad],0  ; than against 16 - the closer pair, or the
+        mov  word ptr [dmixc],6  ; stipple reads as dirt instead of texture
+        call DITHFILL
+        jmp  @@nf
+@@rflat:
         call FACEFILL
 @@nf:   call VISFILL
         mov  ax,[minrz]         ; stroke colour by distance
@@ -1000,44 +1521,295 @@ FACETOPC:
 ;  Chosen in WORLD space (camx/camz against the footprint), so the answer
 ;  does not depend on where the camera is looking - only on where it is.
 ; ============================================================================
+;  Each wall is shaded down its own height between two rungs of its
+;  scheme's three-colour ramp - and WHICH two rungs is what keeps the sun
+;  in the picture. The sunny walls run light->mid, the shaded walls run
+;  mid->dark, so the two sides stay a clear step apart while both of them
+;  stop being one flat colour. Nine effective steps out of three indices.
 VISFILL:
         mov  ax,[camx]          ; west (camx < bwx0): corners 3,0
         cmp  ax,[bwx0]
         jge  @@e
-        mov  al,[wallS]
-        mov  [COLOR],al
+        call SHADEDS
         mov  word ptr [fa],3
         mov  word ptr [fb],0
         call FACEV
-        call FACEFILL
+        call WALLFILL
 @@e:    mov  ax,[camx]          ; east (camx > bwx1): 1,2
         cmp  ax,[bwx1]
         jle  @@s
-        mov  al,[wallS]
-        mov  [COLOR],al
+        call SHADEDS
         mov  word ptr [fa],1
         mov  word ptr [fb],2
         call FACEV
-        call FACEFILL
+        call WALLFILL
 @@s:    mov  ax,[camz]          ; south (camz < bwz0): 0,1 - the sunny side
         cmp  ax,[bwz0]
         jge  @@n
-        mov  al,[wallL]
-        mov  [COLOR],al
+        call SUNNYDS
         mov  word ptr [fa],0
         mov  word ptr [fb],1
         call FACEV
-        call FACEFILL
+        call WALLFILL
 @@n:    mov  ax,[camz]          ; north (camz > bwz1): 2,3
         cmp  ax,[bwz1]
         jle  @@d
-        mov  al,[wallL]
-        mov  [COLOR],al
+        call SUNNYDS
         mov  word ptr [fa],2
         mov  word ptr [fb],3
         call FACEV
-        call FACEFILL
+        call WALLFILL
 @@d:    ret
+
+SUNNYDS:                        ; light at the eaves, mid at the pavement
+        mov  al,[wallL]
+        mov  [COLOR],al
+        mov  [dcolA],al
+        mov  al,[wallS]
+        mov  [dcolB],al
+        ret
+SHADEDS:                        ; mid at the eaves, dark at the pavement
+        mov  al,[wallS]
+        mov  [COLOR],al
+        mov  [dcolA],al
+        mov  al,[wallD]
+        mov  [dcolB],al
+        ret
+
+; ============================================================================
+;  DITHPOLY - SCANPOLY, but the span goes down in TWO colours mixed by an
+;  ordered dither instead of one flat colour. This is what stops a building
+;  reading as a painted cube: a flat span of one index is the flattest thing
+;  a screen can show, and the cure is per-pixel variation, not more colours.
+;
+;  THE MATRIX IS 2 WIDE AND 8 TALL, AND BOTH NUMBERS ARE THE DESIGN.
+;  Two wide means the pattern repeats every WORD along the scanline, so the
+;  inner loop is still REP STOSW and a dithered wall costs what a flat wall
+;  costs. Eight tall buys 16 mix levels, and 16 levels is what keeps a
+;  gradient from stepping in visible bands. A 4x4 Bayer would need a
+;  four-byte period and an unrolled loop for the same 16 levels.
+;
+;  in:  dcolA - the lighter colour, dcolB - the darker one
+;       dgrad = 1: the mix runs 0..16 down the face's projected height
+;               0: the mix is dmixc everywhere (a stipple, for roofs)
+;       dtop, dhgt - the face's top row and height (DITHFILL sets them)
+;       PX/PY/NPOLY, ES = bufseg
+; ============================================================================
+DITHPOLY:
+        mov  ax,[PY]
+        mov  [pminy],ax
+        mov  [pmaxy],ax
+        mov  cx,[NPOLY]
+        dec  cx
+        mov  si,2
+@@mm:   mov  ax,[PY+si]
+        cmp  ax,[pminy]
+        jge  @@mm1
+        mov  [pminy],ax
+@@mm1:  cmp  ax,[pmaxy]
+        jle  @@mm2
+        mov  [pmaxy],ax
+@@mm2:  add  si,2
+        loop @@mm
+        mov  ax,[pminy]
+        cmp  ax,0
+        jge  @@y0
+        xor  ax,ax
+@@y0:   mov  [scy],ax
+        mov  ax,[pmaxy]
+        cmp  ax,199
+        jle  @@y1
+        mov  ax,199
+@@y1:   mov  [scymax],ax
+        mov  ax,[scy]
+        cmp  ax,[scymax]
+        jg   @@done
+@@yloop:
+        mov  word ptr [scxl],32767
+        mov  word ptr [scxr],-32768
+        mov  cx,[NPOLY]
+        xor  si,si
+@@eloop:
+        mov  di,si
+        add  di,2
+        mov  ax,[NPOLY]
+        add  ax,ax
+        cmp  di,ax
+        jl   @@nw2
+        xor  di,di
+@@nw2:  mov  ax,[PY+si]
+        mov  bx,[PY+di]
+        cmp  ax,bx
+        jle  @@io
+        xchg ax,bx
+@@io:   mov  dx,[scy]
+        cmp  dx,ax
+        jl   @@enext
+        cmp  dx,bx
+        jge  @@enext
+        mov  ax,[PX+di]
+        sub  ax,[PX+si]
+        mov  bx,[scy]
+        sub  bx,[PY+si]
+        imul bx
+        mov  bx,[PY+di]
+        sub  bx,[PY+si]
+        idiv bx
+        add  ax,[PX+si]
+        cmp  ax,[scxl]
+        jge  @@nxl
+        mov  [scxl],ax
+@@nxl:  cmp  ax,[scxr]
+        jle  @@enext
+        mov  [scxr],ax
+@@enext:
+        add  si,2
+        loop @@eloop
+        mov  ax,[scxl]
+        cmp  ax,[scxr]
+        jg   @@nextY
+        cmp  ax,0
+        jge  @@fxl
+        xor  ax,ax
+@@fxl:  mov  [scxl],ax
+        mov  ax,[scxr]
+        cmp  ax,319
+        jle  @@fxr
+        mov  ax,319
+@@fxr:  mov  [scxr],ax
+        mov  ax,[scxl]
+        cmp  ax,[scxr]
+        jg   @@nextY
+        ; ---- how dark is this row? ----------------------------------------
+        mov  ax,[dmixc]
+        cmp  byte ptr [dgrad],0
+        je   @@mok
+        mov  ax,[scy]
+        sub  ax,[dtop]
+        mov  bx,16
+        imul bx                 ; DX:AX - do NOT CWD, IMUL already set DX
+        idiv word ptr [dhgt]    ; 0 at the eaves, 16 at the pavement
+        ; ---- THE CURVE, and it is the whole difference between shading and
+        ; noise. A straight 0..16 ramp spends most of the wall near half
+        ; mix, and half mix in a two-colour dither is a CHECKERBOARD - the
+        ; loudest pattern a screen can make, and it shouts louder than the
+        ; shading it is supposed to carry. So: a thin stipple over the whole
+        ; wall (DGRAIN), and the real darkening saved for the bottom third,
+        ; where a building genuinely does stand in its own shadow and its
+        ; neighbours'. Light shading, not a halftone screen.
+        sub  ax,DSHADE
+        jge  @@ramp
+        xor  ax,ax
+@@ramp: add  ax,ax
+        add  ax,DGRAIN
+@@mok:  cmp  ax,0
+        jge  @@c1
+        xor  ax,ax
+@@c1:   cmp  ax,16
+        jle  @@c2
+        mov  ax,16
+@@c2:   mov  [dmix],ax
+        ; ---- the row's two bytes, one per column parity -------------------
+        mov  bx,[scy]
+        and  bx,7
+        add  bx,bx
+        mov  al,[DITH2+bx]
+        xor  ah,ah
+        cmp  ax,[dmix]
+        jl   @@k0d
+        mov  al,[dcolA]
+        jmp  @@k0s
+@@k0d:  mov  al,[dcolB]
+@@k0s:  mov  [dpb0],al
+        mov  al,[DITH2+bx+1]
+        xor  ah,ah
+        cmp  ax,[dmix]
+        jl   @@k1d
+        mov  al,[dcolA]
+        jmp  @@k1s
+@@k1d:  mov  al,[dcolB]
+@@k1s:  mov  [dpb1],al
+        ; the word, phased to where the span actually starts - otherwise the
+        ; grain swims along the wall as the span edge moves
+        mov  al,[dpb0]
+        mov  ah,[dpb1]
+        test word ptr [scxl],1
+        jz   @@pw
+        mov  al,[dpb1]
+        mov  ah,[dpb0]
+@@pw:   mov  [dpw],ax
+        ; ---- lay it down --------------------------------------------------
+        mov  di,[scy]
+        mov  cl,8
+        shl  di,cl
+        mov  bx,[scy]
+        mov  cl,6
+        shl  bx,cl
+        add  di,bx
+        add  di,[scxl]
+        mov  cx,[scxr]
+        sub  cx,[scxl]
+        inc  cx
+        mov  dx,cx
+        shr  cx,1
+        mov  ax,[dpw]
+        jcxz @@odd
+        rep  stosw
+@@odd:  test dx,1               ; an odd span ends on the parity it started
+        jz   @@nextY            ; on, so AL is already the right byte
+        stosb
+@@nextY:
+        mov  ax,[scy]
+        inc  ax
+        mov  [scy],ax
+        cmp  ax,[scymax]
+        jle  @@yloop
+@@done: ret
+
+; ============================================================================
+;  DITHFILL - FACEFILL's dithered twin: clip, project, measure the face's
+;  projected height (the gradient runs down THAT, not down the screen), fill.
+; ============================================================================
+DITHFILL:
+        call CLIPNEAR
+        mov  ax,[NPOLY]
+        cmp  ax,3
+        jl   @@x
+        call PROJPOLY
+        mov  ax,[PY]
+        mov  [dtop],ax
+        mov  [dbot],ax
+        mov  cx,[NPOLY]
+        dec  cx
+        mov  si,2
+@@h:    mov  ax,[PY+si]
+        cmp  ax,[dtop]
+        jge  @@h1
+        mov  [dtop],ax
+@@h1:   cmp  ax,[dbot]
+        jle  @@h2
+        mov  [dbot],ax
+@@h2:   add  si,2
+        loop @@h
+        mov  ax,[dbot]
+        sub  ax,[dtop]
+        jnz  @@h3
+        mov  ax,1               ; an edge-on face: never divide by nothing
+@@h3:   mov  [dhgt],ax
+        call DITHPOLY
+@@x:    ret
+
+; WALLFILL - one wall, shaded or flat, depending on the T switch. The flat
+; path is kept working on purpose: a look is judged by what it is worth, and
+; you cannot see that until you can turn it off.
+WALLFILL:
+        cmp  byte ptr [texon],0
+        je   @@flat
+        mov  byte ptr [dgrad],1
+        call DITHFILL
+        ret
+@@flat: call FACEFILL
+        ret
 
 MEGAFILL:                       ; the same walk, keeping the current COLOR
         mov  ax,[camx]
@@ -1100,11 +1872,17 @@ VISSTROKE:
 ; ---------------------------------------------------------------------------
 ;  EDGEWIN - outline one wall, then glaze it.
 ;  THE ORDER IS LOAD-BEARING. WINFACE reads IX/IY/IZ expecting them to have
-;  been PITCHED ALREADY - FACESTROKE's CLIPNEAR does that in place. Pitch
-;  them a second time and the glass turns again about the camera axis and
-;  slides off the wall exactly when you dive at the city, which is the only
-;  way you ever approach it. So when the outlines are switched OFF, the
-;  pitch still has to happen: PITCH4 stands in for the stroke.
+;  been PITCHED ALREADY - CLIPNEAR does that in place. Pitch them a second
+;  time and the glass turns again about the camera axis and slides off the
+;  wall exactly when you dive at the city, which is the only way you ever
+;  approach it. It also reads PX/PY, the wall's projected outline, for its
+;  own cull. So when the outlines are switched OFF the clip and the
+;  projection still have to run - only the stroke is skipped.
+;
+;  There is no distance gate any more. The wall's projected size decides:
+;  glass appears the moment the wall is worth more than WMINPX pixels, and
+;  a pane too small to fill becomes one lit dot. A city seen from a long
+;  way off IS speckle, and it should not switch on at some magic radius.
 ; ---------------------------------------------------------------------------
 EDGEWIN:
         call FACEV
@@ -1112,15 +1890,19 @@ EDGEWIN:
         mov  [COLOR],al
         cmp  byte ptr [edgeon],0
         je   @@nostr
-        call FACESTROKE
+        call FACESTROKE         ; clip -> project -> stroke
         jmp  @@win
 @@nostr:
-        call PITCH4
+        call CLIPNEAR
+        mov  ax,[NPOLY]
+        cmp  ax,3
+        jl   @@d
+        call PROJPOLY
 @@win:  cmp  byte ptr [winon],0
         je   @@d
-        mov  ax,[minrz]         ; windows only on near faces
-        cmp  ax,1200
-        jg   @@d
+        mov  ax,[NPOLY]         ; the wall never made it through the clip
+        cmp  ax,3
+        jl   @@d
         cmp  word ptr [bhw],50  ; not on spikes, chimneys or lintels
         jl   @@d
         mov  ax,[boxt]
@@ -1132,149 +1914,304 @@ EDGEWIN:
 
 ; ============================================================================
 ;  WINFACE - lit panes on the current wall (IX/IY/IZ[0..3] already pitched).
-;  The glass walks the wall in CAMERA space and every pane is projected on
-;  its own: a grid interpolated in SCREEN space is affine, which looks fine
-;  at a distance and slides the windows clean off the building when you
-;  close in. Each pane carries its own Z test too, so a half-clipped wall
-;  keeps the glass it can still show.
 ;
-;  THIS IS THE ROUTINE THE LAB EXISTS FOR. 3 columns x 5 rows of square
-;  dots is what a house is currently wearing; W turns it off so you can see
-;  what it is worth.
+;  THE PANE IS A QUAD ON THE WALL, not a square stamped on the screen.
+;  What was here before got the pane CENTRES right - they were lerped in
+;  camera space and projected one at a time - and then drew each pane as an
+;  axis-aligned square of fixed world size. A square does not foreshorten.
+;  Look along a wall and its columns crowd together while the glass keeps
+;  its width; the windows stop lying on the brick and start floating over
+;  it. That is the whole complaint, and the fix is to give every pane four
+;  corners and let the projection do to them what it does to the wall.
+;
+;  DOING IT WITHOUT A MATRIX PER PANE. A wall quad is A_bot, A_top, B_top,
+;  B_bot - and A_top-A_bot equals B_top-B_bot, because both are the same
+;  vertical rise. So the wall is a PARALLELOGRAM, and PITCH4 is linear, so
+;  it is still a parallelogram after the pitch. Every point on it is
+;
+;        P(i,j) = V0 + (i/NCOL)*U + (j/NROW)*V,   U = V3-V0, V = V1-V0
+;
+;  which means the whole corner lattice comes out of ONE row of column
+;  offsets and ONE column of row offsets, combined by ADDITION. NCOL+NROW+2
+;  interpolations for the face, then nothing but adds.
+;
+;  The panes share that lattice: (NCOL+1)*(NROW+1) = 24 projections carry
+;  15 panes, instead of 60 if each pane were projected alone. The mullion
+;  between them is made by shrinking each pane to half its cell AFTER
+;  projection - a pane is small enough that shrinking it on screen and
+;  shrinking it on the wall are the same picture.
+;
+;  Distance is handled by the pane itself: when its projected box is under
+;  two pixels there is nothing to fill, so it becomes one lit dot. That is
+;  what a far-off lit facade looks like, and it means the glass fades in
+;  instead of switching on.
 ; ============================================================================
 WINFACE:
-        mov  byte ptr [wc],0
-@@cl:   mov  al,[wc]            ; u = (2c+1)/6 across the wall
-        cbw
-        add  ax,ax
-        inc  ax
-        mov  [wfu],ax
-        mov  ax,[IX+4]          ; column top = C1 + (C2-C1)*u/6
-        sub  ax,[IX+2]
-        imul word ptr [wfu]
-        mov  bx,6
+        ; ---- the wall's own projected box: the cull and the level of
+        ; detail in one. PX/PY are the outline EDGEWIN just projected.
+        mov  cx,[NPOLY]
+        mov  ax,[PX]
+        mov  [fbx0],ax
+        mov  [fbx1],ax
+        mov  ax,[PY]
+        mov  [fby0],ax
+        mov  [fby1],ax
+        dec  cx
+        mov  si,2
+@@bb:   mov  ax,[PX+si]
+        cmp  ax,[fbx0]
+        jge  @@b1
+        mov  [fbx0],ax
+@@b1:   cmp  ax,[fbx1]
+        jle  @@b2
+        mov  [fbx1],ax
+@@b2:   mov  ax,[PY+si]
+        cmp  ax,[fby0]
+        jge  @@b3
+        mov  [fby0],ax
+@@b3:   cmp  ax,[fby1]
+        jle  @@b4
+        mov  [fby1],ax
+@@b4:   add  si,2
+        loop @@bb
+        cmp  word ptr [fbx1],0  ; wholly off the glass? nothing to glaze
+        jl   @@ret
+        cmp  word ptr [fbx0],319
+        jg   @@ret
+        cmp  word ptr [fby1],0
+        jl   @@ret
+        cmp  word ptr [fby0],199
+        jg   @@ret
+        mov  ax,[fbx1]
+        sub  ax,[fbx0]
+        cmp  ax,WMINPX
+        jl   @@ret
+        mov  ax,[fby1]
+        sub  ax,[fby0]
+        cmp  ax,WMINPX
+        jl   @@ret
+        ; ---- quads or dots? ONE decision, for the whole wall ---------------
+        ; Deciding per PANE is what made the far city crawl: a pane sitting
+        ; near the threshold flips between a dot and a two-pixel quad as the
+        ; camera creeps, and its neighbour flips on a different frame, so the
+        ; facade seethes - some windows bigger, some smaller, every frame.
+        ; The WALL's size changes smoothly and in one direction as you
+        ; approach, so switching on that switches the whole facade at once,
+        ; once, and nothing dances in between.
+        mov  byte ptr [wquad],0
+        mov  ax,[fbx1]
+        sub  ax,[fbx0]
+        cwd
+        mov  bx,NCOL
         idiv bx
-        add  ax,[IX+2]
-        mov  [wtcx],ax
-        mov  ax,[IY+4]
-        sub  ax,[IY+2]
-        imul word ptr [wfu]
-        mov  bx,6
+        cmp  ax,WQUADPX
+        jl   @@lod
+        mov  ax,[fby1]
+        sub  ax,[fby0]
+        cwd
+        mov  bx,NROW
         idiv bx
-        add  ax,[IY+2]
-        mov  [wtcy],ax
-        mov  ax,[IZ+4]
-        sub  ax,[IZ+2]
-        imul word ptr [wfu]
-        mov  bx,6
-        idiv bx
-        add  ax,[IZ+2]
-        mov  [wtcz],ax
-        mov  ax,[IX+6]          ; column bottom = C0 + (C3-C0)*u/6
+        cmp  ax,WQUADPX
+        jl   @@lod
+        mov  byte ptr [wquad],1
+@@lod:
+        ; ---- U along the wall, V up it ------------------------------------
+        mov  ax,[IX+6]
         sub  ax,[IX]
-        imul word ptr [wfu]
-        mov  bx,6
-        idiv bx
-        add  ax,[IX]
-        mov  [wbcx],ax
+        mov  [wux],ax
         mov  ax,[IY+6]
         sub  ax,[IY]
-        imul word ptr [wfu]
-        mov  bx,6
-        idiv bx
-        add  ax,[IY]
-        mov  [wbcy],ax
+        mov  [wuy],ax
         mov  ax,[IZ+6]
         sub  ax,[IZ]
-        imul word ptr [wfu]
-        mov  bx,6
+        mov  [wuz],ax
+        mov  ax,[IX+2]
+        sub  ax,[IX]
+        mov  [wvx],ax
+        mov  ax,[IY+2]
+        sub  ax,[IY]
+        mov  [wvy],ax
+        mov  ax,[IZ+2]
+        sub  ax,[IZ]
+        mov  [wvz],ax
+        ; ---- the two axes of offsets. Everything after this is addition.
+        mov  word ptr [wi],0
+@@ci:   mov  si,[wi]
+        add  si,si
+        mov  ax,[wux]
+        imul word ptr [wi]
+        mov  bx,NCOL
         idiv bx
-        add  ax,[IZ]
-        mov  [wbcz],ax
-        mov  byte ptr [wr],0
-@@rl:   mov  al,[wr]            ; v = (2r+1)/10 down the column
-        cbw
-        add  ax,ax
-        inc  ax
-        mov  [wfv],ax
-        mov  ax,[wbcz]          ; depth first: it gates AND it sizes
-        sub  ax,[wtcz]
-        imul word ptr [wfv]
-        mov  bx,10
+        mov  [CUX+si],ax
+        mov  ax,[wuy]
+        imul word ptr [wi]
+        mov  bx,NCOL
         idiv bx
-        add  ax,[wtcz]
-        mov  [wgz],ax
-        cmp  ax,NEARZ
-        jl   @@wn               ; this pane is behind us
-        mov  ax,[wbcx]
-        sub  ax,[wtcx]
-        imul word ptr [wfv]
-        mov  bx,10
+        mov  [CUY+si],ax
+        mov  ax,[wuz]
+        imul word ptr [wi]
+        mov  bx,NCOL
         idiv bx
-        add  ax,[wtcx]
-        mov  [wgx],ax
-        mov  ax,[wbcy]
-        sub  ax,[wtcy]
-        imul word ptr [wfv]
-        mov  bx,10
+        mov  [CUZ+si],ax
+        inc  word ptr [wi]
+        cmp  word ptr [wi],NCOL
+        jle  @@ci
+        mov  word ptr [wj],0
+@@rj:   mov  si,[wj]
+        add  si,si
+        mov  ax,[wvx]
+        imul word ptr [wj]
+        mov  bx,NROW
         idiv bx
-        add  ax,[wtcy]
-        mov  [wgy],ax
-        mov  ax,[wgx]
-        mov  dx,[wgy]
-        mov  cx,[wgz]
+        mov  [RVX+si],ax
+        mov  ax,[wvy]
+        imul word ptr [wj]
+        mov  bx,NROW
+        idiv bx
+        mov  [RVY+si],ax
+        mov  ax,[wvz]
+        imul word ptr [wj]
+        mov  bx,NROW
+        idiv bx
+        mov  [RVZ+si],ax
+        inc  word ptr [wj]
+        cmp  word ptr [wj],NROW
+        jle  @@rj
+        ; ---- project the lattice once ------------------------------------
+        mov  word ptr [wj],0
+@@lj:   mov  word ptr [wi],0
+@@li:   mov  si,[wi]
+        add  si,si
+        mov  di,[wj]
+        add  di,di
+        mov  ax,[IZ]
+        add  ax,[CUZ+si]
+        add  ax,[RVZ+di]
+        mov  [wlz],ax
+        mov  ax,[IX]
+        add  ax,[CUX+si]
+        add  ax,[RVX+di]
+        mov  [wlx],ax
+        mov  ax,[IY]
+        add  ax,[CUY+si]
+        add  ax,[RVY+di]
+        mov  [wly],ax
+        mov  bx,[wj]            ; lattice slot = j*NSTR + i
+        mov  cl,3
+        shl  bx,cl
+        add  bx,[wi]
+        cmp  word ptr [wlz],NEARZ
+        jge  @@lok
+        mov  byte ptr [WSOK+bx],0   ; this corner is behind us; any pane
+        jmp  @@ln                   ; touching it drops out
+@@lok:  mov  byte ptr [WSOK+bx],1
+        add  bx,bx
+        push bx
+        mov  ax,[wlx]
+        mov  dx,[wly]
+        mov  cx,[wlz]
         call PROJPT
-        mov  [wpx],ax
-        mov  [wpy],dx
-        call WLIT2
-        jz   @@wn
-        mov  ax,6160            ; a pane is ~28 units of glass: r=28*220/z
-        cwd
-        idiv word ptr [wgz]
-        or   ax,ax
-        jnz  @@ws1
-        inc  ax                 ; never smaller than one lit pixel
-@@ws1:  cmp  ax,10
-        jle  @@ws2
-        mov  ax,10              ; ...and never a wall of light
-@@ws2:  mov  [wbsz],al
-        sar  ax,1               ; centre the pane on its point
-        mov  bx,[wpx]
-        sub  bx,ax
-        mov  [wpx],bx
-        mov  bx,[wpy]
-        sub  bx,ax
-        mov  [wpy],bx
-        mov  byte ptr [wbj],0
-@@wby:  mov  byte ptr [wbi],0
-@@wbx:  mov  al,[wbi]
+        pop  bx
+        mov  [WSX+bx],ax
+        mov  [WSY+bx],dx
+@@ln:   inc  word ptr [wi]
+        cmp  word ptr [wi],NCOL
+        jle  @@li
+        inc  word ptr [wj]
+        cmp  word ptr [wj],NROW
+        jle  @@lj
+        ; ---- one pane per cell -------------------------------------------
+        mov  byte ptr [wr],0
+@@pr:   mov  byte ptr [wc],0
+@@pc:   mov  al,[wr]
         cbw
-        add  ax,[wpx]
-        js   @@wbs
-        cmp  ax,319
-        jg   @@wbs
-        mov  bl,[wbj]
+        mov  cl,3
+        shl  ax,cl              ; r*NSTR
+        mov  bl,[wc]
         xor  bh,bh
-        add  bx,[wpy]
-        js   @@wbs
+        add  ax,bx
+        mov  [wbase],ax         ; the cell's bottom-left lattice slot
+        mov  bx,ax
+        cmp  byte ptr [WSOK+bx],0
+        je   @@pn
+        cmp  byte ptr [WSOK+bx+1],0
+        je   @@pn
+        cmp  byte ptr [WSOK+bx+NSTR],0
+        je   @@pn
+        cmp  byte ptr [WSOK+bx+NSTR+1],0
+        je   @@pn
+        call WLIT2              ; dark windows are most of them
+        jz   @@pn
+        mov  si,[wbase]
+        add  si,si
+        mov  ax,[WSX+si]        ; bottom left
+        mov  [PX],ax
+        mov  ax,[WSY+si]
+        mov  [PY],ax
+        mov  ax,[WSX+si+2]      ; bottom right
+        mov  [PX+2],ax
+        mov  ax,[WSY+si+2]
+        mov  [PY+2],ax
+        mov  ax,[WSX+si+2*NSTR+2] ; top right
+        mov  [PX+4],ax
+        mov  ax,[WSY+si+2*NSTR+2]
+        mov  [PY+4],ax
+        mov  ax,[WSX+si+2*NSTR]   ; top left
+        mov  [PX+6],ax
+        mov  ax,[WSY+si+2*NSTR]
+        mov  [PY+6],ax
+        mov  ax,[PX]            ; centroid
+        add  ax,[PX+2]
+        add  ax,[PX+4]
+        add  ax,[PX+6]
+        sar  ax,1
+        sar  ax,1
+        mov  [wcxc],ax
+        mov  ax,[PY]
+        add  ax,[PY+2]
+        add  ax,[PY+4]
+        add  ax,[PY+6]
+        sar  ax,1
+        sar  ax,1
+        mov  [wcyc],ax
+        cmp  byte ptr [wquad],0
+        je   @@dot              ; the whole wall is in dot mode
+        xor  si,si              ; shrink to half the cell: the mullion
+@@sh:   mov  ax,[PX+si]
+        add  ax,[wcxc]
+        sar  ax,1
+        mov  [PX+si],ax
+        mov  ax,[PY+si]
+        add  ax,[wcyc]
+        sar  ax,1
+        mov  [PY+si],ax
+        add  si,2
+        cmp  si,8
+        jb   @@sh
+        mov  word ptr [NPOLY],4
+        call SCANPOLY
+        jmp  @@pn
+@@dot:  ; one lit dot per window, from the UNSHRUNK centre - it moves as a
+        ; smooth function of the camera, so the far city twinkles at worst
+        ; and never changes size. A distant lit facade is exactly this.
+        mov  ax,[wcxc]
+        cmp  ax,0               ; MOV sets no flags - test, do not assume
+        jl   @@pn
+        cmp  ax,319
+        jg   @@pn
+        mov  bx,[wcyc]
+        cmp  bx,0
+        jl   @@pn
         cmp  bx,199
-        jg   @@wbs
+        jg   @@pn
         call PUTPIXEL
-@@wbs:  inc  byte ptr [wbi]
-        mov  al,[wbi]
-        cmp  al,[wbsz]
-        jl   @@wbx
-        inc  byte ptr [wbj]
-        mov  al,[wbj]
-        cmp  al,[wbsz]
-        jl   @@wby
-@@wn:   inc  byte ptr [wr]
-        cmp  byte ptr [wr],5
-        jl   @@rl
-        inc  byte ptr [wc]
-        cmp  byte ptr [wc],3
-        jl   @@cl
-        ret
+@@pn:   inc  byte ptr [wc]
+        cmp  byte ptr [wc],NCOL
+        jl   @@pc
+        inc  byte ptr [wr]
+        cmp  byte ptr [wr],NROW
+        jl   @@pr
+@@ret:  ret
 
 ; ---- lit? a hash of gi,gj,fa,wr,wc -> ZF=1 dark, else COLOR is the glass
 WLIT2:  mov  ax,[gi]
@@ -1342,12 +2279,22 @@ STATUS:
         mov  ax,[heading]
         mov  di,offset STATB+19
         call PUTNUM
-        mov  di,offset STATB+26
+        mov  di,offset STATB+25
         mov  al,[winon]
-        call PUTFLAG
-        mov  di,offset STATB+31
+        mov  bl,'W'
+        call PUTSW
+        mov  di,offset STATB+26
         mov  al,[edgeon]
-        call PUTFLAG
+        mov  bl,'E'
+        call PUTSW
+        mov  di,offset STATB+27
+        mov  al,[texon]
+        mov  bl,'T'
+        call PUTSW
+        mov  di,offset STATB+28
+        mov  al,[caron]
+        mov  bl,'C'
+        call PUTSW
         mov  byte ptr [tcol],8
         mov  si,offset STATB
         mov  ax,190
@@ -1355,16 +2302,11 @@ STATUS:
         call TXT
         ret
 
-PUTFLAG:                        ; AL=0/1 -> 'OFF' / 'ON ' at CS:DI
-        or   al,al
-        jz   @@off
-        mov  byte ptr [di],'O'
-        mov  byte ptr [di+1],'N'
-        mov  byte ptr [di+2],' '
-        ret
-@@off:  mov  byte ptr [di],'O'
-        mov  byte ptr [di+1],'F'
-        mov  byte ptr [di+2],'F'
+PUTSW:                          ; AL=flag, BL=the letter -> one char at CS:DI
+        or   al,al              ; the letter means ON, a dash means OFF:
+        jnz  @@on               ; three switches in three columns, and the
+        mov  bl,'-'             ; status line still fits the screen
+@@on:   mov  [di],bl
         ret
 
 ; PUTNUM - signed AX into the 5 characters at CS:DI, right aligned
@@ -1448,11 +2390,11 @@ TXT:    push es
 ; ============================================================================
 ;  KBINT - the game's INT 9: our own KEYS[scancode] table, 1 down 0 up.
 ;  A camera needs to know that a key IS held, which the BIOS buffer with
-;  its typematic delay cannot tell you.
+;  its typematic delay cannot tell you. HITS is the lab's addition: a
+;  sticky "this key went down since you last looked", for the switches.
 ; ============================================================================
 KBINT:  push ax
         push bx
-        push di
         push ds
         mov  ax,cs
         mov  ds,ax
@@ -1461,17 +2403,15 @@ KBINT:  push ax
         and  al,7Fh
         mov  bl,al
         xor  bh,bh
-        mov  di,offset KEYS
-        add  di,bx
         test ah,80h
         jnz  @@brk
-        mov  byte ptr [di],1
+        mov  byte ptr [KEYS+bx],1
+        mov  byte ptr [HITS+bx],1
         jmp  @@eoi
-@@brk:  mov  byte ptr [di],0
+@@brk:  mov  byte ptr [KEYS+bx],0
 @@eoi:  mov  al,20h
         out  20h,al
         pop  ds
-        pop  di
         pop  bx
         pop  ax
         iret
@@ -1521,7 +2461,7 @@ SETPAL: mov  dx,3C8h
         out  dx,al
         mov  dx,3C9h
         mov  si,offset PALLAB
-        mov  cx,2*3
+        mov  cx,NPALLAB*3
 @@p2:   lodsb
         out  dx,al
         loop @@p2
@@ -1560,10 +2500,59 @@ PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db 20,20,23          ;30 cockpit panel trim
 PALLAB  db 17,18,20          ;120 asphalt: the avenues
         db 30,29,26          ;121 pavement: the plot a house stands on
+        ; ---- the third rung of each wall ramp. The game's WSCH gives every
+        ; scheme a LIT and a SHADED colour and stops there, which is enough
+        ; to tell two sides of a box apart and not enough to shade either of
+        ; them. These four are the step below the shaded one, ~2/3 of it.
+        ; They cost nothing anyone else wants: the cockpit owns 31..93 and
+        ; is rewritten by Panel2Inc every build, the game itself stops at
+        ; 119, and the DAC has 134 slots nobody has ever asked for.
+        db 19,20,23          ;122 grey wall, dark
+        db 14,17,27          ;123 blue wall, dark
+        db 22,13,10          ;124 red wall, dark
+        db 27,27,30          ;125 white wall, dark
+        ; ---- eight vehicle paints, each a lit face and a shaded one. The
+        ; city is grey by design; the traffic is the only thing in it
+        ; allowed to be a colour.
+        db 52,12,12          ;126 red
+        db 34, 7, 7          ;127
+        db 16,28,54          ;128 blue
+        db 10,18,36          ;129
+        db 56,50,14          ;130 yellow - the buses and the odd taxi
+        db 38,33, 8          ;131
+        db 14,42,22          ;132 green
+        db  9,28,14          ;133
+        db 56,56,58          ;134 white
+        db 38,38,40          ;135
+        db 24,25,28          ;136 charcoal
+        db 15,16,19          ;137
+        db 58,32, 8          ;138 orange
+        db 40,21, 5          ;139
+        db 12,44,46          ;140 teal
+        db  8,30,31          ;141
 
 ; ---- the game's wall schemes, unchanged: grey / blue / red / white -------
 WSCH    db 0,16, 20,21, 22,23, 24,25
+WDRK    db 122,123,124,125      ; ...and the lab's third rung for each
 PUFO    dw 0,21,42              ; smoke puff phase offsets (loop of 64)
+
+; ---- the dither matrix: 2 wide (one WORD per scanline, so REP STOSW
+; survives) by 8 tall (16 levels, so a gradient does not band).
+; Two properties, both built in and both load-bearing:
+;   - thresholds 0..7 sit on a CHECKERBOARD, so mix 8 comes out as a clean
+;     50/50 chequer and not as stripes;
+;   - inside that, low thresholds alternate columns as well as rows. Put
+;     0,1,2 all in one column - which is what the first version did - and
+;     the light stipple that most of a wall wears lines up into vertical
+;     rows, and the eye reads corduroy instead of texture.
+DITH2   db  0,13
+        db  8, 5
+        db  2,15
+        db 10, 7
+        db  4, 9
+        db 12, 1
+        db  6,11
+        db 14, 3
 
 HELP    db 13,10,'  HOUSE LAB - one city block, standing still.',13,10,13,10
         db '  ARROWS   fly: up/down forward and back, left/right turn',13,10
@@ -1573,7 +2562,11 @@ HELP    db 13,10,'  HOUSE LAB - one city block, standing still.',13,10,13,10
         db '  SHIFT    fast',13,10
         db '  W        windows on / off',13,10
         db '  E        outlines on / off',13,10
+        db '  T        wall shading on / off',13,10
+        db '  C        traffic on / off',13,10
         db '  ESC      back to DOS',13,10,13,10
+        db '  The three letters at the bottom right are those switches:',13,10
+        db '  the letter is ON, a dash is OFF.',13,10,13,10
         db '  Press any key.',13,10,'$'
 
 STATB   db 'X'                  ;0
@@ -1584,11 +2577,9 @@ STATB   db 'X'                  ;0
         db '     '              ;13..17  camera height
         db 'H'                  ;18
         db '     '              ;19..23  heading
-        db ' W'                 ;24,25
-        db '   '                ;26..28  windows
-        db ' E'                 ;29,30
-        db '   '                ;31..33  outlines
-        db 0
+        db ' '                  ;24
+        db '    '               ;25..28  the switches: a letter is ON,
+        db 0                    ;        a dash is OFF
 
 ; ============================================================================
 ;  STATE.  Everything below the line is the contract the ENGINE modules
@@ -1598,18 +2589,33 @@ bufseg  dw 0
 oldk9   dw 0,0                  ; the BIOS keyboard handler we displaced
 labtk   dw 0                    ; BIOS tick, for the chimney smoke
 tcol    db 8                    ; TXT colour
-winon   db 1                    ; the two lab switches...
+winon   db 1                    ; the three lab switches
 edgeon  db 1
-wlat    db 0                    ; ...and their key-edge latches
-elat    db 0
+texon   db 0                    ; OFF. It reads well in a still and CRAWLS in
+                                ; motion - the matrix is indexed by SCREEN
+                                ; x and y, so the grain is nailed to the
+                                ; glass and the wall slides through it. Left
+                                ; switched off, not deleted: see the README.
+dcolA   db 0                    ; the dither pair: lighter, darker
+dcolB   db 0
+dgrad   db 1                    ; 1 = mix runs down the face, 0 = flat mix
+dpb0    db 0                    ; this row's byte for even / odd columns
+dpb1    db 0
+dpw     dw 0                    ; ...packed and phased to the span start
+dmix    dw 0                    ; this row's mix level 0..16
+dmixc   dw 5                    ; the flat mix, when dgrad = 0
+dtop    dw 0                    ; the face's projected top row...
+dbot    dw 0
+dhgt    dw 1                    ; ...and its height, never zero
 mstep   dw 10                   ; camera speed this frame
 mturn   dw 1
 hcur    dw 100                  ; horizon row for the backdrop
 crow    dw 0                    ; backdrop row counter
-; ---- camera: parked south of the block, looking north at it ----------------
-camx    dw 0
-camy    dw 300
-camz    dw -3400
+; ---- camera: parked south of the block, looking north at it. The block
+; spans cells 24..35, world -2048..1024 both axes, so its centre is -512.
+camx    dw -512
+camy    dw 260
+camz    dw -2600
 camgi   dw 0
 camgj   dw 0
 ; ---- the painter's walk ----------------------------------------------------
@@ -1618,6 +2624,7 @@ ordi    dw 0                    ; walk cursor
 okey    dw 0                    ; BUILDORD: the squared distance being emitted
 odi     dw 0
 odj     dw 0
+disq    dw 0                    ; di*di, hoisted out of the inner loop
 ; ---- the cell being drawn --------------------------------------------------
 gi      dw 0
 gj      dw 0
@@ -1649,29 +2656,66 @@ FRX     dw 4 dup(0)             ; footprint corners, camera space
 FRZ     dw 4 dup(0)
 fa      dw 0
 fb      dw 0
-wallL   db 0                    ; this building's two wall colours
+wallL   db 0                    ; this building's wall ramp: light, mid...
 wallS   db 0
+wallD   db 0                    ; ...and dark, the lab's third rung
 scol    db 1                    ; stroke colour (windows overwrite COLOR)
+roofc   db 17                   ; the top face: 17 for a building, its own
+                                ; paint for a vehicle
 puffk   dw 0
+; ---- traffic ---------------------------------------------------------------
+caron   db 1
+cartf   dw 0                    ; where we are in the signal cycle
+caradv  dw 0                    ; whole blocks the platoons have banked
+ctick   dw 0                    ; the traffic clock: last BIOS tick seen,
+cfrm    dw 0                    ; frames inside it, frames the last tick
+crate   dw 4                    ; lasted, where the interpolation had got
+cfrac   dw 0                    ; to, and this frame's share
+cstep   dw 0
+vcen    dw 0                    ; the avenue's centre line
+vcell   dw 0                    ; this cell's start along the lane
+vstart  dw 0                    ; the frame this lane's green begins
+voff    dw 0                    ; how far into its cell a vehicle is
+vadv    dw 0                    ; cells the platoon has advanced
+vlane   dw 0                    ; which lane, for the hash
+vslot   dw 0                    ; which vehicle on it
+vaxis   dw 0                    ; 0 = length runs along Z, 1 = along X
+vdir    dw 1                    ; +1 or -1 along that axis
+vtype   dw 0                    ; 0..4 car, 5 bus, 6..7 truck
+vh      dw 0                    ; this vehicle's hash
+vcx0    dw 0                    ; its centre, before a two-box body moves it
+vcz0    dw 0
 ; ---- windows ---------------------------------------------------------------
-wc      db 0
+wc      db 0                    ; pane column / row (also WLIT2's hash input)
 wr      db 0
-wfu     dw 0
-wfv     dw 0
-wtcx    dw 0
-wtcy    dw 0
-wtcz    dw 0
-wbcx    dw 0
-wbcy    dw 0
-wbcz    dw 0
-wgx     dw 0
-wgy     dw 0
-wgz     dw 0
-wpx     dw 0
-wpy     dw 0
-wbsz    db 0
-wbi     db 0
-wbj     db 0
+wux     dw 0                    ; U: along the wall, in camera space
+wuy     dw 0
+wuz     dw 0
+wvx     dw 0                    ; V: up the wall
+wvy     dw 0
+wvz     dw 0
+wi      dw 0                    ; lattice cursors
+wj      dw 0
+wlx     dw 0                    ; the lattice point being projected
+wly     dw 0
+wlz     dw 0
+wbase   dw 0                    ; the cell's bottom-left lattice slot
+wcxc    dw 0                    ; the pane's centre on screen
+wcyc    dw 0
+wquad   db 0                    ; 1 = this wall gets pane quads, 0 = dots
+fbx0    dw 0                    ; the WALL's projected box: cull + detail
+fbx1    dw 0
+fby0    dw 0
+fby1    dw 0
+CUX     dw (NCOL+1) dup(0)      ; i*U/NCOL, one per column boundary
+CUY     dw (NCOL+1) dup(0)
+CUZ     dw (NCOL+1) dup(0)
+RVX     dw (NROW+1) dup(0)      ; j*V/NROW, one per row boundary
+RVY     dw (NROW+1) dup(0)
+RVZ     dw (NROW+1) dup(0)
+WSX     dw NLAT dup(0)          ; the projected corner lattice...
+WSY     dw NLAT dup(0)
+WSOK    db NLAT dup(0)          ; ...and which of its corners are in front
 ; ---- E_M3D contract --------------------------------------------------------
 heading dw 0
 pitch   dw 0
@@ -1746,7 +2790,9 @@ SINT    dw 0,6,13,19,25,31,38,44,50,56,62,68,74,80,86,92,98,104,109,115
         INCLUDE ..\ENGINE\E_M3D.INC
         INCLUDE ..\ENGINE\E_RAST.INC
 
-KEYS    db 128 dup(0)           ; key state, written by KBINT
+KEYS    db 128 dup(0)           ; key state (held), written by KBINT
+HITS    db 128 dup(0)           ; key went down, cleared by whoever reads it
+SQD     dw (2*RAD+1) dup(0)     ; squares of -RAD..RAD
 ORDT    db NORD*2 dup(0)        ; the painter's order: (di,dj) pairs
 
 CODE    ENDS

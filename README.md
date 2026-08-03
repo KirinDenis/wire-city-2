@@ -42,6 +42,8 @@ GAMES/OWLFLY/     the flight simulator: SRC/, res/, INSTALL/, its README
 GAMES/WIRECITY/   the 1986 original: one CITY.ASM, its README
 ENGINE/           engine modules with documented contracts (shared by all)
 EXAMPLES/         the teaching machines (each states its contract)
+LAB/              the workbench: one city block that holds still, and a
+                  camera to walk round it (HOUSE.COM) - not shipped
 docs/             the arcade site: gallery, players, bundles, deep dives
 MAKE.BAT          builds everything: converters + headless DOSBox + TASM
 ```

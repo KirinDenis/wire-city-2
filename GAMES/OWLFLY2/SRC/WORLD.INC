@@ -155,7 +155,8 @@ DRAWBOX:
         add  ax,[boxt]
         sub  ax,[camy]
         mov  [bry1],ax
-        mov  byte ptr [COLOR],17 ; sun-lit roof
+        mov  al,[roofc]         ; 17 for a building, its own paint for a
+        mov  [COLOR],al         ; vehicle
         mov  ax,[gbase]
         add  ax,[boxt]
         cmp  [camy],ax
@@ -225,23 +226,38 @@ RENDERCELL:
         call HBLD
         mov  ax,[bstreet]
         cmp  ax,1
-        je   @@ret              ; plain street cell -> nothing to draw
+        je   @@ret              ; not city: the terrain mesh paints it
+        cmp  ax,3
+        jne  @@notroad
+        call ROADCELL           ; a city street: tarmac, then whatever is
+        jmp  @@ret              ; driving on it
+@@notroad:
+        mov  byte ptr [roofc],17
         call BCHK
         jz   @@stands
         jmp  @@ret              ; a ruin: rubble and smoke, no walls
 @@stands:
         ; cell centre world coords:  gi*256 + 128 - BIAS   (shl = *CELL)
+        ; ...but a BUILDING owns the 2x2 plot whose corner this cell is, so
+        ; its centre is another 128 out on both axes. The flat patches
+        ; (forest/water/field) are still one cell each and keep the first.
         mov  ax,[gi]
         mov  cl,8
         shl  ax,cl
         add  ax,128
-        sub  ax,BIAS
+        cmp  word ptr [bstreet],0
+        jne  @@c1
+        add  ax,128
+@@c1:   sub  ax,BIAS
         mov  [wcx],ax
         mov  ax,[gj]
         mov  cl,8
         shl  ax,cl
         add  ax,128
-        sub  ax,BIAS
+        cmp  word ptr [bstreet],0
+        jne  @@c2
+        add  ax,128
+@@c2:   sub  ax,BIAS
         mov  [wcz],ax
         call ROTCUL             ; bounds -> rotate corners -> cull
         jc   @@ret
@@ -291,20 +307,22 @@ RENDERCELL:
         mov  [boxt],ax
         call DRAWBOX
         jmp  @@ret
+        ; ---- the composites doubled with the plot, 2026-08-03: a spire
+        ; sized for a 256 cell is a needle on a 512 one.
 @@bspire:                       ; slim tall block + antenna spike
-        mov  word ptr [bhw],56
-        mov  word ptr [bhd],56
+        mov  word ptr [bhw],112
+        mov  word ptr [bhd],112
         mov  word ptr [boxb],0
         mov  ax,[bhgt2]
-        add  ax,60              ; spires read taller than plain boxes
+        add  ax,120             ; spires read taller than plain boxes
         mov  [boxt],ax
         call DRAWBOX
-        mov  word ptr [bhw],14
-        mov  word ptr [bhd],14
+        mov  word ptr [bhw],28
+        mov  word ptr [bhd],28
         mov  ax,[bhgt2]
-        add  ax,60
+        add  ax,120
         mov  [boxb],ax
-        add  ax,90
+        add  ax,180
         mov  [boxt],ax
         call DRAWBOX
         jmp  @@ret
@@ -316,7 +334,7 @@ RENDERCELL:
         call DRAWBOX
         mov  ax,[bhw]
         shr  ax,1
-        add  ax,12
+        add  ax,24
         mov  [bhw],ax
         mov  [bhd],ax
         mov  ax,[bhgt2]
@@ -328,30 +346,30 @@ RENDERCELL:
         jmp  @@ret
 @@barch:                        ; gate building: two legs + lintel on top
         mov  ax,[bhgt2]
-        cmp  ax,240
+        cmp  ax,480
         jle  @@ba1
-        mov  ax,240
+        mov  ax,480
 @@ba1:  mov  [boxt],ax          ; leg height
-        mov  word ptr [bhw],34
-        mov  word ptr [bhd],80
+        mov  word ptr [bhw],68
+        mov  word ptr [bhd],160
         mov  word ptr [boxb],0
         mov  ax,[pwcx]
-        sub  ax,76
+        sub  ax,152
         mov  [wcx],ax
         call DRAWBOX
         mov  ax,[pwcx]
-        add  ax,76
+        add  ax,152
         mov  [wcx],ax
         call DRAWBOX
         mov  ax,[pwcx]          ; lintel spans both legs
         mov  [wcx],ax
-        mov  word ptr [bhw],110
+        mov  word ptr [bhw],220
         mov  bx,[boxt]
         mov  ax,bx
-        sub  ax,44
+        sub  ax,88
         mov  [boxb],ax
         mov  ax,bx
-        add  ax,6
+        add  ax,12
         mov  [boxt],ax
         call DRAWBOX
         jmp  @@ret
@@ -360,16 +378,16 @@ RENDERCELL:
         mov  ax,[bhgt2]
         mov  [boxt],ax          ; hall (industrial heights are low)
         call DRAWBOX
-        mov  word ptr [bhw],13
-        mov  word ptr [bhd],13
+        mov  word ptr [bhw],26
+        mov  word ptr [bhd],26
         mov  ax,[pwcx]
-        add  ax,64
+        add  ax,128
         mov  [wcx],ax
         mov  ax,[pwcz]
-        add  ax,40
+        add  ax,80
         mov  [wcz],ax
         mov  word ptr [boxb],0
-        mov  word ptr [boxt],180
+        mov  word ptr [boxt],360
         call DRAWBOX            ; chimney
         ; SimCity-style smoke: 3 puffs rise on a loop and dissolve. Phase is
         ; driven by the BIOS tick, so the animation speed is real-time.
@@ -383,20 +401,67 @@ RENDERCELL:
         cmp  ax,50
         ja   @@pnx              ; old puff has dissolved
         mov  bx,ax
-        mov  cl,2
+        mov  cl,1
         shr  bx,cl
-        add  bx,7               ; puffs grow as they rise: half-size 7..19
+        add  bx,14              ; puffs grow as they rise: half-size 14..38
         mov  [bhw],bx
         mov  [bhd],bx
-        add  ax,180             ; chimney top + age
+        add  ax,ax
+        add  ax,360             ; chimney top + age
         mov  [boxb],ax
-        add  ax,10
+        add  ax,20
         mov  [boxt],ax
         call PUFFBOX
 @@pnx:  inc  word ptr [puffk]
         cmp  word ptr [puffk],3
         jl   @@pf
 @@ret:  ret
+
+; ============================================================================
+;  ROADCELL - one city street cell: the tarmac, then the traffic on it.
+;  Both are cut off at ROADZ. The lab walks 289 cells and could afford to
+;  surface all of them; this walk is 2401 and cannot. Past ROADZ a road is
+;  a few pixels of grey and a car is one, and neither is worth a fill.
+;  The surface sits gbase+2 above the terrain, the same trick and the same
+;  two units the forest/water/field patches use.
+; ============================================================================
+ROADCELL:
+        mov  ax,[gi]            ; cell centre: gi*256 + 128 - BIAS
+        mov  cl,8
+        shl  ax,cl
+        add  ax,128
+        sub  ax,BIAS
+        mov  [wcx],ax
+        mov  ax,[gj]
+        mov  cl,8
+        shl  ax,cl
+        add  ax,128
+        sub  ax,BIAS
+        mov  [wcz],ax
+        mov  word ptr [bhw],128 ; the full cell, edge to edge
+        mov  word ptr [bhd],128
+        call ROTCUL
+        jc   @@r
+        mov  ax,[minrz]
+        cmp  ax,ROADZ
+        jg   @@r
+        mov  ax,[gi]            ; the ground under it
+        mov  bx,[gj]
+        call GETH
+        call WORLDH
+        mov  [gbase],ax
+        add  ax,2               ; a hair above the terrain quad
+        sub  ax,[camy]
+        mov  [bry1],ax
+        mov  byte ptr [COLOR],ASPHALT
+        call FACETOPC
+        call FACEFILL
+        mov  ax,[minrz]
+        cmp  ax,CARZ
+        jg   @@r                ; tarmac reaches further than the traffic
+        mov  word ptr [vmode],0 ; draw them, do not test them
+        call FAR PTR TRAFFICF
+@@r:    ret
 
 ; ============================================================================
 ;  ROTCUL - shared box setup: world bounds from (wcx,wcz,bhw,bhd), rotate the
@@ -531,55 +596,53 @@ VISSTROKE:
         mov  ax,[camx]
         cmp  ax,[bwx0]
         jge  @@e
-        mov  al,[scol]          ; windows change COLOR - restore per face
-        mov  [COLOR],al
         mov  word ptr [fa],3
         mov  word ptr [fb],0
-        call FACEV
-        call FACESTROKE
-        call WINMAYBE
+        call EDGEWIN
 @@e:    mov  ax,[camx]
         cmp  ax,[bwx1]
         jle  @@s
-        mov  al,[scol]
-        mov  [COLOR],al
         mov  word ptr [fa],1
         mov  word ptr [fb],2
-        call FACEV
-        call FACESTROKE
-        call WINMAYBE
+        call EDGEWIN
 @@s:    mov  ax,[camz]
         cmp  ax,[bwz0]
         jge  @@n
-        mov  al,[scol]
-        mov  [COLOR],al
         mov  word ptr [fa],0
         mov  word ptr [fb],1
-        call FACEV
-        call FACESTROKE
-        call WINMAYBE
+        call EDGEWIN
 @@n:    mov  ax,[camz]
         cmp  ax,[bwz1]
         jle  @@d
-        mov  al,[scol]
-        mov  [COLOR],al
         mov  word ptr [fa],2
         mov  word ptr [fb],3
-        call FACEV
-        call FACESTROKE
-        call WINMAYBE
+        call EDGEWIN
 @@d:    ret
 
-; windows only on near faces
-WINMAYBE:
-        mov  ax,[minrz]
-        cmp  ax,1200
-        jg   @@x
+; ---------------------------------------------------------------------------
+;  EDGEWIN - outline one wall, then glaze it.
+;  THE ORDER IS LOAD-BEARING. WINFACEF reads IX/IY/IZ expecting them to have
+;  been PITCHED ALREADY - FACESTROKE's CLIPNEAR does that in place - and
+;  PX/PY expecting the wall's projected outline, which PROJPOLY leaves
+;  there. Pitch them a second time and the glass turns again about the
+;  camera axis and slides off the wall exactly when you dive at the city,
+;  which is the only way you ever approach it.
+;  There is no distance gate any more: WINFACEF decides from the wall's own
+;  projected size, so the glass fades in instead of switching on at 1200.
+; ---------------------------------------------------------------------------
+EDGEWIN:
+        call FACEV
+        mov  al,[scol]          ; windows change COLOR - restore per face
+        mov  [COLOR],al
+        call FACESTROKE
+        mov  ax,[NPOLY]         ; the wall never made it through the clip
+        cmp  ax,3
+        jl   @@x
         cmp  word ptr [bhw],50  ; no windows on spikes/chimneys/lintels
         jl   @@x
         mov  ax,[boxt]
         sub  ax,[boxb]
         cmp  ax,60              ; nor on flat slabs
         jl   @@x
-        call WINFACE
+        call FAR PTR WINFACEF
 @@x:    ret

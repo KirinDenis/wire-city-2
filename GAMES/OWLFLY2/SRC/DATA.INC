@@ -1409,19 +1409,64 @@ FRZ     dw 4 dup(0)             ; footprint corners (camera-space Z)
 pk      dw 0                    ; polygon/loop counter (ENGINE E_RAST too)
 ; (wqx/wqy retired 2026-07-27: the glass is interpolated in camera
 ;  space now, so the projected-corner cache died with the old grid)
-wfu     dw 0
-wfv     dw 0
-; the glass walks the wall in CAMERA space now (see WINFACE): one
-; column edge pair, and the pane's own 3-D point before projection
-wtcx    dw 0                    ; this column's top edge point
-wtcy    dw 0
-wtcz    dw 0
-wbcx    dw 0                    ; ...and its bottom edge point
-wbcy    dw 0
-wbcz    dw 0
-wgx     dw 0                    ; the pane itself, camera space
-wgy     dw 0
-wgz     dw 0
+; (wfu/wfv/wtc*/wbc*/wg* retired 2026-08-03 with the old WINFACE: the
+;  glass is a quad on the wall now, built from a corner lattice in BSS,
+;  and none of the old per-pane scratch survived the move to TOWNSEG)
+; ---- the new pane geometry (TOWNSEG's WINFACEF). The wall is a
+; parallelogram, so a lattice of corners comes out of one row of column
+; offsets and one column of row offsets, by addition. These are the two
+; edge vectors and the cursors; the lattice itself is in BSS.
+wux     dw 0                    ; U: along the wall, in camera space
+wuy     dw 0
+wuz     dw 0
+wvx     dw 0                    ; V: up the wall
+wvy     dw 0
+wvz     dw 0
+wi      dw 0                    ; lattice cursors
+wj      dw 0
+wlx     dw 0                    ; the lattice point being projected
+wly     dw 0
+wlz     dw 0
+wbase   dw 0                    ; the cell's bottom-left lattice slot
+wcxc    dw 0                    ; the pane's centre on screen
+wcyc    dw 0
+fbx0    dw 0                    ; the WALL's projected box: cull + detail
+fbx1    dw 0
+fby0    dw 0
+fby1    dw 0
+wquad   db 0                    ; 1 = this wall gets pane quads, 0 = dots
+roofc   db 17                   ; the top face: 17 for a building, its own
+                                ; paint for a vehicle
+; ---- traffic (TOWNSEG's TRAFFICF). No vehicle list: a vehicle is a
+; function of (lane, slot, clock), so all that is kept is the clock.
+cartf   dw 0                    ; where we are in the signal cycle
+caradv  dw 0                    ; whole blocks the platoons have banked
+ctick   dw 0                    ; the traffic clock: last BIOS tick seen,
+cfrac   dw 0                    ; where interpolation had got to inside it,
+cstep   dw 0                    ; and this frame's share
+vcen    dw 0                    ; the avenue's centre line
+vcell   dw 0                    ; this cell's start along the lane
+vstart  dw 0                    ; the clock step this lane's green begins
+voff    dw 0                    ; how far into its cell a vehicle is
+vadv    dw 0                    ; cells the platoon has advanced
+vlane   dw 0                    ; which lane, for the hash
+vslot   dw 0                    ; which vehicle on it
+vaxis   dw 0                    ; 0 = length runs along Z, 1 = along X
+vdir    dw 1                    ; +1 or -1 along that axis
+vtype   dw 0                    ; 0..4 car, 5 bus, 6..7 truck
+vh      dw 0                    ; this vehicle's hash
+vcx0    dw 0                    ; its centre, before a two-box body moves it
+vcz0    dw 0
+vmode   dw 0                    ; 0 = the renderer is asking, 1 = a bullet
+vhitf   dw 0                    ; ...and the bullet's answer
+hitx    dw 0                    ; where the round is, for that question
+hity    dw 0
+hitz    dw 0
+vhl     dw 0                    ; the struck vehicle's half extents
+vhw     dw 0
+vhh     dw 0
+vtx     dw 0                    ; ...resolved onto the world axes
+vtz     dw 0
 wvk     dw 0                    ; smoke flake: vertex counter
 wang    dw 0                    ; ...its angle
 wrad    dw 0                    ; ...and this vertex's ragged radius
@@ -1450,16 +1495,11 @@ sy1     dw 0
 tnum    dw 0
 tden    dw 0
 
-wpx     dw 0
-wpy     dw 0
 tmpi    dw 0                    ; INPUT: turn direction (-1/0/+1)
 tmpsx   dw 0
 tmpsy   dw 0
-wr      db 0
-wc      db 0
-wbi     db 0                    ; window-block pixel loop (x)
-wbj     db 0                    ; window-block pixel loop (y)
-wbsz    db 3                    ; window block size: 3x3 close, 1x1 further
+wr      db 0                    ; the pane's row and column: the only two
+wc      db 0                    ; of the old window scratch still standing
 
 cdx     dw 0
 cdy     dw 0
@@ -1487,7 +1527,8 @@ HCOL    db 8
 ;            8 HUD       9 sky band    10 ground     11 field/ground band
 ;            12 haze     13 mountains  14 water      15 forest
 ;            16 wall E/W (shade)       17 roof
-NPALC   equ 120                 ; 31 game + 63 cockpit + glow + 2 IFF +
+NPALC   equ 137                 ; ...+ asphalt + 8 vehicle pairs (120..136)
+NPALCOLD equ 120                ; 31 game + 63 cockpit + glow + 2 IFF +
                                 ; amber + 7 NEWTON sky (SKYZ..SKYZ+6) +
                                 ; ladder dim + HUD cyan + true black
                                 ; + 5 PANEL colours (108..112): the cockpit

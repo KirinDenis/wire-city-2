@@ -64,6 +64,40 @@ RAD     equ 9                   ; building render radius (cells)
 MAXD2   equ RAD*RAD*2           ; max squared cell distance (painter buckets)
 GR      equ 7                   ; ground-grid radius (cells)
 NEARZ   equ 40                  ; near clip plane
+NCOL    equ 4                   ; window panes across a wall...
+NROW    equ 8                   ; ...and down it. Both went up when a
+                                ; building grew to own a 2x2 plot: 3x5 on a
+                                ; wall twice the size is not windows, it is
+                                ; garage doors.
+NSTR    equ 8                   ; lattice row stride - a POWER OF TWO, kept
+                                ; separate from NCOL+1 so the index stays a
+                                ; shift. NCOL may be anything under it.
+NLAT    equ NSTR*(NROW+1)       ; the corner lattice the panes share
+WMINPX  equ 6                   ; a wall thinner than this carries no glass
+WQUADPX equ 5                   ; ...and below this many pixels per CELL the
+                                ; whole facade drops to lit dots
+; ---- the streets, and what drives on them (developed in LAB\HOUSE.COM).
+; CARV*CARG = 2048 = eight cells = ONE BLOCK per green, and that identity
+; is what the whole traffic scheme rests on - see TRAFFICF in TOWN.INC.
+TKSUB   equ 12                  ; traffic-clock steps per BIOS tick
+CARV    equ 1                   ; units per clock step while moving
+CARG    equ 2048                ; clock steps of green
+CARCLR  equ 256                 ; all-red clearance between the two greens
+CART    equ 2*(CARG+CARCLR)     ; the whole signal cycle (~21 s)
+CARRST  equ 200                 ; how far into its cell a stopped vehicle
+                                ; waits - just short of the next crossing
+LANEOF  equ 96                  ; lane centre from the avenue centre
+ROADZ   equ 5200                ; how far the tarmac reaches. It is what
+                                ; makes a city read as a city from the air,
+                                ; so it goes out a long way; it is also
+                                ; only laid on BUILT blocks, which is what
+                                ; makes that affordable.
+CARZ    equ 3000                ; the traffic stops nearer - past this a car
+                                ; is one pixel and costs a whole box
+ASPHALT equ 120                 ; DAC: the road surface
+VCOL0   equ 121                 ; DAC: first vehicle colour (8 lit/shade)
+NKILL   equ 8                   ; vehicles that can be dead at once
+KRESP   equ 90                  ; ticks before a fresh one takes the slot
 FARZ    equ 21600               ; far clip distance
 MEGR    equ 20                  ; far-belt radius in 4x4-cell megablocks
 CEIL    equ 3000                ; flight ceiling (loops need headroom)
@@ -192,9 +226,10 @@ MAIN:
         ; it. SKYSEG gets a full 8K window (CS+1000h..CS+11FFh) with
         ; its own assemble-time guard, and the far map starts past it.
         mov  ax,cs
-        add  ax,1800h           ; past SKYSEG (CS+1000h, 8K), UISEG
-        mov  [bufseg],ax        ; (CS+1200h, SIXTEEN K) and SYMSEG
-                                ; (CS+1600h, 8K) - each with its own guard
+        add  ax,1A00h           ; past SKYSEG (CS+1000h, 8K), UISEG
+        mov  [bufseg],ax        ; (CS+1200h, SIXTEEN K), SYMSEG (CS+1600h,
+                                ; 8K) and TOWNSEG (CS+1800h, 8K) - each
+                                ; with its own guard
 
         ; hook INT 9
         mov  ax,3509h
@@ -208,17 +243,26 @@ MAIN:
         ; (no PIT reprogram, no INT 8 hook - we only read the stock BIOS tick)
 
         ; ---- load CITY.DAT into its own segment (resources: font, ...) ----
-        ; PAST THE BACK BUFFER, and mind the arithmetic: the buffer is
-        ; 64000 bytes = 0FA0h paragraphs, so from CS+1600h it reaches
-        ; CS+27A0h from CS+1800h. This sat at 2400h while the buffer began
-        ; at 1400h;
-        ; opening SYMSEG pushed the buffer up 200h and it ate the front of
-        ; the loaded CITY.DAT. The panel is blitted OUT of that image, so
-        ; the world drawn into the bottom of the buffer came straight back
-        ; up as the top of the cockpit - pixel for pixel, which is what
-        ; made it look like an effect rather than a fault.
+        ; PAST THE BACK BUFFER, and mind the arithmetic. The buffer is
+        ; 64000 bytes = 0FA0h paragraphs, so it reaches bufseg+0FA0h:
+        ;   buffer 1A00h .. 29A0h   ->   this must start at 2A00h.
+        ;
+        ; THIS HAS NOW GONE WRONG TWICE, BOTH TIMES THE SAME WAY. Opening
+        ; SYMSEG pushed the buffer up 200h and it ate the front of the
+        ; loaded CITY.DAT; opening TOWNSEG on 2026-08-03 pushed it up
+        ; another 200h and did it again. The panel is blitted OUT of this
+        ; image, so the world drawn into the BOTTOM of the buffer comes
+        ; straight back up as the TOP of the cockpit, pixel for pixel -
+        ; which looks like a deliberate reflection effect rather than a
+        ; fault, and that is exactly why it gets missed.
+        ;
+        ; THE RULE: opening a far segment moves the back buffer, and
+        ; moving the back buffer moves EVERYTHING STACKED ABOVE IT. Walk
+        ; the whole map - resseg here, then sndseg (SOUND.INC, 64K
+        ; aligned from CS+4000h) and scrseg above it - before believing
+        ; the new segment cost nothing.
         mov  ax,cs
-        add  ax,2800h           ; past the back-buffer at CS+1800h
+        add  ax,2A00h           ; past the back buffer at CS+1A00h
         mov  [resseg],ax
         mov  dx,offset FNAME
         mov  ax,3D00h           ; open read-only
@@ -359,6 +403,7 @@ MAIN:
         add  ax,5FFFh           ; the sample segment - the minimap lives
         and  ax,0F000h          ; there, not in our crowded 64K
         mov  [scrseg],ax
+        call DSTCLR             ; a new world stands up whole
         call DSGEN              ; build the Diamond-Square world heightmap
         call MMAPGEN            ; bake the minimap from it
         call BRDGEN             ; draw the front line on the war
@@ -481,6 +526,8 @@ GAMELOOP:
         ; --- render (runs as fast as it can; speed no longer tied to it) ---
         call LERPSET            ; draw BETWEEN the ticks: silk, not jerks
         call CHASESET           ; F3: swap in the chase camera
+        call FAR PTR CCLOCKF    ; advance the traffic clock: the lights run
+                                ; on TIME, not on how fast we are drawing
         call SETTRIG            ; heading/roll -> sin/cos for this frame
         mov  ax,[bufseg]        ; draw into back-buffer
         mov  es,ax
@@ -596,8 +643,14 @@ FLB     equ  word ptr BSS+18919     ; black box ring: FLBN samples of
 TLX     equ  word ptr BSS+19303     ; contrail rings: NPLANE*TLN words each
 TLY     equ  word ptr BSS+20263     ;  (moved out of the image: generated
 TLZ     equ  word ptr BSS+21223     ;  at spawn, never shipped as zeros)
-DSTB    equ  byte ptr BSS+22183     ; ruins bitmap: 1 bit per world cell
+DSTBA   equ  22183                  ; (as a plain number too: DSTCLR needs it
+                                    ;  as an immediate, not as an address)
+DSTB    equ  byte ptr BSS+DSTBA     ; ruins bitmap: 1 bit per world cell
                                     ;  (64x64), set = the building is down
+; (the window lattice went to TOWNSEG on 2026-08-03, reached with CS:
+;  overrides. It is WINFACEF's private scratch - nothing in the main
+;  segment has ever read a byte of it - and 180 bytes of the main
+;  segment is 180 bytes, which is what the stack guard here trades in.)
 BSSEND  equ  BSS+22695
 
 ; ---- THE STACK GUARD -------------------------------------------------------
@@ -622,6 +675,7 @@ CODE    ENDS
         INCLUDE SKY.INC         ; the NEWTON sky, in its own segment
         INCLUDE UI.INC          ; the front door: splash + sky list
         INCLUDE SYM.INC         ; the fourth segment: the scope's symbols
+        INCLUDE TOWN.INC        ; the fifth: the windows and the traffic
         INCLUDE NET.INC         ; the wire (appends SKYSEG; writes GLIST)
 
         END START

@@ -954,6 +954,27 @@ PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db  8,34,10          ;117 scanline shades - a hair under the
         db 38,26, 3          ;118  core, not the lens shadow
         db 38, 4, 4          ;119
+        ; ---- the streets and what drives on them. The city is grey by
+        ; design; the traffic is the only thing in it allowed to be a
+        ; colour. Each vehicle paint is a lit face and a shaded one, the
+        ; same pairing WSCH gives the walls.
+        db 17,18,20          ;120 asphalt
+        db 52,12,12          ;121 red
+        db 34, 7, 7          ;122
+        db 16,28,54          ;123 blue
+        db 10,18,36          ;124
+        db 56,50,14          ;125 yellow - the buses and the odd taxi
+        db 38,33, 8          ;126
+        db 14,42,22          ;127 green
+        db  9,28,14          ;128
+        db 56,56,58          ;129 white
+        db 38,38,40          ;130
+        db 24,25,28          ;131 charcoal
+        db 15,16,19          ;132
+        db 58,32, 8          ;133 orange
+        db 40,21, 5          ;134
+        db 12,44,46          ;135 teal
+        db  8,30,31          ;136
 
 PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db 12,18,40          ;1  far stroke
@@ -1013,6 +1034,26 @@ PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db  5,20, 6          ;117 scanlines, night
         db 22,15, 2          ;118
         db 22, 2, 2          ;119
+        ; ---- the streets by night. Tarmac goes nearly black; the paint
+        ; keeps its hue but loses its light, because the only thing lighting
+        ; a car at night is the city it is driving through.
+        db  5, 6, 8          ;120 asphalt
+        db 20, 5, 5          ;121 red
+        db 13, 3, 3          ;122
+        db  7,12,24          ;123 blue
+        db  4, 8,16          ;124
+        db 24,21, 6          ;125 yellow
+        db 16,14, 4          ;126
+        db  6,18,10          ;127 green
+        db  4,12, 6          ;128
+        db 24,24,26          ;129 white
+        db 16,16,18          ;130
+        db 10,11,13          ;131 charcoal
+        db  6, 7, 8          ;132
+        db 25,14, 4          ;133 orange
+        db 17, 9, 2          ;134
+        db  5,19,20          ;135 teal
+        db  3,13,14          ;136
 
 APPLYPALF PROC FAR
         push ds

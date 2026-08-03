@@ -75,12 +75,19 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         je   @@st               ; water: the terrain mesh paints the sea
         cmp  ax,4
         je   @@st               ; foothills: terrain paints the woods
+        call ISROAD
+        jc   @@road
+        ; ---- ONE BUILDING TO EVERY 2x2 CELLS. A 256-unit plot beside a
+        ; 512-unit avenue is what made the city look microscopic: the road
+        ; was twice the width of the thing it served. Widening the building
+        ; inside its own cell cannot fix that - at half-width 230 it would
+        ; already be standing in the near traffic lane. So the building
+        ; takes the pair, its centre moves to the pair's centre (see
+        ; RENDERCELL), and the other three cells are its garden.
         mov  ax,[gi]
-        and  ax,3
-        jz   @@st              ; gi on an avenue -> street
-        mov  ax,[gj]
-        and  ax,3
-        jz   @@st              ; gj on an avenue -> street
+        or   ax,[gj]
+        test ax,1
+        jnz  @@st
         call CELLHASH          ; ax = hash of (gi,gj)
         mov  bx,ax
         and  bx,31              ; hash 7/8/9 of 32 -> flat terrain patches
@@ -100,22 +107,45 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         cmp  ax,3
         jae  @@unbuilt          ; empty block: open ground (patches still apply)
         pop  ax
-        ; district type from the block hash: 0/3 residential, 1 downtown, 2 industry
+        ; ---- district: the BLOCK sets the flavour, the CELL gets a say.
+        ; 0/3 residential, 1 downtown, 2 industry. A pure district is what
+        ; makes a procedural city look drawn by a zoning computer: sixty
+        ; identical sheds, then sixty identical houses. Three cells in eight
+        ; take a neighbour's district instead, so a machine shop stands
+        ; behind the houses and a shed leans on a tower - and the block
+        ; still reads as what it mostly is.
         mov  bx,[sbh]
         mov  cl,4
         shr  bx,cl
         and  bx,3
         mov  [bdist],bx
-        ; base footprint from the cell hash
+        push ax                 ; the cell hash is wanted after this
+        call DHASH              ; the cell's own opinion
         mov  bx,ax
-        and  bx,31              ; bits[0..4]  -> half width  84..115
-        add  bx,84
+        and  bx,7
+        cmp  bx,5
+        jb   @@dok
+        mov  bx,ax
+        mov  cl,3
+        shr  bx,cl
+        and  bx,3
+        inc  bx                 ; +1..4, so never its own district again
+        add  bx,[bdist]
+        and  bx,3
+        mov  [bdist],bx
+@@dok:  pop  ax
+        ; base footprint from the cell hash
+        mov  bx,ax              ; footprint, on the 2x2 plot: half size
+        and  bx,31              ; 168..230, so the building is 336..460
+        add  bx,bx              ; across in a 512 plot and still keeps its
+        add  bx,168             ; feet out of the road
         mov  [bhw],bx
         mov  bx,ax
         mov  cl,5
         shr  bx,cl
-        and  bx,31              ; bits[5..9]  -> half depth  84..115
-        add  bx,84
+        and  bx,31
+        add  bx,bx
+        add  bx,168
         mov  [bhd],bx
         mov  bx,ax              ; wall colour scheme 0..3 (grey/blue/red/white)
         mov  cl,13
@@ -138,7 +168,8 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         mov  word ptr [btype],2 ; tower
 @@rh:   mov  bx,ax
         and  bx,63
-        add  bx,60              ; height 60..123
+        add  bx,bx              ; height 120..246 - twice the old, or the
+        add  bx,120             ; doubled footprint reads as a paving slab
         mov  [bhgt2],bx
         jmp  @@bdone
 @@com:  ; --- commercial downtown: tall mixed skyline ---
@@ -171,14 +202,15 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
 @@a2:   add  si,bx              ; manhattan dist to superblock centre, 0..8
         mov  ax,8
         sub  ax,si
-        mov  bx,36
-        imul bx                 ; downtown bonus 0..288
+        mov  bx,60              ; the plot doubled, so the skyline follows -
+        imul bx                 ; downtown bonus 0..480
         mov  si,ax
         pop  ax
         mov  bx,ax
-        and  bx,63              ; per-building variation 0..63
-        add  bx,50
-        add  bx,si              ; height 50..401 (respawn clears all)
+        and  bx,63              ; per-building variation
+        add  bx,bx
+        add  bx,100
+        add  bx,si              ; height 100..706 (respawn clears all)
         mov  [bhgt2],bx
         jmp  @@bdone
 @@ind:  ; --- industrial: smoking factories and low sheds (always grey) ---
@@ -189,13 +221,29 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         mov  word ptr [btype],0 ; 5..7 plain shed
 @@ih:   mov  bx,ax
         and  bx,31
-        add  bx,50              ; low industry: 50..81
+        add  bx,bx
+        add  bx,100             ; low industry: 100..162
         mov  [bhgt2],bx
 @@bdone:
         mov  word ptr [bstreet],0
         ret
 @@st:   mov  word ptr [bstreet],1
         ret
+@@road: call SBHASH             ; ...but only where the block is BUILT UP.
+        and  ax,15              ; Every city-zone cell matches the street
+        cmp  ax,3               ; pattern whether or not anything stands on
+        jae  @@st               ; it, and only ~3/16 of blocks are built, so
+                                ; without this the island wears a full road
+                                ; grid over empty countryside. Same test,
+                                ; same single source of truth, as the one
+                                ; that decides the buildings above.
+        mov  word ptr [bstreet],3 ; a CITY street: tarmac and traffic.
+        ret                       ; Distinct from 1, which also means
+                                  ; "plains / sea / mountain, the terrain
+                                  ; mesh paints it" - and you cannot drive
+                                  ; a bus across those. Everything that
+                                  ; tests bstreet for 0 (is there a
+                                  ; building?) is unaffected.
 @@unbuilt:
         pop  ax                 ; discard the kept cell hash
         jmp  @@st
@@ -211,6 +259,49 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         mov  word ptr [bhw],116
         mov  word ptr [bhd],116
         mov  word ptr [bstreet],2
+        ret
+
+; ============================================================================
+;  ISROAD - is cell [gi],[gj] road rather than a plot?  CF=1 = road.
+;  TWO cells in every eight, so an avenue is 512 units across - twice the
+;  old one, which was one cell in four. The built fraction is untouched:
+;  (6/8) squared is exactly what (3/4) squared gave. Wider streets and
+;  blocks twice the size, the same amount of city. Streets are what a city
+;  is SEEN through; at one cell the buildings on the far side stood right
+;  on top of the ones in front, and there was nowhere to put a bus.
+;  The 8-cell period also lines up with the downtown height bonus, which
+;  already measures its distance from the block centre with gi&7.
+;  Clobbers AX.
+; ============================================================================
+ISROAD: mov  ax,[gi]
+        and  ax,7
+        cmp  ax,2
+        jl   @@yes
+        mov  ax,[gj]
+        and  ax,7
+        cmp  ax,2
+        jl   @@yes
+        clc
+        ret
+@@yes:  stc
+        ret
+
+; DHASH - a SECOND, independent hash of the cell. The first one's bits are
+; all spoken for (width, depth, selector, scheme), and reusing them would
+; tie a cell's district to its shape - the tall buildings would always be
+; the ones that changed district, and the eye finds that sort of thing.
+DHASH:  mov  ax,[gi]
+        mov  bx,3121
+        imul bx
+        mov  si,ax
+        mov  ax,[gj]
+        mov  bx,6151
+        imul bx
+        add  ax,si
+        mov  bx,ax
+        mov  cl,9
+        shr  bx,cl
+        xor  ax,bx
         ret
 
 ; SBHASH - superblock (8x8 cells) hash for cell [gi],[gj] -> AX.
@@ -255,202 +346,9 @@ CELLHASH:
         ret
 
 ; ============================================================================
-;  WINFACE  draw lit windows on the current vertical face (IX/IY/IZ[0..3])
-;  corner order: 0=A_bot 1=A_top 2=B_top 3=B_bot ; needs all IZ>=NEARZ
+;  The windows moved out on 2026-08-03. WINFACE and WLIT2 now live in
+;  TOWNSEG (TOWN.INC) and are reached through the far door WINFACEF: the
+;  main segment was down to twenty-six bytes and the new pane geometry is
+;  bigger than the old, so the rule applied - open a segment, do not shave
+;  bytes. Read TOWN.INC for what changed and LAB\README.md for why.
 ; ============================================================================
-WINFACE:
-        ; The glass walks the wall in CAMERA space and every pane is
-        ; projected on its own. The old grid was bilinear in SCREEN
-        ; space - affine, which is fine at a distance but slides the
-        ; windows clean off the building when you close in, leaving
-        ; them hanging in the air beside it (user report 2026-07-27).
-        ; A corner behind the near plane no longer kills the whole
-        ; face either: each pane carries its own Z test, so a
-        ; half-clipped wall keeps the glass it can still show.
-        ;
-        ; NO PITCH4 HERE. FACESTROKE ran on this face one call ago and
-        ; its CLIPNEAR already pitched IX/IY/IZ IN PLACE. Pitching again
-        ; turned the glass a second time about the camera axis, so the
-        ; windows slid off the wall exactly when you dived at the city -
-        ; which is the only way you ever approach it (2026-07-27).
-        mov  byte ptr [wc],0
-@@cl:   mov  al,[wc]            ; u = (2c+1)/6 across the wall
-        cbw
-        add  ax,ax
-        inc  ax
-        mov  [wfu],ax
-        mov  ax,[IX+4]          ; column top = C1 + (C2-C1)*u/6
-        sub  ax,[IX+2]
-        imul word ptr [wfu]
-        mov  bx,6
-        idiv bx
-        add  ax,[IX+2]
-        mov  [wtcx],ax
-        mov  ax,[IY+4]
-        sub  ax,[IY+2]
-        imul word ptr [wfu]
-        mov  bx,6
-        idiv bx
-        add  ax,[IY+2]
-        mov  [wtcy],ax
-        mov  ax,[IZ+4]
-        sub  ax,[IZ+2]
-        imul word ptr [wfu]
-        mov  bx,6
-        idiv bx
-        add  ax,[IZ+2]
-        mov  [wtcz],ax
-        mov  ax,[IX+6]          ; column bottom = C0 + (C3-C0)*u/6
-        sub  ax,[IX]
-        imul word ptr [wfu]
-        mov  bx,6
-        idiv bx
-        add  ax,[IX]
-        mov  [wbcx],ax
-        mov  ax,[IY+6]
-        sub  ax,[IY]
-        imul word ptr [wfu]
-        mov  bx,6
-        idiv bx
-        add  ax,[IY]
-        mov  [wbcy],ax
-        mov  ax,[IZ+6]
-        sub  ax,[IZ]
-        imul word ptr [wfu]
-        mov  bx,6
-        idiv bx
-        add  ax,[IZ]
-        mov  [wbcz],ax
-        mov  byte ptr [wr],0
-@@rl:   mov  al,[wr]            ; v = (2r+1)/10 down the column
-        cbw
-        add  ax,ax
-        inc  ax
-        mov  [wfv],ax
-        mov  ax,[wbcz]          ; depth first: it gates AND it sizes
-        sub  ax,[wtcz]
-        imul word ptr [wfv]
-        mov  bx,10
-        idiv bx
-        add  ax,[wtcz]
-        mov  [wgz],ax
-        cmp  ax,NEARZ
-        jl   @@wn               ; this pane is behind us
-        mov  ax,[wbcx]
-        sub  ax,[wtcx]
-        imul word ptr [wfv]
-        mov  bx,10
-        idiv bx
-        add  ax,[wtcx]
-        mov  [wgx],ax
-        mov  ax,[wbcy]
-        sub  ax,[wtcy]
-        imul word ptr [wfv]
-        mov  bx,10
-        idiv bx
-        add  ax,[wtcy]
-        mov  [wgy],ax
-        mov  ax,[wgx]
-        mov  dx,[wgy]
-        mov  cx,[wgz]
-        call PROJPT
-        mov  [wpx],ax
-        mov  [wpy],dx
-        call WLIT2
-        jz   @@wn
-        mov  ax,6160            ; a pane is ~28 units of glass: r=28*220/z
-        cwd
-        idiv word ptr [wgz]
-        or   ax,ax
-        jnz  @@ws1
-        inc  ax                 ; never smaller than one lit pixel
-@@ws1:  cmp  ax,10
-        jle  @@ws2
-        mov  ax,10              ; ...and never a wall of light
-@@ws2:  mov  [wbsz],al
-        sar  ax,1               ; centre the pane on its point
-        mov  bx,[wpx]
-        sub  bx,ax
-        mov  [wpx],bx
-        mov  bx,[wpy]
-        sub  bx,ax
-        mov  [wpy],bx
-        mov  byte ptr [wbj],0
-@@wby:  mov  byte ptr [wbi],0
-@@wbx:  mov  al,[wbi]
-        cbw
-        add  ax,[wpx]
-        js   @@wbs
-        cmp  ax,319
-        jg   @@wbs
-        mov  bl,[wbj]
-        xor  bh,bh
-        add  bx,[wpy]
-        js   @@wbs
-        cmp  bx,199
-        jg   @@wbs
-        call PUTPIXEL
-@@wbs:  inc  byte ptr [wbi]
-        mov  al,[wbi]
-        cmp  al,[wbsz]
-        jl   @@wbx
-        inc  byte ptr [wbj]
-        mov  al,[wbj]
-        cmp  al,[wbsz]
-        jl   @@wby
-@@wn:   inc  byte ptr [wr]
-        cmp  byte ptr [wr],5
-        jl   @@rl
-        inc  byte ptr [wc]
-        cmp  byte ptr [wc],3
-        jl   @@cl
-        ret
-
-; lit? hash from gi,gj,fa,wr,wc -> ZF=1 not lit else COLOR set
-WLIT2:  mov  ax,[gi]
-        mov  bx,131
-        imul bx
-        mov  si,ax
-        mov  ax,[gj]
-        mov  bx,977
-        imul bx
-        add  ax,si
-        mov  bx,[fa]
-        add  ax,bx
-        mov  bl,[wr]
-        xor  bh,bh
-        mov  cx,101
-        push ax
-        mov  ax,bx
-        mul  cx
-        mov  bx,ax
-        pop  ax
-        add  ax,bx
-        mov  bl,[wc]
-        xor  bh,bh
-        mov  cx,57
-        push ax
-        mov  ax,bx
-        mul  cx
-        mov  bx,ax
-        pop  ax
-        add  ax,bx
-        mov  bx,ax
-        mov  cl,5
-        shr  bx,cl
-        xor  ax,bx
-        mov  bx,ax
-        and  bx,7
-        cmp  bx,3
-        jl   @@lit
-        xor  al,al
-        ret
-@@lit:  mov  bx,ax
-        and  bx,31
-        jnz  @@cy
-        mov  byte ptr [COLOR],5
-        jmp  @@d
-@@cy:   mov  byte ptr [COLOR],4
-@@d:    mov  al,1
-        or   al,al
-        ret

@@ -968,6 +968,25 @@ PPOINTF PROC FAR
         call PPOINT             ; the station lock-scan projects out there
         ret
 PPOINTF ENDP
+; ---- the way home for TOWNSEG: the windows live out there now and the
+; rasterizer cannot. Three doors, seven bytes each, and the main segment
+; got five hundred back for them.
+PROJPTF PROC FAR
+        call PROJPT
+        ret
+PROJPTF ENDP
+SCANPLYF PROC FAR
+        call SCANPOLY
+        ret
+SCANPLYF ENDP
+PUTPIXF PROC FAR
+        call PUTPIXEL
+        ret
+PUTPIXF ENDP
+DRAWBOXF PROC FAR
+        call DRAWBOX            ; the traffic is boxes on the road, drawn by
+        ret                     ; the same routine the buildings are
+DRAWBOXF ENDP
 
 ; ---------------------------------------------------------------------------
 ;  LKPOS - where the locked target is, in world coordinates: lkx/lky/lkz.
@@ -2785,6 +2804,31 @@ TRCUPD: xor  bx,bx
         call BCHK
         jnz  @@thn              ; already rubble: sail through
         call HBLD
+        cmp  word ptr [bstreet],3
+        jne  @@nocar            ; ---- a street: is there a bus on it? ----
+        mov  ax,[gi]
+        mov  bx,[gj]
+        call GETH
+        call WORLDH
+        mov  [gbase],ax
+        pop  di
+        push di
+        mov  ax,[tcx+di]
+        mov  [hitx],ax
+        mov  ax,[tcy+di]
+        mov  [hity],ax
+        mov  ax,[tcz+di]
+        mov  [hitz],ax
+        call FAR PTR CARHITF    ; O(1): given the cell, where its vehicle is
+        jnc  @@thn              ; right now is arithmetic, not a search
+        mov  ah,40              ; a car going up is a small bang
+        mov  cx,1800
+        call SFXBOOM
+        pop  di
+        pop  bx
+        mov  byte ptr [trcact+bx],0
+        jmp  @@n
+@@nocar:
         cmp  word ptr [bstreet],0
         jne  @@thn
         pop  di
@@ -3747,6 +3791,41 @@ FLBSEED:
 ;  object - its death is one bit in the DSTB ruins bitmap (checked by the
 ;  renderer and the collider) plus a wreck slot full of wall slabs.
 ; ---------------------------------------------------------------------------
+; ---------------------------------------------------------------------------
+;  DSTCLR - stand the whole city back up. Called when a world is made.
+;
+;  THIS WAS MISSING, from the beginning. BSS says at the top of CITY.ASM
+;  that everything in it is "fully written before first read" - and DSTB
+;  was the one tenant that never was. It is only ever OR-ed into by BSET
+;  and read by BCHK, so on a fresh launch the ruins bitmap was whatever
+;  DOS happened to leave at that address: a random scatter of the city
+;  could start life as rubble, and which cells would depend on nothing but
+;  where the program landed in memory.
+;
+;  HONEST NOTE ON HOW THIS WAS FOUND. It came out of chasing black cells on
+;  the map MFD, and it is NOT what caused them - those turn out to predate
+;  all of this (SHOTS\r4.png, an earlier session, has them) and clearing
+;  DSTB does not remove them. So this fixes a real latent fault that was
+;  found by accident, and the map dots are still open. Do not read this
+;  routine as their cure.
+;
+;  A bug that depends on the address it lands at is not a rare bug - it is
+;  a bug waiting for a layout change, and this project makes those.
+; ---------------------------------------------------------------------------
+DSTCLR: push es
+        push di
+        mov  ax,ds
+        mov  es,ax
+        mov  di,offset BSS
+        add  di,DSTBA
+        xor  ax,ax
+        mov  cx,256             ; 512 bytes: one bit per world cell
+        cld
+        rep  stosw
+        pop  di
+        pop  es
+        ret
+
 ; BCHK - ZF=1 while the building at (gi,gj) still stands. Clobbers AX,BX,CL,SI.
 BCHK:   mov  ax,[gj]
         and  ax,63
