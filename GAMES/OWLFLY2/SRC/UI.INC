@@ -950,6 +950,10 @@ PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db  5,20, 6          ;113 ...and each one's shadow, for the round
         db 22,15, 2          ;114 lenses on the option-select columns
         db 22, 3, 3          ;115
+        db  6, 6, 8          ;116 annunciator glass speckle
+        db  8,34,10          ;117 scanline shades - a hair under the
+        db 38,26, 3          ;118  core, not the lens shadow
+        db 38, 4, 4          ;119
 
 PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db 12,18,40          ;1  far stroke
@@ -1005,6 +1009,10 @@ PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db  3,12, 3          ;113 the shadows, dimmer again
         db 13, 9, 1          ;114
         db 13, 2, 2          ;115
+        db  3, 3, 4          ;116 speckle, night
+        db  5,20, 6          ;117 scanlines, night
+        db 22,15, 2          ;118
+        db 22, 2, 2          ;119
 
 APPLYPALF PROC FAR
         push ds
@@ -3110,16 +3118,25 @@ STATPGF ENDP                    ; bytes each of a segment with eight left
 ;  warnings, red, except the target call which is only ever information.
 ;   ES = bufseg, DS = the main segment (UISEG's own words take cs:).
 ; ===========================================================================
-SPLX    equ 12                  ; left column: five glyphs centred in 10..32
-SPRX    equ 288                 ; right column, the same inside 286..308
-SPY0    equ 131                 ; first slot; five of them, eleven apart
-SPDY    equ 11
+SPNX    dw 10,286               ; the two black plates inside their bezels
+SPPLW   equ 23                  ; ...and how wide they are
+SPSY0   equ 129                 ; first slot's top row; five of them
+SPSH    equ 10                  ; ...pitch...
+SPFH    equ 9                   ; ...how much of that is the lit plate...
+SPTY    equ 2                   ; ...and the word's own row inside it, so
+                                ;  the legend is centred DOWN the slot as
+                                ;  well as across it
+SPNY0   equ 129                 ; the plate's own top and bottom, for the
+SPNY1   equ 180                 ;  speckle that goes down before the words
 SPDARK  equ PNLDIM              ; the panel's own set, defined once in
 SPGRN   equ PNLGRN              ;  DATA.INC beside the zone constants so
 SPAMB   equ PNLAMB              ;  both segments read the same numbers
 SPRED   equ PNLRED
-SPTXT   db 'FLAPS',0,'GEAR ',0,'BRAKE',0,'BURN ',0,'     ',0
-        db 'STALL',0,'FUEL ',0,'TERR ',0,'FIRE ',0,'LOCK ',0
+; NUL padding, not spaces, so a word can be MEASURED and centred. Five
+; letters fill the plate exactly; a four-letter one used to start at the
+; same x and sat two pixels left of where it belonged.
+SPTXT   db 'FLAPS',0,'GEAR',0,0,'BRAKE',0,'BURN',0,0,0,0,0,0,0,0
+        db 'STALL',0,'FUEL',0,0,'TERR',0,0,'FIRE',0,0,'LOCK',0,0
 ; ---- the bottom switch row: the three radios ------------------------------
 ; The artwork's buttons are ~11 px of black between bright dividers at
 ; x 53/65/76/88/99/111. Three characters ink eleven pixels, which FILLS a
@@ -3209,14 +3226,18 @@ SWKTAB  db SC_F
 ;  Amber for a setting, green for a stores count, red for damage - the
 ;  panel's own dim set, so they sit down at night with everything else.
 ; ===========================================================================
-OSBX    dw 41,106,122,187,204,269
+; Measured off the artwork, then corrected by eye against the running game -
+; the brightness scan found the columns but put four of the six a pixel or
+; three out, and at this size that is the difference between a lamp in its
+; socket and a lamp beside one.
+OSBX    dw 41,103,122,185,204,267
 OSBLX   equ 4                   ; the lens sits four in from the plate's left
 ; The CENTRE screen sits three pixels lower than the other two in the
 ; artwork (129 against 126), and so do the two columns flanking it. One
 ; table with a per-column offset lands on all six; the first attempt used
 ; the radar column's rows for everything and missed four columns out of
 ; six by exactly that three.
-OSBDY   db 0,0,3,3,0,0
+OSBDY   db 0,2,3,3,0,0
 ; Seven plates a column, and the rows are NOT on a regular pitch - the
 ; artwork drifts, so they were measured off it rather than computed. These
 ; are the TOP row of each lens; the artwork's own lamp centre is one lower.
@@ -3351,7 +3372,7 @@ OSBCOL: mov  al,cs:[OSBDY+bx]   ; this column's own vertical offset
         jz   @@cn
         test cs:[osbf],ax       ; a flashing lamp is dark half the time
         jz   @@ck
-        test word ptr [lasttk],4
+        test word ptr [lasttk],PNLBLNK
         jz   @@cn
 @@ck:   mov  ah,cs:[osbc]       ; red overrides the column's own colour
         test cs:[osbr],ax
@@ -3409,9 +3430,45 @@ SWKEYS: xor  si,si              ; row index 0..SWNK-1
         jb   @@k
         ret
 spmsk   dw 0                    ; which of the ten are live this frame
-spcol   db 0                    ; colour for the slot being drawn
+spcol   db 0                    ; the slot's BACKGROUND colour (0 = unlit)
+spplx   dw 0                    ; ...and the plate's left edge
+spwink  db 0                    ; the ink colour for this slot's word
 
 SIDEPNL:
+        ; ---- the glass first. A flat black rectangle reads as a hole cut
+        ; in the panel; a few barely-lit specks read as glass with a lamp
+        ; somewhere behind it, and the words then sit ON something. The
+        ; pattern is fixed, not random - noise regenerated every frame
+        ; would crawl, and a crawling panel is worse than a flat one. ----
+        cld
+        xor  si,si
+@@nsp:  mov  bx,si
+        add  bx,bx
+        mov  di,cs:[SPNX+bx]
+        mov  word ptr [dsx],SPNY0
+@@nsr:  mov  ax,[dsx]
+        mov  bx,ax              ; the row's own offset: (y*3) and 3, which
+        add  bx,bx              ;  walks 0,3,2,1 down the plate and never
+        add  bx,ax              ;  lines the specks up into a stripe
+        and  bx,3
+        push di
+        call UROW
+        pop  ax
+        add  di,ax
+        add  di,bx
+        push ax
+        mov  al,PNLNOIS
+        mov  cx,5
+@@nsx:  mov  es:[di],al
+        add  di,4
+        loop @@nsx
+        pop  di
+        inc  word ptr [dsx]
+        cmp  word ptr [dsx],SPNY1
+        jbe  @@nsr
+        inc  si
+        cmp  si,2
+        jb   @@nsp
         mov  word ptr cs:[spmsk],0
         cmp  byte ptr [flaps],0 ; ---- left: what is hanging out ----
         je   @@spg
@@ -3443,15 +3500,21 @@ SIDEPNL:
 @@spk:  cmp  word ptr [locki],0FFFFh
         je   @@spd
         or   word ptr cs:[spmsk],512
-@@spd:  xor  si,si              ; ---- and print all ten ----
+        ; ---- and paint all ten. A real annunciator does NOT colour its
+        ; letters: it lights the whole legend plate from behind and the
+        ; printed word stays the dark grey it was printed in. So the SLOT
+        ; fills with colour, faintly banded the way a lit panel always is,
+        ; a dark line divides one from the next, and the word goes on top
+        ; in the same grey whether the lamp is on or off. ----
+@@spd:  xor  si,si
 @@spl:  mov  cx,si
         mov  ax,1
         shl  ax,cl
-        mov  byte ptr cs:[spcol],SPDARK
+        mov  byte ptr cs:[spcol],0      ; 0 = this slot is not lit
         test cs:[spmsk],ax
-        jz   @@spp              ; idle: the legend still shows, unlit
-        test word ptr [lasttk],4
-        jz   @@spp              ; live, dark half of the blink: same again
+        jz   @@spp
+        test word ptr [lasttk],PNLBLNK
+        jz   @@spp              ; live, dark half of the blink
         mov  byte ptr cs:[spcol],SPGRN  ; a system that is OUT reads green
         cmp  si,5
         jb   @@spp
@@ -3459,19 +3522,99 @@ SIDEPNL:
         cmp  si,9
         jne  @@spp
         mov  byte ptr cs:[spcol],SPAMB  ; ...but a lock is news, not alarm
-@@spp:  mov  ax,SPLX            ; where this slot sits
-        cmp  si,5
+@@spp:  mov  di,si              ; MEASURE the word, so it can be centred
+        add  di,di
+        mov  bx,di
+        add  di,di
+        add  di,bx              ; *6
+        xor  cx,cx
+@@spm:  cmp  byte ptr cs:[SPTXT+di],0
+        je   @@spw
+        inc  di
+        inc  cx
+        cmp  cx,5
+        jb   @@spm
+@@spw:  mov  ax,cx              ; ink = len*4 - 1, so the left margin is
+        add  ax,ax              ;  (23 - ink) / 2
+        add  ax,ax
+        dec  ax
+        neg  ax
+        add  ax,SPPLW
+        sar  ax,1
+        mov  bx,si              ; which plate
+        cmp  bx,5
         jb   @@spx
-        mov  ax,SPRX
-@@spx:  mov  [ftx],ax
+        sub  bx,5
+        mov  bx,2
+        jmp  @@spx2
+@@spx:  xor  bx,bx
+@@spx2: mov  dx,cs:[SPNX+bx]
+        mov  cs:[spplx],dx      ; the plate itself, for the lit background
+        add  ax,dx
+        mov  [ftx],ax
         mov  ax,si
         cmp  ax,5
         jb   @@spy
         sub  ax,5
-@@spy:  mov  bx,SPDY
+@@spy:  mov  bx,SPSH
         imul bx
-        add  ax,SPY0
+        add  ax,SPSY0           ; the slot's top row
+        mov  [dsy],ax
+        add  ax,SPTY            ; ...and the word, centred DOWN it too
         mov  [fty],ax
+        mov  al,PNLCAP          ; the ink: grey on black, black on colour
+        cmp  byte ptr cs:[spcol],0
+        je   @@sqt
+        mov  al,PNLNOIS
+@@sqt:  mov  cs:[spwink],al
+        ; ---- the lit plate behind the word, and the dark line dividing
+        ; this slot from the next.
+        ;
+        ; It was BANDED for a while - a darker line every fourth row - and
+        ; that was the wrong instinct twice over: at half brightness it was
+        ; a zebra, and even at a tenth it still read as stripes rather than
+        ; as a surface. Flat colour with a scatter of grey specks does what
+        ; the stripes were meant to do. The specks are placed from the row
+        ; number, so the pattern is fixed and will not crawl. ----
+        cmp  byte ptr cs:[spcol],0
+        je   @@sq1
+        mov  cx,SPFH
+        mov  ax,[dsy]
+@@sq0:  push cx
+        push ax
+        call UROW
+        add  di,cs:[spplx]
+        push di
+        mov  al,cs:[spcol]
+        mov  cx,SPPLW
+        rep  stosb              ; flat, no banding
+        pop  di
+        pop  ax
+        push ax
+        mov  bx,ax              ; two specks, at y*7 and y*5 folded into
+        mov  cl,3               ;  the plate's width - cheap, and scattered
+        shl  bx,cl              ;  enough that no two rows agree
+        sub  bx,ax
+        and  bx,15
+        mov  byte ptr es:[di+bx],PNLCAP
+        mov  bx,ax
+        mov  cl,2
+        shl  bx,cl
+        add  bx,ax
+        and  bx,7
+        add  bx,14
+        mov  byte ptr es:[di+bx],PNLCAP
+        pop  ax
+        inc  ax
+        pop  cx
+        loop @@sq0
+@@sq1:  mov  ax,[dsy]           ; the divider, lit slot or not
+        add  ax,SPFH
+        call UROW
+        add  di,cs:[spplx]
+        mov  al,PNLNOIS
+        mov  cx,SPPLW
+        rep  stosb
         mov  di,si              ; the string: six bytes a slot
         add  di,di
         mov  bx,di
@@ -3506,7 +3649,12 @@ SIDEPNL:
         add  di,[ftx]
         mov  cx,6
 @@spr:  mov  al,[si]
-        mov  ah,cs:[spcol]
+        mov  ah,cs:[spwink]     ; grey on a dark plate, NEAR BLACK on a lit
+                                ;  one. The word is printed on the plate,
+                                ;  not made of light - so when the lamp
+                                ;  comes on behind it, it goes darker, not
+                                ;  brighter, and that is what makes a lit
+                                ;  legend readable instead of glaring.
         test al,80h
         jz   @@sp1
         mov  es:[di],ah
@@ -3697,7 +3845,7 @@ WARNLMP:
         jz   @@wdn
         cmp  byte ptr cs:[WLMPB+si],0
         je   @@wdon
-        test word ptr [lasttk],4 ; the urgent ones flash, about twice a second
+        test word ptr [lasttk],PNLBLNK ; the urgent ones flash, about twice a second
         jz   @@wdn
 @@wdon: mov  ax,WLMPY
         call UROW
@@ -4166,4 +4314,10 @@ ENDIF
                                 ; every paragraph we were given.
 
 UISEG   ENDS
+
+
+
+
+
+
 

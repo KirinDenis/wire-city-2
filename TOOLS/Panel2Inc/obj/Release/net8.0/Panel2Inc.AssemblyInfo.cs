@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Panel2Inc")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0af486469b1cbb71149091d91aa3548f2c2c2e47")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f0cb95247e0b593663113fa2806b9a3a4d5cb3c7")]
 [assembly: System.Reflection.AssemblyProductAttribute("Panel2Inc")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Panel2Inc")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

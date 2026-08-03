@@ -181,6 +181,23 @@ PNLSHAD equ 3                   ; core colour + this = its shadow
 PNLGRN2 equ 113
 PNLAMB2 equ 114
 PNLRED2 equ 115
+PNLNOIS equ 116                 ; the speckle on the annunciator glass. A
+                                ;  black rectangle reads as a hole cut in
+                                ;  the panel; a barely-lit one reads as
+                                ;  glass with a lamp behind it
+; The SCANLINE shade: a hair darker than the core, nothing like PNLSHAD.
+; PNLSHAD is a lens's own curvature and is meant to be seen; this is the
+; faint banding an old lit display has, and is meant NOT to be. Every
+; fourth row at half brightness was a zebra; at a tenth it is a surface.
+PNLBAND equ 7                   ; core colour + this = its scanline
+PNLGRN3 equ 117
+PNLAMB3 equ 118
+PNLRED3 equ 119
+; How fast the panel blinks, as a bit of the tick counter. 4 was twice a
+; second and read as an alarm going off; 8 is once, which reads as a lamp
+; that wants attention without shouting. Every blinking thing on the panel
+; uses THIS so they all wink together - two rates would be chaos.
+PNLBLNK equ 8
 PZDIG0  equ 124                 ; IAS
 PZDIG1  equ 141                 ; ALT (five digits of room)
 PZDIG2  equ 164                 ; HDG
@@ -206,7 +223,7 @@ hbslp   dw 0                    ; the lean in force: -HBLEAN on the left
                                 ;  cockpit down (no bows to follow)
 PZLAMPY equ 129                 ; first lamp slot, five of them 10 apart
 PZLAMPH equ 10
-PZTHRX  equ 34                  ; throttle ladder. It used to stand at 38,
+PZTHRX  equ 35                  ; throttle ladder. It used to stand at 38,
 PZTHRY  equ 176                 ;  where its right-hand pixels climbed onto
                                 ;  the radar screen's bezel. Moved in beside
                                 ;  the FLAPS/GEAR column, on the bare strip
@@ -1470,7 +1487,7 @@ HCOL    db 8
 ;            8 HUD       9 sky band    10 ground     11 field/ground band
 ;            12 haze     13 mountains  14 water      15 forest
 ;            16 wall E/W (shade)       17 roof
-NPALC   equ 116                 ; 31 game + 63 cockpit + glow + 2 IFF +
+NPALC   equ 120                 ; 31 game + 63 cockpit + glow + 2 IFF +
                                 ; amber + 7 NEWTON sky (SKYZ..SKYZ+6) +
                                 ; ladder dim + HUD cyan + true black
                                 ; + 5 PANEL colours (108..112): the cockpit
@@ -1517,3 +1534,5 @@ lgnd     dw 0                   ; last ground height under the jet (TERR lamp)
 MSGHELP  db ' ESC',0
 MSGCRASH db '*** CRASH ***',0
 MSGREST  db 'SPACE = RESTART',0
+
+

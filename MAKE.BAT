@@ -5,6 +5,7 @@ REM   MAKE            - build EVERYTHING (all games + examples)
 REM   MAKE OWLFLY     - the flight simulator only (converters + TASM)
 REM   MAKE WIRECITY   - the 1986 original only
 REM   MAKE EXAMPLES   - the teaching machines only
+REM   MAKE LAB        - the house lab (LAB\HOUSE.COM), TASM only
 REM   MAKE TOOLS      - the DOS toolchain (OBJ2DAT model precompiler)
 REM   MAKE TRAINER    - the flight school (model DAT + TASM)
 REM   MAKE NEWTON     - the force-model aeroplane (TASM only, archived)
@@ -25,6 +26,7 @@ if "%TARGET%"=="" set TARGET=ALL
 
 if "%TARGET%"=="WIRECITY" goto skipconv
 if "%TARGET%"=="EXAMPLES" goto skipconv
+if "%TARGET%"=="LAB" goto skipconv
 if "%TARGET%"=="TOOLS" goto skipconv
 if "%TARGET%"=="NEWTON" goto skipconv
 if "%TARGET%"=="TRAINER" goto trconv

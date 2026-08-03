@@ -1,6 +1,6 @@
 @echo off
 REM BUILDQ.BAT %1 - runs INSIDE DOSBox (via MAKE.BAT), C: = repo root.
-REM Targets: ALL | OWLFLY | OWLFLY2 | WIRECITY | EXAMPLES | TRAINER |
+REM Targets: ALL | OWLFLY | OWLFLY2 | WIRECITY | EXAMPLES | LAB | TRAINER |
 REM NEWTON. Case matters (DOSBox).
 set PATH=c:\bp\bin;d:\bin;%PATH%
 echo BUILD START > BUILD.LOG
@@ -8,6 +8,7 @@ if "%1"=="OWLFLY" goto owlfly
 if "%1"=="OWLFLY2" goto owlfly2
 if "%1"=="WIRECITY" goto wirecity
 if "%1"=="EXAMPLES" goto examples
+if "%1"=="LAB" goto lab
 if "%1"=="TOOLS" goto tools
 if "%1"=="TRAINER" goto trainer
 if "%1"=="NEWTON" goto newton
@@ -90,6 +91,15 @@ TLINK /t SOLO.OBJ >> ..\BUILD.LOG
 if errorlevel 1 goto err
 cd ..
 if "%1"=="EXAMPLES" goto ok
+
+:lab
+cd LAB
+TASM /T HOUSE.ASM >> ..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t HOUSE.OBJ >> ..\BUILD.LOG
+if errorlevel 1 goto err
+cd ..
+if "%1"=="LAB" goto ok
 
 :tools
 cd TOOLS
