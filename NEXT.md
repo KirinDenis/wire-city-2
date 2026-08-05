@@ -109,7 +109,49 @@ aeroplane has a capability it has not got.
 
 ## Open work, in the order I would take it
 
-### 1. The player's missile POOL  (small-to-medium, and it is a real bug)
+### 1. The player's missiles
+
+**FIXED 2026-08-05, and it was not the pool.** Going in to widen the pool I
+found MSLUPD and MSLDRAW reading the WRONG VARIABLES. The missile's previous
+position and velocity are `mpy/mpz` and `mvy/mvz`; the Shilka TURRET's
+model-space scratch was `mtpy/mtpz` and `mtvy/mtvz`. One letter apart, in
+the same file, and the missile code had picked up the turret's four for two
+of its three axes. It assembled silently because both sets exist. What it
+did:
+
+- a missile fired **without a lock** took its vertical and z velocity from
+  whatever the turret geometry had last left there. Only the x component was
+  its own, so a dumb-fire flew off in a direction nobody chose;
+- the exhaust puff was drawn off the trunnion instead of off the missile;
+- and every tick a missile was in the air it **stamped its own last position
+  into the turret's scratch**, so the flak's guns were being fed missile
+  coordinates while you had one flying.
+
+`mvy/mvz/mpy/mpz` were written at launch and never read once. The turret's
+four are now `trnpy/trnpz/trnvy/trnvz` so the names cannot collide again.
+
+### 1b. The pool  (DONE 2026-08-05)
+
+Four rails, four in the air if he wants them. The gate was "the missile is
+not in flight" and a missile lives 280 ticks, so a second launch was
+impossible for fifteen seconds - always the fifteen you needed it.
+
+**The bodies did not change by one instruction.** `MSLUPD1` and `MSLDRAW1`
+are still the code written for one missile; what is new is a POOL and a pair
+of swaps. A slot is loaded into the eleven working words the old code reads,
+the old code runs, the slot is written back. Rewriting sixty-odd accesses of
+homing, fusing and detonation arithmetic to carry an index is how you put
+three new bugs in while taking one out.
+
+The pool, the swaps and the walks live in **SYMSEG**: the arrays alone are
+96 bytes and the main segment had 111. It pays two thunks and a handful of
+call sites instead of four loops. `MCEND` is gated on the slot the camera
+actually rides (`mcsl`), because three other missiles can die while that one
+still flies.
+
+**THE MAIN SEGMENT IS DOWN TO 25 BYTES** (BSSMARK FDD5, guard FDEE). The
+next thing to touch it must EVICT first - see the top of this file. The
+coldest code is the cheapest.
 
 The pilot asked for "four missiles, fire as many as you like, they run
 out". Half of that shipped - they no longer regenerate. The other half did

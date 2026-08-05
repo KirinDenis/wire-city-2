@@ -563,9 +563,11 @@ GAMELOOP:
 @@pdone:
         inc  word ptr [fcnt]
         call COLLIDE
+        call FAR PTR STG0F      ; *** TEMP marker: physics done ***
         call FAR PTR NETPOSF    ; tell the wire where we are (1/tick)...
         call FAR PTR NETPOLLF   ; ...and learn where everyone else is
         call NETAPPLY           ; deaths and hits the wire brought us
+        call FAR PTR STG1F      ; *** TEMP marker: the wire is done ***
 
         ; --- render (runs as fast as it can; speed no longer tied to it) ---
         call LERPSET            ; draw BETWEEN the ticks: silk, not jerks
@@ -599,6 +601,7 @@ GAMELOOP:
                                 ; here makes the contract unconditional
                                 ; too, which is what it should always have
                                 ; been.
+        call FAR PTR STG2F      ; *** TEMP marker: the render is done ***
         call HUD                ; the no-cockpit readouts, in OUR font - so
                                 ; they go in BEFORE the blit now, not after
                                 ; it through the BIOS
@@ -621,6 +624,7 @@ GAMELOOP:
         out  dx,al
         mov  al,[GLOWT+bx+2]
         out  dx,al
+        call FAR PTR STG3F      ; *** TEMP marker: the frame closed ***
         call SNDENG             ; the engine follows the throttle
         call WAITV              ; tearing guard only (does not gate physics)
         ; the exit is Alt-Q, the MicroProse way (F-15 SE II manual).

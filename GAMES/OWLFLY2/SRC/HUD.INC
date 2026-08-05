@@ -403,8 +403,8 @@ PANELBMP:
         cmp  byte ptr [abon],0
         je   @@ab
         mov  byte ptr [COLOR],97
-        mov  word ptr [ftx],149 ; UP into the black plate between the two
-        mov  word ptr [fty],8   ; lamp clusters, where the artwork left a
+        mov  word ptr [ftx],PZABX ; UP into the black plate between the two
+        mov  word ptr [fty],PZABY ; lamp clusters, where the artwork left a
                                 ; slot for exactly this. It used to sit just
                                 ; BELOW the plate, on the canopy rail, where
                                 ; it read as graffiti on the windscreen
@@ -648,9 +648,13 @@ RBLIPS: cmp  byte ptr [swtr],0  ; EMISSIONS OFF is the same picture as a
 @@rn:   add  si,2
         cmp  si,NPLANE*2
         jb   @@rdr
-        ; missiles on the scope: amber sparks (player's and the AI's)
-        cmp  byte ptr [msact],0
-        je   @@rms
+        ; missiles on the scope: amber sparks. All FOUR of the pilot's rails
+        ; now, straight out of the pool - the scope is where you watch a
+        ; salvo go, and one spark for four missiles is a lie about the fight.
+        mov  word ptr [msi],0
+@@psp:  call FAR PTR MSLLOADF   ; the pool is out in SYMSEG; this is how the
+        cmp  byte ptr [msact],0 ;  main segment gets to look at a rail
+        je   @@pspn
         mov  ax,[msx]
         sub  ax,[camx]
         mov  [wdx],ax
@@ -658,6 +662,9 @@ RBLIPS: cmp  byte ptr [swtr],0  ; EMISSIONS OFF is the same picture as a
         sub  ax,[camz]
         mov  [wdz],ax
         call @@rblip
+@@pspn: add  word ptr [msi],2
+        cmp  word ptr [msi],NPMSL*2
+        jb   @@psp
 @@rms:  xor  si,si
 @@rml:  mov  bx,si
         cmp  byte ptr [amact+bx],0

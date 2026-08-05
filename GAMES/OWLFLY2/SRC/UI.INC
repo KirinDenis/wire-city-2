@@ -3255,8 +3255,8 @@ SHKDRAW:
         add  ax,64
         call FAR PTR SINQF
         mov  [mpcs],ax
-        mov  word ptr [mtpy],SHKTRNY
-        mov  word ptr [mtpz],SHKTRNZ
+        mov  word ptr [trnpy],SHKTRNY
+        mov  word ptr [trnpz],SHKTRNZ
         mov  byte ptr [mpon],1
         mov  word ptr [mvb],offset SBARRVT
         mov  word ptr [mvn],SBARRNV*6
@@ -3396,6 +3396,7 @@ STATPGF PROC FAR
         call WARNLMP            ; ...and the overhead lamps, on the same trip
         call SIDEPNL            ; out, the two word columns beside them,
         call OSBLAMP            ; and the six lamp columns by the screens.
+        call NETLAMP            ; ...and the WIRE, in the overhead plate
         ret                     ; A far door apiece would have cost five
 STATPGF ENDP                    ; bytes each of a segment with eight left
 
@@ -3735,6 +3736,7 @@ SWKEYS: xor  si,si              ; row index 0..SWNK-1
         ; not live in the main segment, and the main segment has 180 bytes.
         ; The DRAG still switches with the lever, not with the legs - that is
         ; deliberate. You pay for the gear the moment you ask for it. ----
+        call WINDDRF            ; the breeze, while we are out here anyway
         test word ptr [lasttk],3
         jnz  @@gx
         mov  al,[gearp]
@@ -3753,6 +3755,121 @@ spmsk   dw 0                    ; which of the ten are live this frame
 spcol   db 0                    ; the slot's BACKGROUND colour (0 = unlit)
 spplx   dw 0                    ; ...and the plate's left edge
 spwink  db 0                    ; the ink colour for this slot's word
+
+; ===========================================================================
+;  WINDDRF - the wind, and why it had to stop being a constant.
+;
+;  It used to be two adds in INPUT: camx += 2, camz -= 1, every tick, for
+;  ever. At cruise that is a small correction nobody notices. On APPROACH it
+;  is the main thing happening to the aeroplane - at landing speed the drift
+;  is a large fraction of the airspeed, so the jet crabs sideways across the
+;  strip, and with the airspeed almost gone it is carried bodily backwards
+;  while still pointing forwards. Two pilots reported the same thing in the
+;  same words: "I tried to land and I was blown away."
+;
+;  The fix is the one the air actually uses: THE WIND DIES AT THE SURFACE.
+;  Friction against the ground drags the bottom of the atmosphere to a stop,
+;  which is why real aeroplanes can be landed at all. Full breeze above
+;  WINDH, tapering linearly to nothing on the deck.
+;
+;  Done in FIXED POINT, because the honest scale of this is a fraction of a
+;  unit a tick: the drift is accumulated at 512ths and only whole units are
+;  handed to the position. Truncating per tick instead would round the wind
+;  to zero for the whole approach and to full strength one unit higher.
+;
+;  It lives out here because the main segment has five bytes - and moving it
+;  GAVE that segment eight back, which is the whole reason this could be
+;  fixed properly rather than gated with a compare.
+; ===========================================================================
+WINDH   equ 512                 ; the height the breeze is fully grown at
+wacx    dw 0                    ; the 512ths not yet spent
+wacz    dw 0
+WINDDRF:
+        mov  ax,[camy]          ; height above the ground under us, which
+        sub  ax,[lgnd]          ;  the sway already keeps for its own use
+        jns  @@w1
+        xor  ax,ax
+@@w1:   cmp  ax,WINDH
+        jle  @@w2
+        mov  ax,WINDH           ; above the boundary layer: the full breeze
+@@w2:   mov  cs:[wach],ax
+        mov  bx,WINDX           ; each axis: WIND * agl, into 512ths
+        imul bx
+        add  ax,cs:[wacx]
+        mov  cs:[wacx],ax
+        mov  cl,9
+        sar  ax,cl              ; whole units earned so far
+        mov  bx,ax
+        mov  cl,9
+        shl  ax,cl
+        sub  cs:[wacx],ax       ; ...and keep the change
+        add  [camx],bx
+        mov  ax,cs:[wach]
+        mov  bx,WINDZ
+        imul bx
+        add  ax,cs:[wacz]
+        mov  cs:[wacz],ax
+        mov  cl,9
+        sar  ax,cl
+        mov  bx,ax
+        mov  cl,9
+        shl  ax,cl
+        sub  cs:[wacz],ax
+        add  [camz],bx
+        ret
+wach    dw 0                    ; this tick's height factor, 0..WINDH
+
+; ===========================================================================
+;  NETLAMP - THE WIRE, on the overhead plate.
+;
+;  There was no way to see the state of the network from the cockpit at all.
+;  A pilot disconnected mid-sortie and the only symptom was that the sky went
+;  quiet - which is indistinguishable from nobody being near you. An
+;  aeroplane that fights over a datalink should say whether it HAS one.
+;
+;  It goes in the black plate between the two lamp clusters, the slot the
+;  artwork left for exactly this kind of legend - and the burner strip owns
+;  the same slot. That is not a clash, it is a priority: PANELBMP draws AB ON
+;  AFTER this, so lighting the burner shouts over the wire count for as long
+;  as it is lit, and the count comes straight back when it is not.
+;
+;  The number is REMOTE PILOTS, not a connection flag: netok says the socket
+;  opened, which it did even when the man on the other end walked away. What
+;  a pilot wants to know is how many people are actually out there.
+;
+;  Drawn from UISEG, and that is the point: the main segment has five bytes.
+;  The string is built in NB - a MAIN-segment scratch, so FDRAW can walk it
+;  with DS - and NB is exactly six bytes, which is what "NET n" needs.
+; ===========================================================================
+NETLAMP:
+        xor  cx,cx              ; how many real pilots are on the wire
+        xor  si,si
+@@nl:   cmp  byte ptr [premote+si],0
+        je   @@nln
+        inc  cx
+@@nln:  inc  si
+        cmp  si,NPLANE
+        jb   @@nl
+        mov  byte ptr [NB],'N'
+        mov  byte ptr [NB+1],'E'
+        mov  byte ptr [NB+2],'T'
+        mov  byte ptr [NB+3],' '
+        mov  al,cl
+        cmp  al,9
+        jbe  @@nd
+        mov  al,9               ; one digit is all the plate has room for
+@@nd:   add  al,'0'
+        mov  [NB+4],al
+        mov  byte ptr [NB+5],0
+        mov  byte ptr [COLOR],PNLGRN
+        or   cx,cx
+        jnz  @@nc
+        mov  byte ptr [COLOR],PNLAMB ; alone up here, for whatever reason
+@@nc:   mov  word ptr [ftx],PZABX
+        mov  word ptr [fty],PZABY
+        mov  si,offset NB
+        call FAR PTR FDRAWF
+        ret
 
 SIDEPNL:
         ; ---- the glass first. A flat black rectangle reads as a hole cut

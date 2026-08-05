@@ -1648,6 +1648,206 @@ GEARDRAWF PROC FAR
 @@x:    ret
 GEARDRAWF ENDP
 
+; ============================================================================
+;  THE PILOT'S FOUR RAILS.
+;
+;  He had four missiles and could only ever have ONE in the air: the launch
+;  gate was "the missile is not in flight", and a missile lives up to 280
+;  ticks. Fifteen seconds of a fight in which the weapon does not answer,
+;  and it is always the fifteen seconds you needed it.
+;
+;  THE BODIES DID NOT CHANGE. MSLUPD1 and MSLDRAW1 are the code that was
+;  written for one missile, instruction for instruction. What is here is the
+;  POOL and a pair of swaps: a slot is loaded into the eleven working words
+;  the old code reads, the old code runs, and the slot is written back. The
+;  homing, the proximity fuse, the detonation and the smoke are sixty-odd
+;  accesses of delicate arithmetic - rewriting every one of them to carry an
+;  index is how you put three new bugs in while taking one out.
+;
+;  It lives out HERE because the arrays are ninety-six bytes and the main
+;  segment had a hundred and eleven. The walk is out here too, so the main
+;  segment pays for two thunks and a call site instead of four loops.
+; ============================================================================
+pmact   dw NPMSL dup(0)         ; slot in flight?
+pmx     dw NPMSL dup(0)         ; ...and the same eleven words, per slot
+pmy     dw NPMSL dup(0)
+pmz     dw NPMSL dup(0)
+pmpx    dw NPMSL dup(0)
+pmpy    dw NPMSL dup(0)
+pmpz    dw NPMSL dup(0)
+pmvx    dw NPMSL dup(0)
+pmvy    dw NPMSL dup(0)
+pmvz    dw NPMSL dup(0)
+pmtgt   dw NPMSL dup(0FFFFh)
+pmlife  dw NPMSL dup(0)
+
+MSLLOAD:                        ; slot [msi] -> the working set
+        mov  bx,[msi]
+        mov  ax,cs:[pmact+bx]
+        mov  [msact],al
+        mov  ax,cs:[pmx+bx]
+        mov  [msx],ax
+        mov  ax,cs:[pmy+bx]
+        mov  [msy],ax
+        mov  ax,cs:[pmz+bx]
+        mov  [msz],ax
+        mov  ax,cs:[pmpx+bx]
+        mov  [mpx],ax
+        mov  ax,cs:[pmpy+bx]
+        mov  [mpy],ax
+        mov  ax,cs:[pmpz+bx]
+        mov  [mpz],ax
+        mov  ax,cs:[pmvx+bx]
+        mov  [mvx],ax
+        mov  ax,cs:[pmvy+bx]
+        mov  [mvy],ax
+        mov  ax,cs:[pmvz+bx]
+        mov  [mvz],ax
+        mov  ax,cs:[pmtgt+bx]
+        mov  [mstgt],ax
+        mov  ax,cs:[pmlife+bx]
+        mov  [mlife],ax
+        ret
+MSLSAVE:                        ; ...and back again
+        mov  bx,[msi]
+        mov  al,[msact]
+        xor  ah,ah
+        mov  cs:[pmact+bx],ax
+        mov  ax,[msx]
+        mov  cs:[pmx+bx],ax
+        mov  ax,[msy]
+        mov  cs:[pmy+bx],ax
+        mov  ax,[msz]
+        mov  cs:[pmz+bx],ax
+        mov  ax,[mpx]
+        mov  cs:[pmpx+bx],ax
+        mov  ax,[mpy]
+        mov  cs:[pmpy+bx],ax
+        mov  ax,[mpz]
+        mov  cs:[pmpz+bx],ax
+        mov  ax,[mvx]
+        mov  cs:[pmvx+bx],ax
+        mov  ax,[mvy]
+        mov  cs:[pmvy+bx],ax
+        mov  ax,[mvz]
+        mov  cs:[pmvz+bx],ax
+        mov  ax,[mstgt]
+        mov  cs:[pmtgt+bx],ax
+        mov  ax,[mlife]
+        mov  cs:[pmlife+bx],ax
+        ret
+
+MSLLOADF PROC FAR               ; the swaps, for the callers at home
+        call MSLLOAD
+        ret
+MSLLOADF ENDP
+MSLSAVEF PROC FAR
+        call MSLSAVE
+        ret
+MSLSAVEF ENDP
+
+MSLPOOLF PROC FAR               ; one tick of every rail
+        mov  word ptr [msi],0
+@@s:    call MSLLOAD
+        call FAR PTR MSLUPD1F
+        call MSLSAVE
+        add  word ptr [msi],2
+        cmp  word ptr [msi],NPMSL*2
+        jb   @@s
+        ret
+MSLPOOLF ENDP
+
+MSLDRWPF PROC FAR               ; ...and one picture of every rail
+        mov  word ptr [msi],0
+@@s:    call MSLLOAD
+        call FAR PTR MSLDRAW1F
+        add  word ptr [msi],2
+        cmp  word ptr [msi],NPMSL*2
+        jb   @@s
+        ret
+MSLDRWPF ENDP
+
+MSLFREEF PROC FAR               ; a free rail into [msi]. CF=1 = all four are
+        mov  word ptr [msi],0   ;  in the air, which is a fine problem to have
+@@s:    mov  bx,[msi]
+        cmp  word ptr cs:[pmact+bx],0
+        je   @@got
+        add  word ptr [msi],2
+        cmp  word ptr [msi],NPMSL*2
+        jb   @@s
+        stc
+        ret
+@@got:  clc
+        ret
+MSLFREEF ENDP
+
+MSLCLRF PROC FAR                ; a fresh jet has four EMPTY rails, not
+        xor  bx,bx              ;  whatever was still flying when it died
+@@s:    mov  word ptr cs:[pmact+bx],0
+        add  bx,2
+        cmp  bx,NPMSL*2
+        jb   @@s
+        ret
+MSLCLRF ENDP
+
+; ============================================================================
+;  *** TEMPORARY: THE FROZEN FRAME SAYS WHERE IT STOPPED ***
+;
+;  A network freeze that keeps its SOUND is a main loop spinning, not a
+;  crash and not memory - the interrupts are plainly alive. The picture is
+;  still on the glass, so the picture can be made to answer: each stage of
+;  the frame stamps a coloured square straight into VIDEO memory, and the
+;  next BLIT wipes it. In flight they flicker. When it wedges, the LAST one
+;  written stays - and its colour names the quarter of the frame that hung.
+;
+;  RED   - INPUT and the physics are done
+;  GREEN - the wire is done (NETPOLL + NETAPPLY, the prime suspect)
+;  AMBER - the render is done
+;  WHITE - the blit is done, the frame closed cleanly
+;
+;  A frozen WHITE means it died early in the next frame; a frozen GREEN
+;  means it died in the render; a frozen RED means it died on the wire.
+;  Each door is five bytes at the call site, which is what the main segment
+;  had to spare - the stage number is baked into the door, not passed.
+;  REMOVE ME once it is caught.
+; ============================================================================
+STGMARK:                        ; AL = colour, a 8x2 block at the top left
+        push es
+        push di
+        push cx
+        mov  cx,0A000h
+        mov  es,cx
+        xor  di,di
+        mov  cx,8
+@@m:    mov  es:[di],al
+        mov  es:[di+320],al
+        inc  di
+        loop @@m
+        pop  cx
+        pop  di
+        pop  es
+        ret
+STG0F   PROC FAR
+        mov  al,19
+        call STGMARK
+        ret
+STG0F   ENDP
+STG1F   PROC FAR
+        mov  al,95
+        call STGMARK
+        ret
+STG1F   ENDP
+STG2F   PROC FAR
+        mov  al,97
+        call STGMARK
+        ret
+STG2F   ENDP
+STG3F   PROC FAR
+        mov  al,8
+        call STGMARK
+        ret
+STG3F   ENDP
+
 ; ---- THE WINDOW GUARD ------------------------------------------------------
         PUBLIC SYMEND           ; how full this window is, in the linker map
 SYMEND  label byte

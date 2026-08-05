@@ -245,6 +245,11 @@ HBLEAN  equ 9                   ; ...and how hard, in thirty-seconds a row
 hbslp   dw 0                    ; the lean in force: -HBLEAN on the left
                                 ;  tape, +HBLEAN on the right, 0 with the
                                 ;  cockpit down (no bows to follow)
+; The overhead black plate between the two lamp clusters - the burner strip
+; and the wire count share it, and PANELBMP draws AB ON last so the burner
+; wins while it is lit. Raise or lower BOTH by moving these.
+PZABX   equ 151
+PZABY   equ 6
 PZLAMPY equ 129                 ; first lamp slot, five of them 10 apart
 PZLAMPH equ 10
 PZTHRX  equ 35                  ; throttle ladder. It used to stand at 38,
@@ -651,12 +656,20 @@ mcos    dw 0
 mpon    db 0                    ; 1 = this model pitches at its trunnion
 mpsn    dw 0                    ; the pitch, sin/cos *256
 mpcs    dw 256
-mtpy    dw 0                    ; where the trunnion is, in model space
-mtpz    dw 0
-mtvy    dw 0                    ; the vertex being turned, y and z
-mtvz    dw 0
-mtvy2   dw 0                    ; ...relative to the trunnion
-mtvz2   dw 0
+; THE TURRET's scratch, and it is called trn* for a reason. It was mtpy /
+; mtpz / mtvy / mtvz, one letter from the MISSILE's mpy / mpz / mvy / mvz,
+; and MSLUPD had picked up the wrong four: it flew a dumb-fired missile on
+; the turret's vertex scratch as its vertical and z velocity, drew the
+; exhaust puff off the trunnion, and stamped the missile's last position
+; into the turret's geometry every tick it was in the air. It assembled
+; silently because both sets exist. Names one letter apart, in one file,
+; for two unrelated things - now they are not.
+trnpy    dw 0                    ; where the trunnion is, in model space
+trnpz    dw 0
+trnvy    dw 0                    ; the vertex being turned, y and z
+trnvz    dw 0
+trnvy2   dw 0                    ; ...relative to the trunnion
+trnvz2   dw 0
 pdx     dw 0                    ; plane centre in camera space
 pdy     dw 0
 pdz     dw 0
@@ -762,6 +775,25 @@ mvy     dw 0
 mvz     dw 0
 mstgt   dw 0FFFFh               ; homing target (plane offset)
 mlife   dw 0                    ; ticks to self-destruct
+; ---- THE PLAYER'S FOUR RAILS ----------------------------------------------
+; Everything above is ONE missile, and for a long time that is all the pilot
+; had: four on the rails and no way to put a second one in the air until the
+; first died, up to fifteen seconds later. In a fight that is not a weapon,
+; it is a wait - which is exactly the moment you need the second missile.
+;
+; The pool is held HERE, and the eleven words above are the WORKING SET. A
+; slot is loaded into them, the existing code runs on it untouched, and it
+; is written back: MSLLOAD / MSLSAVE. That is deliberate. The homing, the
+; proximity fuse, the detonation and the smoke are sixty-odd accesses of
+; delicate arithmetic; rewriting every one of them to carry an index is how
+; you introduce three new bugs while fixing one. The bodies did not change
+; by a single instruction.
+; The pool itself lives OUT in SYMSEG with the loops that walk it - it is
+; ninety-six bytes of array and the main segment had a hundred and eleven.
+; Only these two words stay home, because MCEND reads them.
+NPMSL   equ 4
+msi     dw 0                    ; the slot in the working set, as a WORD index
+mcsl    dw 0                    ; ...and the one the missile camera rides
 wnext   dw 0                    ; wreck pool: next slot byte offset
 ; ---- AI missile pool (the war fights itself) --------------------------------
 NAMSL   equ 4

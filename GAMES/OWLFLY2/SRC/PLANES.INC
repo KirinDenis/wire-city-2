@@ -757,44 +757,44 @@ MODELDRAW:
         ; buildings and the hulls skip it and pay two MOVs a vertex.
         mov  bx,[mvb]
         mov  ax,[bx+si+2]
-        mov  [mtvy],ax
+        mov  [trnvy],ax
         mov  ax,[bx+si+4]
-        mov  [mtvz],ax
+        mov  [trnvz],ax
         cmp  byte ptr [mpon],0
         je   @@nopt
-        mov  ax,[mtvy]
-        sub  ax,[mtpy]           ; about the trunnion, so the roots stay put
-        mov  [mtvy2],ax
-        mov  ax,[mtvz]
-        sub  ax,[mtpz]
-        mov  [mtvz2],ax
-        mov  ax,[mtvy2]          ; y' = ty + dy*cos + dz*sin
+        mov  ax,[trnvy]
+        sub  ax,[trnpy]           ; about the trunnion, so the roots stay put
+        mov  [trnvy2],ax
+        mov  ax,[trnvz]
+        sub  ax,[trnpz]
+        mov  [trnvz2],ax
+        mov  ax,[trnvy2]          ; y' = ty + dy*cos + dz*sin
         imul word ptr [mpcs]
         mov  cx,ax
-        mov  ax,[mtvz2]
+        mov  ax,[trnvz2]
         imul word ptr [mpsn]
         add  ax,cx
         cwd
         mov  bx,256
         idiv bx
-        add  ax,[mtpy]
-        mov  [mtvy],ax
-        mov  ax,[mtvy2]          ; z' = tz - dy*sin + dz*cos
+        add  ax,[trnpy]
+        mov  [trnvy],ax
+        mov  ax,[trnvy2]          ; z' = tz - dy*sin + dz*cos
         imul word ptr [mpsn]
         mov  cx,ax
-        mov  ax,[mtvz2]
+        mov  ax,[trnvz2]
         imul word ptr [mpcs]
         sub  ax,cx
         cwd
         mov  bx,256
         idiv bx
-        add  ax,[mtpz]
-        mov  [mtvz],ax
+        add  ax,[trnpz]
+        mov  [trnvz],ax
 @@nopt: mov  bx,[mvb]           ; the model being drawn
         mov  ax,[bx+si]         ; vx = (mx*mcos + mz*msin)/256 + pdx
         imul word ptr [mcos]
         mov  cx,ax
-        mov  ax,[mtvz]
+        mov  ax,[trnvz]
         imul word ptr [msin]
         add  ax,cx
         cwd
@@ -802,14 +802,14 @@ MODELDRAW:
         idiv bx
         add  ax,[pdx]
         mov  [PVX+di],ax
-        mov  ax,[mtvy]           ; vy = my + pdy
+        mov  ax,[trnvy]           ; vy = my + pdy
         add  ax,[pdy]
         mov  [PVY+di],ax
         mov  bx,[mvb]
         mov  ax,[bx+si]         ; vz = (mz*mcos - mx*msin)/256 + pdz
         imul word ptr [msin]
         mov  cx,ax
-        mov  ax,[mtvz]
+        mov  ax,[trnvz]
         imul word ptr [mcos]
         sub  ax,cx
         cwd
@@ -999,6 +999,14 @@ FACETOPCF PROC FAR
         call FACETOPC
         ret
 FACETOPCF ENDP
+MSLUPD1F PROC FAR               ; one rail's tick, and one rail's picture.
+        call MSLUPD1            ;  The POOL that walks them lives in SYMSEG;
+        ret                     ;  these two bodies could not move, because
+MSLUPD1F ENDP                   ;  they near-call half the main segment
+MSLDRAW1F PROC FAR
+        call MSLDRAW1
+        ret
+MSLDRAW1F ENDP
 
 ; ---------------------------------------------------------------------------
 ;  LKPOS - where the locked target is, in world coordinates: lkx/lky/lkz.
@@ -1337,12 +1345,16 @@ LKPOSF  ENDP
 ;  MSLUPD - one tick of the missile: home on the lock target (or fly
 ;  straight), proximity-fuse against every living jet, die by timer.
 ; ---------------------------------------------------------------------------
-MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
-        jne  @@mc0
+MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out. ONCE, not
+        jne  @@mcx              ;  once a rail
         dec  word ptr [mcret]
-        jnz  @@mc0
+        jnz  @@mcx
         mov  byte ptr [mcact],0 ; and the old view returns
-@@mc0:  cmp  byte ptr [msact],0
+@@mcx:  call FAR PTR MSLPOOLF   ; ...and then every rail, out in SYMSEG
+        ret
+
+MSLUPD1:
+        cmp  byte ptr [msact],0
         je   @@out
         dec  word ptr [mlife]
         jnz  @@mv
@@ -1352,9 +1364,9 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
 @@mv:   mov  ax,[msx]           ; remember the old spot (exhaust puff)
         mov  [mpx],ax
         mov  ax,[msy]
-        mov  [mtpy],ax
+        mov  [mpy],ax
         mov  ax,[msz]
-        mov  [mtpz],ax
+        mov  [mpz],ax
         mov  si,[mstgt]
         cmp  si,0FFFFh
         je   @@str
@@ -1363,9 +1375,9 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         mov  word ptr [mstgt],0FFFFh
 @@str:  mov  ax,[mvx]           ; straight: the velocity set at launch
         add  [msx],ax
-        mov  ax,[mtvy]
+        mov  ax,[mvy]
         add  [msy],ax
-        mov  ax,[mtvz]
+        mov  ax,[mvz]
         add  [msz],ax
         jmp  @@prox
 @@home: ; chase at 32/tick, direction normalised by the dominant axis
@@ -1433,7 +1445,7 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         idiv bx
         mov  [ctz],ax           ; dvx*cos
         mov  ax,[msz]
-        sub  ax,[mtpz]
+        sub  ax,[mpz]
         imul word ptr [ctx]
         mov  bx,256
         idiv bx
@@ -2432,7 +2444,9 @@ WRECKDRAW:
 ;  MSLDRAW - the missile in flight: a burning 2x2 dot (glow 94) and a
 ;  little grey exhaust puff at its previous position.
 ; ---------------------------------------------------------------------------
-MSLDRAW:
+MSLDRAW: call FAR PTR MSLDRWPF  ; every rail, walked out in SYMSEG
+        ret
+MSLDRAW1:
         cmp  byte ptr [msact],0
         je   @@no
         mov  ax,[msx]
@@ -2468,11 +2482,11 @@ MSLDRAW:
 @@puff: mov  ax,[mpx]
         sub  ax,[camx]
         mov  [wdx],ax
-        mov  ax,[mtpz]
+        mov  ax,[mpz]
         sub  ax,[camz]
         mov  [wdz],ax
         call ROTXZ
-        mov  dx,[mtpy]
+        mov  dx,[mpy]
         sub  dx,[camy]
         mov  ax,[rcx]
         mov  cx,[rcz]
@@ -3429,6 +3443,13 @@ CHASESET:
         mov  word ptr [roll],0
 @@r:    ret
 @@mcam: ; ---- ride the missile (1) or hover at its grave (2) ----
+        ; Straight out of the POOL, not out of the working set: by the time
+        ; the camera looks, MSLUPD has walked all four rails and the working
+        ; set holds whichever it touched last. The camera rides the rail it
+        ; was armed on, and mcsl is where that was written down.
+        mov  ax,[mcsl]          ; swap the ridden rail into the working set
+        mov  [msi],ax
+        call FAR PTR MSLLOADF
         mov  ax,[msx]
         cmp  byte ptr [mcact],1
         je   @@mm1
@@ -4220,6 +4241,9 @@ LERPRST:
 ; ---------------------------------------------------------------------------
 MCEND:  cmp  byte ptr [mcact],1
         jne  @@r
+        mov  ax,[msi]           ; ...but only for the rail the camera is
+        cmp  ax,[mcsl]          ;  actually riding. Three other missiles can
+        jne  @@r                ;  die while this one is still flying
         mov  byte ptr [mcact],2
         mov  word ptr [mcret],54
         mov  ax,[msx]

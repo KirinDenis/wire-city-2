@@ -706,13 +706,9 @@ INPUT:
                                 ; the same nearest-wins rule, so pointing
                                 ; at a thing is how you pick it
 @@nlk:
-        ; --- wind drift (world space, constant breeze) ---
-        mov  ax,[camx]
-        add  ax,WINDX
-        mov  [camx],ax
-        mov  ax,[camz]
-        add  ax,WINDZ
-        mov  [camz],ax
+        ; --- the wind moved OUT to WINDDRF in UISEG (see there for why it
+        ; had to stop being a constant, and why it costs this segment
+        ; nothing to have got better) ---
 
         ; --- sway: the whole VIEW floats on a slow sine (screen-space,
         ; so it is per-pixel smooth - pitch steps are 5 px and jerk).
@@ -790,8 +786,13 @@ INPUT:
         mov  [prevf],al
         test al,al
         jz   @@nfr
-        cmp  byte ptr [msact],0
-        jne  @@nfr
+        ; ---- A FREE RAIL, not "the missile is not in flight". The gate used
+        ; to be one airborne missile at a time, so a second launch was
+        ; impossible for up to fifteen seconds - which is precisely the
+        ; moment in a fight when you want it. Four rails, four in the air if
+        ; you like; what stops you is pammo, and pammo does not come back. ----
+        call FAR PTR MSLFREEF   ; a rail with nothing on it
+        jc   @@nfr
         cmp  byte ptr [pammo],0
         je   @@nfr
         dec  byte ptr [pammo]
@@ -802,7 +803,9 @@ INPUT:
         call SFXHISS            ; off the rail with a sharp hiss
         cmp  byte ptr [mslcam],0
         je   @@nomc
-        mov  byte ptr [mcact],1 ; armed: the camera rides this one
+        mov  byte ptr [mcact],1 ; armed: the camera rides this one, and it
+        mov  ax,[msi]           ;  has to remember WHICH one
+        mov  [mcsl],ax
         mov  ax,[heading]
         mov  [mch],ax
 @@nomc:
@@ -851,6 +854,7 @@ INPUT:
         mov  bx,256
         idiv bx
         mov  [mvy],ax
+        call FAR PTR MSLSAVEF   ; ...and onto the rail it goes
 @@nfr:
         ; --- THE RAILS DO NOT REFILL THEMSELVES. There used to be a reload
         ; here, one missile back every ~20 s, and between it and the
@@ -1238,6 +1242,7 @@ PLAYERRESET:
         mov  byte ptr [abon],0
         mov  byte ptr [pammo],4
         mov  byte ptr [msact],0
+        call FAR PTR MSLCLRF    ; four EMPTY rails on a fresh jet
         mov  word ptr [gunam],250
         mov  byte ptr [pdam],0
         mov  byte ptr [flaps],0 ; a fresh jet is a CLEAN jet
