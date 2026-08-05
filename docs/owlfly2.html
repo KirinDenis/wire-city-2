@@ -27,6 +27,18 @@
   .grn{color:#5f5}.yel{color:#ff5}.red{color:#f66}.amb{color:#fb4}
   .wht{color:#fff}
   .stat{color:#5f7;font-size:12px}
+  /* ---- the labelled cockpit. The SVG viewBox carries the game's own
+     320x200 screen at x=100, so every leader line is anchored on the SAME
+     coordinate the source uses (PANELZON.INC, WLMPX, SWX, OSBX). ---- */
+  .diagram{width:100%;margin:8px 0 4px}
+  .diagram svg{width:100%;height:auto;display:block}
+  .diagram image{image-rendering:pixelated}
+  .diagram .ln path{stroke:#5b8fbf;stroke-width:.5;fill:none}
+  .diagram .dot circle{fill:#8df}
+  .diagram .plate rect{fill:#eef2f7;stroke:#8ab;stroke-width:.4}
+  .diagram .plate text{fill:#123;font:4.6px monospace}
+  .diagram .plate .t{font-weight:700;fill:#024}
+  .diagram .cap{fill:#89b;font:5px monospace;text-anchor:middle}
 </style>
 </head>
 <body>
@@ -39,81 +51,226 @@
   <div class="hint">the multiplayer combat flight sim in pure 8086 assembly (76 KB), running in DOSBox (WASM) via <a href="https://js-dos.com" target="_blank" rel="noopener">js-dos</a>, IPX tunneled through WebSocket &middot; <a href="https://github.com/KirinDenis/wire-city-2" target="_blank" rel="noopener">source</a> &middot; <a href="https://www.facebook.com/groups/OWLOS" target="_blank" rel="noopener">community</a> &middot; built by <a href="https://owlos.sk/" target="_blank" rel="noopener">Owlos</a> &mdash; legacy systems are our day job</div>
 
   <div id="manual">
+
+    <h2>WHAT THIS IS</h2>
+    <p>
+      A multiplayer combat flight sim in 8086 assembly. Two squadrons fight
+      an attrition war over a procedural island minted from a two-byte seed
+      &mdash; which is why joining a sky is instant: the advertisement
+      carries the seed, your machine builds the same island, the same city
+      and the same clouds, and you are there. You fly an F-15 with a real
+      instrument panel, a radar that has to transmit to see, flak that
+      shoots at what you tell it to, and an aeroplane that does not refill
+      itself. <b>Four missiles, 250 rounds and eleven minutes of fuel.</b>
+      The sortie ends when one of them does.
+    </p>
+
     <h2>THE FRONT DOOR</h2>
     <p>
-      You land in the sky list: every sky on the wire advertises itself
-      once a second &mdash; name, pilots, the war score, bots. Everyone on
-      this page shares one wire, so a friend opening this URL sees your
-      sky in seconds. <b>&uarr;/&darr;</b> pick &middot; <b>Enter</b> join
-      &middot; <b>C</b> create your own (type up to 8 letters, <b>B</b>
-      toggles the 20v20 bot war on/off &mdash; off is a clean PvP arena)
-      &middot; <b>Enter</b> take off.
+      You land in the sky list: every sky on the wire advertises itself once
+      a second &mdash; name, pilots, the war score, bots. Everyone on this
+      page shares one wire, so a friend opening this URL sees your sky in
+      seconds. <b>&uarr;/&darr;</b> pick &middot; <b>Enter</b> join &middot;
+      <b>C</b> create your own (up to 8 letters, <b>B</b> toggles the 20v20
+      bot war &mdash; off is a clean PvP arena) &middot; <b>Enter</b> to
+      take off.
     </p>
 
-    <h2>FLYING &mdash; the F-15 SE II scheme</h2>
-    <table>
-      <tr><td class="k">&larr; / &rarr; (num 4/6)</td><td>bank left / right (roll through 360&deg; &mdash; loops and barrel rolls work)</td></tr>
-      <tr><td class="k">&darr; / &uarr; (num 2/8)</td><td>pull the nose up / push it down (flight-sim yoke)</td></tr>
-      <tr><td class="k">1 / 3 &nbsp;(Z / C, num 7/9)</td><td>rudder pedals: flat turn without banking</td></tr>
-      <tr><td class="k">+ / &minus; or W / S</td><td>throttle up / down (numpad too); <b>Shift+W</b> slams to full military, <b>Shift+S</b> to idle</td></tr>
-      <tr><td class="k">A</td><td>afterburner &mdash; double thrust, drinks fuel</td></tr>
-      <tr><td class="k">hands off</td><td>the plane rights itself and trims to level</td></tr>
-      <tr><td class="k">Alt-Q</td><td>quit to DOS (ESC is deliberately dead &mdash; no more sorties lost to a stray key)</td></tr>
-    </table>
+    <h2>THE COCKPIT</h2>
+    <p class="hint" style="text-align:left">every instrument, and the key that moves it</p>
 
-    <h2>FIGHTING</h2>
-    <table>
-      <tr><td class="k">Enter</td><td>lock the jet inside the aiming ring; Enter on empty sky drops the lock</td></tr>
-      <tr><td class="k">Backspace</td><td>missile &mdash; 4 rails, homing on the lock, dumb-fire without one; one reloads every ~20&nbsp;s</td></tr>
-      <tr><td class="k">Space (hold)</td><td>cannon &mdash; real tracer rounds; the belt refills while you hold fire</td></tr>
-      <tr><td class="k">Z / X</td><td>radar zoom in / out (1 px = 256 / 512 / 1024 world units)</td></tr>
-      <tr><td class="k">M</td><td>centre MFD pages: MAP (north-up island) &rarr; SIT (close-zoom radar) &rarr; TGT (locked target data)</td></tr>
-      <tr><td class="k">V</td><td>sound: all &rarr; effects only &rarr; silence</td></tr>
-    </table>
+    <div class="diagram">
+    <svg viewBox="0 0 520 212" preserveAspectRatio="xMidYMid meet">
+      <image href="cockpit.png" x="100" y="0" width="320" height="200"/>
 
-    <h2>CAMERAS</h2>
+      <g class="ln">
+        <path d="M94 14 L255 11"/>
+        <path d="M94 52 L150 145"/>
+        <path d="M94 100 L110 150"/>
+        <path d="M94 136 L134 168"/>
+        <path d="M94 172 L142 187"/>
+        <path d="M426 16 L258 130"/>
+        <path d="M426 62 L369 145"/>
+        <path d="M426 110 L409 150"/>
+        <path d="M426 146 L291 150"/>
+        <path d="M426 178 L378 187"/>
+      </g>
+      <g class="dot">
+        <circle cx="255" cy="11" r="1.6"/><circle cx="150" cy="145" r="1.6"/>
+        <circle cx="110" cy="150" r="1.6"/><circle cx="134" cy="168" r="1.6"/>
+        <circle cx="142" cy="187" r="1.6"/><circle cx="258" cy="130" r="1.6"/>
+        <circle cx="369" cy="145" r="1.6"/><circle cx="409" cy="150" r="1.6"/>
+        <circle cx="291" cy="150" r="1.6"/><circle cx="378" cy="187" r="1.6"/>
+      </g>
+
+      <g class="plate">
+        <rect x="2" y="2" width="92" height="26" rx="2"/>
+        <text x="6" y="10"><tspan class="t">CAUTION STRIP</tspan><tspan x="6" dy="8">MC MW AA DM FU FR GD</tspan><tspan x="6" dy="7.5">amber sits, red flashes</tspan></text>
+
+        <rect x="2" y="38" width="92" height="34" rx="2"/>
+        <text x="6" y="46"><tspan class="t">RADAR &mdash; left screen</tspan><tspan x="6" dy="8">heading-up: your nose is up</tspan><tspan x="6" dy="7.5">Z / X &mdash; zoom in / out</tspan><tspan x="6" dy="7.5">R &mdash; stop transmitting</tspan></text>
+
+        <rect x="2" y="86" width="92" height="26" rx="2"/>
+        <text x="6" y="94"><tspan class="t">WHAT YOU HUNG OUT</tspan><tspan x="6" dy="8">F flaps &middot; L gear</tspan><tspan x="6" dy="7.5">B airbrake &middot; A burner</tspan></text>
+
+        <rect x="2" y="124" width="92" height="19" rx="2"/>
+        <text x="6" y="132"><tspan class="t">THROTTLE &mdash; W / S</tspan><tspan x="6" dy="8">red at idle and at burner</tspan></text>
+
+        <rect x="2" y="158" width="92" height="26" rx="2"/>
+        <text x="6" y="166"><tspan class="t">RADIOS &amp; TRANSPONDER</tspan><tspan x="6" dy="8">G ground net &middot; U air net</tspan><tspan x="6" dy="7.5">I &mdash; IFF, read this one</tspan></text>
+      </g>
+
+      <g class="plate">
+        <rect x="426" y="2" width="92" height="34" rx="2"/>
+        <text x="430" y="10"><tspan class="t">CENTRE MFD &mdash; M pages it</tspan><tspan x="430" dy="8">MAP &mdash; north-up island</tspan><tspan x="430" dy="7.5">SIT &mdash; close-in scope</tspan><tspan x="430" dy="7.5">TGT &mdash; the locked target</tspan></text>
+
+        <rect x="426" y="46" width="92" height="34" rx="2"/>
+        <text x="430" y="54"><tspan class="t">STORES &amp; SCORE</tspan><tspan x="430" dy="8">GUN rounds &middot; MSL rails</tspan><tspan x="430" dy="7.5">DAM damage &middot; FUEL mins</tspan><tspan x="430" dy="7.5">nothing here reloads</tspan></text>
+
+        <rect x="426" y="96" width="92" height="26" rx="2"/>
+        <text x="430" y="104"><tspan class="t">WHAT THE JET SAYS</tspan><tspan x="430" dy="8">STALL &middot; FUEL &middot; TERR</tspan><tspan x="430" dy="7.5">FIRE &middot; LOCK: you are had</tspan></text>
+
+        <rect x="426" y="134" width="92" height="19" rx="2"/>
+        <text x="430" y="142"><tspan class="t">OPTION LAMPS</tspan><tspan x="430" dy="8">bars beside each screen</tspan></text>
+
+        <rect x="426" y="166" width="92" height="26" rx="2"/>
+        <text x="430" y="174"><tspan class="t">SELF-PROTECTION</tspan><tspan x="430" dy="8">A-P ECM JMR CHF FLR</tspan><tspan x="430" dy="7.5">plates only &mdash; for now</tspan></text>
+      </g>
+
+      <text class="cap" x="260" y="208">SPD speed &middot; ALT altitude &middot; NAV heading &middot; HDG climb rate</text>
+    </svg>
+    </div>
+
+    <h2>CONTROLS &mdash; all of them</h2>
     <table>
+      <tr><td class="k">&larr; / &rarr;</td><td>bank left / right. Roll goes through 360&deg; &mdash; loops and barrel rolls work (numpad 4/6)</td></tr>
+      <tr><td class="k">&uarr; / &darr;</td><td>push the nose down / pull it up, flight-sim yoke (numpad 8/2)</td></tr>
+      <tr><td class="k">1 / 3</td><td>rudder pedals &mdash; a flat turn without dropping a wing (numpad 7/9). This is how you line up on a runway or hold a gun run</td></tr>
+      <tr><td class="k">W / S</td><td>throttle up / down. <b>Shift+W</b> slams to full military, <b>Shift+S</b> to idle. + and &minus; work too</td></tr>
+      <tr><td class="k">A</td><td>afterburner &mdash; double thrust, and it drinks the tank</td></tr>
+      <tr><td class="k">F / L / B</td><td>flaps / landing gear / airbrake. Nothing is interlocked and nothing is refused: put the gear down at six hundred knots if you like, and wear the drag</td></tr>
+      <tr><td class="k">hands off</td><td>the aeroplane rights itself and trims to level</td></tr>
+      <tr><td class="k">Enter</td><td>lock whatever is inside the aiming ring. Enter on empty sky drops the lock</td></tr>
+      <tr><td class="k">Space (hold)</td><td>cannon. Real tracer with a real time of flight &mdash; you lead the target, the game does not do it for you</td></tr>
+      <tr><td class="k">Backspace</td><td>missile. Homes on the lock; without one it flies straight ahead and hits whatever is unlucky</td></tr>
+      <tr><td class="k">Z / X</td><td>radar zoom in / out. In the F4 camera the same two keys pull the view in and out</td></tr>
+      <tr><td class="k">M</td><td>centre screen: MAP &rarr; SIT &rarr; TGT</td></tr>
+      <tr><td class="k">G / U</td><td>ground net / air net &mdash; your lock is broadcast to your own flak and your own aeroplanes</td></tr>
+      <tr><td class="k">I</td><td>IFF transponder. Up, your flak leaves you alone. Down, it does not</td></tr>
+      <tr><td class="k">R</td><td>radar emissions on / off</td></tr>
+      <tr><td class="k">T / O / P / J / Y</td><td>TACAN, master mode, autopilot, ECM, jammer &mdash; the plates toggle; only the master mode lamp does anything yet</td></tr>
       <tr><td class="k">F2</td><td>cockpit on / off (the HUD tapes stay)</td></tr>
-      <tr><td class="k">F3</td><td>chase view: your own jet from behind, banking for real</td></tr>
-      <tr><td class="k">F4</td><td>orbit the locked target &mdash; the arrows steer the camera</td></tr>
-      <tr><td class="k">F5</td><td>arm the missile camera: the next launch is ridden to impact</td></tr>
-      <tr><td class="k">N</td><td>day / night &mdash; the stars are a real celestial sphere</td></tr>
+      <tr><td class="k">F3</td><td>chase view &mdash; your own jet from behind, banking for real. The only place you can see your own landing gear</td></tr>
+      <tr><td class="k">F4</td><td>orbit the locked target. The arrows steer the camera, Z / X the distance</td></tr>
+      <tr><td class="k">F5</td><td>arm the missile camera: the next launch is ridden all the way to impact</td></tr>
+      <tr><td class="k">F6 / F7</td><td>turn your head ninety degrees left / right, and you are looking at a painted side console with the world going past it. Press the same key again to face forward</td></tr>
+      <tr><td class="k">Ctrl + &larr; / &rarr;</td><td>the same head turn on the arrows &mdash; hold Ctrl and look. Let Ctrl go and the arrows fly the aeroplane again</td></tr>
+      <tr><td class="k">N</td><td>day / night. The stars are a real celestial sphere &mdash; they turn with your heading, pitch and bank</td></tr>
+      <tr><td class="k">V</td><td>sound: everything &rarr; effects only &rarr; silence</td></tr>
       <tr><td class="k">Space</td><td>after GAME OVER: take a fresh jet</td></tr>
+      <tr><td class="k">Alt&nbsp;+&nbsp;Q</td><td>quit to DOS. ESC is deliberately dead &mdash; no more sorties lost to a stray key</td></tr>
     </table>
 
-    <h2>READING THE GLASS &mdash; the SA suite</h2>
+    <h2>HOW TO FIGHT</h2>
     <p>
-      The scope speaks NATO shapes: <span class="grn">friends are
-      squares</span>, <span class="yel">hostiles are diamonds</span>, and
-      <span class="wht">real pilots wear white</span> with their callsign
-      letter beside the blip. Every blip trails a velocity stub along its
-      own nose; a dot above/below means higher/lower than you. A
-      compass-true grey grid marches under it all, two dots up the radius
-      point north.
+      <b>Find him.</b> The left screen is a heading-up PPI: your own nose
+      points up the glass, so everything on it is measured against where you
+      are looking. <span class="grn">Green is ours</span>,
+      <span class="red">red is theirs</span>, and a
+      <span class="wht">white pip with a letter</span> is a real pilot. Each
+      blip is an aeroplane symbol swung to its own heading &mdash; a
+      bandit's heading is the first thing worth reading off a scope &mdash;
+      with a tick above or below for higher or lower than you. Z and X
+      change the range.
     </p>
     <p>
-      Centre MFD: the north-up island map &mdash; the red front line, your
-      white blip, humans as a letter plus their altitude digit (thousands).
-      M swaps it for the SIT close-zoom scope or the TGT page (callsign in
-      IFF colour, type, RNG and ALT in K-notation, a live wireframe).
-      Right MFD: the war score with the shape legend, your kills in white,
-      GUN rounds, MSL rails, DAM pips.
+      <b>Look for him.</b> A fight does not stay in front of you.
+      <b>F6</b> and <b>F7</b> turn your head ninety degrees left and right
+      &mdash; or hold <b>Ctrl</b> and use the arrows &mdash; and you are
+      looking out of the side of a real cockpit, past a painted console,
+      with the world going by. The head turn is an honest rotation of the
+      camera about your own spine, so it stays right inverted, in a loop and
+      at any bank; it is not a swap of two angles that only works straight
+      and level. There is no glass HUD out of the side, because a head-up
+      display is bolted to the front of the aeroplane. Same key again to
+      face forward.
     </p>
     <p>
-      In the world, any human in view wears a designator box with a white
-      nameplate &mdash; callsign letter and range &mdash; at any distance.
-      The AI's IFF boxes light up inside visual range only.
+      <b>Point at him.</b> The aiming ring on the HUD is the lock gate. Fly
+      until he is inside it and press <b>Enter</b>. The ring becomes a lock
+      pointer that keeps showing where he is when he leaves the glass, the
+      TGT page fills in with his callsign, type, range and altitude, and the
+      missile now has somewhere to go. Enter on empty sky lets him go.
+    </p>
+    <p>
+      <b>Kill him.</b> The cannon is 250 rounds of real tracer with a real
+      time of flight: aim where he will be, not where he is, and fire in
+      short bursts. The missile is smarter and there are only four &mdash;
+      it wants a lock, and it wants him in front of you and not on the deck.
+      A jet takes 5 hits; so do you, and the fifth replays your last five
+      seconds before GAME OVER.
+    </p>
+    <p>
+      <b>Do not get killed.</b> The <span class="amb">LOCK</span> lamp and
+      the missile warning on the overhead strip mean somebody has done to
+      you what you just did to him. There is no chaff and no flare yet, so
+      the answer is the aeroplane: unload, get the nose down, and put a hill
+      between you and the thing that is guiding.
+    </p>
+    <p>
+      <b>The ground has opinions.</b> Two radar stations and twenty flak
+      vehicles hold the line, and the flak leads its shots. With the
+      <b>G</b> net up they shoot at what you have locked instead of what is
+      nearest their barrel &mdash; one pilot's eyes become the battery's.
+      With the <b>I</b> transponder down they shoot at <em>you</em>, and
+      they are right to.
+    </p>
+    <p>
+      <b>Being invisible costs you your eyes.</b> <b>R</b> stops your radar
+      transmitting. You stop painting yourself on other people's scopes, and
+      your own screen goes to snow &mdash; a radar that is not transmitting
+      has nothing to receive. That is the whole trade, and knocking down the
+      enemy's ground station does the same to him.
+    </p>
+
+    <h2>THE SWITCH PANEL</h2>
+    <p>
+      Twelve plates along the bottom: the up-front panel on the left, the
+      self-protection suite on the right. The rule they are built on is
+      <b>a switch changes what OTHERS do, never what you are allowed to
+      do</b> &mdash; nothing here takes your eyes away or refuses you a
+      control.
+    </p>
+    <table>
+      <tr><td class="k grn">GND &nbsp;(G)</td><td>your lock goes out to your own flak batteries and they shoot at what you designate. The range gate still applies &mdash; a radio carries a designation, not a longer barrel</td></tr>
+      <tr><td class="k grn">AIR &nbsp;(U)</td><td>the same for your own aeroplanes: your side attacks what you are locked onto instead of whoever they noticed first</td></tr>
+      <tr><td class="k grn">IFF &nbsp;(I)</td><td>the transponder, and the most dangerous switch on the panel. Up, your own flak leaves you alone. Down, it does not</td></tr>
+      <tr><td class="k amb">T-R &nbsp;(R)</td><td>emissions: unseen, and blind. See above</td></tr>
+      <tr><td class="k grn">A-A / A-G &nbsp;(O)</td><td>master mode, one lamp or the other. It reports the mode; the weapons do not care which way it is set yet</td></tr>
+      <tr><td class="k" style="color:#567">TAC A-P ECM<br>JMR CHF FLR</td><td>TACAN, autopilot, countermeasures, jammer, chaff, flares. The plates toggle and that is all they do so far. An unlit plate is an honest way to say &quot;not yet&quot;</td></tr>
+    </table>
+
+    <h2>THE AERODROMES</h2>
+    <p>
+      Four strips, two a side, standing back from the line with a radar mast
+      on the front pair &mdash; a station belongs to an air base. The ground
+      under a runway is ironed flat into the heightmap before the world is
+      baked, so the terrain, the collision test and the streets all agree
+      about the concrete with no special case anywhere, and nothing is ever
+      built on it. Grey slab, dashed centreline, a threshold bar at each end.
+    </p>
+    <p>
+      Landing is the work in progress: flaps down or it is not a landing,
+      gear too, and a belly arrival refuels nobody. Your own field gives you
+      fuel and rails back. Theirs gives you nothing &mdash; but you can put
+      down on it and work the place over, which is a different kind of
+      sortie altogether.
     </p>
 
     <h2>THE WAR</h2>
     <p>
-      Two squadrons in an attrition war over a procedural island minted
-      from a two-byte seed &mdash; which is why joining a sky is instant:
-      the ad carries the seed, your machine builds the same island, city
-      and clouds, and you are there. Buildings fall and stay ruins,
-      wreckage chains, ramming works. Once. You take 5 hits; the fifth
-      replays your last five seconds, then GAME OVER &mdash; Space &mdash;
-      again.
+      Buildings fall and stay ruins. Wreckage chains &mdash; a jet that comes
+      apart over a city takes part of the city with it. Ramming works. Once.
     </p>
   </div>
 </div>

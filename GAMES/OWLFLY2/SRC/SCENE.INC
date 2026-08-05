@@ -50,6 +50,9 @@ RENDER: call SETHORIZ           ; where the glass is, before anything uses it
                                 ; ridge is painted over, as it should be
         call TERRPREP           ; rotate + cache the terrain nodes
         call TERRAIN            ; real 3D relief, far -> near
+        call FAR PTR AFDRAWF    ; the aerodromes, paved onto it - before the
+                                ; buildings, so anything standing goes over
+                                ; the concrete rather than under it
         call BUILDINGS          ; real buildings to the horizon (BORD walk)
         call FAR PTR RSTADRAWF  ; the two ground radar stations, dish turning
         call FAR PTR SHKDRAWF   ; the six Shilkas, turrets turning
@@ -67,10 +70,16 @@ RENDER: call SETHORIZ           ; where the glass is, before anything uses it
 @@nochs:
         call MSLDRAW            ; the missile dot and its puff
         call AMSLDRAW           ; the AI's missiles too
+        cmp  byte ptr [sview],0
+        jne  @@sideview         ; looking out of the side: NO glass HUD. The
+                                ; ring, the gunsight and the strips belong to
+                                ; the head-up display, and a head-up display
+                                ; is bolted to the front of the cockpit
         call LOCKHUD            ; aiming ring, lock pointer, callsign
         call GUNDRAW            ; cannon tracers
         call HUDBARS            ; glass HUD: compass, speed, altitude
         call CROSS              ; levelled gunsight + standby horizon
+@@sideview:
         mov  word ptr [mapt],123
         cmp  byte ptr [dying],0
         jne  @@pdone            ; falling: cinema only

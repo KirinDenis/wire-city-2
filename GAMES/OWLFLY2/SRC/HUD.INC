@@ -30,7 +30,12 @@ HUD:    cmp  byte ptr [cockpit],0
 ;  (the ADI ball), right tower y130+ (minimap + vertical LED bars).
 ;  ES=bufseg. Text uses the CITY.DAT 4x6 font. MINIMAP lands on the tower.
 ; ============================================================================
-PANEL:  cmp  word ptr [pimgo],0
+PANEL:  cmp  byte ptr [sview],0
+        je   @@front
+        call FAR PTR SIDEBMPF   ; a side console, and nothing else: the MFDs
+        ret                     ; are on the front panel, out of shot
+@@front:
+        cmp  word ptr [pimgo],0
         je   @@nopanel          ; no CITY.DAT bitmap: fly without a panel
         jmp  PANELBMP           ; the photo cockpit does everything
 @@nopanel:
@@ -398,8 +403,12 @@ PANELBMP:
         cmp  byte ptr [abon],0
         je   @@ab
         mov  byte ptr [COLOR],97
-        mov  word ptr [ftx],149
-        mov  word ptr [fty],15
+        mov  word ptr [ftx],149 ; UP into the black plate between the two
+        mov  word ptr [fty],8   ; lamp clusters, where the artwork left a
+                                ; slot for exactly this. It used to sit just
+                                ; BELOW the plate, on the canopy rail, where
+                                ; it read as graffiti on the windscreen
+                                ; rather than as an annunciator.
         mov  si,offset MSGABON
         call FDRAW
 @@ab:

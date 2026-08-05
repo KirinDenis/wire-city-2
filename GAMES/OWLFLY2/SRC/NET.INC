@@ -755,6 +755,8 @@ RSLOT:  push si
 ; the neighbour eat the cloud tables (postmortem 2026-07-23) - and
 ; the ORG pad below CLAIMS the full window, so the linker parks
 ; UISEG exactly at CS+1200h.
+        PUBLIC SKYEND           ; how full this window is, in the linker map
+SKYEND  label byte
 IF ($-BNOISE) GT 8176
         %OUT *** SKYSEG overflows its 8K window before UISEG ***
         .ERR

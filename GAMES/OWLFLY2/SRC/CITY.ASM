@@ -43,7 +43,11 @@
 ;     ES = bufseg during RENDER/CROSS (pixel writes go to the back-buffer);
 ;          ES = A000h only inside BLIT and CRASHHANDLE.
 ;     COLOR (byte) = current draw colour (palette index) for LINE/SCANPOLY.
-;     SETTRIG must run each frame before RENDER (fills hsin/hcos/rsin/rcos).
+;     SETTRIG must run each frame before RENDER (fills hsin/hcos/rsin/rcos)
+;     AND AGAIN AFTER IT, because INPUT flies the jet on those same sines
+;     and never computes them itself. Anything that moves the camera for
+;     the length of a render - the chase, the orbit, the pilot's head -
+;     must leave the trig belonging to the AIRCRAFT, not to the view.
 ;
 ;  COORDS: PROJPT returns sx in AX, sy in DX. SINQ returns sin*256 in AX.
 ;  DEAD CODE (assembled but never called) is tagged "DEAD" in its banner.
@@ -93,10 +97,26 @@ LANEOF  equ 96                  ; lane centre from the avenue centre
 ; a full ROTCUL - four rotations - and then filled a large ground quad,
 ; hundreds of them a frame. That is what a frozen web build looks like.
 ; ROADR culls by CELL first, before any of that arithmetic happens.
-ROADR   equ 9                   ; cells: the cheap cull, done on cdi/cdj
-ROADZ   equ 2400                ; units: the fine cull, after ROTCUL
+;
+; 2026-08-04, on the pilot's word that the streets show up far too late:
+; the reach went from 9 cells to the WHOLE WALK, 24 - which is as far as
+; the road can ever go without lengthening the walk itself, and 2.7x what
+; it was. It is paid for by LEVEL OF DETAIL rather than by cost. Past
+; ROADLOD the quad is not one cell but a 2x2 GROUP of them: an avenue is
+; two cells wide and every road cell falls in an even/even 2x2 group that
+; is road all the way through, so the merge is EXACT, not an approximation
+; - one quad in four, and only the group's anchor cell draws it. Net: the
+; road reaches 2.7x further for about 2.4x the fills, and the far ones are
+; a few pixels each.
+ROADR   equ 24                  ; cells: the cheap cull, done on cdi/cdj
+ROADLOD equ 9                   ; cells: inside this a quad per CELL, outside
+                                ; it a quad per 2x2 group
+ROADZ   equ 7200                ; units: the fine cull, after ROTCUL
 CARZ    equ 2200                ; the traffic stops nearer still - past this
-                                ; a car is one pixel and costs a whole box
+                                ; a car is one pixel and costs a whole box.
+                                ; It also never runs in grouped detail, and
+                                ; CARZ < ROADLOD*256 keeps that automatic.
+ROADLIFT equ 2                  ; how far the tarmac sits above the ground
 ASPHALT equ 120                 ; DAC: the road surface
 VCOL0   equ 121                 ; DAC: first vehicle colour (8 lit/shade)
 NKILL   equ 8                   ; vehicles that can be dead at once
@@ -115,7 +135,10 @@ CEIL    equ 3000                ; flight ceiling (loops need headroom)
 THRUST  equ 720                 ; engine thrust (force units)
 DRAGK   equ 256                 ; drag divisor: drag = vel*rho/DRAGK
 MEMPTY  equ 4000                ; empty mass
-FUELMAX equ 6000                ; full tank (1 unit burned per tick ~ 5.5 min)
+FUELMAX equ 12000               ; full tank (1 unit burned per tick ~ 11 min).
+                                ; Doubled 2026-08-05 on the pilot's word: at
+                                ; 5.5 minutes a sortie was over before you
+                                ; had crossed the front line and come back.
 VSTALL  equ 300                 ; stall airspeed (vel units)
 CRUISE  equ 736                 ; initial airspeed (= 46 units/tick, old feel)
 TURNDRG equ 2                   ; induced drag per tick while turning
@@ -160,6 +183,9 @@ SC_BS   equ 0Eh                 ; missile launch (Backspace, above Enter)
 SC_F3   equ 3Dh                 ; chase camera toggle
 SC_F4   equ 3Eh                 ; orbit camera around the locked target
 SC_F5   equ 3Fh                 ; missile camera arm/disarm
+SC_F6   equ 40h                 ; LOOK LEFT  - 90 degrees, inside the cockpit
+SC_F7   equ 41h                 ; LOOK RIGHT - and Ctrl+arrows do the same
+SC_CTL  equ 1Dh                 ; the Ctrl of Ctrl+left / Ctrl+right
 SC_Z    equ 2Ch                 ; rudder left
 SC_F2   equ 3Ch                 ; cockpit view toggle
 SC_NP7  equ 47h                 ; numpad 7: rudder left
@@ -366,6 +392,11 @@ MAIN:
 @@sd:   mov  word ptr [di],0FFFFh
 @@pn:   pop  es
 
+        call FAR PTR CPSLOADF   ; CPSIDE.DAT: the two 90-degree views, into a
+                                ; page of their own. It runs once and it is
+                                ; all file handling, so it lives in SYMSEG
+                                ; next to the code that reads it.
+
         ; ---- THE FRONT DOOR: video and sound up FIRST, then the wire,
         ; then the splash and the sky list. The world is minted only
         ; after the pilot picks one - its seed comes from the clock
@@ -408,7 +439,17 @@ MAIN:
         mov  [scrseg],ax
         call DSTCLR             ; a new world stands up whole
         call DSGEN              ; build the Diamond-Square world heightmap
-        call MMAPGEN            ; bake the minimap from it
+        call FAR PTR AFINITF   ; ...then IRON THE AERODROMES INTO IT, before
+                                ; anything is baked off it. The block table
+                                ; and the minimap below both read HMAP, and
+                                ; both have to see flat concrete: that is what
+                                ; keeps the mesh, TERRH, the streets and the
+                                ; collision test agreeing about a runway
+                                ; without one special case between them.
+        call FAR PTR BLKTABF    ; zone the 32x32 blocks off it, ONCE - the
+                                ; streets and the buildings both read that
+                                ; table and must not re-derive it per cell
+        call FAR PTR MMAPGENF   ; bake the minimap from it
         call BRDGEN             ; draw the front line on the war
         call FAR PTR SKYBAKE    ; cut this run's sky: ramp + cloud coats
 
@@ -531,13 +572,33 @@ GAMELOOP:
         call CHASESET           ; F3: swap in the chase camera
         call FAR PTR CCLOCKF    ; advance the traffic clock: the lights run
                                 ; on TIME, not on how fast we are drawing
+        call FAR PTR SVIEWF     ; F6/F7 and Ctrl+arrows: look 90 left/right,
+                                ; which is a turn of [heading] and nothing
+                                ; more - taken back below, before physics
         call SETTRIG            ; heading/roll -> sin/cos for this frame
         mov  ax,[bufseg]        ; draw into back-buffer
         mov  es,ax
         call CLEARBUF
         call RENDER
+        call FAR PTR SVRSTF     ; nose back down the centreline
         call CHASERST           ; give the pilot's world back to physics
         call LERPRST            ; ...and the true un-lerped state too
+        call SETTRIG            ; ...AND THE TRIG THAT GOES WITH IT. INPUT
+                                ; integrates the flight path straight off
+                                ; hsin/hcos/psin/pcos and never recomputes
+                                ; them - it trusts whatever the render left.
+                                ; That was fine while the render only ever
+                                ; drew the pilot's own attitude. It stopped
+                                ; being fine when the head could turn: the
+                                ; angles were put back but the SINES were
+                                ; not, so the jet flew off down the line of
+                                ; sight. CHASERST and LERPRST each call
+                                ; SETTRIG for exactly this reason, and both
+                                ; are CONDITIONAL - in ordinary flight
+                                ; neither fires. One unconditional call
+                                ; here makes the contract unconditional
+                                ; too, which is what it should always have
+                                ; been.
         call HUD                ; the no-cockpit readouts, in OUR font - so
                                 ; they go in BEFORE the blit now, not after
                                 ; it through the BIOS

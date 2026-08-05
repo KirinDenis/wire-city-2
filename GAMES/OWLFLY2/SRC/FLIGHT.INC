@@ -197,6 +197,10 @@ INPUT:
         mov  word ptr [tmpi],0
         cmp  byte ptr [tgtcam],0
         jne  @@nr               ; F4: hands off, dihedral takes over
+        cmp  byte ptr [KEYS+SC_CTL],0
+        jne  @@nr               ; Ctrl+arrow is a LOOK, not a roll - the whole
+                                ; point of putting it there is that the hand
+                                ; never leaves the stick, so it must not bank
         cmp  byte ptr [KEYS+SC_LF],0
         je   @@nl
         mov  ax,[roll]
@@ -848,15 +852,13 @@ INPUT:
         idiv bx
         mov  [mvy],ax
 @@nfr:
-        ; --- reload: one missile back on the rails every ~20 s ---
-        cmp  byte ptr [pammo],4
-        jae  @@nrl
-        inc  word ptr [mrel]
-        cmp  word ptr [mrel],360
-        jb   @@nrl
-        mov  word ptr [mrel],0
-        inc  byte ptr [pammo]
-@@nrl:
+        ; --- THE RAILS DO NOT REFILL THEMSELVES. There used to be a reload
+        ; here, one missile back every ~20 s, and between it and the
+        ; one-in-flight gate the weapon read as broken: fire, wait out the
+        ; missile's flight, find four on the rails again, fire one more,
+        ; forever. Four is what the aeroplane carries. Spend them and you
+        ; are out - which is what makes a sortie a decision, and what gives
+        ; landing at your own field something to be FOR.
         ; --- Space: the cannon. Hold to fire; a volley lands every
         ; 2nd tick on whatever sits inside the aiming circle. Each jet
         ; soaks 2..5 hits (its HP roll) before it comes apart.
@@ -1012,13 +1014,11 @@ INPUT:
         cmp  si,NPLANE*2
         jb   @@gsc
         jmp  @@gnf
-@@gnr:  cmp  word ptr [gunam],250 ; trigger released: the belt feeds in
-        jae  @@gnf
-        inc  word ptr [gunreg]
-        cmp  word ptr [gunreg],8
-        jb   @@gnf
-        mov  word ptr [gunreg],0
-        inc  word ptr [gunam]
+@@gnr:  ; the belt does not grow back either, for the same reason. Two
+        ; hundred and fifty rounds is what the drum holds; letting go of
+        ; the trigger used to feed one back in every eight ticks, so the
+        ; gun could never actually run dry and the count on the panel was
+        ; decoration.
 @@gnf:
         call SNDBEEP            ; the caution lamps sing
         ; --- manoeuvre loading for the engine sound: how hard is the
@@ -1215,6 +1215,15 @@ CRASHHANDLE:
 ; PLAYERRESET - Space pressed during the fall: take a fresh jet.
 PLAYERRESET:
         mov  byte ptr [dying],0
+        ; ---- and GIVE THE PILOT HIS AEROPLANE BACK. Neither cinema camera
+        ; was being switched off here. Take a fresh jet while F4 was orbiting
+        ; something and the new jet arrives with no cockpit drawn (the panel
+        ; is skipped whenever tgtcam is up), no view of itself, and the arrow
+        ; keys still steering the CAMERA - which reads exactly like the game
+        ; has hung, because there is nothing left that answers. Same trap
+        ; rides on the missile camera. ----
+        mov  byte ptr [tgtcam],0
+        mov  byte ptr [mcact],0
         mov  word ptr [lastklr],0   ; a fresh jet owes nobody a kill
         mov  word ptr [dytick],0
         mov  word ptr [camy],1450   ; respawn above everything
@@ -1233,6 +1242,8 @@ PLAYERRESET:
         mov  byte ptr [pdam],0
         mov  byte ptr [flaps],0 ; a fresh jet is a CLEAN jet
         mov  byte ptr [gear],0
+        mov  byte ptr [gearp],0 ; ...and its legs are already up, not still
+                                ;  travelling from the life before
         mov  byte ptr [abrk],0
         mov  word ptr [vstl],VSTALL
         mov  word ptr [flbcnt],0

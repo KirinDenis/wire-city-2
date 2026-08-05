@@ -1336,7 +1336,11 @@ MMSETUP:
         and  ax,63
         mov  cl,6
         shl  ax,cl              ; *64: the baked map is 64 bytes a row
-        mov  si,bx
+        cmp  byte ptr [mmzs],MMZALL
+        jne  @@rt1              ; the whole-world step reads the OTHER baked
+        add  ax,MMWIDE          ; page, the one whose towns are cities. One
+                                ; add, here, and the blit never learns of it
+@@rt1:  mov  si,bx
         add  si,si
         mov  cs:[MMROWT+si],ax
         inc  bx
@@ -1564,6 +1568,254 @@ MINIMAP2:
 ;  home. Far doors: RSTAINITF (once, after DSGEN), RSTADRAWF (per frame)
 ;  and RSBLIPF (the scope mark; the map mark rides out with MAPHUMF).
 ; ============================================================================
+; ============================================================================
+;  AFINITF - site the four aerodromes and FLATTEN THE GROUND UNDER THEM.
+;
+;  Runs ONCE, immediately after DSGEN and BEFORE anything is baked off the
+;  heightmap - the block table and the minimap both read HMAP, and both have
+;  to see the concrete. That ordering is the whole feature: flatten the
+;  heightmap and the terrain mesh, TERRH, the road walk and the collision
+;  test all agree about the strip with no special case in any of them.
+;
+;  The site is found the way a radar mast finds its site (FINDGND spirals out
+;  until it is out of the sea and off the mountain), and then the height is
+;  CLAMPED into the plains band. That second part is not tidiness: the city
+;  zone is a band of heights, so a strip left at its natural height could be
+;  zoned built-up and the town would plant houses down the runway. Clamped
+;  low, the aerodrome cannot be a city block whatever the world does.
+;
+;  DS = the main segment (HMAP lives there and is written here).
+; ============================================================================
+AFSITX   dw 24576-4000, 24576-4000, 24576+4000, 24576+4000
+AFSITZ   dw 24576-9500, 24576+9500, 24576-11500, 24576+11500
+
+; ---- AFPATCH - judge one candidate patch, its top-left node in afcx/afcz.
+; out: CF=1 the ground is impossible, else AX = the SPREAD of its heights.
+; A strip does not want a legal point, it wants a legal PATCH: this is the
+; whole difference from FINDGND, which asks whether ONE spot is out of the
+; sea and searches +-200 world units for it - a fifth of a single node. It
+; can step off a shoreline and nothing else. Measured over forty worlds, the
+; fixed sites put a third of the aerodromes in the water or up a mountain.
+AFPATCH:
+        mov  byte ptr cs:[aflo],255
+        mov  byte ptr cs:[afhi],0
+        mov  word ptr cs:[afu],0
+@@pu:   mov  word ptr cs:[afv],0
+@@pv:   mov  ax,cs:[afcx]
+        add  ax,cs:[afu]
+        and  ax,63
+        mov  cl,6
+        shl  ax,cl
+        mov  bx,ax
+        mov  ax,cs:[afcz]
+        add  ax,cs:[afv]
+        and  ax,63
+        add  bx,ax
+        mov  al,[HMAP+bx]
+        cmp  al,cs:[aflo]
+        jae  @@p1
+        mov  cs:[aflo],al
+@@p1:   cmp  al,cs:[afhi]
+        jbe  @@p2
+        mov  cs:[afhi],al
+@@p2:   inc  word ptr cs:[afv]
+        cmp  word ptr cs:[afv],AFNL
+        jb   @@pv
+        inc  word ptr cs:[afu]
+        cmp  word ptr cs:[afu],AFNW
+        jb   @@pu
+        mov  al,cs:[aflo]
+        cmp  al,AFSEA
+        jb   @@pbad             ; a corner of it is in the water
+        mov  al,cs:[afhi]
+        cmp  al,AFTOP
+        ja   @@pbad             ; ...or up the mountain
+        mov  al,cs:[afhi]
+        sub  al,cs:[aflo]
+        xor  ah,ah
+        clc
+        ret
+@@pbad: stc
+        ret
+
+AFINITF PROC FAR
+        mov  word ptr [afi],0
+@@f:    mov  bx,[afi]
+        add  bx,bx
+        mov  ax,cs:[AFSITX+bx]  ; the nominal site, as a heightmap node
+        add  ax,BIAS
+        mov  cl,10
+        shr  ax,cl
+        mov  cs:[afnx],ax
+        mov  ax,cs:[AFSITZ+bx]
+        add  ax,BIAS
+        mov  cl,10
+        shr  ax,cl
+        mov  cs:[afnz],ax
+        ; ---- walk out in rings until the flattest legal patch is found.
+        ; Flattest wins, plus the ring number: a patch one unit flatter is
+        ; worth exactly one node of walking, so a field stays in the quarter
+        ; of the map it was designed to hold. Over forty worlds this places
+        ; all one hundred and sixty strips, mean ground spread nine units. ----
+        mov  word ptr cs:[afbest],7FFFh
+        mov  word ptr cs:[afr],0
+@@rr:   mov  ax,cs:[afr]
+        neg  ax
+        mov  cs:[afdu],ax
+@@ru:   mov  ax,cs:[afr]
+        neg  ax
+        mov  cs:[afdv],ax
+@@rv:   mov  ax,cs:[afdu]       ; a RING, not a square: |du| or |dv| is r
+        or   ax,ax
+        jns  @@r1
+        neg  ax
+@@r1:   mov  dx,cs:[afdv]
+        or   dx,dx
+        jns  @@r2
+        neg  dx
+@@r2:   cmp  ax,dx
+        jae  @@r3
+        mov  ax,dx
+@@r3:   cmp  ax,cs:[afr]
+        jne  @@rn
+        mov  ax,cs:[afnx]       ; the candidate's top-left node
+        add  ax,cs:[afdu]
+        sub  ax,AFNW/2
+        mov  cs:[afcx],ax
+        mov  ax,cs:[afnz]
+        add  ax,cs:[afdv]
+        sub  ax,AFNL/2
+        mov  cs:[afcz],ax
+        call AFPATCH
+        jc   @@rn
+        add  ax,cs:[afr]        ; ...and the walk it cost to get here
+        cmp  ax,cs:[afbest]
+        jae  @@rn
+        mov  cs:[afbest],ax
+        mov  ax,cs:[afnx]
+        add  ax,cs:[afdu]
+        mov  cs:[afbx],ax
+        mov  ax,cs:[afnz]
+        add  ax,cs:[afdv]
+        mov  cs:[afbz],ax
+@@rn:   inc  word ptr cs:[afdv]
+        mov  ax,cs:[afr]
+        cmp  cs:[afdv],ax
+        jle  @@rv
+        inc  word ptr cs:[afdu]
+        mov  ax,cs:[afr]
+        cmp  cs:[afdu],ax
+        jle  @@ru
+        inc  word ptr cs:[afr]
+        cmp  word ptr cs:[afr],AFREACH
+        jbe  @@rr
+        ; ---- where that put it, in the world: the middle of the node ----
+        mov  ax,cs:[afbx]
+        and  ax,63
+        mov  cl,10
+        shl  ax,cl
+        sub  ax,BIAS
+        add  ax,512
+        mov  [ctx],ax
+        mov  ax,cs:[afbz]
+        and  ax,63
+        mov  cl,10
+        shl  ax,cl
+        sub  ax,BIAS
+        add  ax,512
+        mov  [ctz],ax
+        mov  bx,[afi]
+        add  bx,bx
+        mov  ax,[ctx]
+        mov  [afx+bx],ax
+        mov  ax,[ctz]
+        mov  [afz+bx],ax
+        ; ---- the height every node of this strip will carry ----
+        mov  ax,cs:[afbx]
+        and  ax,63
+        mov  cl,6
+        shl  ax,cl              ; node row base
+        mov  bx,ax
+        mov  ax,cs:[afbz]
+        and  ax,63
+        add  bx,ax
+        mov  al,[HMAP+bx]
+        cmp  al,AFHLO
+        jae  @@h1
+        mov  al,AFHLO
+@@h1:   cmp  al,AFHHI
+        jbe  @@h2
+        mov  al,AFHHI
+@@h2:   mov  cs:[afh],al
+        ; ---- stamp AFNW x AFNL nodes of it flat ----
+        mov  ax,[ctx]           ; the node the centre sits in
+        add  ax,BIAS
+        mov  cl,10
+        shr  ax,cl
+        mov  cs:[afnodx],ax
+        mov  ax,[ctz]
+        add  ax,BIAS
+        mov  cl,10
+        shr  ax,cl
+        mov  cs:[afnodz],ax
+        mov  word ptr cs:[afu],0
+@@su:   mov  word ptr cs:[afv],0
+@@sv:   mov  ax,cs:[afnodx]      ; the patch is centred on the node, so it
+        add  ax,cs:[afu]       ;  reaches back as far as it reaches forward
+        sub  ax,AFNW/2
+        and  ax,63
+        mov  cl,6
+        shl  ax,cl
+        mov  bx,ax
+        mov  ax,cs:[afnodz]
+        add  ax,cs:[afv]
+        sub  ax,AFNL/2
+        and  ax,63
+        add  bx,ax
+        mov  al,cs:[afh]
+        mov  [HMAP+bx],al
+        inc  word ptr cs:[afv]
+        cmp  word ptr cs:[afv],AFNL
+        jb   @@sv
+        inc  word ptr cs:[afu]
+        cmp  word ptr cs:[afu],AFNW
+        jb   @@su
+        ; ---- and the world height of the concrete, once it is flat ----
+        push word ptr [camx]
+        push word ptr [camz]
+        mov  ax,[ctx]
+        mov  [camx],ax
+        mov  ax,[ctz]
+        mov  [camz],ax
+        call FAR PTR TERRHF
+        pop  word ptr [camz]
+        pop  word ptr [camx]
+        mov  bx,[afi]
+        add  bx,bx
+        mov  [afy+bx],ax
+        inc  word ptr [afi]
+        cmp  word ptr [afi],NAF
+        jb   @@f
+        ret
+AFINITF ENDP
+afh    db 0                    ; this strip's stamped heightmap value
+afnodx   dw 0                    ; ...the node it is centred on...
+afnodz   dw 0
+afu    dw 0                    ; ...and the walk over its patch
+afv    dw 0
+afcx    dw 0                    ; AFPATCH's candidate, its top-left node...
+afcz    dw 0
+aflo    db 0                    ; ...and the range of ground it found there
+afhi    db 0
+afnx    dw 0                    ; the nominal node the ring walk starts from
+afnz    dw 0
+afbest  dw 0                    ; best score so far, and where it was
+afbx    dw 0
+afbz    dw 0
+afr     dw 0                    ; the ring being walked, and the point on it
+afdu    dw 0
+afdv    dw 0
+
 RSTAINITF PROC FAR
         call RSTAINIT
         ret
@@ -1602,15 +1854,22 @@ RSTAINIT:
         mov  byte ptr [rsst+bx],0
         mov  byte ptr [rshp+bx],RSHITS
         add  bx,bx              ; word index
-        mov  word ptr [rsx+bx],24576
-        mov  ax,24576
-        cmp  word ptr [rsi],0
-        jne  @@north
-        sub  ax,7000            ; ours: the southern rear
-        jmp  @@sz
-@@north:
-        add  ax,7000            ; theirs: the mirror of it
-@@sz:   mov  [rsz+bx],ax
+        ; ---- THE RADAR STANDS ON THE AERODROME. It used to be planted on
+        ; the spine at its own fixed offset, 7000 back from the line, which
+        ; put the two of them in unrelated fields - and a mast in the middle
+        ; of nowhere is not what a radar is. A station belongs to an air
+        ; base: same apron, same defences, one thing to find and one thing
+        ; to lose. The dependency runs THIS way round because the strip is
+        ; the fussy one - it has to walk until it finds ground flat enough
+        ; to land on, and the mast does not care what it stands on. So the
+        ; strip chooses, and the mast follows it out. Station 0 is ours and
+        ; so is field 0; 1 is theirs and so is field 1 - the same parity
+        ; that carries IFF everywhere else lines them up for free. ----
+        mov  ax,[afx+bx]
+        add  ax,RSAPRON         ; beside the concrete, not on it
+        mov  [rsx+bx],ax
+        mov  ax,[afz+bx]
+        mov  [rsz+bx],ax
         call RSTAGND
         inc  word ptr [rsi]
         cmp  word ptr [rsi],NRSTA
@@ -3469,7 +3728,27 @@ SWKEYS: xor  si,si              ; row index 0..SWNK-1
 @@kn:   inc  si
         cmp  si,SWNK
         jb   @@k
-        ret
+        ; ---- and the GEAR'S OWN TRAVEL, which the lever does not have.
+        ; Six steps, one every fourth tick: about a second from the lever to
+        ; down and locked, and the same coming up. It rides here because
+        ; SWKEYS is the one routine called every tick from INPUT that does
+        ; not live in the main segment, and the main segment has 180 bytes.
+        ; The DRAG still switches with the lever, not with the legs - that is
+        ; deliberate. You pay for the gear the moment you ask for it. ----
+        test word ptr [lasttk],3
+        jnz  @@gx
+        mov  al,[gearp]
+        cmp  byte ptr [gear],0
+        je   @@gup
+        cmp  al,GEARNS-1
+        jae  @@gx               ; down and locked
+        inc  al
+        jmp  @@gst
+@@gup:  or   al,al
+        jz   @@gx               ; stowed
+        dec  al
+@@gst:  mov  [gearp],al
+@@gx:   ret
 spmsk   dw 0                    ; which of the ten are live this frame
 spcol   db 0                    ; the slot's BACKGROUND colour (0 = unlit)
 spplx   dw 0                    ; ...and the plate's left edge
@@ -3492,11 +3771,17 @@ SIDEPNL:
         add  bx,bx              ;  walks 0,3,2,1 down the plate and never
         add  bx,ax              ;  lines the specks up into a stripe
         and  bx,3
-        push di
-        call UROW
-        pop  ax
-        add  di,ax
-        add  di,bx
+        push bx                 ; UROW CLOBBERS BX - it builds row*64 in there
+        push di                 ;  on its way to row*320, and this offset was
+        call UROW               ;  being added back AFTERWARDS. The specks
+        pop  ax                 ;  were landing at row*384 + x: sixty-four
+        pop  bx                 ;  pixels further right every row, marching
+        add  di,ax              ;  diagonally across the whole panel, over
+        add  di,bx              ;  both MFDs and the map, and wrapping off the
+                                ;  top of the buffer past row 170. That is the
+                                ;  speckle the pilot kept seeing on his map,
+                                ;  and it is the SAME trap ROW320 and VLINE2
+                                ;  already carry notes about.
         push ax
         mov  al,PNLNOIS
         mov  cx,5
@@ -3557,6 +3842,17 @@ SIDEPNL:
         test word ptr [lasttk],PNLBLNK
         jz   @@spp              ; live, dark half of the blink
         mov  byte ptr cs:[spcol],SPGRN  ; a system that is OUT reads green
+        cmp  si,3
+        jne  @@spbrn
+        mov  byte ptr cs:[spcol],SPRED  ; ...except BURN. The other three on
+        jmp  @@spp                      ; that side are configuration - flaps
+                                        ; out, gear down, boards out - and
+                                        ; green is right for those. The
+                                        ; burner is not a configuration, it
+                                        ; is fuel going up the stack at four
+                                        ; times the rate, and the lamp should
+                                        ; say so (the pilot's call).
+@@spbrn:
         cmp  si,5
         jb   @@spp
         mov  byte ptr cs:[spcol],SPRED  ; a warning reads red...
@@ -4343,6 +4639,11 @@ TGTVIEW:
 
 
 ; ---- THE WINDOW GUARD ------------------------------------------------------
+; The marker is BSSMARK's trick, spread to the far segments: the linker map
+; then prints how full each window actually is, so "will this fit" is a
+; number instead of a build that either passes or explodes.
+        PUBLIC UIEND
+UIEND   label byte
 IF ($-GLIST) GT 16368
         %OUT *** UISEG overflows its 16K window before the buffer ***
         .ERR

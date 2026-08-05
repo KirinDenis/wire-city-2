@@ -13,6 +13,15 @@
 //  markers are simply the largest flat, strongly-saturated rectangles in
 //  the image: no exact RGB has to be typed into the artist's colour picker.
 //
+//  THE SIDE PANELS ride the same run: -left and -right take the 90-degree
+//  views, and they MUST be quantised in the same pass, because the VGA DAC
+//  lends this game exactly 63 slots and all three pictures have to live in
+//  them. So the median cut is fed all three at once (the front counted
+//  twice - it is the one you stare at). They are not stored as 64000 raw
+//  bytes like the front: two more of those would want two more 64K far
+//  pages, and moving the far map has gone wrong twice in this project. They
+//  are RLE'd instead, and blitted straight out of the compressed stream.
+//
 //  Outputs (into -o):
 //    PANELIMG.INC - 64000 palette-index bytes, resource id 2 in CITY.DAT,
 //                   255 = transparent, panel colours at palette 31..93
@@ -20,6 +29,8 @@
 //    PANELZON.INC - the instrument rectangles as equs. mkpanel.py PRINTED
 //                   these and a human retyped them into HUD.INC; with a
 //                   live panel wanting dozens of zones that stops scaling.
+//    CPSIDE.INC   - the two side panels, RLE (see RLE() at the bottom for
+//                   the format), only when -left and -right are given
 //  Outputs (into -bmp): <name>_art.bmp and <name>_mark.bmp, the shrunk art
 //  and the same with the found zones flagged - for eyeballing, not input.
 //
@@ -33,7 +44,7 @@ int OW = 320, OH = 200;          // the screen this cockpit has to fit
 int NPAL = 63;                   // palette slots 31..93 in the game's DAC
 int SPANCAP = 399;               // see the span check at the bottom
 
-string src = null, outDir = null, bmpDir = null;
+string src = null, outDir = null, bmpDir = null, leftSrc = null, rightSrc = null;
 bool probe = false;
 int ditherArg = -1;              // -1 = decide from the source size, below
 for (int i = 0; i < args.Length; i++)
@@ -42,6 +53,8 @@ for (int i = 0; i < args.Length; i++)
     {
         case "-o": outDir = args[++i]; break;
         case "-bmp": bmpDir = args[++i]; break;
+        case "-left": leftSrc = args[++i]; break;
+        case "-right": rightSrc = args[++i]; break;
         case "-probe": probe = true; break;
         case "-dither": ditherArg = 1; break;
         case "-nodither": ditherArg = 0; break;
@@ -50,9 +63,12 @@ for (int i = 0; i < args.Length; i++)
 }
 if (src == null || outDir == null)
 {
-    Console.Error.WriteLine("usage: Panel2Inc cockpit.png -o SRCDIR [-bmp RESDIR] [-probe] [-dither|-nodither]");
+    Console.Error.WriteLine("usage: Panel2Inc cockpit.png -o SRCDIR [-bmp RESDIR]");
+    Console.Error.WriteLine("       [-left look_left.png -right look_right.png] [-probe] [-dither|-nodither]");
     return 1;
 }
+if ((leftSrc == null) != (rightSrc == null))
+{ Console.Error.WriteLine("error: -left and -right go together - a cockpit has two sides"); return 1; }
 
 var img = Png.Load(src);
 Console.WriteLine($"{Path.GetFileName(src)}: {img.W}x{img.H}");
@@ -216,7 +232,64 @@ foreach (var z in text)
 //  BEFORE the pixels are matched, so the dither compensates for what the
 //  card will really show instead of for a precision it does not have.
 // ---------------------------------------------------------------------------
-var pal = MedianCut(art, clear, OW, OH, NPAL);
+// ---------------------------------------------------------------------------
+//  THE SIDE PANELS, shrunk the same way, so their pixels can vote in the
+//  same median cut. Nothing else about them is special: no marker zones (a
+//  side console carries no screens), no dark-glass patches, same near-white
+//  transparency test for the canopy.
+// ---------------------------------------------------------------------------
+(byte[] art, bool[] clear) Prep(string path, string what)
+{
+    var im = Png.Load(path);
+    Console.WriteLine($"{what}: {Path.GetFileName(path)}: {im.W}x{im.H}");
+    if (im.W < OW || im.H < OH) throw new Exception($"{path} is smaller than {OW}x{OH}");
+    double asp = (double)im.W / im.H;
+    if (Math.Abs(asp - want) > 0.02)
+        Console.Error.WriteLine($"warning: {what} aspect {asp:F3} is not {want:F3} - it will be stretched");
+    var a = new byte[OW * OH * 3];
+    var c = new bool[OW * OH];
+    int cn = 0;
+    for (int y = 0; y < OH; y++)
+    {
+        int sy0 = (int)((long)y * im.H / OH), sy1 = (int)((long)(y + 1) * im.H / OH);
+        if (sy1 <= sy0) sy1 = sy0 + 1;
+        for (int x = 0; x < OW; x++)
+        {
+            int sx0 = (int)((long)x * im.W / OW), sx1 = (int)((long)(x + 1) * im.W / OW);
+            if (sx1 <= sx0) sx1 = sx0 + 1;
+            long r = 0, g = 0, b = 0, n = 0; int white = 0;
+            for (int sy = sy0; sy < sy1; sy++)
+                for (int sx = sx0; sx < sx1; sx++)
+                {
+                    int p = (sy * im.W + sx) * 3;
+                    r += im.P[p]; g += im.P[p + 1]; b += im.P[p + 2]; n++;
+                    if (im.P[p] >= 240 && im.P[p + 1] >= 240 && im.P[p + 2] >= 240) white++;
+                }
+            int o = (y * OW + x) * 3;
+            a[o] = (byte)(r / n); a[o + 1] = (byte)(g / n); a[o + 2] = (byte)(b / n);
+            if (white * 2 > n) { c[y * OW + x] = true; cn++; }
+        }
+    }
+    Console.WriteLine($"   transparent pixels: {cn}  (viewport {cn * 100 / (OW * OH)}%)");
+    return (a, c);
+}
+
+byte[] lArt = null, rArt = null; bool[] lClear = null, rClear = null;
+if (leftSrc != null)
+{
+    (lArt, lClear) = Prep(leftSrc, "look left");
+    (rArt, rClear) = Prep(rightSrc, "look right");
+}
+
+// ONE median cut over every picture that has to share the DAC. The front
+// panel votes TWICE: it is on screen almost all the time, the side consoles
+// are glanced at. Without this the sides - which are far darker artwork -
+// would be forced through a ramp cut for the front alone and come out in
+// three shades of near-black.
+var pal = (lArt == null)
+    ? MedianCut(art, clear, OW, OH, NPAL)
+    : MedianCut(Pool(new[] { art, art, lArt, rArt }),
+                Pool(new[] { clear, clear, lClear, rClear }), OW, OH * 4, NPAL);
 for (int i = 0; i < pal.Length; i++)
     pal[i] = ((pal[i].r >> 2) << 2, (pal[i].g >> 2) << 2, (pal[i].b >> 2) << 2);
 
@@ -324,6 +397,76 @@ for (int i = 0; i < text.Count; i++) Zone($"PZT{i}", Scale(text[i]));
 File.WriteAllText(Path.Combine(outDir, "PANELZON.INC"), sb.ToString());
 Console.WriteLine("wrote PANELZON.INC");
 
+// ---------------------------------------------------------------------------
+//  THE SIDE PANELS: quantise against the palette they helped choose, then
+//  pack. Reported as a percentage of the raw 64000 - that number is the
+//  whole argument for not giving each of them a 64K page.
+// ---------------------------------------------------------------------------
+byte[] lData = null, rData = null;
+if (lArt != null)
+{
+    byte[] Quant(byte[] a, bool[] c)
+    {
+        var d = new byte[OW * OH];
+        var e = new double[OW * OH * 3];
+        for (int y = 0; y < OH; y++)
+            for (int x = 0; x < OW; x++)
+            {
+                int i = y * OW + x, o = i * 3;
+                if (c[i]) { d[i] = 255; continue; }
+                double r = a[o] + e[o], g = a[o + 1] + e[o + 1], b = a[o + 2] + e[o + 2];
+                int best = 0; double bd = double.MaxValue;
+                for (int k = 0; k < pal.Length; k++)
+                {
+                    double dr = r - pal[k].r, dg = g - pal[k].g, db = b - pal[k].b;
+                    double dd = dr * dr + dg * dg + db * db;
+                    if (dd < bd) { bd = dd; best = k; }
+                }
+                d[i] = (byte)(31 + best);
+                if (!dither) continue;
+                double er = r - pal[best].r, eg = g - pal[best].g, eb = b - pal[best].b;
+                void Spill(int nx, int ny, double f)
+                {
+                    if (nx < 0 || nx >= OW || ny < 0 || ny >= OH) return;
+                    int q = (ny * OW + nx) * 3;
+                    e[q] += er * f; e[q + 1] += eg * f; e[q + 2] += eb * f;
+                }
+                Spill(x + 1, y, 7.0 / 16); Spill(x - 1, y + 1, 3.0 / 16);
+                Spill(x, y + 1, 5.0 / 16); Spill(x + 1, y + 1, 1.0 / 16);
+            }
+        return d;
+    }
+    lData = Quant(lArt, lClear);
+    rData = Quant(rArt, rClear);
+    var lPack = RLE(lData);
+    var rPack = RLE(rData);
+    Console.WriteLine($"side panels packed: left {lPack.Length} bytes ({lPack.Length * 100 / (OW * OH)}% of raw),"
+                    + $" right {rPack.Length} ({rPack.Length * 100 / (OW * OH)}%)");
+
+    sb.Clear();
+    sb.Append("; CPSIDE.INC - generated by TOOLS\\Panel2Inc from\r\n");
+    sb.Append($";   {Path.GetFileName(leftSrc)} and {Path.GetFileName(rightSrc)}\r\n");
+    sb.Append("; The 90-degree cockpit views, RLE. Token byte: 40|n literal, 80|n run,\r\n");
+    sb.Append("; C0|n skip (transparent), 00 end; n = 0 means a word count follows.\r\n");
+    sb.Append("; Decoded by SIDEBMP in SYM.INC. DO NOT EDIT BY HAND.\r\n");
+    void Stream(string label, byte[] d)
+    {
+        sb.Append(label).Append(":\r\n");
+        for (int i = 0; i < d.Length; i += 20)
+        {
+            sb.Append("        db ");
+            for (int k = 0; k < 20 && i + k < d.Length; k++)
+            { if (k > 0) sb.Append(','); sb.Append(d[i + k]); }
+            sb.Append("\r\n");
+        }
+        sb.Append(label).Append("END:\r\n");
+    }
+    Stream("CPLIMG", lPack);
+    Stream("CPRIMG", rPack);
+    File.WriteAllText(Path.Combine(outDir, "CPSIDE.INC"), sb.ToString());
+    Console.WriteLine("wrote CPSIDE.INC");
+}
+
 if (bmpDir != null)
 {
     Directory.CreateDirectory(bmpDir);
@@ -348,6 +491,23 @@ if (bmpDir != null)
     foreach (var t in text) Paint(Scale(t), 153, 217, 234);
     Bmp.Save(Path.Combine(bmpDir, stem + "_mark.bmp"), mark, OW, OH);
     Console.WriteLine($"wrote {stem}_art.bmp and {stem}_mark.bmp");
+    // the sides too, so a shared palette can be judged by eye and not by faith
+    void SideBmp(string path, byte[] d)
+    {
+        var s = new byte[OW * OH * 3];
+        for (int i = 0; i < OW * OH; i++)
+        {
+            if (d[i] == 255) { s[i * 3] = 255; s[i * 3 + 1] = 255; s[i * 3 + 2] = 255; }
+            else { var c = pal[d[i] - 31]; s[i * 3] = (byte)c.r; s[i * 3 + 1] = (byte)c.g; s[i * 3 + 2] = (byte)c.b; }
+        }
+        Bmp.Save(path, s, OW, OH);
+        Console.WriteLine("wrote " + Path.GetFileName(path));
+    }
+    if (lData != null)
+    {
+        SideBmp(Path.Combine(bmpDir, Path.GetFileNameWithoutExtension(leftSrc) + "_art.bmp"), lData);
+        SideBmp(Path.Combine(bmpDir, Path.GetFileNameWithoutExtension(rightSrc) + "_art.bmp"), rData);
+    }
 }
 
 if (spans > SPANCAP)
@@ -408,6 +568,66 @@ static List<Blob> FindFlatBlobs(Image im, int sat, int tol, int minpx)
     }
     outp.Sort((a, c) => c.N.CompareTo(a.N));
     return outp;
+}
+
+// Pool several same-sized images end to end, so one median cut can see them
+// all. MedianCut only ever walks w*h, so a taller fake image is all it takes.
+static T[] Pool<T>(T[][] parts)
+{
+    var o = new T[parts.Sum(p => p.Length)];
+    int at = 0;
+    foreach (var p in parts) { Array.Copy(p, 0, o, at, p.Length); at += p.Length; }
+    return o;
+}
+
+// ---------------------------------------------------------------------------
+//  RLE for a side panel. The stream walks the 64000 pixels in order and is
+//  read by SIDEBMP (SYMSEG) straight out of the loaded file - there is no
+//  decompressed copy anywhere, which is the whole point: it saves a 64K far
+//  page per side, and moving the far map is how this project has broken
+//  itself twice.
+//
+//  One token byte, two bits of type and six of count; count 0 means a WORD
+//  count follows, so a long run costs three bytes instead of dozens.
+//      00        end of image
+//      40 | n    LITERAL n - n palette bytes follow
+//      80 | n    RUN n     - one palette byte follows, repeated n times
+//      C0 | n    SKIP n    - n transparent pixels, the world shows through
+// ---------------------------------------------------------------------------
+static byte[] RLE(byte[] px)
+{
+    var o = new List<byte>();
+    void Tok(int type, int n)
+    {
+        if (n < 64) o.Add((byte)(type | n));
+        else { o.Add((byte)type); o.Add((byte)(n & 255)); o.Add((byte)(n >> 8)); }
+    }
+    int i = 0;
+    var lit = new List<byte>();
+    void FlushLit()
+    {
+        while (lit.Count > 0)
+        {
+            int n = Math.Min(lit.Count, 65535);
+            Tok(0x40, n);
+            o.AddRange(lit.GetRange(0, n));
+            lit.RemoveRange(0, n);
+        }
+    }
+    while (i < px.Length)
+    {
+        int run = 1;
+        while (i + run < px.Length && px[i + run] == px[i] && run < 65535) run++;
+        if (px[i] == 255)                        // transparent: never stored
+        { FlushLit(); Tok(0xC0, run); i += run; continue; }
+        if (run >= 3)                            // a run pays for itself here
+        { FlushLit(); Tok(0x80, run); o.Add(px[i]); i += run; continue; }
+        for (int k = 0; k < run; k++) lit.Add(px[i]);
+        i += run;
+    }
+    FlushLit();
+    o.Add(0);
+    return o.ToArray();
 }
 
 // ---------------------------------------------------------------------------

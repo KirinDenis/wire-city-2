@@ -419,58 +419,84 @@ RENDERCELL:
 
 ; ============================================================================
 ;  ROADCELL - one city street cell: the tarmac, then the traffic on it.
-;  Both are cut off at ROADZ. The lab walks 289 cells and could afford to
-;  surface all of them; this walk is 2401 and cannot. Past ROADZ a road is
-;  a few pixels of grey and a car is one, and neither is worth a fill.
-;  The surface sits gbase+2 above the terrain, the same trick and the same
-;  two units the forest/water/field patches use.
+;  The tarmac is cut off at ROADR / ROADZ, the traffic much nearer at CARZ -
+;  past that a car is one pixel and costs a whole box.
+;  TWO LEVELS OF DETAIL (see the constants in CITY.ASM): out past ROADLOD a
+;  quad covers a 2x2 GROUP of cells instead of one, and only the group's
+;  even/even anchor draws it. That is an exact merge, not a simplification -
+;  an avenue is two cells wide and every one of those groups is road all the
+;  way through - and it is what lets the road reach the whole walk.
+;  The surface is bent onto the terrain corner by corner by ROADYF; the
+;  flat gbase is now only what the VEHICLES stand on.
 ; ============================================================================
 ROADCELL:
         mov  ax,[cdi]           ; ---- the cheap cull FIRST. Everything below
         or   ax,ax              ; costs four rotations and a big fill, and
         jns  @@d1               ; there are a thousand street cells in the
         neg  ax                 ; walk. Chebyshev on the cell offsets: no
-@@d1:   cmp  ax,ROADR           ; multiply, no projection, just two compares.
-        jg   @@x
+@@d1:   mov  bx,ax              ; multiply, no projection, just two compares.
         mov  ax,[cdj]
         or   ax,ax
         jns  @@d2
         neg  ax
-@@d2:   cmp  ax,ROADR
-        jg   @@x
-        mov  ax,[gi]            ; cell centre: gi*256 + 128 - BIAS
+@@d2:   cmp  ax,bx
+        jle  @@d3
+        mov  bx,ax
+@@d3:   cmp  bx,ROADR           ; bx = the distance in CELLS, and it decides
+        jg   @@x                ; the level of detail as well as the cull
+        mov  word ptr [rlod],0
+        cmp  bx,ROADLOD
+        jle  @@one
+        mov  ax,[gi]            ; ---- grouped: the 2x2 block of cells whose
+        or   ax,[gj]            ; corner is even. Only that corner draws;
+        test ax,1               ; the other three are inside its quad.
+        jnz  @@x
+        mov  word ptr [rlod],1
+@@one:  mov  ax,[gi]            ; cell centre: gi*256 + 128 - BIAS ...
         mov  cl,8
         shl  ax,cl
         add  ax,128
-        sub  ax,BIAS
+        cmp  word ptr [rlod],0
+        je   @@c1
+        add  ax,128             ; ...and a group's centre is a cell further
+@@c1:   sub  ax,BIAS
         mov  [wcx],ax
         mov  ax,[gj]
         mov  cl,8
         shl  ax,cl
         add  ax,128
-        sub  ax,BIAS
+        cmp  word ptr [rlod],0
+        je   @@c2
+        add  ax,128
+@@c2:   sub  ax,BIAS
         mov  [wcz],ax
-        mov  word ptr [bhw],128 ; the full cell, edge to edge
-        mov  word ptr [bhd],128
+        mov  ax,128             ; the full cell, edge to edge - or the full
+        cmp  word ptr [rlod],0  ; group, which is two of them
+        je   @@c3
+        mov  ax,256
+@@c3:   mov  [bhw],ax
+        mov  [bhd],ax
         call ROTCUL
         jc   @@r
         mov  ax,[minrz]
         cmp  ax,ROADZ
         jg   @@r
-        mov  ax,[gi]            ; the ground under it
+        mov  byte ptr [COLOR],ASPHALT
+        call FACETOPC           ; the quad, flat...
+        call FAR PTR ROADYF     ; ...and now bent onto the ground, corner by
+        call FACEFILL           ; corner (see TOWN.INC: it used to take ONE
+                                ; height for the whole cell, which on a
+                                ; slope is a slab hovering over the hill)
+        cmp  word ptr [rlod],0
+        jne  @@r                ; grouped detail is too far out for traffic
+        mov  ax,[minrz]
+        cmp  ax,CARZ
+        jg   @@r                ; tarmac reaches further than the traffic
+        mov  ax,[gi]            ; the ground the vehicles stand on
         mov  bx,[gj]
         call GETH
         call WORLDH
         mov  [gbase],ax
-        add  ax,2               ; a hair above the terrain quad
-        sub  ax,[camy]
-        mov  [bry1],ax
-        mov  byte ptr [COLOR],ASPHALT
-        call FACETOPC
-        call FACEFILL
-        mov  ax,[minrz]
-        cmp  ax,CARZ
-        jg   @@r                ; tarmac reaches further than the traffic
         mov  word ptr [vmode],0 ; draw them, do not test them
         call FAR PTR TRAFFICF
 @@r:

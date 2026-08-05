@@ -279,49 +279,11 @@ TERRAIN:
         jl   @@tl
         ret
 
-; ============================================================================
-;  MMAPGEN - bake the 64x64 world minimap from HMAP (once, after DSGEN).
-;  Colours: water/plain/CITY-BROWN/woods/rock/snow. North (+Z) is up.
-; ============================================================================
-MMAPGEN:
-        push es                 ; the map is baked into the scratch segment
-        mov  ax,[scrseg]
-        mov  es,ax
-        mov  word ptr [dsx],0   ; node i (world X)
-@@i:    mov  word ptr [dsy],0   ; node j (world Z)
-@@j:    mov  bx,[dsx]
-        mov  dx,[dsy]
-        call HGET               ; AL = H
-        mov  ah,14              ; water
-        cmp  al,88
-        jb   @@put
-        mov  ah,10              ; plains green
-        cmp  al,120
-        jb   @@put
-        mov  ah,18              ; CITY -> brown blocks
-        cmp  al,168
-        jb   @@put
-        mov  ah,15              ; woods
-        cmp  al,200
-        jb   @@put
-        mov  ah,13              ; rock
-        cmp  al,230
-        jb   @@put
-        mov  ah,8               ; snow
-@@put:  mov  bx,63              ; screen row = 63 - j (north up)
-        sub  bx,[dsy]
-        mov  cl,6
-        shl  bx,cl
-        add  bx,[dsx]
-        mov  es:[bx],ah
-        inc  word ptr [dsy]
-        cmp  word ptr [dsy],64
-        jl   @@j
-        inc  word ptr [dsx]
-        cmp  word ptr [dsx],64
-        jl   @@i
-        pop  es
-        ret
+; (MMAPGEN went out to SYMSEG as MMAPGENF on 2026-08-05. It bakes the
+;  minimap ONCE, at startup, out of HMAP and into the scratch segment - it
+;  calls nothing hot, it is never called again, and the main segment was
+;  down to TWO bytes with an aerodrome to build. The cheapest bytes are
+;  always the coldest ones.)
 
 ; ============================================================================
 ;  MINIMAP - blit the baked map to the bottom-right corner (rows 123..186)

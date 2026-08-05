@@ -22,7 +22,10 @@ $MAP = @{
     detect = "owlfly2_v(\d+)\.jsdos"
     files  = @(
       @{ p = "GAMES\OWLFLY2\INSTALL\FLYOWL2.EXE"; n = "FLYOWL2.EXE" },
-      @{ p = "GAMES\OWLFLY2\INSTALL\CITY.DAT";    n = "CITY.DAT" }
+      @{ p = "GAMES\OWLFLY2\INSTALL\CITY.DAT";    n = "CITY.DAT" },
+      # the 90-degree cockpit views. Its own file because CITY.DAT is read
+      # in one go with CX=0FFF0h and the front panel is 64000 of those bytes.
+      @{ p = "GAMES\OWLFLY2\INSTALL\CPSIDE.DAT";  n = "CPSIDE.DAT" }
       # no ENGINE.RAW: OWL FLY II generates its turbine (GENBED)
     )
     strings = @(

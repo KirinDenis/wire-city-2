@@ -142,6 +142,12 @@ TLINK /t RESDAT.OBJ >> ..\..\..\BUILD.LOG
 if errorlevel 1 goto err
 copy /y RESDAT.COM ..\INSTALL\CITY.DAT >> ..\..\..\BUILD.LOG
 del RESDAT.COM
+TASM /T SIDEDAT.ASM >> ..\..\..\BUILD.LOG
+if errorlevel 1 goto err
+TLINK /t SIDEDAT.OBJ >> ..\..\..\BUILD.LOG
+if errorlevel 1 goto err
+copy /y SIDEDAT.COM ..\INSTALL\CPSIDE.DAT >> ..\..\..\BUILD.LOG
+del SIDEDAT.COM
 TASM /T CITY.ASM >> ..\..\..\BUILD.LOG
 if errorlevel 1 goto err
 TLINK /m CITY.OBJ >> ..\..\..\BUILD.LOG

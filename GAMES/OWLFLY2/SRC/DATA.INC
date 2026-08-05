@@ -16,6 +16,16 @@ vel     dw CRUISE               ; airspeed, *16 fixed point
 ; annunciator column on the left says which of them are hanging out.
 flaps   db 0                    ; F: high lift, high drag, low stall
 gear    db 0                    ; L: three legs in the wind
+; ...and how far out they actually ARE. The lever is instant; the legs are
+; not. Six steps, one every fourth tick, so a cycle takes about a second -
+; which is why the drag arrives before the legs finish coming down and stays
+; a moment after they are up. SWKEYS walks this (it is called every tick and
+; lives out in UISEG); GEARDRAWF in SYMSEG draws whichever step it lands on,
+; straight out of GEARM.INC. Step 0 is stowed and is not drawn at all.
+gearp   db 0
+GEARNS  equ 6                   ; steps of travel, and the vertices a leg has.
+GEARNV  equ 16                  ;  The guard beside the include in SYM.INC
+GEARNF  equ 4                   ;  checks GEARM.INC against these three.
 abrk    db 0                    ; B: the airbrake
 prevfl  db 0                    ; ...their key-down edges
 prevgr  db 0
@@ -70,6 +80,15 @@ mmspx   dw 0                    ; how many nodes fit across at this zoom...
 mmspy   dw 0                    ;  ...and down. Both change with mmzs.
 resseg  dw 0                    ; segment CITY.DAT is loaded into (CS+2000h)
 pimgo   dw 0                    ; cockpit bitmap offset in resseg (0 = none)
+cpsseg  dw 0                    ; CPSIDE.DAT's own page, ABOVE scrseg so that
+                                ; opening it moves nothing (0 = not loaded)
+cplo    dw 0                    ; the left view's RLE stream in it
+cpro    dw 0                    ; ...and the right's
+sview   db 0                    ; 0 forward, 1 looking left, 2 looking right.
+                                ; The saved heading and the four key edges
+                                ; that go with it are CS-relative in SYMSEG:
+                                ; only SVIEWF ever touches them, and this
+                                ; segment is down to its last dozen bytes
 swph    dw 0                    ; sway: phase, full circle = 65536
 swspd   dw 360                  ; sway: phase step per tick (~10 s cycle)
 swamp   dw 4                    ; sway: current amplitude, screen pixels
@@ -137,6 +156,11 @@ RSMDMG  equ 4                   ; a missile is worth four shells: two level it
 ; for ours (0FFF0h) and HOSTILE for theirs (0FFF2h). Real plane offsets are
 ; 0..78, so anything at or above RSLK is a station and nothing else.
 RSLK    equ 0FFF0h
+RSAPRON equ 800                 ; how far off the runway centreline the mast
+                                ;  stands. The strip is 150 half-width and
+                                ;  the flattened patch reaches 1024 either
+                                ;  way, so this is beside the concrete and
+                                ;  still on the aerodrome's own flat ground
 RSRAD   equ 90                  ; its footprint, half-width. Wider than the
                                 ;  dish (54) ON PURPOSE: a cannon round steps
                                 ;  150 units a tick, so a box thinner than
@@ -244,6 +268,14 @@ PZMMY   equ PZADIY0
 ; it had to be added: the widest setting used to be one pixel a node, which
 ; on a 55-wide screen is 55 of the 64 columns, and reads as "I can only see
 ; part of it". The other three are 1, 2 and 4 pixels a node.
+; The baked world is TWO pages in [scrseg], 4096 bytes each. The first is the
+; map proper: every built block in its place. The second, at MMWIDE, is the
+; same land with the towns generalised into CITIES - see MMAPGENF - and it is
+; what the whole-world step reads, because at that scale a block is one pixel
+; and a scatter of single pixels is not a map. The page costs nothing: scrseg
+; is a whole 64K and only the first 4K of it was ever used (cpsseg is a full
+; 64K above it, not 4K - see CPSLOADF).
+MMWIDE  equ 1000h
 MMZN    equ 4
 MMZALL  equ 0                   ; the index of the whole-world step
 MMZICO  equ 3                   ; ...and the step from which the MAP stops
@@ -281,12 +313,29 @@ NSHILK  equ 20                  ; ten a side. Their job is to cover the
 GNDLO   equ 20                  ; above the waterline by a real margin
 GNDHI   equ 430                 ; and below the mountains
 ; A locked SHILKA rides in locki as SHKLK + index*2, the trick the stations
-; play one shelf up. Plane offsets are 0..78, Shilkas 0FFE0h..0FFEAh and
-; stations 0FFF0h..0FFF2h, so a single compare sorts all three - and bit 1,
-; the parity every IFF test in this game already reads, comes out FRIENDLY
-; for an even slot and HOSTILE for an odd one. That is why the six were
-; interleaved by side (see SHKPX in UI.INC): it buys the whole IFF for free.
-SHKLK   equ 0FFE0h
+; play one shelf up. Plane offsets are 0..78 and stations 0FFF0h..0FFF2h, so
+; a single compare sorts all three - and bit 1, the parity every IFF test in
+; this game already reads, comes out FRIENDLY for an even slot and HOSTILE
+; for an odd one. That is why they are interleaved by side (see SHKPX in
+; UI.INC): it buys the whole IFF for free.
+;
+; SHKLK IS DERIVED, and it has to be. It was written down as a literal
+; 0FFE0h when there were six Shilkas, which left room for eight; the day the
+; flak went to twenty, locking number eight started decoding as a radar
+; STATION (and past number nine as a read off the end of a two-entry array),
+; and locking number sixteen wrapped past 0FFFFh into PLANE OFFSET ZERO -
+; the pilot's own aeroplane. F4 then orbited the player, who is not drawn in
+; that view, and the scope's Shilka "vanished". Nothing here may be a typed
+; constant again: the shelf is measured from the one above it.
+SHKLK   equ RSLK - NSHILK*2
+IF SHKLK LE (NPLANE*2)
+        %OUT *** the Shilka lock shelf has grown down into plane offsets ***
+        .ERR
+ENDIF
+IF (SHKLK AND 2) NE 0
+        %OUT *** SHKLK must be even-parity: the IFF reads bit 1 of the lock ***
+        .ERR
+ENDIF
 SHKTOP  equ 54                  ; how high the vehicle stands, in engine
                                 ;  units - aim at half of it, the turret
 SHKHITS equ 4                   ; cannon shells it soaks before it burns
@@ -333,6 +382,59 @@ SHKAPER equ 5                   ; how closely the mount must be on the mark
                                 ;  that hoses the sky and one that aims
 SHKHITC equ 1                   ; the dice: 1 of 2 bursts connects, against
                                 ;  the AI's 1 of 4. He asked for accurate
+; ---- THE AERODROMES -------------------------------------------------------
+; Four strips, interleaved by side the way everything else in this game is:
+; an EVEN slot is ours, an ODD one theirs, so the parity that already carries
+; IFF everywhere carries it here too. They stand back from the front line on
+; the same x = 24576 spine the squadrons form up on, two either side.
+;
+; The runway runs NORTH-SOUTH, along z. That is not decoration: ours point
+; at the enemy, so a sortie rolls out of the blocks already facing the war,
+; and the takeoff heading is 0 with nothing to work out.
+;
+; A strip is FLAT because the heightmap says so - AFINITF stamps its nodes
+; to one value right after DSGEN, before the block table or the minimap are
+; baked off it. The mesh, TERRH, the road walk and the collision test then
+; all agree about the concrete for free, with no special case anywhere. And
+; the value is forced into the PLAINS band, below the city: no block whose
+; centre lands on a runway can ever be zoned built-up, so nothing grows on
+; the aerodrome without a line of code to prevent it.
+NAF    equ 4
+AFHLO  equ 96                  ; the band a strip's height is clamped into -
+AFHHI  equ 116                 ;  inside 88..119, which is plain grass
+AFNW   equ 2                   ; the flattened patch, in heightmap NODES:
+AFNL   equ 4                   ;  2 x 4 = 2048 x 4096 world units
+AFLEN  equ 1500                ; the concrete itself, half-length along z...
+AFW    equ 150                 ;  ...and half-width across it
+AFSEG   equ 6                  ; slabs the strip is laid in - see AFDRAWF for
+AFSEGD  equ AFLEN/AFSEG        ;  why it is not one, and why 250 is the size
+AFVIS   equ 12000              ; how far the concrete is drawn, on EITHER
+                               ;  axis. At this range a strip is five pixels
+                               ;  across; nearer than this the quads are
+                               ;  small enough that all four corners of one
+                               ;  clamp together and go off-glass as a unit,
+                               ;  which is the difference between a runway
+                               ;  that vanishes politely and one that fills
+                               ;  the windscreen
+                               ;  NOT "AFZ": TASM folds case and that is the
+                               ;  afz array two dozen lines down
+AFPAINT equ 8                  ; the markings: white, the way they are white
+AFEDGE  equ 12                 ; the edge lines, half-width...
+AFCTR   equ 8                  ;  ...the centreline...
+AFTHR   equ 60                 ;  ...and the threshold bar, half-depth
+AFSEA  equ 92                  ; no corner of a strip may sit this low...
+AFTOP  equ 190                 ;  ...and none of it this high
+AFREACH equ 12                 ; how far the siting walk may go, in NODES.
+                               ;  Measured, not guessed: twelve places all
+                               ;  four fields in every one of forty test
+                               ;  worlds, six leaves one placement in
+                               ;  thirteen with nowhere to stand, and the
+                               ;  fixed sites the stations use put a THIRD
+                               ;  of the aerodromes in the sea or up a hill
+afx    dw NAF dup(0)          ; where each strip ended up: its centre,
+afy    dw NAF dup(0)          ;  the flattened ground under it,
+afz    dw NAF dup(0)
+afi    dw 0                    ; the strip being sited or drawn
 rsx     dw 0,0                  ; where each station stands
 rsy     dw 0,0                  ;  (rsy = the ground under its feet)
 rsz     dw 0,0
@@ -819,6 +921,7 @@ ftx     dw 0                    ; font cursor x
 fty     dw 0                    ; font cursor y
 NB      db 6 dup(0)             ; number->text scratch for FNUM
 FNAME   db 'CITY.DAT',0
+SFNAME  db 'CPSIDE.DAT',0       ; the 90-degree views; optional, see CITY.ASM
 RESMSG  db 'CITY.DAT not found - keep it next to CITY.COM',13,10,'$'
 ; (F15FN/MHDR gone: the model is baked into the image at build time)
 daymode db 1                    ; 1 = day palette, 0 = night (N key toggles)
@@ -1391,6 +1494,7 @@ cdi     dw 0                    ; cell offset from camera (was 'di' - clashed wi
 cdj     dw 0
 ring    dw 0                    ; current d^2 painter bucket
 bstreet dw 0
+rlod    dw 0                    ; road detail: 0 = a quad per cell, 1 = per 2x2
 bhw     dw 0
 bhd     dw 0
 bhgt2   dw 0

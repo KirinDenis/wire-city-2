@@ -57,26 +57,28 @@ FACETOPC:
 
 ; ============================================================================
 ;  HBLD  deterministic building descriptor for grid cell [gi],[gj]
-;   out: bstreet (1 = empty avenue cell), and if 0: bhw,bhd (half-size 84..115)
-;        and bhgt2 (height 100..355).  Clobbers AX,BX,CX,SI.
-;   Streets: any cell with gi&3==0 or gj&3==0 is empty -> 3x3 blocks + wide
-;   avenues. Otherwise a cheap integer hash of (gi,gj) picks the dimensions;
-;   bit-fields of the hash give width / depth / height (deterministic, so the
-;   same cell always looks identical - no per-frame flicker, no storage).
+;   out: bstreet - 0 a building, 1 nothing (the terrain mesh paints it),
+;        2 a flat patch, 3 a CITY STREET; and if 0: bhw,bhd (half-size) and
+;        bhgt2 (height).  Clobbers AX,BX,CX,SI.
+;   Two questions, asked at two different scales, and that is the point:
+;   the STREET GRID is the block's (ISROAD marks the strip, ROADOKF says
+;   whether any block it touches is a built city block), and the PLOT is the
+;   cell's own (its zone, then a cheap integer hash of (gi,gj) whose
+;   bit-fields give width / depth / height - deterministic, so the same cell
+;   always looks identical: no per-frame flicker, no storage).
 ; ============================================================================
-HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
-        mov  bx,[gj]
-        call GETZONE
-        cmp  ax,1
-        je   @@st               ; plains: the terrain mesh paints the land
-        cmp  ax,2
-        je   @@st               ; mountains: the terrain mesh IS the mountain
-        cmp  ax,3
-        je   @@st               ; water: the terrain mesh paints the sea
-        cmp  ax,4
-        je   @@st               ; foothills: terrain paints the woods
-        call ISROAD
-        jc   @@road
+HBLD:   call ISROAD             ; THE STREET GRID GOES FIRST, and it is
+        jc   @@road             ; decided by the BLOCK - see ROADOKF in
+                                ; TOWN.INC. The per-cell zoning below must
+                                ; not get a vote on it: it reads a height
+                                ; node every four cells, and one node
+                                ; drifting out of the city band used to cut
+                                ; an avenue in half.
+        mov  ax,[gi]            ; a PLOT, though, is the cell's own business:
+        mov  bx,[gj]            ; plains, sea, foothills and mountains are
+        call GETZONE            ; all painted by the terrain mesh, and a
+        or   ax,ax              ; building has to stand where it stands
+        jnz  @@st
         ; ---- ONE BUILDING TO EVERY 2x2 CELLS. A 256-unit plot beside a
         ; 512-unit avenue is what made the city look microscopic: the road
         ; was twice the width of the thing it served. Widening the building
@@ -101,8 +103,8 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         ; Structures stay grouped (a built block keeps full density) but the
         ; groups themselves are rare - SimCity-style districts on open land.
         push ax                 ; keep the cell hash
-        call SBHASH             ; superblock hash (clustering decision)
-        mov  [sbh],ax
+        call FAR PTR BLKINFF    ; the block byte: clustering nibble in 0..3,
+        mov  [sbh],ax           ; district in 4..5 - where SBHASH put them
         and  ax,15
         cmp  ax,3
         jae  @@unbuilt          ; empty block: open ground (patches still apply)
@@ -229,14 +231,15 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         ret
 @@st:   mov  word ptr [bstreet],1
         ret
-@@road: call SBHASH             ; ...but only where the block is BUILT UP.
-        and  ax,15              ; Every city-zone cell matches the street
-        cmp  ax,3               ; pattern whether or not anything stands on
-        jae  @@st               ; it, and only ~3/16 of blocks are built, so
-                                ; without this the island wears a full road
-                                ; grid over empty countryside. Same test,
-                                ; same single source of truth, as the one
-                                ; that decides the buildings above.
+@@road: call FAR PTR ROADOKF    ; ...but only where a block this strip
+        jnc  @@st               ; touches is BUILT UP. Only ~3/16 of blocks
+                                ; are, so without that test the island wears
+                                ; a full road grid over empty countryside -
+                                ; and asking about the STRIP rather than the
+                                ; cell's own block is what closes the ring
+                                ; round the outside of a district. Same
+                                ; table, same single source of truth, as the
+                                ; one that decides the buildings above.
         mov  word ptr [bstreet],3 ; a CITY street: tarmac and traffic.
         ret                       ; Distinct from 1, which also means
                                   ; "plains / sea / mountain, the terrain
@@ -304,30 +307,12 @@ DHASH:  mov  ax,[gi]
         xor  ax,bx
         ret
 
-; SBHASH - superblock (8x8 cells) hash for cell [gi],[gj] -> AX.
-; Single source of truth for "is this block built up": HBLD plans buildings
-; with it; anything distance-related must agree with this decision.
-SBHASH: mov  ax,[gi]
-        mov  cl,3
-        shr  ax,cl
-        and  ax,31              ; superblock i (toroidal)
-        mov  si,ax
-        mov  ax,[gj]
-        mov  cl,3
-        shr  ax,cl
-        and  ax,31
-        mov  bx,ax
-        mov  ax,331
-        mul  si
-        mov  si,ax
-        mov  ax,769
-        mul  bx
-        add  ax,si
-        mov  bx,ax
-        mov  cl,4
-        shr  bx,cl
-        xor  ax,bx
-        ret
+; SBHASH went out to TOWNSEG on 2026-08-04 and became BLKHASH, baked once
+; into the BLOCK TABLE and read back through BLKINFF. It was already called
+; the single source of truth for "is this block built up" - but it was being
+; ASKED cell by cell, and that let the cells of one block answer differently
+; and tore the streets apart. Read TOWN.INC for what replaced it. The bytes
+; it gave back here are what pays for the two far calls in HBLD.
 
 ; hash = mix(gi*1973 + gj*9277) - shared by buildings, patches and mountains
 CELLHASH:

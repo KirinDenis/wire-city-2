@@ -987,6 +987,18 @@ DRAWBOXF PROC FAR
         call DRAWBOX            ; the traffic is boxes on the road, drawn by
         ret                     ; the same routine the buildings are
 DRAWBOXF ENDP
+FACEFILLF PROC FAR
+        call FACEFILL           ; the landing gear is drawn from SYMSEG and
+        ret                     ; fills its quads through here
+FACEFILLF ENDP
+ROTCULF PROC FAR
+        call ROTCUL             ; the aerodromes are paved from TOWNSEG, and
+        ret                     ; a slab of concrete is a footprint like any
+ROTCULF ENDP                    ; other: rotate its four corners and cull
+FACETOPCF PROC FAR
+        call FACETOPC
+        ret
+FACETOPCF ENDP
 
 ; ---------------------------------------------------------------------------
 ;  LKPOS - where the locked target is, in world coordinates: lkx/lky/lkz.
@@ -1968,6 +1980,8 @@ WRECKDRAW:
         neg  ax
 @@wq2:  cmp  ax,9000
         jge  @@wdn
+        call FAR PTR BLASTF     ; the fireball and the cook-offs: the first
+                                ; seven seconds, over the top of the burn
         ; ---- the eight faces ----
         mov  word ptr [pfc],0
 @@wface:
@@ -3699,7 +3713,10 @@ PLAYERDRAW:
         jb   @@bi
         pop  cx
         loop @@bs
-@@bsdn: mov  word ptr [pfc],0
+@@bsdn: call FAR PTR GEARDRAWF  ; the legs go down FIRST, under the airframe:
+                                ;  they hang below the belly and the body
+                                ;  should hide whatever of them is behind it
+        mov  word ptr [pfc],0
 @@df:   mov  si,[pfc]
         mov  al,[FCO+si]
         xor  ah,ah

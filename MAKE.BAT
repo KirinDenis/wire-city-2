@@ -62,7 +62,11 @@ REM in. Save it as cockpit2_edit.png and it is yours.
 set PANELSRC=GAMES\OWLFLY2\res\cockpit2.png
 if exist GAMES\OWLFLY2\res\cockpit2_edit.png set PANELSRC=GAMES\OWLFLY2\res\cockpit2_edit.png
 echo panel source: %PANELSRC%
-dotnet run --project TOOLS\Panel2Inc -c Release -- %PANELSRC% -o GAMES\OWLFLY2\SRC -bmp GAMES\OWLFLY2\res
+REM The two 90-degree views ride the SAME run, and they have to: the VGA DAC
+REM lends this game 63 slots and all three pictures live in them, so one
+REM median cut has to see all three. Run the front alone and the sides go
+REM stale against a palette they never voted in.
+dotnet run --project TOOLS\Panel2Inc -c Release -- %PANELSRC% -o GAMES\OWLFLY2\SRC -bmp GAMES\OWLFLY2\res -left GAMES\OWLFLY2\res\cockpit_left.png -right GAMES\OWLFLY2\res\cockpit_right.png
 if errorlevel 1 goto err
 dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY2\res\F15.OBJ -o GAMES\OWLFLY2\SRC\F15M.INC -n F15 -s 2
 if errorlevel 1 goto err
