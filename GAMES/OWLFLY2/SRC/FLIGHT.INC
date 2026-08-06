@@ -783,7 +783,7 @@ INPUT:
         je   @@swgo
         mov  word ptr [swayy],0
         mov  word ptr [swayx],0
-        jmp  @@tb3
+        jmp  @@swjolt
 @@swgo: mov  ax,[swph]
         add  ax,[swspd]
         mov  [swph],ax
@@ -820,6 +820,31 @@ INPUT:
         mov  cx,512
         idiv cx                 ; half amplitude sideways
         mov  [swayx],ax
+@@swjolt:
+        ; ---- AND THE KICK OF BEING HIT, on top of whatever the air was
+        ; doing - and on the ground too, which is why it sits below the
+        ; branch and not inside it. It rides swayx/swayy because those are
+        ; already added to every projected vertex in PROJPT: the WORLD jumps
+        ; and the cockpit does not, which is exactly what a hit looks like
+        ; from inside one. Scaled by phit, so it is a jolt that settles
+        ; rather than a wobble that runs for half a second.
+        cmp  word ptr [phit],0
+        je   @@tb3
+        mov  ax,[lasttk]
+        and  ax,3
+        sub  ax,2               ; -2..+1, a new number every tick
+        imul word ptr [phit]
+        mov  cl,2
+        sar  ax,cl
+        add  [swayy],ax
+        mov  ax,[lasttk]
+        inc  ax                 ; the other axis, a tick out of step with it
+        and  ax,3
+        sub  ax,2
+        imul word ptr [phit]
+        mov  cl,2
+        sar  ax,cl
+        add  [swayx],ax
 @@tb3:
         ; --- advance: split vel/16 into horizontal (cos p) and climb (sin p)
         mov  ax,[vel]
@@ -950,7 +975,20 @@ INPUT:
 @@gt0:  cmp  word ptr [hitft],0
         je   @@gt0a
         dec  word ptr [hitft]
-@@gt0a: cmp  word ptr [phit],0
+@@gt0a: ; ---- THE HIT, heard. phit rising is the only thing all three damage
+        ; sites have in common, so the sound hangs off the EDGE of it rather
+        ; than off three new call sites. The explosion recording at a quarter
+        ; of its swing: a thump on your own airframe, not a blast out in the
+        ; world - and it is the same sample, so it costs the bank nothing.
+        mov  ax,[phit]
+        cmp  ax,[phitp]
+        jbe  @@gt0b
+        push ax
+        mov  ax,SFX_BOOM+(2*256)
+        call SFXPLAY
+        pop  ax
+@@gt0b: mov  [phitp],ax
+        cmp  word ptr [phit],0
         je   @@gt1
         dec  word ptr [phit]
 @@gt1:  cmp  byte ptr [KEYS+SC_SP],0
@@ -1281,9 +1319,9 @@ CRASHHANDLE:
         mov  [flbc],ax
         mov  word ptr [flbcnt],FLBN
         call PBOOM
-        mov  ah,95              ; OUR bang: the biggest in the game
-        mov  cx,11000
-        call SFXBOOM
+        call SFXDETH            ; OUR bang, and its OWN recording - the only
+                                ;  sound in the game that is about you rather
+                                ;  than about something in the world
         mov  ax,[hsin]          ; freeze the camera behind the wreck
         mov  bx,100
         imul bx

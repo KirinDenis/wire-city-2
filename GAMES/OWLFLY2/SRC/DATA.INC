@@ -1010,7 +1010,19 @@ bhnext  dw 0                    ; round robin for fresh victims
 MASK8   db 1,2,4,8,16,32,64,128 ; bit masks for the ruins bitmap
 MSGVWIN db 'VIPERS WIN',0
 MSGBWIN db 'BANDITS WIN',0
-phit    dw 0                    ; player hit flash timer
+phit    dw 0                    ; player hit flash timer. Set to 9 at all
+                                ;  THREE places the player can be hit - a
+                                ;  cannon round, the flak, and the wire -
+                                ;  which is why every part of the hit
+                                ;  reaction hangs off it and none of them
+                                ;  needed a call site of their own
+phitp   dw 0                    ; ...and what it was last tick. A hit is the
+                                ;  EDGE, and it has to be caught by comparing
+                                ;  rather than by testing for 9: the three
+                                ;  damage sites do not all run before the
+                                ;  tick that counts phit down, so "it equals
+                                ;  9 now" is true on different ticks
+                                ;  depending on who shot you
 tscf    dw 0                    ; team score: hostiles downed
 tsch    dw 0                    ; team score: friendlies downed
 psc     dw 0                    ; personal kills
@@ -1052,6 +1064,16 @@ fty     dw 0                    ; font cursor y
 NB      db 6 dup(0)             ; number->text scratch for FNUM
 FNAME   db 'CITY.DAT',0
 SFNAME  db 'CPSIDE.DAT',0       ; the 90-degree views; optional, see CITY.ASM
+; ---- THE SOUND BANK. Recorded audio, cut by TOOLS\Snd2Dat into SIGNED
+; 8-bit mono at 11025 Hz - the rate the engine ring already spins at, so a
+; sound is mixed in as it lies, with no resampling at play time. Signed
+; because the ring holds unsigned bytes centred on 80h and SFXMB ADDS a
+; signed value into it: storing the deltas means the player is load,
+; sign-extend, add, and nothing else. Optional the way CPSIDE.DAT is - no
+; file, no bank, the game runs on in silence.
+SXNAME  db 'SFX.DAT',0
+sfxseg  dw 0                    ; where the bank was loaded (0 = none)
+        INCLUDE SFXIDX.INC      ; SFXN and the SFX_* indices, from Snd2Dat
 RESMSG  db 'CITY.DAT not found - keep it next to CITY.COM',13,10,'$'
 ; (F15FN/MHDR gone: the model is baked into the image at build time)
 daymode db 1                    ; 1 = day palette, 0 = night (N key toggles)

@@ -455,6 +455,8 @@ MAIN:
 @@sd:   mov  word ptr [di],0FFFFh
 @@pn:   pop  es
 
+        call FAR PTR SFXLOADF   ; SFX.DAT: the recorded sounds, one page above
+                                ;  the side views. Optional - no file, no bank
         call FAR PTR CPSLOADF   ; CPSIDE.DAT: the two 90-degree views, into a
                                 ; page of their own. It runs once and it is
                                 ; all file handling, so it lives in SYMSEG

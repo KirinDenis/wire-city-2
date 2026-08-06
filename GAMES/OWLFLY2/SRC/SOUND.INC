@@ -147,154 +147,122 @@ SNDHEAL:push cx
         pop  cx
         ret
 
-; ---- SFXPOP: the cannon - a deep thump, almost a clap ---------------------
-SFXPOP: cmp  byte ptr [sbok],0
+; ============================================================================
+;  SFXPLAY - mix one RECORDED sound into the ring. AL = which, AH = volume
+;  as a RIGHT SHIFT (0 full, 1 half, 2 quarter, 3 an eighth).
+;
+;  A shift and not a multiply, and that is the whole reason the volume is
+;  coarse: this loop runs once per sample and a sound is up to fourteen
+;  thousand of them. A 16-bit IMUL each time round would cost more than the
+;  frame it is played in. Four steps of loudness is what the ring can afford
+;  and, at eight bits over a running engine, about as many as it can show.
+;
+;  It writes the WHOLE sound in one go, ~60 ms ahead of the DMA beam, the
+;  way SFXBOOM's rumble always did. Nothing has to be serviced afterwards:
+;  the beam sweeps through it once and SNDHEAL erases it from behind out of
+;  the pristine copy. That is why there is no voice pool and no mixer here -
+;  the ring IS the mixer, and it always was.
+;
+;  The one hard rule is that a sound must be shorter than the ring, or the
+;  beam laps its own tail; Snd2Dat enforces it at build time and says so.
+; ============================================================================
+SFXPLAY:cmp  byte ptr [sbok],0
         je   @@r
         cmp  byte ptr [sndmod],0
         je   @@r
+        cmp  word ptr [sfxseg],0
+        je   @@r                ; no bank on disk: silence, the game runs on
+        push ax
         push bx
         push cx
         push dx
         push si
         push di
+        push bp
+        push ds
         push es
-        mov  ax,[sndseg]
-        mov  es,ax
-        call SFXRAW
-        lea  di,[bx+700]        ; ~60 ms ahead of the beam
+        mov  bl,ah              ; the shift, out of the way of SFXRAW
+        xor  ah,ah
+        mov  si,ax
+        add  si,si
+        add  si,si
+        add  si,4               ; index entry: past 'SF' and the count
+        push bx
+        call SFXRAW             ; BX = where the beam is now
+        lea  di,[bx+700]        ; ~60 ms ahead of it
         and  di,SNDN-1
-        mov  bx,84              ; a dying deep square, ~125 Hz
-        xor  si,si
-@@half: mov  cx,44
-        mov  dx,bx
-        test si,1
-        jz   @@go
-        neg  dx
-@@go:   call SFXMB
-        loop @@go
-        inc  si
-        sub  bx,15
-        jg   @@half
-        mov  cx,160             ; and a short breath of smoke
-@@nz:   push cx
-        call RND16
-        pop  cx
-        and  ax,31
-        sub  ax,15
-        mov  dx,ax
-        call SFXMB
-        loop @@nz
-        pop  es
-        pop  di
-        pop  si
-        pop  dx
-        pop  cx
         pop  bx
-@@r:    ret
-
-; ---- SFXHISS: the missile leaves the rail - a sharp fading hiss -----------
-SFXHISS:cmp  byte ptr [sbok],0
-        je   @@r
-        cmp  byte ptr [sndmod],0
-        je   @@r
-        push bx
-        push cx
-        push dx
-        push si
-        push di
-        push es
-        mov  ax,[sndseg]
+        mov  ax,[sndseg]        ; READ BOTH SEGMENTS FIRST - the moment DS
+        mov  dx,[sfxseg]        ;  moves, no main-segment word is reachable
         mov  es,ax
-        call SFXRAW
-        lea  di,[bx+700]
-        and  di,SNDN-1
-        mov  word ptr [sfa16],70*256
-        mov  word ptr [sfdec],6
-        mov  cx,3000
-@@s:    push cx
-        call RND16
-        and  ax,255
-        sub  ax,128
-        mov  cl,byte ptr [sfa16+1]
-        xor  ch,ch
-        imul cx                 ; noise scaled by the fading amplitude
-        mov  cl,7
+        mov  ds,dx
+        mov  cx,[si+2]          ; how long this one is...
+        mov  si,[si]            ; ...and where it starts
+        jcxz @@x
+        mov  bp,cx              ; the count rides BP: CL is the shift
+@@m:    lodsb                   ; DS:SI = the bank
+        cbw                     ; signed 8-bit delta -> 16
+        mov  cl,bl
         sar  ax,cl
         mov  dx,ax
-        call SFXMB
-        mov  ax,[sfa16]
-        sub  ax,[sfdec]
-        jns  @@s1
-        xor  ax,ax
-@@s1:   mov  [sfa16],ax
-        pop  cx
-        loop @@s
-        pop  es
+        call SFXMB              ; ES:DI, adds, clamps, advances, wraps
+        dec  bp
+        jnz  @@m
+@@x:    pop  es
+        pop  ds
+        pop  bp
         pop  di
         pop  si
         pop  dx
         pop  cx
         pop  bx
+        pop  ax
 @@r:    ret
 
+; ---- SFXPOP: the cannon --------------------------------------------------
+; Was a dying square wave and a breath of noise; it is now the recording.
+SFXPOP: mov  ax,SFX_GUN
+        call SFXPLAY
+        ret
+
+; ---- SFXHISS: the missile leaves the rail --------------------------------
+; Was fading white noise; it is now the rocket recording.
+SFXHISS:mov  ax,SFX_RKT
+        call SFXPLAY
+        ret
+
 ; ---- SFXBOOM: an explosion. AH = loudness, CX = length in samples ---------
-SFXBOOM:cmp  byte ptr [sbok],0
-        je   @@r
-        push bx
-        push cx
-        push dx
-        push si
-        push di
-        push es
-        mov  al,ah
-        mov  byte ptr [sfa16],0
-        mov  byte ptr [sfa16+1],al
-        push cx
-        mov  bx,cx
-        mov  ax,[sfa16]
-        xor  dx,dx
-        div  bx                 ; amplitude decay per sample
-        or   ax,ax
-        jnz  @@d1
-        inc  ax
-@@d1:   mov  [sfdec],ax
-        pop  cx
-        mov  ax,[sndseg]
-        mov  es,ax
-        call SFXRAW
-        lea  di,[bx+700]
-        and  di,SNDN-1
-        xor  si,si              ; the rumble: a random walk...
-@@b:    push cx
-        call RND16
-        and  ax,63
-        sub  ax,31
-        add  si,ax
-        mov  cl,byte ptr [sfa16+1]
-        xor  ch,ch
-        cmp  si,cx              ; ...fenced by the fading loudness
-        jle  @@b1
-        mov  si,cx
-@@b1:   neg  cx
-        cmp  si,cx
-        jge  @@b2
-        mov  si,cx
-@@b2:   mov  dx,si
-        call SFXMB
-        mov  ax,[sfa16]
-        sub  ax,[sfdec]
-        jns  @@b3
-        xor  ax,ax
-@@b3:   mov  [sfa16],ax
-        pop  cx
-        loop @@b
-        pop  es
-        pop  di
-        pop  si
-        pop  dx
-        pop  cx
-        pop  bx
-@@r:    ret
+; The signature is UNCHANGED and both are still honoured in spirit, which is
+; why not one call site had to be touched: AH picks the volume step and CX,
+; which used to set how long the rumble ran, is now the recording's own
+; business. AH arrives as 14..95 - SFXBM2 computes it from range and gates
+; anything under 14 as too far to hear - so the four steps are cut across
+; that span and not across 0..255.
+SFXBOOM:mov  ah,ah              ; (AH = loudness, as it always was)
+        cmp  ah,64
+        jae  @@v0
+        cmp  ah,40
+        jae  @@v1
+        cmp  ah,24
+        jae  @@v2
+        mov  ah,3
+        jmp  @@go
+@@v0:   xor  ah,ah
+        jmp  @@go
+@@v1:   mov  ah,1
+        jmp  @@go
+@@v2:   mov  ah,2
+@@go:   mov  al,SFX_BOOM
+        call SFXPLAY
+        ret
+
+; ---- SFXDETH: the player's own aeroplane coming apart ---------------------
+; Its own recording, because this one is not an event in the world - it is
+; the end of your sortie, and it is the only sound in the game that is about
+; you. Always full volume: there is no range to it.
+SFXDETH:mov  ax,SFX_DETH
+        call SFXPLAY
+        ret
 
 ; ---- SFXBM2: an explosion at world (DX,BX) - loudness falls with range ----
 SFXBM2: cmp  byte ptr [sbok],0
@@ -335,42 +303,19 @@ SFXBM2: cmp  byte ptr [sbok],0
         pop  ax
 @@r:    ret
 
-; ---- SFXBEEP: a caution note. BL = half period in samples ------------------
-SFXBEEP:cmp  byte ptr [sbok],0
-        je   @@r
-        cmp  byte ptr [sndmod],0
-        je   @@r
-        push bx
-        push cx
-        push dx
-        push si
-        push di
-        push es
-        mov  ax,[sndseg]
-        mov  es,ax
-        xor  bh,bh
-        mov  si,bx
-        push si
-        call SFXRAW
-        pop  si
-        lea  di,[bx+700]
-        and  di,SNDN-1
-        mov  cx,480             ; ~45 ms
-        mov  dx,38
-        mov  bx,si
-@@bp:   call SFXMB
-        dec  bx
-        jnz  @@b2
-        neg  dx                 ; the square flips
-        mov  bx,si
-@@b2:   loop @@bp
-        pop  es
-        pop  di
-        pop  si
-        pop  dx
-        pop  cx
-        pop  bx
-@@r:    ret
+; ---- SFXBEEP: the caution audio. BL now says WHICH, not what pitch --------
+; It used to be a square wave and BL was its half-period, so each lamp sang
+; its own note. There are two recordings instead of four notes, and the
+; split is by URGENCY rather than by lamp: a lock is somebody else's missile
+; and gets the critical tone, everything else gets the caution tone. BL = 0
+; caution, non-zero critical.
+SFXBEEP:mov  al,SFX_CAUT
+        or   bl,bl
+        jz   @@bq
+        mov  al,SFX_WARN
+@@bq:   mov  ah,1               ; a step down: these repeat, and an alarm at
+        call SFXPLAY            ;  full swing every second is a hammer
+        ret
 
 ; ---- SNDBEEP: the caution lamps sing, each its own note (tick-side) -------
 ; one lamp per 16-tick slot, so at worst it is a slow round-robin choir:
@@ -389,13 +334,13 @@ SNDBEEP:cmp  byte ptr [sbok],0
         mov  ax,[vel]           ; slot 0: STALL
         cmp  ax,[vstl]
         jge  @@r
-        mov  bl,7
+        mov  bl,0               ; STALL: caution
         jmp  @@go
 @@f:    cmp  bx,4               ; slot 4: FUEL
         jne  @@t
         cmp  word ptr [fuel],1200
         jge  @@r
-        mov  bl,12
+        mov  bl,0               ; FUEL: caution
         jmp  @@go
 @@t:    cmp  bx,8               ; slot 8: TERRAIN
         jne  @@l
@@ -403,13 +348,13 @@ SNDBEEP:cmp  byte ptr [sbok],0
         sub  ax,[lgnd]
         cmp  ax,150
         jge  @@r
-        mov  bl,20
+        mov  bl,0               ; TERRAIN: caution
         jmp  @@go
 @@l:    cmp  bx,12              ; slot 12: LOCK
         jne  @@r
         cmp  word ptr [locki],0FFFFh
         je   @@r
-        mov  bl,5
+        mov  bl,1               ; LOCK: the critical one
 @@go:   mov  ax,[lasttk]
         mov  [lastbp],ax
         call SFXBEEP

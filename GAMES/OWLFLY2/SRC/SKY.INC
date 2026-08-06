@@ -200,10 +200,27 @@ GENBED: push es
         inc  si
         cmp  si,512
         jb   @@xf
+        ; ---- and the pristine copy into the TOP half, which is where
+        ; SNDHEAL goes looking for it: it heals ring position i from
+        ; SNDN+i, so the copy must start at exactly SNDN.
+        ;
+        ; DI HAD TO BE SET AND WAS NOT. The crossfade above leaves it at
+        ; SNDN-1 - it recomputes DI from SI every time round and never
+        ; advances it - so the copy landed one byte low, at 32767. Three
+        ; things followed, and the third is audible: the last byte of the
+        ; ring got clobbered by the first byte of the copy; every healed
+        ; sample came back shifted one place (harmless on noise); and the
+        ; copy ended at 65534, so offset 65535 was never written at all.
+        ; SNDHEAL reads exactly that byte to heal ring position 32767 -
+        ; the last sample before the wrap - and got whatever was in memory.
+        ; ONE BYTE OF GARBAGE, once per lap of a 32768-sample ring at 11 kHz:
+        ; a click every 2.97 seconds, for ever, like a scratch on a record.
+        ; Reported exactly that way.
         push ds
         mov  ax,es
         mov  ds,ax
         xor  si,si
+        mov  di,SNDN
         mov  cx,SNDN/2
         rep  movsw
         pop  ds

@@ -88,6 +88,17 @@ REM ...and a FOURTH: the barrels, which pitch at their trunnion as well as
 REM riding the turret round. Three motions, three models.
 dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY2\res\SBARR.OBJ -o GAMES\OWLFLY2\SRC\SBARRM.INC -n SBARR -s 3
 if errorlevel 1 goto err
+REM ---- THE SOUND BANK. Ordinary WAVs in res\snd, cut to signed 8-bit mono
+REM at 11025 Hz - the rate the engine ring already spins at - and packed with
+REM an index into INSTALL\SFX.DAT. The second field is a HARD CAP in seconds
+REM and it is not taste: every sound must fit inside a 32768-sample ring
+REM ahead of the DMA beam, and the whole bank must fit one 64K segment.
+REM Snd2Dat trims the padding off both ends (a library file is mastered with
+REM silence around it) and normalises what actually ships, so the caps are
+REM the only place loudness and length are decided. The third field pushes
+REM one sound back behind the others.
+dotnet run --project TOOLS\Snd2Dat -c Release -- -o GAMES\OWLFLY2\INSTALL -src GAMES\OWLFLY2\SRC "GUN=GAMES\OWLFLY2\res\snd\selfgun.wav,0.22,1.0" "FLAK=GAMES\OWLFLY2\res\snd\shilkagun.wav,0.22,0.85" "RKT=GAMES\OWLFLY2\res\snd\rocket.wav,0.90,1.0" "BOOM=GAMES\OWLFLY2\res\snd\Explosion.wav,1.10,1.0" "DETH=GAMES\OWLFLY2\res\snd\self_explosion.wav,1.30,1.0" "CAUT=GAMES\OWLFLY2\res\snd\alarm.wav,0.55,0.7" "WARN=GAMES\OWLFLY2\res\snd\critical-alarm.wav,0.55,0.85"
+if errorlevel 1 goto err
 :skipconv
 
 echo === 2/2 DOSBox build: %TARGET% ===

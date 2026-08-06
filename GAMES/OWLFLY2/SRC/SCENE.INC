@@ -70,6 +70,8 @@ RENDER: call SETHORIZ           ; where the glass is, before anything uses it
 @@nochs:
         call MSLDRAW            ; the missile dot and its puff
         call AMSLDRAW           ; the AI's missiles too
+        call FAR PTR HITFLSHF   ; hit: the world flares, and the HUD below
+                                ;  draws straight over it so the sight lives
         cmp  byte ptr [sview],0
         jne  @@sideview         ; looking out of the side: NO glass HUD. The
                                 ; ring, the gunsight and the strips belong to

@@ -336,12 +336,98 @@ distance, and whether the nose leg should be visible when the jet is pitched
 up (it is behind the fuselage from dead astern, which is honest but may look
 like a missing leg).
 
-### 4. Explosions and gunfire should SOUND like it  (medium)
+### 3c. Being hit now costs you something  (2026-08-06)
 
-The engine note is generated and is not to be touched (`GENBED`). What
-wants work is `SFXBOOM` and the cannon: a blast needs layers - the crack of
-the front, the low thump, the tail - not a louder single sample. Work in
-`SOUND.INC` / `ENGINE/E_SND.INC`, and it has to be judged by ear.
+Taking a round used to flash the aiming ring red and nothing else - four
+hits could land and the only way to know was to read the DAM figure. A hit
+is now a sound, a jolt and a flare, and **all three hang off `phit`**, which
+the three damage sites (cannon, flak, the wire) already set to 9 between
+them. Not one of them needed a call site.
+
+- **Heard**: the explosion recording at a quarter swing - a thump on your
+  own airframe rather than a blast out in the world, and the same sample, so
+  the bank costs nothing. Triggered on the EDGE of `phit`, compared against
+  `phitp`, because the three damage sites do not all run before the tick
+  that counts it down - "it equals 9 now" is true on different ticks
+  depending on who shot you.
+- **Felt**: a jolt added to `swayx`/`swayy`, which PROJPT already adds to
+  every projected vertex. The WORLD jumps and the cockpit does not, which is
+  what a hit looks like from inside one. It sits below the on-the-ground
+  branch, so a hit shakes you on the runway too.
+- **Seen**: `HITFLSHF` floods alternating rows red and yellow - this game's
+  own two attention colours - drawn AFTER the world and BEFORE the HUD. Both
+  halves matter: the flare replaces the ground, and the gunsight rides on
+  top, because a pilot who has just been hit is the one who most needs to
+  still see it. Bands and not a wash: there is no alpha in a 256-colour
+  buffer, so a flood would replace the picture instead of flaring over it.
+  Three ticks of the nine, about a sixth of a second - longer and it stops
+  being an impact and starts being a screen effect.
+
+### 3b. The click in the engine loop  (FIXED 2026-08-06, one instruction)
+
+*"Like a scratch on a record"* - a click at a dead-regular interval, and the
+interval was the tell: 32768 samples at 11 kHz is 2.97 s, so it was the ring
+wrapping, not anything in the effects.
+
+`GENBED` copies the finished bed into the top half of the segment for
+SNDHEAL to heal from. **DI was never set for that copy.** The crossfade above
+it recomputes DI from SI every iteration and never advances it, so DI arrived
+at SNDN-1 and the copy landed one byte low. Three things followed:
+
+- the last byte of the ring was clobbered by the first byte of the copy;
+- every healed sample came back shifted one place (inaudible on noise);
+- the copy ended at 65534, so **offset 65535 was never written** - and that
+  is precisely the byte SNDHEAL reads to heal ring position 32767, the last
+  sample before the wrap. One byte of uninitialised memory, once per lap.
+
+`mov di,SNDN`. The lesson worth keeping is the diagnosis, not the fix: a
+periodic click times the buffer that carries it, and 2.97 s named the ring
+before a line of code was read.
+
+### 4. Explosions and gunfire  (DONE 2026-08-06 - they are RECORDINGS now)
+
+The plan here was to give the synthesised blast more layers. It got
+something better instead: the pilot supplied a sound library, so the five
+synthesisers are gone and the game plays actual audio.
+
+`TOOLS\Snd2Dat` (C#, per the tooling contract) cuts ordinary WAVs into
+SIGNED 8-bit mono at 11025 Hz - the rate the ring already spins at, so a
+sound is mixed in as it lies - and packs them with an index into
+`INSTALL\SFX.DAT`. Signed because `SFXMB` ADDS into a ring of unsigned bytes
+centred on 80h: storing the deltas makes the player load, sign-extend, add.
+
+**The tail trimming is the point of the tool.** A library file is mastered
+with silence around it - Explosion.wav carried 1.46 s of padding, rocket.wav
+1.19 s - and on a machine where every sound must fit ahead of a DMA beam in
+a 32768-sample ring, that padding is the difference between fitting and
+lapping. Both ends are cut at the first and last real signal and the cut is
+faded over 6 ms, because an abrupt end is a click and a click is louder than
+the sound it ends. The peak is measured on **what ships**, not on the source:
+the rocket's peak is four seconds into a ten-second burn that the game never
+takes, and normalising against the source sent it out at half swing.
+
+**Not one call site had to change**, because the existing entry points
+already carried the right signatures: `SFXPOP`, `SFXHISS`, `SFXBOOM` (AH
+still picks the volume), `SFXBM2` (still does its own range falloff and
+calls SFXBOOM), `SFXBEEP` (BL now says caution-or-critical instead of a
+pitch). The player's own death got its own recording via `SFXDETH`.
+
+**It GAVE the main segment 218 bytes** - five synthesisers out, one 60-byte
+mixer in. There is no voice pool and no mixer routine: the whole sound is
+written once, 60 ms ahead of the beam, and SNDHEAL erases it from behind out
+of the pristine copy. The ring is the mixer and always was.
+
+Volume is a right SHIFT, four steps. A 16-bit IMUL per sample over fourteen
+thousand samples would cost more than the frame it plays in.
+
+The bank sits one page above `cpsseg` - the only safe shelf, per the top of
+this file - which puts it about 512K above the code. That is close enough to
+a 640K ceiling to ask rather than assume, so SFXLOADF checks 0040:0013 and
+declines to load if it will not fit. No bank, no sound, the game runs on.
+
+**Still open:** the FLAK recording is in the bank with nowhere to play from.
+The Shilka's only moving part is its turret - it does not shoot yet - so the
+sound is waiting for the gun, not the other way round.
 
 ### 5. The black dots on the map  (FOUND AND FIXED 2026-08-05)
 

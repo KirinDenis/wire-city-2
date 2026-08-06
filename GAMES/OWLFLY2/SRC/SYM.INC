@@ -696,6 +696,126 @@ GNDMARK:
 ;  No file, or the wrong file: cpsseg stays 0, the view keys are dead and
 ;  the game flies on with the front panel it has always had.
 ; ============================================================================
+; ============================================================================
+;  HITFLSHF - the world flares red and yellow when something hits you.
+;
+;  It is drawn AFTER the world and BEFORE the head-up display, and both
+;  halves of that matter. After the world, so the flash is what you see
+;  instead of the ground; before the HUD, so the gunsight and the strips
+;  ride on top and stay readable - a pilot who has just been hit is the one
+;  who most needs to still see his sight. The panel and the side consoles
+;  paint over it later for free, which is why this can flood all 200 rows
+;  and never think about where the glass ends.
+;
+;  BANDS, not a wash. There is no alpha in a 256-colour buffer, so a full
+;  flood would simply replace the picture; alternating filled rows let the
+;  world show through between them and read as a flare rather than a curtain.
+;  The stride widens as phit falls - 2, 3, 4 - so it thins out on its own,
+;  and it only runs for the top three ticks of the nine: about a sixth of a
+;  second, which is the "moment" that was asked for. Any longer and it stops
+;  being an impact and starts being a screen effect.
+;
+;  Red and yellow are not picked for taste either - they are this game's own
+;  two attention colours, the ones the locked target and the enemy IFF
+;  already wear. ES = bufseg, set by the main loop before RENDER.
+; ============================================================================
+HITFLSHF PROC FAR
+        cmp  byte ptr [dying],0
+        jne  @@x                ; going down has a picture of its own
+        mov  bx,[phit]
+        cmp  bx,6
+        jb   @@x
+        neg  bx
+        add  bx,11              ; phit 9,8,7 -> stride 2,3,4
+        cld
+        xor  si,si
+@@row:  mov  ax,si
+        xor  dx,dx
+        div  bx
+        or   dx,dx
+        jnz  @@nx               ; not one of this pass's rows
+        mov  ah,19              ; red...
+        test si,2
+        jz   @@c1
+        mov  ah,96              ; ...and yellow, in pairs
+@@c1:   push ax
+        mov  ax,si
+        mov  dx,320
+        mul  dx
+        mov  di,ax
+        pop  ax
+        mov  al,ah
+        mov  cx,320
+        rep  stosb
+@@nx:   inc  si
+        cmp  si,200
+        jb   @@row
+@@x:    ret
+HITFLSHF ENDP
+
+; ============================================================================
+;  SFXLOADF - the sound bank, into the page ABOVE cpsseg.
+;
+;  That address is not a taste. Opening a far data page anywhere lower moves
+;  the back buffer and everything stacked on it, and that has gone wrong
+;  twice in this project and looked like a graphics effect both times. Past
+;  cpsseg nothing is stacked on anything, which is exactly why CPSIDE.DAT
+;  sits where it does - this is the same shelf, one storey up.
+;
+;  Optional, like CPSIDE.DAT: no file, sfxseg stays zero, SFXPLAY returns
+;  without touching anything and the game runs on with its engine note.
+; ============================================================================
+SFXLOADF PROC FAR
+        mov  ax,ds              ; the MAIN segment - see CPSLOADF for why the
+        add  ax,5FFFh           ;  paragraph is never hand-typed
+        and  ax,0F000h          ; scrseg...
+        add  ax,2000h           ; ...past its 64K AND past cpsseg's
+        mov  [sfxseg],ax
+        ; ---- AND IS THERE ROOM UP THERE? This is the highest thing the game
+        ; asks for - about 512K above the code, plus its own 64K - which on a
+        ; 640K machine is close enough to the ceiling to be worth asking
+        ; rather than assuming. The BIOS keeps the answer at 0040:0013 in
+        ; kilobytes; six shifts turn that into the first paragraph past the
+        ; end. Fail it and the bank simply does not load, which the rest of
+        ; this routine already knows how to mean.
+        push es
+        mov  cx,40h
+        mov  es,cx
+        mov  cx,es:[13h]        ; conventional memory, KB
+        pop  es
+        mov  bx,cx
+        mov  cl,6
+        shl  bx,cl              ; ...as a segment
+        mov  cx,ax
+        add  cx,1000h           ; the top of the bank
+        jc   @@no               ; wrapped 20 bits: there is certainly no room
+        cmp  cx,bx
+        ja   @@no
+        mov  dx,offset SXNAME
+        mov  ax,3D00h
+        int  21h
+        jc   @@no
+        mov  bx,ax
+        push ds
+        mov  ax,[sfxseg]
+        mov  ds,ax
+        xor  dx,dx
+        mov  cx,0FFF0h
+        mov  ah,3Fh
+        int  21h
+        pop  ds
+        mov  ah,3Eh
+        int  21h
+        push es
+        mov  ax,[sfxseg]
+        mov  es,ax
+        cmp  word ptr es:[0],4653h  ; 'SF', little-endian
+        pop  es
+        je   @@ok
+@@no:   mov  word ptr [sfxseg],0    ; no bank: every effect is a no-op
+@@ok:   ret
+SFXLOADF ENDP
+
 CPSLOADF PROC FAR
         mov  ax,ds              ; the MAIN segment - cs in here is SYMSEG, and
                                 ; typing its paragraph offset is exactly the
