@@ -141,6 +141,69 @@ FUELMAX equ 12000               ; full tank (1 unit burned per tick ~ 11 min).
                                 ; had crossed the front line and come back.
 VSTALL  equ 300                 ; stall airspeed (vel units)
 CRUISE  equ 736                 ; initial airspeed (= 46 units/tick, old feel)
+VNE     equ 2600                ; never-exceed: the airframe's own top end,
+                                ;  about Mach 2.2 in this world's units and
+                                ;  three and a half times CRUISE. See the
+                                ;  clamp in FLIGHT.INC - it exists because the
+                                ;  x4 burner can otherwise push vel past 7000
+                                ;  at altitude, three times anything this
+                                ;  program's arithmetic was written for
+; ---- THE GROUND SCHOOL (GNDSCH, out in UISEG) ------------------------------
+; Ported from the TRAINER's F_PHYS.INC, whose own header says it came from
+; OWL FLY in the first place - so these are not foreign numbers, they are
+; this family's numbers coming home. THRUST, DRAGK, VSTALL, TURNDRG and CEIL
+; are already identical between the two programs, and vel means the same
+; thing in both: airspeed x16, advancing vel/32 world units a tick. That
+; shared scale is what lets the sink-rate limits below transfer as written
+; instead of being re-guessed.
+; THE ROTATION SPEEDS ARE OURS, NOT THE TRAINER'S, and this is the one place
+; the port could not be transcribed. The trainer rotates at 330 because its
+; drag is QUADRATIC (V*V/680); ours is LINEAR (vel*rho/256) and the gear and
+; flaps add three quarters again on top, so a jet on the deck at full DRY
+; thrust settles at 254 and can never see 330 at all. Measured, not reasoned:
+; the model was re-implemented in C# and run, which is how this was caught
+; before anybody sat on a runway wondering why the aeroplane would not fly.
+;
+; So VR is hung off what this jet can actually reach, and the answer that
+; falls out is worth having: SHE GOES OFF THE DECK IN BURNER. Dry, with the
+; flaps out, the nose comes up at 250 and the speed then DECAYS to 226 - the
+; rotation spends energy the dry engine cannot replace - and she sits there
+; with her nose in the air going nowhere. Light the burner and she is off in
+; three seconds. That is a mechanic, not a fault: the failure states its own
+; cause, which is the most a cockpit can do without a caption.
+VRSPD   equ 290                 ; rotation speed, clean: below this the nose
+                                ;  stays on the deck whatever the stick says
+VRFLAP  equ 40                  ; ...and what the flaps take off it, which is
+                                ;  what makes them worth selecting for a
+                                ;  takeoff and not only for a landing
+VLOFD   equ 45                  ; VLOF = VR + this. Past it lift wins and she
+                                ;  floats off whether or not you asked
+VLOFP   equ 5                   ; ...at THIS much nose-up, where the trainer
+                                ;  uses 2. Ours has to be bigger for an
+                                ;  arithmetic reason: the climb is
+                                ;  (vel/32)*sin(pitch)/256 in WHOLE units, and
+                                ;  at these speeds two units of pitch
+                                ;  truncates to zero climb - she would be
+                                ;  "flying" and still pinned to the concrete
+TDSLAM  equ -700                ; sink at touchdown, in 8.8 units a tick:
+TDFIRM  equ -300                ;  past TDSLAM she is wrecked, past TDFIRM it
+                                ;  was firm, and inside it she is greased on.
+                                ;  8.8 AND NOT WHOLE UNITS ON PURPOSE - one
+                                ;  whole unit a tick is nine metres a second,
+                                ;  which cannot tell a landing from an
+                                ;  accident. See vsp8.
+GNDDIRT equ 160                 ; meeting the grass above this speed is a
+                                ;  wreck; below it she is merely being ground
+GNDGRND equ 90                  ; ...and this much grinding finishes the job
+AFSTART equ 240                 ; how far up from the threshold the first jet
+AFSPACE equ 420                 ;  is towed out, and how far apart they stand
+AFIDLE  equ 24                  ; the throttle she is handed over at, of 64.
+                                ;  Chosen so the two forces on a parked jet
+                                ;  come out the right way round: idle thrust
+                                ;  makes 2 a tick, the brakes take 3 and the
+                                ;  wheels 1, so she holds absolutely - and
+                                ;  the moment the brakes come off the same
+                                ;  idle makes +1 and she rolls
 TURNDRG equ 2                   ; induced drag per tick while turning
 WINDX   equ 2                   ; wind drift, world units per tick
 WINDZ   equ -1
@@ -455,46 +518,20 @@ MAIN:
 
         ; (video mode went up before the menu - the world just draws)
 
-        ; spawn over a city node (H in 130..160), not out at sea
-        mov  word ptr [camx],0
-        mov  word ptr [camz],0
-        xor  si,si
-@@seek: mov  al,[HMAP+si]
-        cmp  al,130
-        jb   @@snext
-        cmp  al,160
-        ja   @@snext
-        mov  ax,si              ; node x = si>>6 -> world centre of that node
-        mov  cl,6
-        shr  ax,cl
-        mov  cl,2
-        shl  ax,cl
-        mov  cl,8
-        shl  ax,cl              ; *1024
-        add  ax,512
-        sub  ax,BIAS
-        mov  [camx],ax
-        mov  ax,si
-        and  ax,63
-        mov  cl,2
-        shl  ax,cl
-        mov  cl,8
-        shl  ax,cl
-        add  ax,512
-        sub  ax,BIAS
-        mov  [camz],ax
-        jmp  @@sdone
-@@snext:
-        inc  si
-        cmp  si,4096
-        jb   @@seek
-@@sdone:
-        mov  ax,[netpid]        ; pilots of one wire must not share a
-        and  ax,3               ; cockpit: fan the spawns out east
-        mov  cl,7
-        shl  ax,cl              ; 0/128/256/384
-        add  [camx],ax
-        mov  word ptr [camy],1450 ; start high above everything (peaks ~1110)
+        ; ---- A SORTIE STARTS ON THE STRIP: fuelled, towed out, made ready.
+        ; This used to hunt the heightmap for a city node in H 130..160 and
+        ; drop the jet over it at 1450 doing cruise speed, with the pilots of
+        ; one wire fanned 128 units apart to the east so they did not share a
+        ; cockpit. All of it is gone: AFSPAWN puts her on the concrete of
+        ; field 0 facing up the runway, and the wire's pilots line up ALONG
+        ; the strip instead of abreast of it - four jets 128 apart across a
+        ; runway 150 half-wide would have been three of them in the grass.
+        ;
+        ; It needs the aerodromes sited, which AFINITF did above, and it
+        ; needs the ground school to be there to receive her - standing still
+        ; on the deck is a state the old model had no way to express.
+        ; Forty-odd bytes of this segment came back with the search.
+        call FAR PTR AFSPAWNF
         ; (the BSS wipe and SBINIT went up before the menu; the F15
         ; model is BAKED into the image by Obj2Inc at build time)
 

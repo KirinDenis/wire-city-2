@@ -1791,6 +1791,58 @@ MSLCLRF PROC FAR                ; a fresh jet has four EMPTY rails, not
 MSLCLRF ENDP
 
 ; ============================================================================
+;  RAMPTXT - the only instruction this game gives, and it earns its place.
+;
+;  A sortie now begins stopped on the concrete with the brakes set, and a
+;  pilot who has never seen this screen has no way to know that. Everything
+;  else here is discoverable by pushing something; a jet that does not move
+;  is not, because the correct input is to UNDO a state nobody told you
+;  about. So the aeroplane says it, and stops saying it the moment it stops
+;  being true - which is the design rule: this is a DESCRIPTION OF THE
+;  CURRENT STATE, not a tutorial playing out on a timer.
+;
+;  Two states only. On the brakes: what is holding her. Rolling below flying
+;  speed: what makes her fly. Airborne, it is gone for good.
+;
+;  It lives out here because it is a caption: it draws once a frame, it is
+;  nowhere near the render's hot path, and in the main segment it cost 195
+;  bytes of the 232 that were free - which is exactly the thing the top of
+;  NEXT.md says not to do. The strings stay home; FDRAW is reached through
+;  the door the map pages already opened.
+; ============================================================================
+RAMPTXTF PROC FAR
+        cmp  byte ptr [dying],0
+        jne  @@rx
+        cmp  byte ptr [onrwy],0
+        je   @@rx               ; flying: she is on her own
+        cmp  byte ptr [abrk],0
+        je   @@roll
+        mov  ax,[lasttk]        ; PARKED - and the state BLINKS, because a
+        test ax,4               ;  steady caption reads as furniture and
+        jz   @@r2               ;  stops being seen after the second look
+        mov  byte ptr [COLOR],19
+        mov  word ptr [ftx],142
+        mov  word ptr [fty],70
+        mov  si,offset MSGBRK
+        call FAR PTR FDRAWF
+@@r2:   mov  byte ptr [COLOR],PNLGRN ; GREEN, not white - white is AFPAINT,
+        mov  word ptr [ftx],110      ;  which is the paint on the runway
+        mov  word ptr [fty],82       ;  directly underneath, and the two sat
+        mov  si,offset MSGBRK2       ;  on top of each other. Green is the
+        call FAR PTR FDRAWF          ;  panel's own "a system is talking to
+        ret                          ;  you" colour and nothing on the ground
+                                     ;  wears it
+@@roll: cmp  word ptr [vel],VRSPD-VRFLAP
+        jae  @@rx               ; past VR she knows what she is doing
+        mov  byte ptr [COLOR],PNLGRN
+        mov  word ptr [ftx],118
+        mov  word ptr [fty],82
+        mov  si,offset MSGBRK3
+        call FAR PTR FDRAWF
+@@rx:   ret
+RAMPTXTF ENDP
+
+; ============================================================================
 ;  *** TEMPORARY: THE FROZEN FRAME SAYS WHERE IT STOPPED ***
 ;
 ;  A network freeze that keeps its SOUND is a main loop spinning, not a

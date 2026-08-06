@@ -18,7 +18,9 @@ INPUT:
         jb   @@dwar             ; ignore Space for the first second
         cmp  byte ptr [KEYS+SC_SP],0
         je   @@dwar
-        call PLAYERRESET
+        call FAR PTR PLAYERRESETF ; EVICTED to UISEG, beside the landing code
+                                ;  it now has to talk to. Once per death, and
+                                ;  it was the coldest thing left in here
 @@dwar: cmp  word ptr [flbcnt],0
         je   @@dwr2
         mov  ax,[lasttk]        ; the recording is half-rate: play it so
@@ -60,20 +62,37 @@ INPUT:
         jne  @@tup
         cmp  byte ptr [KEYS+SC_EQ],0
         je   @@tw
-@@tup:  ; The throttle GATE (slam to full) lives on Shift+W only. It used
-        ; to fire on Shift + any throttle key - but '+' IS Shift+'=' on a
-        ; real keyboard, so the manual's own throttle key could never ramp:
-        ; it jumped to 100% and stayed there, reading as "+ does nothing"
-        ; (user report 2026-07-27, browser build).
-        cmp  byte ptr [KEYS+SC_W],0
-        je   @@tu1
+@@tup:  ; The throttle GATE: ANY throttle key with a shift on it slams the
+        ; lever to the stop.
+        ;
+        ; THIS WENT ROUND ONCE AND CAME BACK, so the reasoning is written
+        ; down. '+' IS Shift+'=' on a real keyboard - the same keystroke,
+        ; indistinguishable at the scancode - so a rule that says "shift
+        ; slams" necessarily makes '+' slam, and '+' can then never ramp.
+        ; That was reported once as "+ does nothing" (2026-07-27) and the
+        ; gate was narrowed to Shift+W alone; it was then reported the other
+        ; way as "Shift with +/- does not work" (2026-08-06), which is the
+        ; same fact seen from the other side.
+        ;
+        ; It cannot be both, so it is resolved by MEANING instead of by
+        ; keyboard: '=' is the gentle one and ramps, '+' is the loud one and
+        ; slams. Ramping still lives on W/S and on the numpad pair, so
+        ; nothing is lost - and a pilot who wants everything at once reaches
+        ; for '+', which is now exactly what it does.
         mov  al,[KEYS+SC_LSH]
         or   al,[KEYS+SC_RSH]
         jz   @@tu1
         mov  word ptr [throt],64
         jmp  @@tw
 @@tu1:  mov  ax,[throt]
-        add  ax,2
+        add  ax,4               ; FOUR a tick, not two: idle to the stop in
+                                ;  nine tenths of a second instead of nearly
+                                ;  two. A lever you have to hold down while
+                                ;  counting does not read as a throttle, it
+                                ;  reads as a delay - and the slam gates
+                                ;  (Shift+W, '+', Shift+numpad) exist
+                                ;  precisely because the ramp was still too
+                                ;  slow to use in a fight
         cmp  ax,64
         jle  @@tw1
         mov  ax,64
@@ -84,15 +103,13 @@ INPUT:
         jne  @@tdn
         cmp  byte ptr [KEYS+SC_MIN],0
         je   @@ts
-@@tdn:  cmp  byte ptr [KEYS+SC_S],0 ; idle gate: Shift+S, same reasoning
-        je   @@td1
-        mov  al,[KEYS+SC_LSH]
+@@tdn:  mov  al,[KEYS+SC_LSH]   ; idle gate: same rule, same reasoning
         or   al,[KEYS+SC_RSH]
         jz   @@td1
         mov  word ptr [throt],0
         jmp  @@ts
 @@td1:  mov  ax,[throt]
-        sub  ax,2
+        sub  ax,4               ; and back the same way it went up
         jns  @@ts1
         xor  ax,ax
 @@ts1:  mov  [throt],ax
@@ -102,7 +119,32 @@ INPUT:
         mov  byte ptr [abon],1  ; afterburner lit (needs fuel, checked below)
 @@ab0:
         ; --- engine: burn fuel; jet thrust breathes air: T*(rho+256)/512,
-        ; scaled by throttle/64; afterburner doubles it and drinks 4x fuel ---
+        ; scaled by throttle/64; the afterburner QUADRUPLES it and drinks
+        ; eight times the fuel.
+        ;
+        ; IT USED TO DOUBLE, AND DOUBLE IS NOT ENOUGH TO CLIMB ON. Measured
+        ; clean at full throttle, net acceleration per tick - what the pilot
+        ; actually feels - against the angle he is holding:
+        ;
+        ;         pitch    0    14    24    32    46      (256ths of a circle)
+        ;   x2, vel 450    7    -1    -6    -9   -14
+        ;   x4, vel 450   18    10     5     2    -3
+        ;
+        ; At x2 every climb angle is zero or negative: point the nose up and
+        ; the aeroplane bleeds, and past 20 degrees it bleeds into the stall
+        ; and the nose falls through on its own. Nobody noticed for as long as
+        ; a sortie began at 1450 doing CRUISE 736 - the jet was handed to you
+        ; with all the energy it was ever going to need. Now a sortie begins
+        ; STOPPED on a runway and unsticks around 264, and this game had never
+        ; been flown at that end of its own model. Time to a thousand units off
+        ; the deck: twenty-two seconds at x2, six at x4.
+        ;
+        ; ONLY THE BURNER CHANGED. Dry thrust is untouched, so the clean jet
+        ; still runs out at CRUISE and cruises exactly as it always did - the
+        ; proven model is not being retuned, it is being given a top end.
+        ; What the burner costs is now the honest part: 8 fuel a tick against
+        ; a 12000 tank is about eighty seconds of it in a sortie of eleven
+        ; minutes. It is a thing you spend, not a thing you leave on. ---
         xor  cx,cx              ; default thrust 0 (flame-out)
         mov  ax,[fuel]
         test ax,ax
@@ -122,9 +164,10 @@ INPUT:
         mov  cx,ax
         cmp  byte ptr [abon],0
         je   @@noth
-        add  cx,cx              ; afterburner: double thrust...
-        mov  ax,[fuel]          ; ...and burn 3 extra units
-        sub  ax,3
+        add  cx,cx              ; afterburner: FOUR times dry thrust...
+        add  cx,cx
+        mov  ax,[fuel]          ; ...and burn 7 extra units for it
+        sub  ax,7
         jns  @@abf
         xor  ax,ax
 @@abf:  mov  [fuel],ax
@@ -404,7 +447,21 @@ INPUT:
         sub  bx,ax
         jns  @@ve
         xor  bx,bx
-@@ve:   mov  [vel],bx
+@@ve:   ; --- AND THE AIRFRAME LIMIT, which this jet has never had. Every
+        ; multiply and divide in this program was written when vel could not
+        ; pass about 1500 - that was the old burner's terminal - and the
+        ; burner is now four times dry thrust. At altitude the air is thin
+        ; enough that drag collapses (rho floors at 64) and the level
+        ; terminal works out near 7200, which is not a fast aeroplane, it is
+        ; Mach 6 and it is nonsense. VNE puts the top back where an airframe
+        ; has one; it is still three and a half times CRUISE, so nothing the
+        ; pilot enjoys is taken away. The trainer has always clamped its own
+        ; vel for exactly this reason. This is the LAST write to vel in the
+        ; tick, so one clamp here bounds every reader downstream. ---
+        cmp  bx,VNE
+        jle  @@ve1
+        mov  bx,VNE
+@@ve1:  mov  [vel],bx
         ; --- stall: below the stall speed AS FLOWN (flaps lower it) the
         ; nose falls through on its own ---
         mov  ax,[vel]
@@ -715,7 +772,19 @@ INPUT:
         ; Every full cycle rolls a new amplitude (3..6 px, more over
         ; mountains/water) and a new period (~7..13 s). The cockpit
         ; stays put; the world breathes behind the glass.
-        mov  ax,[swph]
+        ;
+        ; A JET ON ITS WHEELS DOES NOT BREATHE. This is the airframe riding
+        ; moving air, and a machine standing on concrete is not riding
+        ; anything - so the horizon has to be nailed down or the whole scene
+        ; rocks while the aeroplane is plainly parked, which reads as the
+        ; picture being broken rather than as weather. It could never show
+        ; before, because before this the jet was never stationary.
+        cmp  byte ptr [onrwy],0
+        je   @@swgo
+        mov  word ptr [swayy],0
+        mov  word ptr [swayx],0
+        jmp  @@tb3
+@@swgo: mov  ax,[swph]
         add  ax,[swspd]
         mov  [swph],ax
         jnc  @@sw1              ; carry = full circle: re-roll the dice
@@ -778,6 +847,15 @@ INPUT:
         mov  bx,256
         idiv bx
         add  [camz],ax
+        ; --- and THE GROUND SCHOOL, which is the whole of the flight model
+        ; below the wheels: brakes, rolling resistance, nose-wheel steering,
+        ; rotation at VR and the grass beside the concrete. It runs HERE, at
+        ; the end of the advance, on purpose - the airborne code above has
+        ; already had its say and this overrides whichever parts of it a jet
+        ; standing on three legs is entitled to argue with. It also keeps the
+        ; sink rate in 8.8 every tick, airborne or not, because the one tick
+        ; anybody reads it is the tick she arrives. See GNDSCH in UI.INC.
+        call FAR PTR GNDSCHF
         ; --- Backspace: fire a missile (edge; sits right above Enter =
         ; lock). Homing on the lock, straight down the nose otherwise.
         mov  al,[KEYS+SC_BS]
@@ -1115,6 +1193,15 @@ COLLIDE:
         ; --- ground effect: within 250 units of the surface the wing rides
         ; its own compressed air, pushing up harder the lower you get.
         ; Needs airflow (vel >= 150), so a stalled drop still hits dirt.
+        ; ...unless the GEAR IS DOWN, and this is the whole reason a landing
+        ; was impossible. The cushion is up to seven units a tick and the
+        ; approach settles at three: over a runway the aeroplane was being
+        ; pushed up harder than it was coming down, so it hung there, and
+        ; the only way through the cushion was to dive - which arrives too
+        ; fast to be a landing and is why it broke every time. A pilot with
+        ; his legs out has said what he intends.
+        cmp  byte ptr [gear],0
+        jne  @@gfx
         mov  bx,[camy]
         sub  bx,ax              ; height above ground
         cmp  bx,62
@@ -1130,6 +1217,8 @@ COLLIDE:
         add  ax,14              ; hull clearance above the slope
         cmp  [camy],ax
         jge  @@terok
+        call FAR PTR LANDF      ; an arrival, or an accident?
+        jc   @@terok
         call CRASHHANDLE        ; flew into the hillside
         ret
 @@terok:
@@ -1216,41 +1305,7 @@ CRASHHANDLE:
         mov  [dcy],ax
 @@cr:   ret
 
-; PLAYERRESET - Space pressed during the fall: take a fresh jet.
-PLAYERRESET:
-        mov  byte ptr [dying],0
-        ; ---- and GIVE THE PILOT HIS AEROPLANE BACK. Neither cinema camera
-        ; was being switched off here. Take a fresh jet while F4 was orbiting
-        ; something and the new jet arrives with no cockpit drawn (the panel
-        ; is skipped whenever tgtcam is up), no view of itself, and the arrow
-        ; keys still steering the CAMERA - which reads exactly like the game
-        ; has hung, because there is nothing left that answers. Same trap
-        ; rides on the missile camera. ----
-        mov  byte ptr [tgtcam],0
-        mov  byte ptr [mcact],0
-        mov  word ptr [lastklr],0   ; a fresh jet owes nobody a kill
-        mov  word ptr [dytick],0
-        mov  word ptr [camy],1450   ; respawn above everything
-        mov  word ptr [camx],24576  ; home plate: the southern line
-        mov  word ptr [camz],24576-3400
-        mov  word ptr [heading],0   ; nose at the enemy
-        mov  word ptr [roll],0
-        mov  word ptr [vel],CRUISE  ; fresh jet: cruise speed + full tank
-        mov  word ptr [fuel],FUELMAX
-        mov  word ptr [pitch],0
-        mov  word ptr [throt],42    ; 65% power
-        mov  byte ptr [abon],0
-        mov  byte ptr [pammo],4
-        mov  byte ptr [msact],0
-        call FAR PTR MSLCLRF    ; four EMPTY rails on a fresh jet
-        mov  word ptr [gunam],250
-        mov  byte ptr [pdam],0
-        mov  byte ptr [flaps],0 ; a fresh jet is a CLEAN jet
-        mov  byte ptr [gear],0
-        mov  byte ptr [gearp],0 ; ...and its legs are already up, not still
-                                ;  travelling from the life before
-        mov  byte ptr [abrk],0
-        mov  word ptr [vstl],VSTALL
-        mov  word ptr [flbcnt],0
-        call FLBSEED            ; a fresh black box for a fresh jet
-        ret
+; PLAYERRESET lived here until 2026-08-06. It is now PLAYERRESETF in
+; UI.INC (UISEG) - see the note at its head. It ran once per death and
+; cost this segment about 150 bytes, which is what the ground school is
+; standing on.

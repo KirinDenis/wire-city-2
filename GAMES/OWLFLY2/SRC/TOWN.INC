@@ -1449,11 +1449,89 @@ AFDRAWF PROC FAR
         mov  word ptr [bhw],AFW-AFEDGE
         mov  word ptr [bhd],AFTHR
         call AFQUAD
+        call AFBLD              ; ...and the things standing beside it
 @@n:    inc  word ptr [afi]
         cmp  word ptr [afi],NAF
         jb   @@f
         ret
 AFDRAWF ENDP
+
+; ============================================================================
+;  AFBLD - THE APRON: three hangars in a row and the tower beside them.
+;  [afq] holds the field as a word index, and it survives everything here
+;  because it lives in CS - which is TOWNSEG, and nothing in the main
+;  segment can reach it. cs:[afy1] is NOT what these want: that is the
+;  concrete made camera-relative and lifted by ROADLIFT, and DRAWBOX does
+;  its own subtraction from a WORLD height. So gbase is read fresh.
+;
+;  These are BOXES, not models, and that was not a shortcut. MODELDRAW
+;  reads its vertex and face tables through DS, and DS is the main
+;  segment even out here - so a hangar drawn the way the radar mast is
+;  drawn would have put its geometry in the one segment that has three
+;  bytes left. DRAWBOX takes eight words of parameters and no data at
+;  all, and a hangar is honestly a box. The tower is two of them.
+;
+;  It costs the main segment NOTHING: AFDRAWF is already called from
+;  RENDER, and DRAWBOXF is a door the traffic opened years ago.
+;
+;  Known and accepted, and it is the concrete's own artefact inherited:
+;  all of this is drawn before the city walk, so a building on a distant
+;  ridge can paint over a hangar. Nothing is ever built within reach of a
+;  field - AFINITF clamps the ground into the plains band so no block can
+;  zone built-up on it - so the two are never near each other.
+; ============================================================================
+AFBLD:  mov  bx,cs:[afq]
+        mov  ax,[afy+bx]        ; the ironed ground: every box on the apron
+        mov  [gbase],ax         ;  shares it, which is the flattening paying
+                                ;  out for the third time
+        mov  word ptr cs:[afb],0
+@@h:    mov  bx,cs:[afq]
+        mov  ax,[afx+bx]
+        add  ax,AFAPX
+        mov  [wcx],ax
+        mov  ax,cs:[afb]        ; 0,1,2 -> -1,0,+1 down the strip, so the row
+        dec  ax                 ;  is centred on the field whatever AFHGN is
+        mov  cx,AFHGS
+        imul cx
+        add  ax,[afz+bx]
+        mov  [wcz],ax
+        mov  word ptr [bhw],AFHGW
+        mov  word ptr [bhd],AFHGD
+        mov  word ptr [boxb],0
+        mov  word ptr [boxt],AFHGH
+        mov  byte ptr [wallL],AFBWL
+        mov  byte ptr [wallS],AFBWS
+        mov  byte ptr [roofc],AFBRF
+        call FAR PTR DRAWBOXF
+        inc  word ptr cs:[afb]
+        cmp  word ptr cs:[afb],AFHGN
+        jb   @@h
+        ; ---- the tower: a shaft, and the cab that overhangs it ----
+        mov  bx,cs:[afq]
+        mov  ax,[afx+bx]
+        add  ax,AFTWX
+        mov  [wcx],ax
+        mov  ax,[afz+bx]
+        add  ax,AFTWZ
+        mov  [wcz],ax
+        mov  word ptr [bhw],AFTWW
+        mov  word ptr [bhd],AFTWW
+        mov  word ptr [boxb],0
+        mov  word ptr [boxt],AFTWH
+        mov  byte ptr [wallL],AFBWL
+        mov  byte ptr [wallS],AFBWS
+        mov  byte ptr [roofc],AFBWS
+        call FAR PTR DRAWBOXF
+        mov  word ptr [bhw],AFTCW ; wcx/wcz still stand: ROTCUL only READS
+        mov  word ptr [bhd],AFTCW ;  them, so the cab needs no re-centring
+        mov  word ptr [boxb],AFTWH
+        mov  word ptr [boxt],AFTWH+AFTCH
+        mov  byte ptr [wallL],AFTGL
+        mov  byte ptr [wallS],AFTGL
+        mov  byte ptr [roofc],AFBRF
+        call FAR PTR DRAWBOXF
+        ret
+afb     dw 0                    ; the hangar being put up
 
 ; ---- AFQUAD - one painted slab, from wcx/wcz/bhw/bhd at bry1 --------------
 AFQUAD: call FAR PTR ROTCULF

@@ -13,16 +13,24 @@ in the last one. Read this, then the task file for whatever you pick up.
 ## The three things that will bite you
 
 **1. The main segment is the only scarce thing, and every far call costs 5
-bytes of it.** As of this writing it has **180 bytes** free. There is 13K
-free across the far segments. The linker map now tells you exactly, because
-every window carries a PUBLIC end marker - `BSSMARK` (main), `SKYEND`,
-`UIEND`, `SYMEND`, `TWNEND`. Build and read `SRC/CITY.MAP`:
+bytes of it.** As of 2026-08-06 it has **232 bytes** free, and it is worth
+knowing where they came from: it was down to 3, and the ground school needed
+a call site, so `PLAYERRESET` was evicted to UISEG (one caller, once per
+death, the coldest thing left) and the city-node spawn search was deleted
+outright when the sortie moved onto the concrete. That is the procedure,
+every time: **do not shave - EVICT, coldest first.** About 20 bytes more come
+back the moment the `*** TEMP ***` freeze markers come out. The linker map
+tells you exactly, because every window carries a PUBLIC end marker -
+`BSSMARK` (main), `SKYEND`, `UIEND`, `SYMEND`, `TWNEND`. Build and read
+`SRC/CITY.MAP`:
 
-    0000:FD3A  BSSMARK    main, guard is FDEE
-    1000:1BC8  SKYEND     window 8176
-    1200:344C  UIEND      window 16368
-    1600:0CB2  SYMEND     window 8176
-    1800:1190  TWNEND     window 8176
+    0000:FD06  BSSMARK    main, guard is FDEE   <-- 232 bytes
+    1000:1BC8  SKYEND     window 8176           (1064 free)
+    1200:3BA2  UIEND      window 16368          (1102 free)
+    1600:146F  SYMEND     window 8176           (2945 free)
+    1800:1415  TWNEND     window 8176           (3035 free)
+
+UISEG is now the tight one, not the main segment.
 
 When the main segment is tight, do not shave - **evict**. The coldest code
 is the cheapest: `MMAPGENF` (bakes the minimap once at startup) moved to
@@ -38,7 +46,24 @@ cpsseg, where nothing is stacked on anything - that is why CPSIDE.DAT sits
 where it does. Read the comment beside `resseg` in CITY.ASM before you
 touch any of it.
 
-**3. `SETTRIG` must run after the render as well as before it.** `INPUT`
+**3. A FIXED-POINT `idiv` IS A HANG WAITING FOR ENOUGH SPEED.** `idiv` traps
+INT 0 when the QUOTIENT will not fit in a word, nothing here catches INT 0,
+and the machine stops mid-frame looking exactly like a hang. The flight model
+is full of `imul`/`idiv` pairs and they are all safe for one reason: **they
+SHIFT FIRST.** The advance computes `(vel>>5)*psin/256`, not `vel*psin/32` -
+same number, eight times the headroom.
+
+The ground school's sink rate divides by 32 precisely to KEEP the fraction,
+and shipped without buying that headroom back. It overran at `vel` 4096,
+which this jet reaches in about fifteen seconds of vertical dive at full
+burner - reported as *"took off, flew a bit, and it froze"*, which is the
+shape of it: you have to be fast before you can be fast enough. Found by
+running the model in C#, not by reading it. **Any new fixed-point divide in
+here clamps its dividend at the door**, and the sibling `imul` wants the same
+treatment - that one does not trap, it hands back a wrong-signed low word,
+which is worse because it looks like a physics bug.
+
+**4. `SETTRIG` must run after the render as well as before it.** `INPUT`
 flies the jet straight off `hsin/hcos/psin/pcos` and never computes them.
 Anything that moves the camera for the length of a render - chase, orbit,
 the pilot's head - must leave the trig belonging to the AIRCRAFT. This cost
@@ -106,6 +131,107 @@ rounds have not reloaded themselves since the pilot asked for that to stop -
 and the switch section is deliberately honest about which plates do nothing
 yet. An unlit plate is a better way to say "not yet" than pretending the
 aeroplane has a capability it has not got.
+
+## Done 2026-08-06: the apron, and the ground school
+
+`LANDTASK.md` stages 1c and 2a have the whole of it. In short:
+
+- **Hangars and a control tower on every field**, drawn as parameterised
+  boxes through the traffic's own `DRAWBOXF` door rather than as models -
+  MODELDRAW reads its tables through DS, so models would have cost the one
+  segment that had three bytes. Main segment: nothing. TOWNSEG: 227 bytes.
+- **The ground school**, ported from the trainer: brakes, rolling
+  resistance, nose-wheel steering that grows with ground speed, rotation at
+  VR, float-off at VLOF, concrete versus grass, and a real
+  greased/firm/slammed touchdown gate on an 8.8 sink rate.
+- **A sortie starts on the concrete**, stopped, and so does every life
+  after a death.
+
+**And it corrected the plan.** The reason the approach model was supposed to
+come first - "the trainer carries vsp as STATE with gravity on it" - is not
+true: the trainer derives vsp from pitch and speed exactly the way this game
+derives vvy, and its GRAV acts on airspeed. Both programs are the same model.
+Which means the approach model is still ahead and is genuinely NEW work, not
+a port: what is needed is a vertical rate with weight on it, so that "not
+enough lift" can be expressed at all. Neither program can express it today.
+
+## A PARKED JET IS A NEW STATE, AND THE AIR MODEL DID NOT KNOW ABOUT IT
+
+Three faults in a row had one shape: **something that models moving air was
+still acting on an aeroplane standing on its wheels.** Until this week the
+jet could not be stationary - a sortie began at 1450 doing CRUISE - so none
+of it could ever show.
+
+- **The sway.** The whole view floats on a slow sine. Parked, the horizon
+  rocked while the aeroplane was plainly bolted to the ground, which reads as
+  the picture being broken rather than as weather. Gated on `onrwy`.
+- **The wind.** `WINDDRF` tapers the breeze to nothing at the surface, which
+  is honest - but it tapers against HEIGHT ABOVE GROUND, and a jet on its
+  legs sits fourteen units up. Fourteen times WINDX is 28 of the 512ths a
+  whole unit takes, so a parked jet earned one unit of sideways drift every
+  eighteen ticks and slid off its own apron at a unit a second. Reported as
+  *"it slowly creeps to the right"*. Gated on `onrwy` - tapering to zero at
+  14 instead would be arithmetic covering a category error, because wind does
+  not push a machine held by friction.
+- **The ground cushion** was already gated, on the gear, back when the
+  landing scaffolding went in - same instinct, found the hard way.
+
+**If you add anything that acts on the airframe, ask whether it should act on
+a jet that is parked.** The test is not "is the number small down here", it
+is "is this aeroplane in the air at all".
+
+## The burner is four times dry thrust now (2026-08-06)
+
+**And it is not a difficulty knob, it is a bug the runway exposed.** Measured
+net acceleration per tick, clean at full throttle, against the angle held:
+
+| pitch (256ths) | 0 | 14 | 24 | 32 | 46 |
+|---|---|---|---|---|---|
+| x2, vel 450 | 7 | -1 | -6 | -9 | -14 |
+| x4, vel 450 | 18 | 10 | 5 | 2 | -3 |
+
+At x2 **every climb angle was zero or negative**: point the nose up and the
+jet bleeds, and past 20 degrees it bleeds into the stall and the nose falls
+through on its own. Nobody could notice for as long as a sortie began at 1450
+doing CRUISE 736 - the jet was handed to you with all the energy it would
+ever need. A sortie now begins STOPPED and unsticks around 264, and this game
+had never once been flown at that end of its own model. Time to a thousand
+units off the deck: 22 s at x2, 6 s at x4.
+
+**Only the burner changed.** Dry thrust is untouched, so the clean jet still
+runs out at CRUISE and cruises exactly as it always did - the proven model is
+not retuned, it is given a top end. The cost is the honest part: 8 fuel a
+tick against a 12000 tank is about eighty seconds of burner in a sortie of
+eleven minutes. Throttle ramp also went 2 -> 4 a tick; a lever you hold down
+while counting reads as a delay, not a throttle.
+
+**The jet has a VNE now, and it did not before.** Every multiply and divide
+in this program was written when `vel` could not pass about 1500 - the old
+burner's terminal. At altitude `rho` floors at 64, drag collapses with it,
+and x4 thrust works out to a level terminal near 7200, which is not a fast
+aeroplane, it is Mach 6. `VNE 2600` is about Mach 2.2 in this world's units
+and still three and a half times CRUISE, so nothing enjoyable is taken away -
+and it bounds every reader downstream in ONE place, because it sits on the
+last write to `vel` in the tick. The trainer has always clamped its own.
+
+Note for whoever tunes next: at 65 degrees she still bleeds (-3), so the
+energy trade survives at the extreme. That is deliberate. If it ever needs to
+go further, the constant to look at is the 24 in the energy term (`psin*24
+/256`), and it is the trainer's GRAV with a six on it - but that one touches
+ALL flight, not just the burner.
+
+## PICK THIS UP FIRST: `LANDTASK.md`, "STAGE 2b - THE APPROACH MODEL"
+
+**The pilot's call stands and is still the safest shape there is: F not set
+is the existing physics, untouched; F set switches models.** What has changed
+is what goes behind the switch. Read Stage 2a's two measured findings before
+writing anything - the drag law is linear here and quadratic in the trainer,
+which is what made the trainer's rotation speed unreachable, and it is the
+first thing the approach model has to decide about.
+
+`APPRCH` and the gear-gated cushion are still in, deliberately: they are
+scaffolding, but pulling them now would make it impossible to get DOWN to the
+runway the school already knows how to receive you on. They come out with 2b.
 
 ## Open work, in the order I would take it
 

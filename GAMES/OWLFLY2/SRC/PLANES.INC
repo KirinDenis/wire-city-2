@@ -987,6 +987,14 @@ DRAWBOXF PROC FAR
         call DRAWBOX            ; the traffic is boxes on the road, drawn by
         ret                     ; the same routine the buildings are
 DRAWBOXF ENDP
+FLBSEEDF PROC FAR
+        call FLBSEED            ; PLAYERRESET moved out to UISEG and still
+        ret                     ; wants a fresh black box on the way past
+FLBSEEDF ENDP
+CRASHHANDLEF PROC FAR
+        call CRASHHANDLE        ; the ground school can finish you: the belly
+        ret                     ; on the concrete, or the grass at speed
+CRASHHANDLEF ENDP
 FACEFILLF PROC FAR
         call FACEFILL           ; the landing gear is drawn from SYMSEG and
         ret                     ; fills its quads through here

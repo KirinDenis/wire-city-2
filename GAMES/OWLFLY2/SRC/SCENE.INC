@@ -99,6 +99,7 @@ RENDER: call SETHORIZ           ; where the glass is, before anything uses it
         call MINIMAP            ; world map + plane marker
 @@pdone:
         call DEATHTXT           ; CRASH - PRESS SPACE while falling
+        call FAR PTR RAMPTXTF   ; ...and what is holding her, while parked
         ret
 
 ; ----- stars (sky background; horizon is the sky/ground colour split) -------

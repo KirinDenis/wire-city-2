@@ -1747,7 +1747,24 @@ AFINITF PROC FAR
         jbe  @@h2
         mov  al,AFHHI
 @@h2:   mov  cs:[afh],al
-        ; ---- stamp AFNW x AFNL nodes of it flat ----
+        ; ---- STAMP AFSW x AFSL NODES FLAT - one node WIDER, on every side,
+        ; than the patch that was judged. The two sizes are separate on
+        ; purpose and the difference is the whole fix.
+        ;
+        ; TERRH does not read A node, it BILINEARLY INTERPOLATES the four
+        ; nodes around the point - tta,tta+1 and ttb,ttb+1. Ironing exactly
+        ; the judged patch left the node just past its edge untouched, so
+        ; every height under the concrete was a blend of flat runway and
+        ; whatever hill stood beyond it. The strip was never level: it read
+        ; 250-odd on the altimeter where the stamped value says 140 at the
+        ; very most, and it sloped. The far threshold was the worst of it -
+        ; the strip is 3000 units long against a 1024-unit node, so its ends
+        ; reach two nodes out from the centre and the interpolation there
+        ; reached three.
+        ;
+        ; AFPATCH still scores AFNW x AFNL, so nothing about WHERE a field
+        ; may stand has changed - ironing more ground is always safe, and it
+        ; is only the judging that has to stay strict.
         mov  ax,[ctx]           ; the node the centre sits in
         add  ax,BIAS
         mov  cl,10
@@ -1762,23 +1779,23 @@ AFINITF PROC FAR
 @@su:   mov  word ptr cs:[afv],0
 @@sv:   mov  ax,cs:[afnodx]      ; the patch is centred on the node, so it
         add  ax,cs:[afu]       ;  reaches back as far as it reaches forward
-        sub  ax,AFNW/2
+        sub  ax,AFSW/2
         and  ax,63
         mov  cl,6
         shl  ax,cl
         mov  bx,ax
         mov  ax,cs:[afnodz]
         add  ax,cs:[afv]
-        sub  ax,AFNL/2
+        sub  ax,AFSL/2
         and  ax,63
         add  bx,ax
         mov  al,cs:[afh]
         mov  [HMAP+bx],al
         inc  word ptr cs:[afv]
-        cmp  word ptr cs:[afv],AFNL
+        cmp  word ptr cs:[afv],AFSL
         jb   @@sv
         inc  word ptr cs:[afu]
-        cmp  word ptr cs:[afu],AFNW
+        cmp  word ptr cs:[afu],AFSW
         jb   @@su
         ; ---- and the world height of the concrete, once it is flat ----
         push word ptr [camx]
@@ -3438,6 +3455,31 @@ SPRED   equ PNLRED
 ; same x and sat two pixels left of where it belonged.
 SPTXT   db 'FLAPS',0,'GEAR',0,0,'BRAKE',0,'BURN',0,0,0,0,0,0,0,0
         db 'STALL',0,'FUEL',0,0,'TERR',0,0,'FIRE',0,0,'LOCK',0,0
+; ---- TEN LAMPS, TEN BULBS. --------------------------------------------
+; They used to wink off one bit of the tick counter, all ten together, and
+; the note beside PNLBLNK said that was deliberate: "two rates would be
+; chaos". It is the right instinct about RATES and the wrong one about
+; LAMPS. Ten things moving in perfect lockstep do not read as ten lamps,
+; they read as one timer driving ten holes - which is exactly what it was.
+; A real annunciator has ten independent bulbs behind ten independent
+; relays, and no two of them have ever agreed about anything.
+;
+; So each slot gets its own phase and its own period, and the spread is
+; deliberately narrow - this is meant to read as bulbs that do not agree,
+; not as a christmas tree. Most sit on the old 8 (about a second); three
+; are on 16, which is half the rate and reads as a slower, heavier lamp.
+; The phases are spread WITHIN each column, not across all ten - the two
+; columns are at opposite edges of the screen and never share a glance, so
+; what matters is that no lamp agrees with the ones it sits next to. Left
+; column is 0..3, right is 5..9; the slow ones spread over 32 instead of 16.
+SPBPH   db 0,4,20,12,0,2,9,6,14,25 ; phase offset, in ticks
+SPBMK   db 8,8,16,8,8,8,16,8,8,16  ; which bit of the tick: the period
+; ---- and they are not all the same BRIGHTNESS either. The palette already
+; carries this: PNLBAND is the "hair darker than the core" shade of each
+; lamp colour, cut for the scanline banding that was tried and dropped. It
+; is the same hue one step down, which is precisely a bulb that has been in
+; longer than its neighbour. Zero is full, PNLBAND is tired.
+SPBDIM  db 0,PNLBAND,0,PNLBAND,0,PNLBAND,0,0,PNLBAND,0
 ; ---- the bottom switch row: the three radios ------------------------------
 ; The artwork's buttons are ~11 px of black between bright dividers at
 ; x 53/65/76/88/99/111. Three characters ink eleven pixels, which FILLS a
@@ -3737,6 +3779,7 @@ SWKEYS: xor  si,si              ; row index 0..SWNK-1
         ; The DRAG still switches with the lever, not with the legs - that is
         ; deliberate. You pay for the gear the moment you ask for it. ----
         call WINDDRF            ; the breeze, while we are out here anyway
+        call APPRCH             ; ...and the settle, if he is on approach
         test word ptr [lasttk],3
         jnz  @@gx
         mov  al,[gearp]
@@ -3781,10 +3824,459 @@ spwink  db 0                    ; the ink colour for this slot's word
 ;  GAVE that segment eight back, which is the whole reason this could be
 ;  fixed properly rather than gated with a compare.
 ; ===========================================================================
+; ===========================================================================
+;  THE APPROACH, and the arrival.
+;
+;  Altitude in this model comes from ONE place: camy += vel/32 * sin(pitch).
+;  Level, and you hold height exactly - the jet hangs over the runway. Nose
+;  down, and pitching down also buys speed, so you do not sink, you dive.
+;  There was no way to come down GENTLY, which is the only way anybody has
+;  ever landed anything.
+;
+;  So: flaps out and below VAPP is an APPROACH. The aeroplane settles at a
+;  steady rate whatever the pitch is doing - which is what an aeroplane on
+;  the back of the drag curve actually does. Clean it up or push the speed
+;  back over VAPP and the sink stops at once.
+;
+;  LANDF then decides whether meeting the ground is an arrival or an
+;  accident, and it is called from the ONE place a crash was decided before.
+;  The gate is the pilot's: flaps down, gear down, slow, and over concrete.
+;  Miss any of the four and it is still a crash - he asked for consequences,
+;  not a forgiving box.
+; ===========================================================================
+VAPP    equ 170                 ; approach speed: under this, with the boards
+                                ;  out, the jet is coming down
+VSINK   equ 3                   ; ...at this many units a tick
+LANDW   equ 260                 ; how far off the centreline still counts -
+                                ;  the concrete is AFW=150, and a wheel on
+                                ;  the paint is a landing
+APPRCH:
+        cmp  byte ptr [dying],0
+        jne  @@ax
+        cmp  byte ptr [flaps],0
+        je   @@ax
+        cmp  word ptr [vel],VAPP
+        jae  @@ax
+        mov  ax,[camy]          ; settle, and let the ground arrive
+        sub  ax,VSINK
+        mov  [camy],ax
+@@ax:   ret
+
+; ---- ONPAVE - CF=0 if the wheels are on somebody's concrete, CF=1 if they
+; are in the grass beside it. Walks all four fields, and THEIRS COUNT: the
+; pilot's ruling is that you may put down on the enemy's strip and work the
+; place over, you simply get no fuel and no rearm for it.
+ONPAVE: mov  word ptr [afi],0
+@@l:    mov  bx,[afi]
+        add  bx,bx
+        mov  ax,[camx]
+        sub  ax,[afx+bx]
+        or   ax,ax
+        jns  @@l1
+        neg  ax
+@@l1:   cmp  ax,LANDW
+        jg   @@ln
+        mov  ax,[camz]
+        sub  ax,[afz+bx]
+        or   ax,ax
+        jns  @@l2
+        neg  ax
+@@l2:   cmp  ax,AFLEN
+        jg   @@ln
+        clc
+        ret
+@@ln:   inc  word ptr [afi]
+        cmp  word ptr [afi],NAF
+        jb   @@l
+        stc
+        ret
+
+; ---- LANDF - CF=1 if the ground under us is a runway and we belong on it.
+; Called at the instant the hull would have hit the terrain.
+;
+; THE FIRST TEST IS THE NEW ONE AND IT IS LOAD-BEARING. This routine is
+; reached every tick the wheels are on the deck, not only at the arrival -
+; COLLIDE fires it whenever camy is under the ground, and GNDSCH deliberately
+; holds camy exactly there for the whole roll. A takeoff accelerates STRAIGHT
+; THROUGH VAPP with the flaps still out, which is precisely the state the
+; gate below refuses. Without the first three lines the jet would be ruled a
+; crash halfway down its own runway, every time, at about 170 knots.
+LANDF   PROC FAR
+        cmp  byte ptr [onrwy],0
+        je   @@judge
+        jmp  @@rolling          ; already on her wheels: this is the roll
+@@judge:
+        cmp  byte ptr [gear],0
+        je   @@no               ; a belly arrival is an accident
+        cmp  byte ptr [flaps],0
+        je   @@no
+        cmp  word ptr [vel],VAPP
+        jae  @@no               ; arriving at cruise speed is not landing
+        call ONPAVE             ; ...and it has to be OVER a strip
+        jc   @@no
+        ; ---- AND NOW THE SINK RATE, which is the whole of a landing and
+        ; was the one thing this gate did not ask about. Gear, flaps, slow
+        ; and over the concrete described an aeroplane in the right PLACE;
+        ; none of the four says anything about how hard it arrived, so a
+        ; vertical dive onto the numbers passed all of them. ----
+        mov  ax,[vsp8]
+        cmp  ax,TDSLAM
+        jle  @@no               ; slammed in: the gear goes through the wing
+        mov  byte ptr [onrwy],1
+        mov  word ptr [hdgr],0
+        mov  byte ptr [dirtd],0
+        mov  word ptr [roll],0
+        cmp  ax,TDFIRM
+        jg   @@grs
+        add  word ptr [pitch],2 ; firm: she sits back on her heels.
+                                ;  The trainer BOUNCES here - apy=2 and
+                                ;  airborne again. Not ported, and
+                                ;  deliberately: at these speeds the climb
+                                ;  from two units of pitch rounds to zero, so
+                                ;  she would re-contact on the next tick and
+                                ;  bounce for ever. A nose-up nudge says the
+                                ;  same thing and cannot loop.
+        jmp  @@rolling
+@@grs:  mov  word ptr [pitch],0 ; greased on
+@@rolling:
+        mov  ax,[lgnd]          ; on the wheels, and staying there
+        add  ax,14
+        mov  [camy],ax
+        stc
+        ret
+@@no:   clc
+        ret
+LANDF   ENDP
+
+; ===========================================================================
+;  GNDSCH - THE GROUND SCHOOL, ported from the TRAINER (F_PHYS.INC, the
+;  "ON THE GROUND" branch and the arrival below it).
+;
+;  WHY THIS COULD BE PORTED WITHOUT THE APPROACH MODEL, which the plan said
+;  had to come first: the plan's premise was that the trainer "carries vsp
+;  as STATE with GRAV acting on it" and that the vertical axis therefore had
+;  to be restructured before anything else could land. It does not. The
+;  trainer writes vsp in exactly two places and both are derived -
+;  vsp = spd*sin(pitch), and then the ground cushion damps it - which is the
+;  SAME LAW this game already uses for vvy. GRAV acts on the airspeed, along
+;  the flight path: dive buys speed, climb spends it. OWLFLY2 has had that
+;  line since it was written, with 24 where the trainer has 4.
+;
+;  So the two models are the same model, and the school is a self-contained
+;  branch hanging off it. Nothing here needs a vertical axis that does not
+;  exist yet.
+;
+;  WHERE IT RUNS: once a tick, from INPUT, straight AFTER the 3-D advance -
+;  which is one far call and no restructuring of the airborne code at all.
+;  The airborne code runs first and this OVERRIDES it, which composes
+;  correctly on every axis: the elevator's pitch is replaced by the rotation
+;  rule, the ailerons' roll by the fact that a wheel on each side holds the
+;  wings level, and the advance's climb by the pin to the concrete. The one
+;  thing it does NOT override is thrust and drag, and it must not - the
+;  engine pushes and the boards bite exactly as hard standing still as they
+;  do at height.
+;
+;  Reading the advance's own answer is what decides the takeoff. There is no
+;  separate test for "has she flown": the advance ran a few instructions ago
+;  with the pitch this routine set LAST tick, and if that carried her above
+;  the wheels then she is flying. One compare, and it cannot disagree with
+;  the physics because it IS the physics.
+; ===========================================================================
+GNDSCHF PROC FAR
+        call GNDSCH
+        ret
+GNDSCHF ENDP
+
+GNDSCH: ; ---- the sink rate, kept every tick whether she is up or down,
+        ; because the one tick it is READ is the tick she arrives. 8.8, the
+        ; trainer's own scale: vel*sin(pitch)/32 is exactly vvy*256.
+        ;
+        ; THE CLAMP IS NOT A TIDY-UP, IT IS THE WHOLE ROUTINE'S LICENCE TO
+        ; EXIST. idiv takes a 32-bit dividend and a 16-bit divisor and traps
+        ; INT 0 if the QUOTIENT will not fit in a word - and nothing catches
+        ; INT 0 here, so the machine stops dead, mid-frame, looking exactly
+        ; like a hang. vel*256/32 passes 32767 at vel 4096, and this jet gets
+        ; there: dive at full burner and the energy term keeps adding 24 a
+        ; tick until the drag catches up somewhere past 4600. Reported as
+        ; "took off, flew a bit, and it froze", which is precisely the shape
+        ; of it - you have to be fast before you can be fast enough.
+        ;
+        ; The advance twenty lines above does the same sum and is safe purely
+        ; because it SHIFTS FIRST: (vel>>5)*psin/256 has eight times the
+        ; headroom. This one divides by 32 to keep the fraction, so it has to
+        ; buy the headroom back at the door. 2048 is twelve times any speed
+        ; anybody arrives at, and the only tick this number is ever READ is
+        ; the tick the wheels touch.
+        mov  ax,[vel]
+        cmp  ax,2048
+        jle  @@v8
+        mov  ax,2048
+@@v8:   imul word ptr [psin]
+        mov  bx,32
+        idiv bx
+        mov  [vsp8],ax
+        cmp  byte ptr [dying],0
+        jne  @@x                ; a wreck is not taxiing
+        cmp  byte ptr [onrwy],0
+        je   @@x
+        ; ---- has she flown off? The advance already answered. ----
+        mov  ax,[lgnd]
+        add  ax,14
+        cmp  [camy],ax
+        jle  @@roll
+        mov  byte ptr [onrwy],0
+        ret
+@@roll: mov  [camy],ax          ; still on her wheels
+        cmp  byte ptr [gear],0
+        jne  @@gok
+        jmp  @@wreck            ; the legs came up while she was standing on
+                                ;  them. Nothing forbids the lever - the
+                                ;  panel refuses nothing anywhere - and this
+                                ;  is what it costs
+@@gok:  ; ---- the brakes. THE AIRBRAKE LEVER IS THE WHEEL BRAKES down here.
+        ; It is the same lever asking the same question - take speed off -
+        ; and giving it a second meaning on the ground costs the pilot no
+        ; new finger and no new plate on the panel. ----
+        cmp  byte ptr [abrk],0
+        je   @@nbr
+        mov  ax,[vel]
+        mov  cl,5
+        sar  ax,cl
+        add  ax,3
+        sub  [vel],ax
+        jns  @@nbr
+        mov  word ptr [vel],0
+@@nbr:  mov  ax,[vel]           ; rolling resistance of the wheels: she does
+        mov  cl,8               ;  not coast for ever, and at idle she comes
+        sar  ax,cl              ;  to a stop on her own
+        inc  ax
+        sub  [vel],ax
+        jns  @@rr1
+        mov  word ptr [vel],0
+@@rr1:  ; ---- NOSE-WHEEL STEERING, AND THE RATE GROWS WITH GROUND SPEED.
+        ; That is the whole character of taxiing a jet and it is why the
+        ; first attempt at a takeoff run wanders: at walking pace the thing
+        ; barely answers, and by the time it does you are going fast enough
+        ; for the answer to put you in the grass. Arrows steer, the rudder
+        ; pedals trim. ----
+        xor  ax,ax
+        cmp  byte ptr [KEYS+SC_LF],0
+        je   @@s1
+        sub  ax,12
+@@s1:   cmp  byte ptr [KEYS+SC_RT],0
+        je   @@s2
+        add  ax,12
+@@s2:   cmp  byte ptr [KEYS+SC_Z],0
+        je   @@s3
+        sub  ax,6
+@@s3:   cmp  byte ptr [KEYS+SC_C],0
+        je   @@s4
+        add  ax,6
+@@s4:   mov  bx,[vel]           ; same family as the vsp8 clamp above, and
+        cmp  bx,1800            ;  worth closing while the lesson is fresh:
+        jle  @@s4a              ;  18*vel runs out of a WORD past 1820. imul
+        mov  bx,1800            ;  does not trap, it just hands back a
+@@s4a:  imul bx                 ;  wrong-signed low word - so the nose wheel
+        cmp  ax,512             ;  would steer the wrong way instead of
+        jle  @@s5               ;  stopping the machine. The clamp is far
+                                ;  above any speed a wheel is still on the
+                                ;  ground at, and it costs a far segment
+                                ;  eight bytes to never think about again
+        mov  ax,512
+@@s5:   cmp  ax,-512
+        jge  @@s6
+        mov  ax,-512
+@@s6:   add  [hdgr],ax          ; the 8.8 residue: a slow turn still counts
+        mov  ax,[hdgr]
+        mov  cl,8
+        sar  ax,cl
+        add  [heading],ax
+        and  word ptr [heading],255
+        mov  cl,8
+        shl  ax,cl
+        sub  [hdgr],ax
+        ; ---- ROTATION: past VR the pull raises the nose; below it the nose
+        ; is on the deck whatever the stick is doing. ----
+        mov  bx,VRSPD
+        cmp  byte ptr [flaps],0
+        je   @@vr1
+        sub  bx,VRFLAP          ; flaps buy an earlier rotation
+@@vr1:  push bx
+        cmp  [vel],bx
+        jl   @@pdn
+        cmp  byte ptr [KEYS+SC_DN],0
+        je   @@pdn
+        mov  ax,[pitch]
+        inc  ax
+        cmp  ax,14
+        jle  @@pst
+        mov  ax,14
+@@pst:  mov  [pitch],ax
+        jmp  @@flt
+@@pdn:  mov  ax,[pitch]         ; below VR she comes back down to level, one
+        or   ax,ax              ;  unit a tick, and stays there
+        jle  @@pz
+        dec  ax
+        mov  [pitch],ax
+        jmp  @@flt
+@@pz:   mov  word ptr [pitch],0
+@@flt:  pop  bx                 ; past VLOF lift wins: she floats off whether
+        add  bx,VLOFD           ;  or not anybody asked her to
+        cmp  [vel],bx
+        jl   @@pave
+        cmp  word ptr [pitch],VLOFP
+        jge  @@pave
+        mov  word ptr [pitch],VLOFP
+@@pave: ; ---- the concrete, or the grass beside it ----
+        call ONPAVE
+        jc   @@dirt
+        mov  word ptr [roll],0  ; a wheel on each side holds the wings level
+        mov  byte ptr [dirtd],0
+        ret
+@@dirt: cmp  word ptr [vel],GNDDIRT
+        jge  @@wreck            ; dirt at speed is a wreck, not an excursion
+        mov  ax,[lasttk]        ; ...and below it she is merely being shaken.
+        and  ax,7               ;  The shake is off the tick and not off
+        sub  ax,4               ;  RND16, which lives in the main segment and
+        and  ax,255             ;  is not worth a far door to be random at
+        mov  [roll],ax
+        cmp  word ptr [vel],8
+        jl   @@x
+        inc  byte ptr [dirtd]   ; ...and ground, for as long as she rolls
+        cmp  byte ptr [dirtd],GNDGRND
+        jb   @@x
+@@wreck:call FAR PTR CRASHHANDLEF
+        mov  byte ptr [onrwy],0
+@@x:    ret
+
+; ===========================================================================
+;  AFSPAWN - put the jet on the concrete: fuelled, towed out, made ready.
+;  The pilot's words, and the reason the landing gear was built at all.
+;  Field 0 is ours (the same even/odd parity that carries IFF everywhere
+;  else), and she stands at the near threshold facing up the strip - which
+;  is heading 0, because the runways were laid north-south so that ours
+;  point at the war and a takeoff needs no navigation.
+; ===========================================================================
+AFSPAWN:
+        mov  ax,[netpid]        ; pilots of one wire line up ALONG the strip
+        and  ax,3               ;  now, not fanned out east: four jets abreast
+        mov  cx,AFSPACE         ;  on a 150-unit runway would be four jets in
+        imul cx                 ;  the grass
+        add  ax,AFSTART
+        sub  ax,AFLEN
+        add  ax,[afz]
+        mov  [camz],ax
+        mov  ax,[afx]
+        mov  [camx],ax
+        mov  ax,[afy]
+        mov  [lgnd],ax          ; SEED THE GROUND, and it is not optional.
+                                ;  lgnd is written by COLLIDE, which runs
+                                ;  AFTER the physics - so on the first tick
+                                ;  of a life it still holds whatever was
+                                ;  under the LAST one (zero at startup, the
+                                ;  crash site after a death). GNDSCH's very
+                                ;  first question is whether camy has risen
+                                ;  above lgnd+14, and against a stale zero
+                                ;  the answer is yes: she would be declared
+                                ;  airborne while standing on the concrete
+                                ;  and drop out of the sky from her own ramp
+        add  ax,14              ; standing on her wheels
+        mov  [camy],ax
+        mov  word ptr [heading],0
+        mov  word ptr [roll],0
+        mov  word ptr [pitch],0
+        mov  word ptr [vel],0   ; STOPPED. The first thing any flight
+                                ;  contains is now a takeoff.
+        mov  word ptr [throt],AFIDLE ; ...but the ENGINE IS RUNNING. A jet
+                                ;  towed out and made ready is handed over
+                                ;  turning and burning, not dead - and a dead
+                                ;  panel gives a pilot who has never seen this
+                                ;  screen nothing at all to push against. At
+                                ;  idle she leans on the brakes and holds;
+                                ;  let them go and she creeps, which is the
+                                ;  aeroplane inviting the next input instead
+                                ;  of waiting to be guessed at.
+        mov  byte ptr [abon],0
+        mov  byte ptr [gear],1  ; down, and already finished travelling
+        mov  byte ptr [gearp],GEARNS-1
+        mov  byte ptr [flaps],1 ; set for takeoff: they buy VRFLAP off VR
+        mov  byte ptr [abrk],1  ; PARKED. It is the same lever as the
+                                ;  airbrake and down here it is the wheel
+                                ;  brakes, so a jet handed over "made ready"
+                                ;  is handed over standing on them. With the
+                                ;  throttle at zero they hold her absolutely;
+                                ;  open the taps without releasing and she
+                                ;  will creep, which is a jet overpowering
+                                ;  its own brakes and is allowed to happen
+        mov  word ptr [vstl],VSTALL*3/4
+        mov  byte ptr [onrwy],1
+        mov  word ptr [hdgr],0
+        mov  word ptr [vsp8],0
+        mov  byte ptr [dirtd],0
+        ret
+AFSPAWNF PROC FAR
+        call AFSPAWN
+        ret
+AFSPAWNF ENDP
+
+; ===========================================================================
+;  PLAYERRESETF - Space pressed during the fall: take a fresh jet.
+;  EVICTED FROM THE MAIN SEGMENT 2026-08-06. It runs once per death, which
+;  made it the coldest thing left in there, and the ~150 bytes it gave back
+;  are what the ground school's call site is standing on. It had one caller.
+;
+;  AND EVERY LIFE NOW COSTS A TAKEOFF. A fresh jet arrives stopped on its
+;  own concrete instead of at 1450 doing cruise speed. This is the question
+;  LANDTASK.md wrote down rather than answered - it changes what dying feels
+;  like more than anything else on the list - and it is one line to undo:
+;  drop the AFSPAWN call and put back the four words that follow it.
+; ===========================================================================
+PLAYERRESETF PROC FAR
+        mov  byte ptr [dying],0
+        ; ---- and GIVE THE PILOT HIS AEROPLANE BACK. Neither cinema camera
+        ; was being switched off here. Take a fresh jet while F4 was orbiting
+        ; something and the new jet arrives with no cockpit drawn (the panel
+        ; is skipped whenever tgtcam is up), no view of itself, and the arrow
+        ; keys still steering the CAMERA - which reads exactly like the game
+        ; has hung, because there is nothing left that answers. Same trap
+        ; rides on the missile camera. ----
+        mov  byte ptr [tgtcam],0
+        mov  byte ptr [mcact],0
+        mov  word ptr [lastklr],0   ; a fresh jet owes nobody a kill
+        mov  word ptr [dytick],0
+        call AFSPAWN            ; on the strip: position, attitude, speed,
+                                ;  gear, flaps and the ground state, all of it
+        mov  word ptr [fuel],FUELMAX
+        mov  byte ptr [pammo],4
+        mov  byte ptr [msact],0
+        call FAR PTR MSLCLRF    ; four EMPTY rails on a fresh jet
+        mov  word ptr [gunam],250
+        mov  byte ptr [pdam],0
+        mov  word ptr [flbcnt],0
+        call FAR PTR FLBSEEDF   ; a fresh black box for a fresh jet
+        ret
+PLAYERRESETF ENDP
+
 WINDH   equ 512                 ; the height the breeze is fully grown at
 wacx    dw 0                    ; the 512ths not yet spent
 wacz    dw 0
 WINDDRF:
+        ; ---- WHEELS ON THE GROUND, NO DRIFT. The taper below is honest -
+        ; the breeze dies at the surface - but it dies to what the SURFACE
+        ; is, and the surface here is fourteen units up, because that is
+        ; where the undercarriage holds the hull. Fourteen times WINDX is 28
+        ; of the 512ths a whole unit takes, so a parked jet was earning one
+        ; unit of sideways drift every eighteen ticks and sliding off its own
+        ; apron at a unit a second. Reported exactly as "it slowly creeps to
+        ; the right", which is what it was doing.
+        ;
+        ; Tapering to zero at 14 instead would be arithmetic hiding a
+        ; category error: wind does not push an aeroplane that is standing on
+        ; rubber, friction does not care how hard it blows, and the jet is
+        ; not IN the moving air at all. Same reason the sway is switched off
+        ; down here - both are the airframe riding air it is not riding. ----
+        cmp  byte ptr [onrwy],0
+        jne  @@wx
         mov  ax,[camy]          ; height above the ground under us, which
         sub  ax,[lgnd]          ;  the sway already keeps for its own use
         jns  @@w1
@@ -3816,7 +4308,7 @@ WINDDRF:
         shl  ax,cl
         sub  cs:[wacz],ax
         add  [camz],bx
-        ret
+@@wx:   ret
 wach    dw 0                    ; this tick's height factor, 0..WINDH
 
 ; ===========================================================================
@@ -3956,8 +4448,12 @@ SIDEPNL:
         mov  byte ptr cs:[spcol],0      ; 0 = this slot is not lit
         test cs:[spmsk],ax
         jz   @@spp
-        test word ptr [lasttk],PNLBLNK
-        jz   @@spp              ; live, dark half of the blink
+        mov  bx,si              ; THIS lamp's own phase and own period -
+        mov  ax,[lasttk]        ;  see SPBPH/SPBMK. Only the low byte is
+        add  al,cs:[SPBPH+bx]   ;  ever looked at, so byte arithmetic is
+        mov  ah,cs:[SPBMK+bx]   ;  the whole of it and the wrap is free
+        test al,ah
+        jz   @@spp              ; live, dark half of THIS lamp's blink
         mov  byte ptr cs:[spcol],SPGRN  ; a system that is OUT reads green
         cmp  si,3
         jne  @@spbrn
@@ -3976,7 +4472,13 @@ SIDEPNL:
         cmp  si,9
         jne  @@spp
         mov  byte ptr cs:[spcol],SPAMB  ; ...but a lock is news, not alarm
-@@spp:  mov  di,si              ; MEASURE the word, so it can be centred
+@@spp:  cmp  byte ptr cs:[spcol],0
+        je   @@spp0             ; dark: nothing to shade
+        mov  bx,si              ; ...lit: and this bulb's own brightness.
+        mov  al,cs:[SPBDIM+bx]  ;  Safe to add straight onto the colour -
+        add  cs:[spcol],al      ;  nothing downstream derives a shade from
+                                ;  spcol, it is only ever a flat fill
+@@spp0: mov  di,si              ; MEASURE the word, so it can be centred
         add  di,di
         mov  bx,di
         add  di,di

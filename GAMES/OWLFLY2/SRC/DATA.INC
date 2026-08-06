@@ -31,6 +31,29 @@ prevfl  db 0                    ; ...their key-down edges
 prevgr  db 0
 prevbr  db 0
 vstl    dw VSTALL               ; stall speed AS FLOWN: flaps lower it
+; ---- WHAT THE JET IS STANDING ON, which it never used to have an opinion
+; about. Six bytes here and the whole ground school out in UISEG (GNDSCH).
+onrwy   db 0                    ; 1 = on her wheels. LANDF sets it at the
+                                ;  moment of arrival, GNDSCH clears it when
+                                ;  the advance carries her clear again, and
+                                ;  it is what stops a TAKEOFF being ruled a
+                                ;  crash: a roll accelerates straight through
+                                ;  VAPP, which is exactly what LANDF refuses
+hdgr    dw 0                    ; nose-wheel steering, 8.8 residue. Whole
+                                ;  units of heading are far too coarse at
+                                ;  taxi speed - truncating per tick rounds
+                                ;  every slow turn to nothing at all
+vsp8    dw 0                    ; SINK RATE in 8.8 units a tick. vvy beside
+                                ;  it is this same number rounded to whole
+                                ;  units for the IVV caret, and a whole unit
+                                ;  a tick is about nine metres a second -
+                                ;  three times a gear-collapsing arrival. A
+                                ;  landing cannot be judged on it, so the
+                                ;  school keeps the fraction the trainer
+                                ;  keeps, and TDSLAM/TDFIRM are the trainer's
+                                ;  own numbers unchanged
+dirtd   db 0                    ; how long she has been grinding through the
+                                ;  grass; GNDGRND of it and she is finished
 ; ---- the avionics that are SWITCHES, not lamps ----------------------------
 ; Each of these changes how the war behaves, and each can be turned off. A
 ; box that only reports is decoration; these three make other people act.
@@ -219,8 +242,14 @@ PNLAMB3 equ 118
 PNLRED3 equ 119
 ; How fast the panel blinks, as a bit of the tick counter. 4 was twice a
 ; second and read as an alarm going off; 8 is once, which reads as a lamp
-; that wants attention without shouting. Every blinking thing on the panel
-; uses THIS so they all wink together - two rates would be chaos.
+; that wants attention without shouting.
+;
+; This used to say "every blinking thing uses THIS so they all wink
+; together - two rates would be chaos", and the ANNUNCIATOR no longer does:
+; its ten slots carry their own phase and period (SPBPH/SPBMK in UI.INC).
+; The old rule was right about rates and wrong about lamps - ten things
+; moving in perfect lockstep read as one timer driving ten holes, which is
+; what they were. Everything else on the panel still winks off this.
 PNLBLNK equ 8
 PZDIG0  equ 124                 ; IAS
 PZDIG1  equ 141                 ; ALT (five digits of room)
@@ -407,8 +436,29 @@ SHKHITC equ 1                   ; the dice: 1 of 2 bursts connects, against
 NAF    equ 4
 AFHLO  equ 96                  ; the band a strip's height is clamped into -
 AFHHI  equ 116                 ;  inside 88..119, which is plain grass
-AFNW   equ 2                   ; the flattened patch, in heightmap NODES:
-AFNL   equ 4                   ;  2 x 4 = 2048 x 4096 world units
+AFNW   equ 2                   ; the patch AFPATCH JUDGES, in heightmap
+AFNL   equ 4                   ;  NODES: 2 x 4 = 2048 x 4096 world units
+AFSW   equ 5                   ; ...and the patch AFINITF actually IRONS.
+AFSL   equ 7                   ;  TERRH does not read A node, it INTERPOLATES
+                               ;  the four around the point - so ironing only
+                               ;  the judged patch left every height under
+                               ;  the concrete a blend of flat runway and the
+                               ;  hill just past its edge. The strip was never
+                               ;  level: it read 250-odd on the altimeter
+                               ;  where the stamped value says 140 at the very
+                               ;  most, and it sloped.
+                               ;  THE SIZES ARE DERIVED, NOT PADDED. The
+                               ;  concrete reaches AFW=150 in x and AFLEN=1500
+                               ;  in z from the centre; a node is 1024. Worst
+                               ;  case the centre sits hard against a node
+                               ;  edge, so x touches nodes -1..+1 and needs
+                               ;  -2..+2 for their interpolation partners,
+                               ;  and z touches -2..+2 and needs -3..+3.
+                               ;  Judging stays on AFNW x AFNL, so nothing
+                               ;  about WHERE a field may stand has changed;
+                               ;  ironing more ground can never hurt.
+                               ;  WANTS EYES: this is a 5x7-node plateau now,
+                               ;  5120 x 7168 units, four of them in a world.
 AFLEN  equ 1500                ; the concrete itself, half-length along z...
 AFW    equ 150                 ;  ...and half-width across it
 AFSEG   equ 6                  ; slabs the strip is laid in - see AFDRAWF for
@@ -436,6 +486,48 @@ AFREACH equ 12                 ; how far the siting walk may go, in NODES.
                                ;  thirteen with nowhere to stand, and the
                                ;  fixed sites the stations use put a THIRD
                                ;  of the aerodromes in the sea or up a hill
+; ---- THE APRON: the hangars and the tower (AFBLD, in TOWN.INC) -------------
+; All of it stands on the +x side, the same side the mast does, so a field
+; reads as ONE place with a near side and a far side rather than a strip
+; with clutter scattered round it. The scale is the airframe's own: the F-15
+; model is 26 units across the wings against 13 metres of real span, so a
+; unit is HALF A METRE and every figure below is a real dimension halved.
+;
+; Everything here has to sit inside the patch AFINITF ironed flat - 1024
+; either way in x, 2048 in z - or a building stands on a slope it was never
+; levelled for. The furthest thing out is the tower cab at 360, and the
+; longest reach along the strip is a hangar at 690. Both are well inside.
+AFAPX   equ 620                ; the apron: how far off the centreline the
+                               ;  hangars stand. Clear of the concrete
+                               ;  (AFW=150) and short of the mast (RSAPRON
+                               ;  =800), which parks the row between them
+AFHGN   equ 3                  ; three hangars...
+AFHGS   equ 620                ;  ...this far apart along the strip
+AFHGW   equ 90                 ; one of them: half-width across the apron,
+AFHGD   equ 70                 ;  half-depth along it, and 23 metres tall -
+AFHGH   equ 46                 ;  a fighter shed, not an airliner's
+AFTWX   equ 330                ; THE TOWER STANDS CLOSER IN AND WELL DOWN THE
+AFTWZ   equ 900               ;  FIELD, abeam the touchdown point rather than
+                               ;  at midfield: it is the thing you have in the
+                               ;  corner of your eye on short finals, and that
+                               ;  is the whole reason to put a landmark beside
+                               ;  a runway at all
+AFTWW   equ 16                 ; the shaft, half-width...
+AFTWH   equ 96                 ;  ...and 48 metres of it
+AFTCW   equ 30                 ; the cab OVERHANGS the shaft, the way a real
+AFTCH   equ 26                 ;  one does - it is how a tower reads as a
+                               ;  tower and not as a chimney
+AFBWL   equ 0                  ; the paint: the greys the mast already wears,
+AFBWS   equ 16                 ;  lit face and shaded face...
+AFBRF   equ 17                 ;  ...and the roof
+AFTGL   equ 20                 ; the cab is GLASS, and it is the only glass on
+                               ;  the field. No window lattice runs on any of
+                               ;  this: EDGEWIN wants bhw>=50 AND 60 units of
+                               ;  wall, and every box here misses one or the
+                               ;  other. The hangars are too flat and the
+                               ;  tower too thin, which is exactly right -
+                               ;  a city window grid on a hangar would read
+                               ;  as an office block parked on the grass
 afx    dw NAF dup(0)          ; where each strip ended up: its centre,
 afy    dw NAF dup(0)          ;  the flattened ground under it,
 afz    dw NAF dup(0)
@@ -898,6 +990,12 @@ bpz     dw 0
 bph     dw 0                    ; WRKFILL input: breakup heading
 MSGCR2  db 'CRASH',0
 MSGPS2  db 'PRESS SPACE',0
+; ---- the ramp prompt (RAMPTXT). Centred by hand at 4 px a character on a
+; 320-wide screen: ftx = 160 - 2*length.
+MSGBRK  db 'BRAKES ON',0        ; 9 chars  -> 142
+MSGBRK2 db 'PRESS B TO RELEASE',0 ; 18     -> 124... 110 leaves it clear of
+                                ;  the left annunciator column
+MSGBRK3 db 'W THROTTLE  A BURNER',0 ; 20   -> 120
 prevv   db 0                    ; F3 edge detector
 svx     dw 0                    ; pilot's world, saved during the chase
 svy     dw 0
