@@ -713,7 +713,10 @@ GNDMARK:
 ;  REMOVE ME with the stage markers once this is caught.
 ; ============================================================================
 RMARKF  PROC FAR
-        push es
+        cmp  byte ptr [dbgm],0
+        jne  @@on
+        ret                     ; Ctrl+D is off: the glass stays clean
+@@on:   push es
         push di
         push cx
         mov  cx,0A000h
@@ -2027,7 +2030,10 @@ RAMPTXTF ENDP
 ;  REMOVE ME once it is caught.
 ; ============================================================================
 STGMARK:                        ; AL = colour, a 8x2 block at the top left
-        push es
+        cmp  byte ptr [dbgm],0
+        jne  @@on
+        ret                     ; gated with the render bar, on the same key
+@@on:   push es
         push di
         push cx
         mov  cx,0A000h

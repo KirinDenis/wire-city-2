@@ -1076,6 +1076,12 @@ sfxseg  dw 0                    ; where the bank was loaded (0 = none)
         INCLUDE SFXIDX.INC      ; SFXN and the SFX_* indices, from Snd2Dat
 RESMSG  db 'CITY.DAT not found - keep it next to CITY.COM',13,10,'$'
 ; (F15FN/MHDR gone: the model is baked into the image at build time)
+; ---- Ctrl+D: the diagnostic marks. OFF by default, and that is the point -
+; the stage square and the render bar are instruments for catching a freeze,
+; and an instrument that is always on the glass stops being an instrument and
+; becomes clutter a player has to learn to ignore.
+dbgm    db 0                    ; 1 = the marks are drawn
+prevdb  db 0                    ; ...and the key's own edge
 daymode db 1                    ; 1 = day palette, 0 = night (N key toggles)
 prevn   db 0                    ; previous N-key state (edge detect)
 bcol    db 0                    ; terrain patch colour chosen by HBLD

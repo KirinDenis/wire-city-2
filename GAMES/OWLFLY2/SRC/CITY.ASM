@@ -258,6 +258,7 @@ SC_NPM  equ 4Ah                 ; numpad -: throttle down
 SC_EQ   equ 0Dh                 ; main-row =/+: throttle up
 SC_MIN  equ 0Ch                 ; main-row -: throttle down
 SC_V    equ 2Fh                 ; V: sound mode (all/effects/silence)
+SC_D    equ 20h                 ; Ctrl+D: the diagnostic marks on/off
 SC_1    equ 02h                 ; top-row 1: rudder left  (the F-15 way)
 SC_3    equ 04h                 ; top-row 3: rudder right
 SC_LSH  equ 2Ah                 ; the shifts, for the throttle gates

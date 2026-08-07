@@ -3780,6 +3780,21 @@ SWKEYS: xor  si,si              ; row index 0..SWNK-1
         ; deliberate. You pay for the gear the moment you ask for it. ----
         call WINDDRF            ; the breeze, while we are out here anyway
         call APPRCH             ; ...and the settle, if he is on approach
+        ; ---- Ctrl+D: show the diagnostic marks, or hide them. It rides here
+        ; for the same reason the gear travel does - SWKEYS is the one
+        ; per-tick routine that is NOT in the main segment, so an edge
+        ; detector costs that segment nothing. Ctrl and not a bare D because
+        ; a bare letter is a key a player finds by accident. ----
+        mov  al,[KEYS+SC_D]
+        cmp  al,[prevdb]
+        je   @@dbx
+        mov  [prevdb],al
+        test al,al
+        jz   @@dbx
+        cmp  byte ptr [KEYS+SC_CTL],0
+        je   @@dbx
+        xor  byte ptr [dbgm],1
+@@dbx:
         test word ptr [lasttk],3
         jnz  @@gx
         mov  al,[gearp]

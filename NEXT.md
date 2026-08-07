@@ -46,6 +46,30 @@ cpsseg, where nothing is stacked on anything - that is why CPSIDE.DAT sits
 where it does. Read the comment beside `resseg` in CITY.ASM before you
 touch any of it.
 
+**2b. THE FREEZE HUNT, and how to read it (Ctrl+D).** Both sets of marks are
+off by default and toggle together on **Ctrl+D** - an instrument that is
+always on the glass stops being an instrument. The toggle rides in SWKEYS,
+the one per-tick routine outside the main segment, so it costs that segment
+nothing, and the gate is inside `STGMARK`/`RMARKF` rather than at their
+thirteen call sites.
+
+- **Top left, a coloured square** - which QUARTER of the frame finished.
+  Frozen red = died on the wire, green = died in the render, amber = died in
+  the blit, white = died in the next frame's physics.
+- **Top centre, a bar of blocks** - how far the RENDER got, and the count is
+  the stage that FINISHED: 1 sky/terrain/concrete, 2 city + traffic, 3 radar
+  + Shilkas, 4 wrecks, 5 AI jets, 6 missiles, 7 hit flash, 8 HUD, 9 panel +
+  map. Blocks and not colours on purpose: naming a hue off a frozen screen is
+  guesswork, counting five blocks is not.
+
+Standing as of 2026-08-06: the browser build freezes after some minutes,
+GREEN, so it is inside RENDER. Ruled out by reading, not by guessing: the
+sound (the bundle had no SFX.DAT, so that path was switched off entirely),
+the physics clock, the rasteriser (SCANPOLY clamps X and Y before filling and
+its edge divide is bounded by construction), and every divide fed by `vel`.
+`MSLDRAW1` contains no loops at all. **Remove both marker sets once it is
+caught** - about eighty bytes of the main segment come back with them.
+
 **3. A FIXED-POINT `idiv` IS A HANG WAITING FOR ENOUGH SPEED.** `idiv` traps
 INT 0 when the QUOTIENT will not fit in a word, nothing here catches INT 0,
 and the machine stops mid-frame looking exactly like a hang. The flight model
