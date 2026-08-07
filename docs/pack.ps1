@@ -25,9 +25,20 @@ $MAP = @{
       @{ p = "GAMES\OWLFLY2\INSTALL\CITY.DAT";    n = "CITY.DAT" },
       # the 90-degree cockpit views. Its own file because CITY.DAT is read
       # in one go with CX=0FFF0h and the front panel is 64000 of those bytes.
-      @{ p = "GAMES\OWLFLY2\INSTALL\CPSIDE.DAT";  n = "CPSIDE.DAT" }
-      # no ENGINE.RAW: OWL FLY II generates its turbine (GENBED)
+      @{ p = "GAMES\OWLFLY2\INSTALL\CPSIDE.DAT";  n = "CPSIDE.DAT" },
+      # the recorded sound bank (TOOLS\Snd2Dat). Optional to the GAME - no
+      # file and SFXPLAY is a no-op - which is exactly why leaving it out of
+      # here was silent: the browser build simply had no effects, while the
+      # engine note carried on because it is generated.
+      @{ p = "GAMES\OWLFLY2\INSTALL\SFX.DAT";     n = "SFX.DAT" }
     )
+    # Left out ON PURPOSE, and named here so the "not in the bundle" warning
+    # below stays quiet about it. A warning that always fires is a warning
+    # nobody reads, which would put us straight back where SFX.DAT was.
+    # ENGINE.RAW: OWL FLY II generates its turbine (GENBED) and has since
+    # 2026-07-23. The file in INSTALL is a leftover of the version that
+    # loaded one.
+    ignore = @("ENGINE.RAW")
     strings = @(
       # the BBS lesson (2026-07-19): minimal conf, and [ipx] ipx=true is
       # what lets the page's networkConnect reach the game's INT 7Ah
@@ -85,6 +96,24 @@ $g = $MAP[$Game]
 foreach ($f in $g.files) {
   $full = Join-Path $root $f.p
   if (-not (Test-Path $full)) { throw "$($f.p) not found - build it first (MAKE.BAT $Game)" }
+}
+
+# ...and now the other direction, which is the one that actually bites. The
+# list above is hand-written, so a NEW data file is not left out loudly - it
+# is left out SILENTLY: the local build has it, the browser build does not,
+# and nothing fails anywhere. SFX.DAT shipped exactly that way, and the game
+# was right to carry on without it (no bank, no effects, engine note
+# unchanged), which is what made it invisible. This warns instead.
+$listed = $g.files | ForEach-Object { Split-Path $_.p -Leaf }
+$dirs   = $g.files | ForEach-Object { Split-Path (Join-Path $root $_.p) -Parent } |
+          Sort-Object -Unique
+foreach ($d in $dirs) {
+  Get-ChildItem $d -File | Where-Object { $_.Extension -in '.DAT', '.RAW' } |
+    ForEach-Object {
+      if ($listed -notcontains $_.Name -and $g.ignore -notcontains $_.Name) {
+        Write-Warning "$($_.Name) is in $d but NOT in the bundle - deliberate?"
+      }
+    }
 }
 
 # next version = the one referenced in the player page + 1
