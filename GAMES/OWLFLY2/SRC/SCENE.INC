@@ -120,6 +120,7 @@ RENDER: call SETHORIZ           ; where the glass is, before anything uses it
         call FAR PTR RMARKF     ; *** TEMP: the panel and the map done
         call DEATHTXT           ; CRASH - PRESS SPACE while falling
         call FAR PTR RAMPTXTF   ; ...and what is holding her, while parked
+        call FAR PTR SPECTXTF   ; ...and the invitation, while watching
         ret
 
 ; ----- stars (sky background; horizon is the sky/ground colour split) -------

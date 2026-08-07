@@ -485,6 +485,19 @@ MAIN:
         mov  [netpid],dx        ; 0 when the wire is dark
         call FAR PTR UISPLASH
         call FAR PTR UIMENU     ; blocks until a sky is picked
+        ; ---- EVERY arrival watches first, joined or created alike, and
+        ; Enter is what takes a jet. There is no "empty sky" case to except:
+        ; the bot war is running before anybody gets here, which is the whole
+        ; reason this screen has something on it. Gating this on "somebody
+        ; else is already flying" made it impossible to see alone, which is
+        ; a poor way to build a thing that has to be judged by eye.
+        mov  byte ptr [spect],1
+        mov  byte ptr [tgtcam],1 ; UP FROM HERE, not from the first physics
+                                ;  tick. SPECTUPF raises it, but INPUT runs
+                                ;  AFTER the first frame is drawn - so the
+                                ;  cockpit got one frame on the glass before
+                                ;  the camera took over, and it read as the
+                                ;  panel flashing past on the way in
         cmp  byte ptr [gact],2
         je   @@gjn              ; join: the menu set rseed/wseed/ggid
         push es                 ; create: mint a fresh seed NOW (the

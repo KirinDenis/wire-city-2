@@ -697,7 +697,122 @@ GNDMARK:
 ;  the game flies on with the front panel it has always had.
 ; ============================================================================
 ; ============================================================================
-;  *** TEMPORARY: WHICH PART OF THE RENDER *** (2026-08-06)
+;  SPECTUPF - one tick of WATCHING, and SPECTNXT - who to watch.
+;
+;  The camera is F4's, unchanged: tgtcam=1 orbits [tgti] at tgaz/tgel/tgrad,
+;  CHASESET puts it there and CHASERST takes it back, and RENDER skips the
+;  panel on its own because tgtcam is up. Nothing here is a new view - it is
+;  the view the pilot already had, pointed by somebody who is not flying.
+;
+;  WHO TO WATCH: whoever is in the fight, and the fight is the BOT WAR - it
+;  is running before any human arrives, which is the whole point. No second
+;  pilot is needed to have something to look at.
+;
+;  "Being attacked" is already written down and needs no new state: every
+;  AI missile in the air carries `amtgt`, the plane it is chasing. So the
+;  walk looks for a jet with a missile on its tail first - that is a fight
+;  in progress, seen from the outside, and it is the best two seconds this
+;  game has. Anything living is the fallback, so a quiet sky still shows an
+;  aeroplane rather than empty air.
+;
+;  Space walks DOWN the ranking rather than reshuffling, so pressing it
+;  takes you through the war in order instead of dealing you a new hand.
+; ============================================================================
+SPECTUPF PROC FAR
+        cmp  byte ptr [KEYS+SC_ENT],0
+        je   @@nj
+        ; ---- ENTER: take a jet. From here on this is an ordinary sortie.
+        mov  byte ptr [spect],0
+        mov  byte ptr [tgtcam],0
+        mov  byte ptr [mcact],0
+        call FAR PTR AFSPAWNF   ; on the concrete, brakes on, engine running
+        ret                     ;  (AFSPAWN is UISEG's - this is SYMSEG)
+@@nj:   mov  byte ptr [tgtcam],1 ; hold the orbit camera up, whatever else
+        mov  al,[KEYS+SC_SP]    ; ---- Space: the next one down the list
+        cmp  al,[prevsp]
+        je   @@nsp
+        mov  [prevsp],al
+        test al,al
+        jz   @@nsp
+        call SPECTNXT
+        jmp  @@arr
+@@nsp:  cmp  word ptr [sptmr],0 ; ---- ...or it moves on by itself
+        je   @@auto
+        dec  word ptr [sptmr]
+        jmp  @@arr
+@@auto: call SPECTNXT
+@@arr:  ; ---- the arrows and Z/X drive the orbit, exactly as under F4 ----
+        cmp  byte ptr [KEYS+SC_LF],0
+        je   @@a1
+        dec  word ptr [tgaz]
+@@a1:   cmp  byte ptr [KEYS+SC_RT],0
+        je   @@a2
+        inc  word ptr [tgaz]
+@@a2:   and  word ptr [tgaz],255
+        cmp  byte ptr [KEYS+SC_UP],0
+        je   @@a3
+        cmp  word ptr [tgel],56
+        jge  @@a3
+        inc  word ptr [tgel]
+@@a3:   cmp  byte ptr [KEYS+SC_DN],0
+        je   @@a4
+        cmp  word ptr [tgel],-30
+        jle  @@a4
+        dec  word ptr [tgel]
+@@a4:   cmp  byte ptr [KEYS+SC_Z],0
+        je   @@a5
+        cmp  word ptr [tgrad],60
+        jle  @@a5
+        sub  word ptr [tgrad],8
+@@a5:   cmp  byte ptr [KEYS+SC_X],0
+        je   @@a6
+        cmp  word ptr [tgrad],2000
+        jge  @@a6
+        add  word ptr [tgrad],8
+@@a6:   ret
+SPECTUPF ENDP
+
+; ---- SPECTNXT - the next interesting jet, and restart the clock ----------
+SPECTNXT:
+        mov  word ptr [sptmr],SPTIME
+        mov  word ptr [tgspare],0FFFFh
+        mov  cx,NPLANE          ; walk the whole table ONCE from where we are,
+        mov  bx,[tgti]          ;  so Space always MOVES and never sticks
+@@w:    add  bx,2
+        cmp  bx,NPLANE*2
+        jb   @@w1
+        xor  bx,bx
+@@w1:   push bx
+        shr  bx,1
+        cmp  byte ptr [pst+bx],0
+        jne  @@wn               ; not flying: that seat is a respawn timer
+        pop  bx
+        push bx
+        cmp  word ptr [tgspare],0FFFFh
+        jne  @@hot
+        mov  [tgspare],bx       ; the first living jet, as a fallback
+@@hot:  ; ---- is anything CHASING it? the AI's missiles carry their target
+        xor  si,si
+@@hl:   cmp  byte ptr [amact+si],0
+        je   @@hn
+        mov  di,si
+        add  di,di
+        mov  ax,[amtgt+di]
+        cmp  ax,bx
+        je   @@got              ; a missile on its tail: watch THIS one
+@@hn:   inc  si
+        cmp  si,NAMSL
+        jb   @@hl
+@@wn:   pop  bx
+        loop @@w
+        mov  ax,[tgspare]       ; no humans up: show whatever is flying
+        cmp  ax,0FFFFh
+        je   @@keep             ; nothing at all: stay where we are
+        mov  [tgti],ax
+@@keep: ret
+@@got:  pop  bx
+        mov  [tgti],bx
+        ret
 ;
 ;  The frame markers said GREEN - it wedges inside RENDER - and RENDER is
 ;  fifteen calls deep, so that is a room, not an address. These split the
@@ -1976,7 +2091,16 @@ MSLCLRF ENDP
 ;  NEXT.md says not to do. The strings stay home; FDRAW is reached through
 ;  the door the map pages already opened.
 ; ============================================================================
+; (SPECTXTF moved to UI.INC: the double-size font UBIG lives there and reads
+;  its strings out of its OWN code segment, so the caption has to live beside
+;  it rather than reach across for it.)
+
 RAMPTXTF PROC FAR
+        cmp  byte ptr [spect],0
+        jne  @@rx               ; WATCHING: your own jet is indeed parked with
+                                ;  the brakes set, and this would say so over
+                                ;  somebody else's dogfight. A prompt is only
+                                ;  true in the cockpit it belongs to.
         cmp  byte ptr [dying],0
         jne  @@rx
         cmp  byte ptr [onrwy],0

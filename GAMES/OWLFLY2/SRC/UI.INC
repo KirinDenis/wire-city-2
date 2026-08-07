@@ -595,228 +595,113 @@ UJPRJ:  push si
         pop  si
         ret
 
+
 ; ============================================================================
-;  XMENU - the sky list. Lives until the pilot picks: gact 1 = create
-;  (gname/gbots ready), 2 = join (rseed/wseed/ggid set).
+;  SPECTXTF - the caption over somebody else's fight.
+;
+;  It lives HERE and not with the rest of the spectator because of UBIG: the
+;  double-size font reads its string out of its own code segment, so the
+;  words have to sit beside it. That is also what makes the two big lines
+;  cost nothing to draw at four pixels each - UBIG was written for the old
+;  menu title and it outlived the menu.
+;
+;  WHITE, all of it. The keys were the panel's green and green is invisible
+;  against grass - which is what most of this screen is, most of the time.
+;  A caption laid over a live world cannot pick a colour that belongs to the
+;  world. Only the invitation blinks; the keys are reference and reference
+;  that flashes is just noise.
 ; ============================================================================
-XMENU:
-        push es
-        mov  byte ptr [uimode],0
-        mov  byte ptr [uisel],0
-@@loop: call FAR PTR NETPOLLF   ; the wire fills GLIST while we draw
-        ; ---- prune skies gone quiet for ~3 s ----
-        push es
-        mov  ax,40h
-        mov  es,ax
-        mov  dx,es:[6Ch]
-        pop  es
-        xor  si,si
-@@pr:   mov  bx,si
-        mov  cl,4
-        shl  bx,cl
-        cmp  word ptr cs:[GLIST+bx],0
-        je   @@prn
-        mov  ax,si
-        add  ax,ax
-        mov  di,ax
-        mov  ax,dx
-        sub  ax,cs:[GLAST+di]
-        cmp  ax,55
-        jb   @@prn
-        mov  word ptr cs:[GLIST+bx],0
-@@prn:  inc  si
-        cmp  si,NGL
-        jb   @@pr
-        ; ---- draw ----
-        mov  al,UBLACK
-        call UCLS
-        mov  bx,[bufseg]
-        mov  es,bx
-        mov  word ptr [ftx],100
-        mov  word ptr [fty],16
-        mov  byte ptr [COLOR],97
-        mov  si,offset UTITLE
+; Centred by hand, and UBIG steps TWELVE pixels a character, not eight - the
+; glyph is six wide doubled, plus its gap doubled too. Centre = (320-n*12)/2.
+; UFDRAW below still steps four.
+SPBLP   equ 73                  ; the invitation's cycle, in 18.2 Hz ticks:
+SPBLON  equ 55                  ;  55 lit is 3.0 s, the other 18 is 0.99 s
+SPTITL  db 'HOLDING',0                ; 7  -> 118
+SPJOIN  db 'PRESS ENTER TO JOIN',0    ; 19 ->  46
+SPKEYS  db 'SPACE NEXT   ARROWS LOOK   Z X ZOOM',0  ; 35 at 4 px -> 90
+
+SPECTXTF PROC FAR
+        cmp  byte ptr [spect],0
+        je   @@sx
+        mov  byte ptr [COLOR],8
+        mov  word ptr [ftx],118
+        mov  word ptr [fty],10
+        mov  si,offset SPTITL
         call UBIG
-        mov  word ptr [ftx],124
-        mov  word ptr [fty],44
+        ; ---- only the INVITATION blinks, and it breathes rather than
+        ; flashes: three seconds lit, one dark. That is deliberately NOT a
+        ; bit of the tick counter - a bit gives you equal halves and this
+        ; wants three to one, so it is a real modulo. Cheap enough once a
+        ; frame, and safe: lasttk over 73 cannot overflow a word.
+        mov  ax,[lasttk]
+        xor  dx,dx
+        mov  bx,SPBLP
+        div  bx
+        cmp  dx,SPBLON
+        jae  @@sk               ; the dark second
         mov  byte ptr [COLOR],8
-        mov  si,offset USUB
+        mov  word ptr [ftx],46
+        mov  word ptr [fty],150
+        mov  si,offset SPJOIN
+        call UBIG
+@@sk:   mov  byte ptr [COLOR],8
+        mov  word ptr [ftx],90
+        mov  word ptr [fty],172
+        mov  si,offset SPKEYS
         call UFDRAW
-        mov  word ptr [ftx],40
-        mov  word ptr [fty],64
-        mov  byte ptr [COLOR],106
-        mov  si,offset UHDR
-        call UFDRAW
-        ; the wire verdict, top-left, in its own colour
-        mov  word ptr [ftx],4
-        mov  word ptr [fty],4
-        mov  byte ptr [COLOR],2
-        mov  si,offset UWIRE0
-        cmp  byte ptr [netup],1
-        jb   @@wv
-        mov  si,offset UWIRE1
-        mov  byte ptr [COLOR],19 ; a dark wire glows warning red
-        je   @@wv
-        mov  si,offset UWIRE2
-        mov  byte ptr [COLOR],95 ; a live one, friendly green
-@@wv:   call UFDRAW
-        ; the rows
-        xor  si,si              ; row = list index
-        mov  word ptr [dsy],0   ; rows actually shown
-@@row:  mov  bx,si
-        mov  cl,4
-        shl  bx,cl
-        cmp  word ptr cs:[GLIST+bx],0
-        je   @@rn
-        mov  ax,[dsy]
-        mov  cx,10
-        imul cx
-        add  ax,76
-        mov  [fty],ax
-        mov  word ptr [ftx],48
-        mov  byte ptr [COLOR],8
-        mov  al,[uisel]
-        xor  ah,ah
-        cmp  ax,si
-        jne  @@rc
-        mov  byte ptr [COLOR],97 ; the picked sky glows amber
-        push si
-        push bx
-        mov  word ptr [ftx],40
-        mov  si,offset UJARR
-        call UFDRAW
-        pop  bx
-        pop  si
-        mov  word ptr [ftx],48
-@@rc:   push si
-        push bx
-        lea  si,[GLIST+bx+8]    ; the name (8 chars, NUL-padded) lives
-        call UFDRAW             ; here with us: plain CS read
-        mov  word ptr [ftx],96
-        pop  bx
-        push bx
-        mov  al,cs:[GLIST+bx+4] ; players
-        xor  ah,ah
-        call UNUM2
-        pop  bx
-        push bx
-        mov  si,offset UPLR
-        call UFDRAW
-        pop  bx
-        push bx
-        mov  al,cs:[GLIST+bx+5] ; the war score
-        xor  ah,ah
-        call UNUM2
-        pop  bx
-        push bx
-        mov  si,offset UCOLN
-        call UFDRAW
-        pop  bx
-        push bx
-        mov  al,cs:[GLIST+bx+6]
-        xor  ah,ah
-        call UNUM2
-        pop  bx
-        pop  si
-        inc  word ptr [dsy]
-@@rn:   inc  si
-        cmp  si,NGL
-        jb   @@row
-        cmp  word ptr [dsy],0
-        jne  @@hasl
-        mov  word ptr [ftx],48  ; an empty wire
-        mov  word ptr [fty],80
-        mov  byte ptr [COLOR],2
-        mov  si,offset UEMPTY
-        call UFDRAW
-@@hasl:
-        ; the footer: create line (with live name in mode 1)
-        mov  word ptr [ftx],40
-        mov  word ptr [fty],164
-        mov  byte ptr [COLOR],8
-        cmp  byte ptr [uimode],0
-        jne  @@m1
-        mov  si,offset UCREAT
-        call UFDRAW
-        mov  word ptr [ftx],40
-        mov  word ptr [fty],176
-        mov  byte ptr [COLOR],2
-        mov  si,offset UJOIN
-        call UFDRAW
-        jmp  @@dbl
-@@m1:   mov  si,offset UNAME
-        call UFDRAW
-        mov  word ptr [ftx],68
-        push si                 ; the name so far: mirror DS gname into
-        xor  si,si              ; our segment for the CS-reading font
-@@nmc:  mov  al,[gname+si]
-        mov  cs:[unamec+si],al
-        inc  si
-        cmp  si,9
-        jb   @@nmc
-        pop  si
-        mov  si,offset unamec
-        call UFDRAW
-        mov  word ptr [ftx],40
-        mov  word ptr [fty],176
-        mov  si,offset UBOTS1
-        cmp  byte ptr [gbots],0
-        jne  @@bl
-        mov  si,offset UBOTS0
-@@bl:   call UFDRAW
-@@dbl:  call UBLIT
-        ; ---- one redraw per BIOS tick (alive again now that the ESR
-        ; bell is masked and the tick actually ticks) ----
+@@sx:   ret
+SPECTXTF ENDP
+
+; ============================================================================
+;  XMENU - and there is no menu any more. It LISTENS instead of asking.
+;
+;  The sky list is gone: no rows to read, no C to create, no choosing
+;  between rooms. There is ONE sky. Poll the wire for a couple of seconds -
+;  every sky advertises itself once a second, so that is long enough to hear
+;  one - and the first that answers is the one we join. Silence means nobody
+;  is up, so we mint the sky ourselves. Either way the pilot pressed nothing.
+;
+;  Out, exactly as before, so CITY.ASM did not change: gact 2 = join, with
+;  ggid and the seed adopted from the advertisement; gact 1 = create, and the
+;  caller mints a fresh seed. The 270 lines of list, cursor, name entry and
+;  bot toggle that used to live here are DELETED, not bypassed.
+;
+;  The bot war is now always on. That is not an oversight of removing the
+;  toggle - it is what makes the arrival screen have a war on it. An empty
+;  sky with nothing to watch is the thing this whole change exists to kill.
+; ============================================================================
+XLISTEN equ 36                  ; BIOS ticks: two seconds, and ads are 1/s
+
+XMENU:  push es
+        push es                 ; when to stop listening
+        mov  ax,40h
+        mov  es,ax
+        mov  ax,es:[6Ch]
+        pop  es
+        add  ax,XLISTEN
+        mov  [uidl],ax
+@@lis:  call FAR PTR NETPOLLF   ; the wire fills GLIST while we wait
         push es
         mov  ax,40h
         mov  es,ax
-@@tw:   mov  ax,es:[6Ch]
-        cmp  ax,cs:[uitick]
-        je   @@tw
-        mov  cs:[uitick],ax
+        mov  ax,es:[6Ch]
         pop  es
-        ; ---- keys ----
-        call UEDGE
-        or   al,al
-        jz   @@loop
-        cmp  byte ptr [uimode],0
-        jne  @@keys1
-        cmp  al,48h             ; up
-        jne  @@k2
-        cmp  byte ptr [uisel],0
-        je   @@loop
-        dec  byte ptr [uisel]
-        jmp  @@loop
-@@k2:   cmp  al,50h             ; down
-        jne  @@k3
-        cmp  byte ptr [uisel],NGL-1
-        jae  @@loop
-        inc  byte ptr [uisel]
-        jmp  @@loop
-@@k3:   cmp  al,2Eh             ; C: name a new sky
-        jne  @@k4
-        mov  byte ptr [uimode],1
-        mov  byte ptr [unlen],0
-        mov  di,offset gname    ; clean slate
-        mov  cx,8
-        mov  al,0
-        cld
-        push es
-        push ds
-        pop  es
-        rep  stosb
-        pop  es
-        jmp  @@loop
-@@k4:   cmp  al,1Ch             ; enter: fly the picked sky
-        jne  @@loop
-        mov  al,[uisel]
-        xor  ah,ah
-        mov  bx,ax
+        sub  ax,[uidl]
+        js   @@lis              ; still listening
+        ; ---- who answered? the first live row wins ----
+        xor  si,si
+@@sc:   mov  bx,si
         mov  cl,4
         shl  bx,cl
         cmp  word ptr cs:[GLIST+bx],0
-        je   @@loop             ; picked an empty row
-        mov  ax,word ptr cs:[GLIST+bx]
+        jne  @@join
+        inc  si
+        cmp  si,NGL
+        jb   @@sc
+        mov  byte ptr [gact],1  ; nobody up: this sky is ours to mint
+        pop  es
+        ret
+@@join: mov  ax,word ptr cs:[GLIST+bx]
         mov  [ggid],ax
         mov  ax,word ptr cs:[GLIST+bx+2]
         mov  [rseed],ax
@@ -824,47 +709,6 @@ XMENU:
         mov  byte ptr [gact],2
         pop  es
         ret
-@@keys1:
-        cmp  al,1Ch             ; enter: launch the new sky
-        jne  @@n1
-        cmp  byte ptr [unlen],0
-        je   @@loop             ; a sky needs a name
-        mov  byte ptr [gact],1
-        pop  es
-        ret
-@@n1:   cmp  al,30h             ; B: bots on/off
-        jne  @@n2
-        xor  byte ptr [gbots],1
-        jmp  @@loop
-@@n2:   cmp  al,0Eh             ; backspace
-        jne  @@n3
-        cmp  byte ptr [unlen],0
-        je   @@loop
-        dec  byte ptr [unlen]
-        mov  al,[unlen]
-        xor  ah,ah
-        mov  di,ax
-        mov  byte ptr [gname+di],0
-        jmp  @@loop
-@@n3:   cmp  al,1               ; esc backs out of naming
-        jne  @@n4
-        mov  byte ptr [uimode],0
-        jmp  @@loop
-@@n4:   xor  ah,ah              ; a letter?
-        mov  si,ax
-        mov  al,cs:[SC2CH+si]
-        or   al,al
-        jz   @@loop
-        cmp  byte ptr [unlen],8
-        jae  @@loop
-        push ax
-        mov  al,[unlen]
-        xor  ah,ah
-        mov  di,ax
-        pop  ax
-        mov  [gname+di],al
-        inc  byte ptr [unlen]
-        jmp  @@loop
 
 ; ---- UNUM2: AL (0..99) as two digits ---------------------------------------
 UNUM2:  xor  ah,ah

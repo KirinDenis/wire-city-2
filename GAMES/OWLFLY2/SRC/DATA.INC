@@ -144,7 +144,8 @@ lastklr dw 0                    ; who shot us down (rides our death POS)
 wseed   dw 0                    ; the seed the world was built from
 netup   db 0                    ; 1 = IPX answered at startup
 netpid  dw 0                    ; our name on the wire (spawn fan-out)
-gact    db 0                    ; the menu's verdict: 1 create, 2 join
+gact    db 0                    ; the front door's verdict: 1 create, 2 join
+uidl    dw 0                    ; ...and the tick it stops listening at
 gbots   db 1                    ; 1 = the 20v20 war flies with us
 ggid    dw 0                    ; which sky we are in (the host's pid)
 gname   db 9 dup(0)             ; our sky's name (8 + NUL)
@@ -970,6 +971,21 @@ warmc   dw 2048                 ; bed: warm-up samples to discard
 xtt     db 0                    ; bed: crossfade scratch
 sbn2    dw 0                    ; the audio spool: the note chases the
                                 ;  lever from 0 - startup whine for free
+; ---- THE FRONT DOOR IS THE WAR. Arrive at a sky somebody is already
+; flying and you do not read a list, you watch: the orbit camera stands off
+; whoever is in the fight, Space walks to the next one, and it moves on by
+; itself if you do not. Enter takes a jet.
+;
+; It is a STATE OF THE RUNNING GAME, not a screen of its own - the wire, the
+; blit, the clock and the render all carry on exactly as they do in flight,
+; and the panel is already skipped whenever tgtcam is up. That is the whole
+; reason this is small: the camera it needs was written for F4.
+spect   db 0                    ; 1 = watching, not flying
+sptmr   dw 0                    ; ticks until it moves on by itself
+SPTIME  equ 273                 ; ...which is fifteen seconds at 18.2 Hz
+prevsp  db 0                    ; Space's own edge, while spectating
+tgspare dw 0FFFFh               ; the first living jet the walk saw, for when
+                                ;  no human is up (0FFFFh = it saw none)
 tgti    dw 0                    ; orbited plane (kept past the lock)
 tcws    dw 0                    ; wreck slot the camera follows (mode 2)
 tgaz    dw 0                    ; orbit azimuth (0..255)
@@ -996,6 +1012,8 @@ MSGBRK  db 'BRAKES ON',0        ; 9 chars  -> 142
 MSGBRK2 db 'PRESS B TO RELEASE',0 ; 18     -> 124... 110 leaves it clear of
                                 ;  the left annunciator column
 MSGBRK3 db 'W THROTTLE  A BURNER',0 ; 20   -> 120
+; (the spectator's caption moved to UI.INC with SPECTXTF - UBIG reads its
+;  strings from its own segment, and 56 bytes came back here for it)
 prevv   db 0                    ; F3 edge detector
 svx     dw 0                    ; pilot's world, saved during the chase
 svy     dw 0

@@ -10,6 +10,11 @@
 ;  costs it) -> stall -> altitude clamp -> wind drift -> advance along heading.
 ; ============================================================================
 INPUT:
+        cmp  byte ptr [spect],0 ; WATCHING: the world turns, we do not fly
+        je   @@nspec
+        call FAR PTR SPECTUPF
+        jmp  @@dwr2             ; ...and everything else still gets its tick
+@@nspec:
         cmp  byte ptr [dying],0
         je   @@alive2
         ; the fall: the world keeps turning, we just watch the wreck
