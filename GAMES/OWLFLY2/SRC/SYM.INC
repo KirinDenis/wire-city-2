@@ -697,6 +697,49 @@ GNDMARK:
 ;  the game flies on with the front panel it has always had.
 ; ============================================================================
 ; ============================================================================
+;  *** TEMPORARY: WHICH PART OF THE RENDER *** (2026-08-06)
+;
+;  The frame markers said GREEN - it wedges inside RENDER - and RENDER is
+;  fifteen calls deep, so that is a room, not an address. These split the
+;  room: AL = the stage that just FINISHED, drawn as AL little blocks along
+;  the top of the screen.
+;
+;  BLOCKS AND NOT COLOURS, on purpose. Naming a hue off a frozen screen is
+;  guesswork - "amber or yellow?" - but counting six blocks is not, and the
+;  count is what the answer needs to be. They sit at x=160 so they never
+;  touch the stage square in the corner, and the next blit wipes them, so in
+;  flight the bar just flickers at full length.
+;
+;  REMOVE ME with the stage markers once this is caught.
+; ============================================================================
+RMARKF  PROC FAR
+        push es
+        push di
+        push cx
+        mov  cx,0A000h
+        mov  es,cx
+        mov  di,160
+        xor  ch,ch
+        mov  cl,al
+        jcxz @@d
+@@blk:  push cx
+        push di
+        mov  cx,6               ; six lit pixels...
+@@px:   mov  byte ptr es:[di],19
+        mov  byte ptr es:[di+320],19
+        inc  di
+        loop @@px
+        pop  di
+        add  di,8               ; ...and two dark, so they can be counted
+        pop  cx
+        loop @@blk
+@@d:    pop  cx
+        pop  di
+        pop  es
+        ret
+RMARKF  ENDP
+
+; ============================================================================
 ;  HITFLSHF - the world flares red and yellow when something hits you.
 ;
 ;  It is drawn AFTER the world and BEFORE the head-up display, and both

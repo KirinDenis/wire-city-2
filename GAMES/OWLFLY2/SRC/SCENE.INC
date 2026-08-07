@@ -53,11 +53,21 @@ RENDER: call SETHORIZ           ; where the glass is, before anything uses it
         call FAR PTR AFDRAWF    ; the aerodromes, paved onto it - before the
                                 ; buildings, so anything standing goes over
                                 ; the concrete rather than under it
+        mov  al,1
+        call FAR PTR RMARKF     ; *** TEMP: sky, terrain and concrete done
         call BUILDINGS          ; real buildings to the horizon (BORD walk)
+        mov  al,2
+        call FAR PTR RMARKF     ; *** TEMP: the city and its traffic done
         call FAR PTR RSTADRAWF  ; the two ground radar stations, dish turning
         call FAR PTR SHKDRAWF   ; the six Shilkas, turrets turning
+        mov  al,3
+        call FAR PTR RMARKF     ; *** TEMP: the ground furniture done
         call WRECKDRAW          ; fallen jets burn on the ground
+        mov  al,4
+        call FAR PTR RMARKF     ; *** TEMP: the wreck pool done
         call PLANESDRAW         ; AI jets own the sky
+        mov  al,5
+        call FAR PTR RMARKF     ; *** TEMP: the AI jets done
         cmp  byte ptr [chsview],0
         je   @@nochs
         cmp  byte ptr [dying],0
@@ -70,8 +80,12 @@ RENDER: call SETHORIZ           ; where the glass is, before anything uses it
 @@nochs:
         call MSLDRAW            ; the missile dot and its puff
         call AMSLDRAW           ; the AI's missiles too
+        mov  al,6
+        call FAR PTR RMARKF     ; *** TEMP: the missiles done
         call FAR PTR HITFLSHF   ; hit: the world flares, and the HUD below
                                 ;  draws straight over it so the sight lives
+        mov  al,7
+        call FAR PTR RMARKF     ; *** TEMP: the hit flash done
         cmp  byte ptr [sview],0
         jne  @@sideview         ; looking out of the side: NO glass HUD. The
                                 ; ring, the gunsight and the strips belong to
@@ -82,6 +96,8 @@ RENDER: call SETHORIZ           ; where the glass is, before anything uses it
         call HUDBARS            ; glass HUD: compass, speed, altitude
         call CROSS              ; levelled gunsight + standby horizon
 @@sideview:
+        mov  al,8
+        call FAR PTR RMARKF     ; *** TEMP: the head-up display done
         mov  word ptr [mapt],123
         cmp  byte ptr [dying],0
         jne  @@pdone            ; falling: cinema only
@@ -100,6 +116,8 @@ RENDER: call SETHORIZ           ; where the glass is, before anything uses it
 @@nopan:
         call MINIMAP            ; world map + plane marker
 @@pdone:
+        mov  al,9
+        call FAR PTR RMARKF     ; *** TEMP: the panel and the map done
         call DEATHTXT           ; CRASH - PRESS SPACE while falling
         call FAR PTR RAMPTXTF   ; ...and what is holding her, while parked
         ret
