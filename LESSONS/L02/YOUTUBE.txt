@@ -1,0 +1,67 @@
+TITLE
+=====
+Lecture 2: The File Is The Program — DOS Game from Scratch (TASM, COM vs EXE)
+
+
+DESCRIPTION
+===========
+A COM file has no header. None at all. DOS finds a free segment, copies the
+file into it, and jumps to the first byte — so if you open the file in a hex
+editor and change five bytes, the program changes. In this lesson we do
+exactly that: HELLO becomes WORLD without the assembler running once, and the
+source still says HELLO afterwards.
+
+Along the way, the thing nobody shows beginners: what an instruction actually
+is. Turbo Assembler's listing file puts the address, the machine bytes and
+your own source line on one row, so you can watch "mov ah, 9" turn into B4 09
+and then find those same two bytes sitting in the file.
+
+  - writing ten lines of assembly, and what every one of them is for
+  - TASM /T /L, and reading the listing
+  - eighteen bytes: the entire program, on one line
+  - patching the file with a hex editor, and running it again
+  - why org 100h, and what DOS actually does when it loads a COM
+  - the same program as an EXE, and the two extra instructions it needs
+  - eighteen bytes against five hundred and sixty-two, and where they went
+  - the same bytes in memory, in Turbo Debugger
+
+Source, both files, runs on its own:
+https://github.com/KirinDenis/wire-city-2/tree/main/LESSONS/L02
+
+Tools: DOSBox 0.74-3, Turbo Assembler 3.2 + TLINK, Turbo Debugger, and Volkov
+Commander as the hex editor (this machine has no DEBUG.EXE, and VC is the one
+tool in DOS that both shows bytes and changes them).
+
+CHAPTERS
+00:00 What assembly actually is
+00:32 Writing it: ten lines of assembly
+01:25 Saving it, and leaving the IDE
+01:36 The listing: a line, and its bytes
+02:36 Eighteen bytes, and all of them
+02:58 Changing the program without recompiling it
+03:38 Why a COM file works like that
+03:59 The EXE, and the two extra instructions
+04:56 Eighteen bytes against six hundred
+05:30 The same bytes, in memory
+
+Previous: Lecture 1 — The Screen Is Just Memory
+Next: why the picture tears when it moves, and the second screen that fixes it.
+
+Made by Owlos. We modernise legacy software for the people who still depend on
+it, and knowing how it was written the first time is the whole reason we can.
+https://owlos.sk
+
+#dos #turbopascal #retroprogramming #assembly #tasm #retrocomputing #msdos
+#x86 #reverseengineering #gamedev #dosbox #borland
+
+
+NOTES FOR UPLOAD
+================
+- Subtitles: Lecture/voice/L02-thefile.srt, uploaded WITH TIMING.
+- Trim the head of the recording to the first spoken word; every timestamp
+  above is measured from there.
+- Chapters are generated, not typed:
+      Director.exe --chapters L02-thefile
+- The first three hashtags show above the title. #dos #turbopascal
+  #retroprogramming keep the series consistent; #assembly and #tasm are the
+  ones that earn their place in this episode.
