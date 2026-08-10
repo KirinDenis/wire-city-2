@@ -8,6 +8,12 @@ EXAMPLES/*.EXE
 *.lst
 *.bak
 
+# The workshop's own notebooks: NEXT.md (the cold-start brief) and the
+# *TASK.md planning files live in Skill/ and stay OFF the public repo -
+# they are session notes between the maintainer and the AI, not
+# documentation. The public story lives in README.md and docs/.
+Skill/
+
 # editor / OS noise
 *~
 Thumbs.db

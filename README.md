@@ -9,42 +9,46 @@ the last byte. Built by the team behind **[Owlos](https://owlos.sk/)**:
 keeping legacy systems alive is our day job; writing new software for
 MS-DOS is how we relax.
 
-## Part museum, part method
+## Why this exists
 
-The 1986 original ships untouched beside its successors — you can play the
-lineage in order and watch forty years happen to one idea. That is the
-museum half. The other half is the claim: **the programming method of that
-era still works**, and this repository practises it on new code rather than
-exhibiting it behind glass.
+**Then.** In 1986 a game fit in five kilobytes because it had to. The
+machine offered one stretch of memory worth caring about, no libraries, no
+framework — and the programmer knew the price of every byte and every
+instruction, because the bill arrived instantly: the program either fit and
+ran at full speed, or it did not exist. Software was written *against* the
+machine, with the whole machine held in one head.
 
-- **The byte is the unit of design.** The hot code lives in one 64K
-  segment, and every far call out of it costs five bytes. Every segment
-  carries a `PUBLIC` end marker, so the linker map prints how full each one
-  is — *"will this fit"* is a number read from `CITY.MAP`, not a build that
-  either passes or explodes. When the segment is tight you don't shave
-  bytes, you **evict the coldest code** to a far segment and pay one call.
-- **Integer math, and shift before you divide.** The whole flight model is
-  deterministic 16-bit arithmetic. A fixed-point divide that keeps its
-  fraction without buying headroom first is a hang on real iron — `idiv`
-  traps, nothing catches it — and this repo's commit history contains the
-  proof.
-- **The hardware is the library.** The sound "mixer" is one spinning DMA
-  ring that effects are written into ahead of the beam and healed out of
-  behind it; the physics clock is the BIOS tick at `0040:006C`, nothing
-  hooked, nothing reprogrammed; transparency is the palette.
-- **Modern tools serve the old target.** The cockpit art, the 3D models and
-  the sound bank are cut by C# converters at build time, and flight-model
-  changes are verified by re-implementing the arithmetic in C# and diffing
-  the profiles *before anybody flies*. The 8086 is the runtime, never the
-  toolchain.
-- **Written to be read cold.** ~30,000 lines of assembly in which routines
-  carry their reasoning, not just their mechanics — why the constant is 62,
-  what went wrong the last time someone touched this — plus a standing
-  brief (`NEXT.md`) for whoever picks the work up next, human or AI.
+**Now.** That way of working is being forgotten. The people who wrote like
+this are retiring, while the systems they built still run banks, factories
+and railways — and the skill to look after them is leaving the industry
+faster than the systems are. This is **[Owlos](https://owlos.sk/)**'s day
+job: we know how these systems were written, and we modernise them so they
+can be supported for the years ahead — and when the job calls for it, we
+can still write the way they were written.
 
-The result is the advantage: a codebase where the cost of everything is
-visible, nothing is hidden in a framework, and every lesson the constraint
-taught is written down where the next constraint will need it.
+**So.** This repository is the proof, kept in public:
+
+- **Part museum.** The 1986 original ships untouched beside its successors.
+  Play the lineage in order — a wireframe night-flight, then a flight
+  simulator, then a multiplayer air war — and watch forty years happen to
+  one idea, on the same 8086, every byte still readable.
+- **Part working method.** When the job calls for writing the old way, we
+  still can — and these games are the demonstration, built exactly as it
+  was done then: arithmetic you can prove on paper, memory budgets you read
+  as a number before you build, the hardware itself used as the library it
+  always was. And where the old meets today's tools, today serves
+  yesterday — modern converters prepare the art and the sounds, but the
+  8086 is the runtime, never the toolchain.
+- **Part lesson.** Every routine in ~30,000 lines of assembly carries its
+  reasoning, not just its mechanics — what this is for, why the constant,
+  what broke the last time someone touched it. The code teaches the way it
+  was taught: by being read.
+
+What the method buys — then and now — is the advantage of this repository:
+nothing hidden behind a framework, the cost of everything visible, and
+programs small enough that one person can hold the whole machine in their
+head. That is not nostalgia. It is an engineering standard, and this is
+what it looks like applied.
 
 ## The games
 
