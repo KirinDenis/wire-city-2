@@ -9,11 +9,48 @@ the last byte. Built by the team behind **[Owlos](https://owlos.sk/)**:
 keeping legacy systems alive is our day job; writing new software for
 MS-DOS is how we relax.
 
+## Part museum, part method
+
+The 1986 original ships untouched beside its successors — you can play the
+lineage in order and watch forty years happen to one idea. That is the
+museum half. The other half is the claim: **the programming method of that
+era still works**, and this repository practises it on new code rather than
+exhibiting it behind glass.
+
+- **The byte is the unit of design.** The hot code lives in one 64K
+  segment, and every far call out of it costs five bytes. Every segment
+  carries a `PUBLIC` end marker, so the linker map prints how full each one
+  is — *"will this fit"* is a number read from `CITY.MAP`, not a build that
+  either passes or explodes. When the segment is tight you don't shave
+  bytes, you **evict the coldest code** to a far segment and pay one call.
+- **Integer math, and shift before you divide.** The whole flight model is
+  deterministic 16-bit arithmetic. A fixed-point divide that keeps its
+  fraction without buying headroom first is a hang on real iron — `idiv`
+  traps, nothing catches it — and this repo's commit history contains the
+  proof.
+- **The hardware is the library.** The sound "mixer" is one spinning DMA
+  ring that effects are written into ahead of the beam and healed out of
+  behind it; the physics clock is the BIOS tick at `0040:006C`, nothing
+  hooked, nothing reprogrammed; transparency is the palette.
+- **Modern tools serve the old target.** The cockpit art, the 3D models and
+  the sound bank are cut by C# converters at build time, and flight-model
+  changes are verified by re-implementing the arithmetic in C# and diffing
+  the profiles *before anybody flies*. The 8086 is the runtime, never the
+  toolchain.
+- **Written to be read cold.** ~30,000 lines of assembly in which routines
+  carry their reasoning, not just their mechanics — why the constant is 62,
+  what went wrong the last time someone touched this — plus a standing
+  brief (`NEXT.md`) for whoever picks the work up next, human or AI.
+
+The result is the advantage: a codebase where the cost of everything is
+visible, nothing is hidden in a framework, and every lesson the constraint
+taught is written down where the next constraint will need it.
+
 ## The games
 
 | Game | Size | What it is | |
 |---|---|---|---|
-| ![owlfly2](res/owlfly2.png) **[OWL FLY II](GAMES/OWLFLY2/)** | 76 KB | **The multiplayer successor**: real pilots share procedural skies over IPX-through-WebSocket — a live sky list to join or create (bots optional; off is a clean PvP arena), the NEWTON sky with baked clouds, an F-15 SE II cockpit with NATO-shape radar symbology, three MFD pages (MAP / SIT / TGT) and nameplates over every human in view. | [▶ play](https://kirindenis.github.io/wire-city-2/owlfly2.html) |
+| ![owlfly2](res/owlfly2.png) **[OWL FLY II](GAMES/OWLFLY2/)** | 105 KB code + 162 KB data | **The multiplayer successor**: one shared sky over IPX-through-WebSocket, and no menu — you arrive as a spectator over the bot war, an orbit camera on whoever has a missile on his tail, and **Enter takes a jet**, stopped on your own runway with the brakes set. An F-15 SE II cockpit with NATO-shape radar symbology, three MFD pages (MAP / SIT / TGT), a ground school (rotation speed, wheel brakes, nose-wheel steering), a recorded sound bank mixed through one DMA ring, and an afterburner worth four dry engines. The data is the painted cockpit (63 KB front, 47 KB side views) and the sounds (52 KB). | [▶ play](https://kirindenis.github.io/wire-city-2/owlfly2.html) |
 | ![owlfly](res/owlfly.png) **[OWL FLY](GAMES/OWLFLY/)** | 40 KB | The combat flight simulator: procedural island, destructible city, two air forces of five aircraft types, missiles, a photo cockpit with a working radar, a real jet engine in one Sound Blaster channel. *Fly, owl!* | [▶ play](https://kirindenis.github.io/wire-city-2/owlfly.html) |
 | ![wirecity](res/wirecity.png) **[WIRE CITY](GAMES/WIRECITY/)** | 5.5 KB | The 1986-style original that named the arcade: a wireframe night-flight over a procedural megacity, one source file. The ancestor. | [▶ play](https://kirindenis.github.io/wire-city-2/play.html?g=wirecity) |
 
