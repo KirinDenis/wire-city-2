@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 wire-city-86 authors
+Copyright (c) 2026 Denys Kirin
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,6 +20,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-NOTE: This MIT license covers the original game source and the web/build
-scaffolding only. The browser build runs on DOSBox and js-dos, which are
-licensed under the GNU GPL; see their respective projects for terms.
+NOTE: This MIT license covers the source in this repository - the games, the
+engine, the tools and the lessons. It does NOT cover the third-party files
+published under docs/jsdos/, which are js-dos and DOSBox compiled to
+WebAssembly and are licensed under the GNU GPL version 2. Those files carry
+their own notice and licence text beside them, and the full inventory - along
+with the commercial software this repository uses locally but deliberately
+does not ship - is in THIRD-PARTY.md.

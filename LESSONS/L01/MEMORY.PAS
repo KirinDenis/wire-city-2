@@ -1,3 +1,12 @@
+{ a screen is memory. this machine has two:
+
+    B800:0000   text      80 x 25 cells, two bytes each
+    A000:0000   graphics  320 x 200 pixels, one byte each
+
+  both are one long row of bytes, written a line at a time:
+
+    offset = y * width + x  }
+
 { ==========================================================================
   MEMORY.PAS - Lesson 1, "The Screen Is Memory".
 
