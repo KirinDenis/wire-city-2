@@ -134,7 +134,7 @@ code was written under them and they are why it looks the way it does:
 
 ## ENGINE/ and EXAMPLES/
 
-The engine is split 1986-style — not a library, but modules with
+The engine is split the way the era did it — not a library, but modules with
 CONTRACTS: each `ENGINE/*.INC` states the symbols its includer must
 define, and the game includes the same files the examples do. Each
 example is a standalone `.COM` of a few KB: `TERRA` (the island
@@ -153,7 +153,7 @@ wraps themselves are the architecture speaking); and every further
 feature now costs a reclaim campaign first. The honest next step is not
 another squeeze — it's an EXE with far segments, 32-bit coordinate
 math, and that is a different program. This one is complete: it flies,
-it fights, it sounds, it fits in the memory of a machine from 1986 —
+it fights, it sounds, it fits in the memory of an 8086 machine —
 and every byte of it can be read.
 
 ---

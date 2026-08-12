@@ -12,12 +12,12 @@ MS-DOS is how we relax.
 
 ## Why this exists
 
-**Then.** In 1986 a game fit in five kilobytes because it had to. The
-machine offered one stretch of memory worth caring about, no libraries, no
-framework — and the programmer knew the price of every byte and every
-instruction, because the bill arrived instantly: the program either fit and
-ran at full speed, or it did not exist. Software was written *against* the
-machine, with the whole machine held in one head.
+**Then.** A DOS game fit in five kilobytes because it had to. The machine
+offered one stretch of memory worth caring about, no libraries, no framework
+— and the programmer knew the price of every byte and every instruction,
+because the bill arrived instantly: the program either fit and ran at full
+speed, or it did not exist. Software was written *against* the machine, with
+the whole machine held in one head.
 
 **Now.** That way of working is being forgotten. The people who wrote like
 this are retiring, while the systems they built still run banks, factories
@@ -29,10 +29,10 @@ can still write the way they were written.
 
 **So.** This repository is the proof, kept in public:
 
-- **Part museum.** The 1986 original ships untouched beside its successors.
-  Play the lineage in order — a wireframe night-flight, then a flight
-  simulator, then a multiplayer air war — and watch forty years happen to
-  one idea, on the same 8086, every byte still readable.
+- **Part lineage.** The smallest one ships beside its successors, and they
+  are meant to be played in order — a wireframe night-flight, then a flight
+  simulator, then a multiplayer air war. One idea growing up inside the same
+  constraints, on the same 8086, every byte still readable.
 - **Part working method.** When the job calls for writing the old way, we
   still can — and these games are the demonstration, built exactly as it
   was done then: arithmetic you can prove on paper, memory budgets you read
@@ -53,11 +53,11 @@ what it looks like applied.
 
 ## The games
 
-| Game | Size | What it is | |
-|---|---|---|---|
-| ![owlfly2](res/owlfly2.png) **[OWL FLY II](GAMES/OWLFLY2/)** | 105 KB code + 162 KB data | **The multiplayer successor**: one shared sky over IPX-through-WebSocket, and no menu — you arrive as a spectator over the bot war, an orbit camera on whoever has a missile on his tail, and **Enter takes a jet**, stopped on your own runway with the brakes set. An F-15 SE II cockpit with NATO-shape radar symbology, three MFD pages (MAP / SIT / TGT), a ground school (rotation speed, wheel brakes, nose-wheel steering), a recorded sound bank mixed through one DMA ring, and an afterburner worth four dry engines. The data is the painted cockpit (63 KB front, 47 KB side views) and the sounds (52 KB). | [▶ play](https://kirindenis.github.io/wire-city-2/owlfly2.html) |
-| ![owlfly](res/owlfly.png) **[OWL FLY](GAMES/OWLFLY/)** | 40 KB | The combat flight simulator: procedural island, destructible city, two air forces of five aircraft types, missiles, a photo cockpit with a working radar, a real jet engine in one Sound Blaster channel. *Fly, owl!* | [▶ play](https://kirindenis.github.io/wire-city-2/owlfly.html) |
-| ![wirecity](res/wirecity.png) **[WIRE CITY](GAMES/WIRECITY/)** | 5.5 KB | The 1986-style original that named the arcade: a wireframe night-flight over a procedural megacity, one source file. The ancestor. | [▶ play](https://kirindenis.github.io/wire-city-2/play.html?g=wirecity) |
+| Game | What it is | |
+|---|---|---|
+| ![owlfly2](res/owlfly2.png) **[OWL FLY II](GAMES/OWLFLY2/)** | **The multiplayer successor**, 105 KB of code and 162 KB of data: one shared sky over IPX-through-WebSocket, and no menu — you arrive as a spectator over the bot war, an orbit camera on whoever has a missile on his tail, and **Enter takes a jet**, stopped on your own runway with the brakes set. An F-15 SE II cockpit with NATO-shape radar symbology, three MFD pages (MAP / SIT / TGT), a ground school (rotation speed, wheel brakes, nose-wheel steering), a recorded sound bank mixed through one DMA ring, and an afterburner worth four dry engines. The data is the painted cockpit (63 KB front, 47 KB side views) and the sounds (52 KB). | [▶ play](https://kirindenis.github.io/wire-city-2/owlfly2.html) |
+| ![owlfly](res/owlfly.png) **[OWL FLY](GAMES/OWLFLY/)** | The combat flight simulator, 40 KB: procedural island, destructible city, two air forces of five aircraft types, missiles, a photo cockpit with a working radar, a real jet engine in one Sound Blaster channel. *Fly, owl!* | [▶ play](https://kirindenis.github.io/wire-city-2/owlfly.html) |
+| ![wirecity](res/wirecity.png) **[WIRE CITY](GAMES/WIRECITY/)** | The one that named the arcade, 5.5 KB in a single source file: a wireframe night-flight over a procedural megacity. Where the rest of it started. | [▶ play](https://kirindenis.github.io/wire-city-2/play.html?g=wirecity) |
 
 ## The teaching machines
 

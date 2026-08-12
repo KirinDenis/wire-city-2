@@ -15,7 +15,7 @@ the picture is DONE it goes to the screen in one move (`rep movsw`,
 
 ## 1. Fractions without fractions
 
-A 1986 CPU has **no fractional numbers** — integers only. But sines and
+The 8086 has **no fractional numbers** — integers only. But sines and
 cosines are all fractions (0.7071...). The trick: store everything
 **multiplied by 256**. sin 45° = 0.7071 → store 181. To rotate a point,
 multiply by 181 and divide by 256 — the two 256s cancel. This exact
