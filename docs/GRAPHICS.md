@@ -120,9 +120,12 @@ undefined-symbol errors literally dictate it):
 - `JET.COM` — this document, running: rotation, sorting, clipping,
   filling, and the breakup physics, in ~5 KB
 
-Build everything with `MAKE.BAT` (see the repo README). The listing
-trick from section 5 — `TASM /T /l`, then grep the crash offset — works
-on any DOS-era binary you'll ever have to rescue.
+Build any of it by going into its folder and typing `MAKE` (see the repo
+README). The listing trick from section 5 wants an assembler that writes
+listings, and flat assembler does not - so where these programs need that kind
+of answer now, `TOOLS/BinAccount` gives it by decoding the binary itself. The
+trick is still worth knowing: it works on any DOS-era binary you will ever
+have to rescue, and the assembler that produced it is rarely the one you have.
 
 ---
 [Play the game](https://kirindenis.github.io/wire-city-2/) ·

@@ -29,8 +29,7 @@
 ;  (160 - pofs*sin/256, horiz + pofs*cos/256).
 ; ============================================================================
 
-SKYSEG  SEGMENT PARA PUBLIC 'CODE'
-        ASSUME  CS:SKYSEG, DS:CODE, ES:NOTHING, SS:CODE
+segment SKYSEG
 
 ; ---- the tables: all CS-relative, none of them in the main segment --------
 ; They stand BEFORE the code: TASM will only emit the CS override on a
@@ -70,25 +69,21 @@ VLU     dw 24 dup(0)            ; sideways reach, instance
 VLI     db 24 dup(0)
 
 ; ---- the far doors ---------------------------------------------------------
-SKYBAKE PROC FAR
+SKYBAKE:
         call XBAKE
-        ret
-SKYBAKE ENDP
+        retf
 
-SKYFILL PROC FAR
+SKYFILL:
         call BGND
-        ret
-SKYFILL ENDP
+        retf
 
-WCLOUDF PROC FAR
+WCLOUDF:
         call WCLOUD
-        ret
-WCLOUDF ENDP
+        retf
 
-GENBEDF PROC FAR
+GENBEDF:
         call GENBED
-        ret
-GENBEDF ENDP
+        retf
 
 ; ---- GENBED: the tuned turbine + warm-up + splice + pristine copy ----------
 ; NEWTON's bed, ported VERBATIM - this exact arithmetic is the sound
@@ -107,12 +102,12 @@ GENBED: push es
         xor  di,di
         xor  si,si
         xor  bp,bp
-        mov  word ptr [bm1],0
-        mov  word ptr [bm2],0
-        mov  word ptr [bm3],0
-        mov  word ptr [bm4],0
-        mov  word ptr [praw],0
-@@g:    call RNDS
+        mov  word [bm1],0
+        mov  word [bm2],0
+        mov  word [bm3],0
+        mov  word [bm4],0
+        mov  word [praw],0
+.g:    call RNDS
         mov  al,ah
         xor  ah,ah
         and  ax,31
@@ -141,12 +136,12 @@ GENBED: push es
         sar  dx,1
         sar  dx,1
         cmp  dx,38
-        jle  @@r1
+        jle  .r1
         mov  dx,38
-@@r1:   cmp  dx,-38
-        jge  @@r2
+.r1:   cmp  dx,-38
+        jge  .r2
         mov  dx,-38
-@@r2:   mov  ax,bx
+.r2:   mov  ax,bx
         sar  ax,1
         add  bp,ax
         mov  ax,bp
@@ -154,39 +149,39 @@ GENBED: push es
         sar  ax,cl
         sub  bp,ax
         cmp  bp,16
-        jle  @@w1
+        jle  .w1
         mov  bp,16
-@@w1:   cmp  bp,-16
-        jge  @@w2
+.w1:   cmp  bp,-16
+        jge  .w2
         mov  bp,-16
-@@w2:   add  dx,bp
+.w2:   add  dx,bp
         cmp  si,3
-        jae  @@g2
+        jae  .g2
         add  dx,2
-        jmp  @@g3
-@@g2:   sub  dx,2
-@@g3:   mov  ax,dx
+        jmp  .g3
+.g2:   sub  dx,2
+.g3:   mov  ax,dx
         add  ax,[praw]
         sar  ax,1
         mov  [praw],dx
         add  ax,128
-        cmp  word ptr [warmc],0
-        je   @@st
-        dec  word ptr [warmc]
-        jmp  @@wh
-@@st:   stosb
-@@wh:   inc  si
+        cmp  word [warmc],0
+        je   .st
+        dec  word [warmc]
+        jmp  .wh
+.st:   stosb
+.wh:   inc  si
         cmp  si,6
-        jb   @@g4
+        jb   .g4
         xor  si,si
-@@g4:   cmp  di,SNDN
-        jb   @@g
+.g4:   cmp  di,SNDN
+        jb   .g
         xor  si,si
-@@xf:   mov  di,si
+.xf:   mov  di,si
         add  di,SNDN-512
-        mov  al,es:[di]
+        mov  al,[es:di]
         mov  [xtt],al
-        mov  al,es:[si]
+        mov  al,[es:si]
         sub  al,[xtt]
         cbw
         mov  bx,si
@@ -196,10 +191,10 @@ GENBED: push es
         mov  cl,6
         sar  ax,cl
         add  al,[xtt]
-        mov  es:[di],al
+        mov  [es:di],al
         inc  si
         cmp  si,512
-        jb   @@xf
+        jb   .xf
         ; ---- and the pristine copy into the TOP half, which is where
         ; SNDHEAL goes looking for it: it heals ring position i from
         ; SNDN+i, so the copy must start at exactly SNDN.
@@ -210,7 +205,7 @@ GENBED: push es
         ; things followed, and the third is audible: the last byte of the
         ; ring got clobbered by the first byte of the copy; every healed
         ; sample came back shifted one place (harmless on noise); and the
-        ; copy ended at 65534, so offset 65535 was never written at all.
+        ; copy ended at 65534, so 65535 was never written at all.
         ; SNDHEAL reads exactly that byte to heal ring position 32767 -
         ; the last sample before the wrap - and got whatever was in memory.
         ; ONE BYTE OF GARBAGE, once per lap of a 32768-sample ring at 11 kHz:
@@ -232,20 +227,20 @@ GENBED: push es
 ; PERPENDICULAR distance to it - so the haze ramp rotates with the
 ; world instead of with the screen. The ground side is two flat
 ; greens: the terrain mesh repaints nearly all of it every frame.
-BGND:   mov  word ptr [mrow],0
-        mov  word ptr [rowb],0
-@@mr:   mov  ax,[mrow]
+BGND:   mov  word [mrow],0
+        mov  word [rowb],0
+.mr:   mov  ax,[mrow]
         sub  ax,[hcur]
-        imul word ptr [cosr]
+        imul word [cosr]
         mov  bx,256
         idiv bx
         mov  [fmv],ax           ; f at the pivot column of this row
         mov  bx,[sinr]
         or   bx,bx
-        jge  @@ab
+        jge  .ab
         neg  bx
-@@ab:   cmp  bx,8               ; level: the row is all one thing
-        jb   @@one
+.ab:   cmp  bx,8               ; level: the row is all one thing
+        jb   .one
         ; banked: guard the crossing divide. x - cx0 = fmv*256/sinr;
         ; any crossing ON the glass has |x-cx0| < 512, so |fmv| >=
         ; 2*|sinr| means the row never crosses on screen - and skipping
@@ -253,117 +248,117 @@ BGND:   mov  word ptr [mrow],0
         ; horizon is pitched far off the top or bottom.
         mov  ax,[fmv]
         or   ax,ax
-        jge  @@fa
+        jge  .fa
         neg  ax
-@@fa:   add  bx,bx              ; bx = 2*|sinr|
+.fa:   add  bx,bx              ; bx = 2*|sinr|
         cmp  ax,bx
-        jae  @@one
-        jmp  @@split
-@@one:  mov  word ptr [spa],0
-        mov  word ptr [spl],320
+        jae  .one
+        jmp  .split
+.one:  mov  word [spa],0
+        mov  word [spanl],320
         mov  al,0
-        cmp  word ptr [fmv],0
-        jl   @@ws
+        cmp  word [fmv],0
+        jl   .ws
         mov  al,1
-@@ws:   mov  [sptype],al
+.ws:   mov  [sptype],al
         call FSP
-        jmp  @@nr
-@@split:mov  ax,[fmv]           ; the line crosses this row at
+        jmp  .nr
+.split:mov  ax,[fmv]           ; the line crosses this row at
         mov  cx,256             ; x = cx0 + f*256/sin r
         imul cx
-        idiv word ptr [sinr]
+        idiv word [sinr]
         add  ax,[cx0]
         mov  bx,ax
         or   bx,bx
-        jge  @@x1
+        jge  .x1
         xor  bx,bx
-@@x1:   cmp  bx,320
-        jle  @@x2
+.x1:   cmp  bx,320
+        jle  .x2
         mov  bx,320
-@@x2:   cmp  word ptr [sinr],0
-        jl   @@neg
-        mov  word ptr [spa],0   ; sin>0: f falls as x grows - ground left
-        mov  [spl],bx
-        mov  byte ptr [sptype],1
+.x2:   cmp  word [sinr],0
+        jl   .neg
+        mov  word [spa],0   ; sin>0: f falls as x grows - ground left
+        mov  [spanl],bx
+        mov  byte [sptype],1
         push bx
         call FSP
         pop  bx
         mov  [spa],bx
         mov  ax,320
         sub  ax,bx
-        mov  [spl],ax
-        mov  byte ptr [sptype],0
+        mov  [spanl],ax
+        mov  byte [sptype],0
         call FSP
-        jmp  @@nr
-@@neg:  mov  word ptr [spa],0   ; sin<0: sky on the left instead
-        mov  [spl],bx
-        mov  byte ptr [sptype],0
+        jmp  .nr
+.neg:  mov  word [spa],0   ; sin<0: sky on the left instead
+        mov  [spanl],bx
+        mov  byte [sptype],0
         push bx
         call FSP
         pop  bx
         mov  [spa],bx
         mov  ax,320
         sub  ax,bx
-        mov  [spl],ax
-        mov  byte ptr [sptype],1
+        mov  [spanl],ax
+        mov  byte [sptype],1
         call FSP
-@@nr:   add  word ptr [rowb],320
-        inc  word ptr [mrow]
-        cmp  word ptr [mrow],200
-        jb   @@mr
+.nr:   add  word [rowb],320
+        inc  word [mrow]
+        cmp  word [mrow],200
+        jb   .mr
         ret
 
-; ---- FSP: fill span [spa..spa+spl) of row [mrow], sky or ground ------------
+; ---- FSP: fill span [spa..spa+spanl) of row [mrow], sky or ground ------------
 ; One shade per span, taken at its centre - the retro compromise.
-FSP:    cmp  word ptr [spl],0
-        jle  @@fr
-        mov  ax,[spl]
+FSP:    cmp  word [spanl],0
+        jle  .fr
+        mov  ax,[spanl]
         shr  ax,1
         add  ax,[spa]
         sub  ax,[cx0]
-        imul word ptr [sinr]
+        imul word [sinr]
         mov  bx,256
         idiv bx
         neg  ax                 ; f = fmv - (x-cx0)*sin/256
         add  ax,[fmv]
         or   ax,ax
-        jge  @@f1
+        jge  .f1
         neg  ax
-@@f1:   cmp  ax,199
-        jbe  @@f2
+.f1:   cmp  ax,199
+        jbe  .f2
         mov  ax,199
-@@f2:   mov  bx,ax
-        cmp  byte ptr [sptype],0
-        jne  @@fg
-        mov  al,[SBASE+bx]      ; the sky ramp, by height above the line
+.f2:   mov  bx,ax
+        cmp  byte [sptype],0
+        jne  .fg
+        mov  al,[cs:SBASE+bx]      ; the sky ramp, by height above the line
         mov  [dbase],al
-        mov  al,[SFRAC+bx]
+        mov  al,[cs:SFRAC+bx]
         mov  [dfrac],al
-        jmp  @@ff
-@@fg:   mov  al,10              ; the settled green of the plain
+        jmp  .ff
+.fg:   mov  al,10              ; the settled green of the plain
         cmp  bx,16              ; the first rows past the line keep the
-        jae  @@fb               ; dark far-ground band the city wore
+        jae  .fb               ; dark far-ground band the city wore
         mov  al,28
-@@fb:   mov  di,[rowb]
+.fb:   mov  di,[rowb]
         add  di,[spa]
-        mov  cx,[spl]
-        jcxz @@fr
+        mov  cx,[spanl]
+        jcxz .fr
         rep  stosb
         ret
-@@ff:   mov  di,[rowb]
+.ff:   mov  di,[rowb]
         add  di,[spa]
-        mov  cx,[spl]
-        cmp  byte ptr [wdith],0
-        je   @@fast
+        mov  cx,[spanl]
+        cmp  byte [wdith],0
+        je   .fast
         mov  ax,[mrow]          ; banked: the slow, honest grain
         mov  bx,[spa]
         call WSTART
         call DFILLW
         ret
-@@fast: mov  ax,[mrow]
+.fast: mov  ax,[mrow]
         call MKPATT
         call DFILL
-@@fr:   ret
+.fr:   ret
 
 ; ---- MKPATT: cut the row's 16-pixel dither pattern (wings level) -----------
 ; The anchor (tile row and phase) is cached per screen row: several
@@ -373,35 +368,35 @@ MKPATT: push bx
         push cx
         push si
         cmp  ax,[pmrow]
-        je   @@have
+        je   .have
         mov  [pmrow],ax
         sub  ax,[hcur]          ; wings level, the world frame IS the
         mov  ah,0               ; screen frame; the tile row comes from
         mov  si,ax              ; the same table the banked path reads
-        mov  al,[TSKY+si]
+        mov  al,[cs:TSKY+si]
         xor  ah,ah
         mov  [pf0],ax
         mov  ax,[cx0]
         neg  ax
         and  ax,15
         mov  [pt0],ax
-@@have: mov  ax,[pt0]
+.have: mov  ax,[pt0]
         mov  [pti],ax
         xor  bx,bx
-@@m:    mov  ax,[pti]
+.m:    mov  ax,[pti]
         and  ax,15
         add  ax,[pf0]
         mov  si,ax
-        mov  ah,[BNOISE+si]
+        mov  ah,[cs:BNOISE+si]
         mov  al,[dbase]
         cmp  [dfrac],ah
-        jbe  @@m1
+        jbe  .m1
         inc  al
-@@m1:   mov  [PATT+bx],al
-        inc  word ptr [pti]
+.m1:   mov  [PATT+bx],al
+        inc  word [pti]
         inc  bx
         cmp  bx,16
-        jb   @@m
+        jb   .m
         pop  si
         pop  cx
         pop  bx
@@ -410,17 +405,17 @@ MKPATT: push bx
 ; ---- DFILL: fill CX pixels at ES:DI with PATT, phased by screen x ----------
 ; The hot loop of the common case reads PATT in the MAIN segment via
 ; DS - no segment prefix anywhere inside.
-DFILL:  jcxz @@z                ; CX=0 must mean zero, not 65536
+DFILL:  jcxz .z                ; CX=0 must mean zero, not 65536
         push bx
         mov  bx,di
         and  bx,15              ; the tile is 16 wide, and 320 is
-@@f:    mov  al,[PATT+bx]       ; still a multiple of it
+.f:    mov  al,[PATT+bx]       ; still a multiple of it
         stosb
         inc  bx
         and  bx,15
-        loop @@f
+        loop .f
         pop  bx
-@@z:    ret
+.z:    ret
 
 ; ---- DFILLW: the same span, but the GRAIN BELONGS TO THE WORLD ------------
 ; No integer map can rotate a dither: it preserves the pixel lattice,
@@ -428,37 +423,37 @@ DFILL:  jcxz @@z                ; CX=0 must mean zero, not 65536
 ; t and f as 8.8 accumulators, stepping by (cos, -sin). The wrap at
 ; 65536 is harmless: all we ever read are bits 8..9.
 ;  in: ES:DI dest, CX count, wt8/wf8 the span start, dbase/dfrac shade
-DFILLW: jcxz @@z
+DFILLW: jcxz .z
         push bx
         push dx
         push si
         push bp
         mov  bx,[wt8]
         mov  dx,[wf8]
-        mov  bp,offset TSKY
-@@p:    mov  al,dh
+        mov  bp,TSKY
+.p:    mov  al,dh
         xor  ah,ah
         mov  si,ax
-        mov  al,cs:[bp+si]      ; TSKY lives HERE, but BP-based
+        mov  al,[cs:bp+si]      ; TSKY lives HERE, but BP-based
         mov  ah,bh              ; addressing defaults to SS - the one
         and  ah,15              ; override ASSUME cannot place for us
         add  al,ah
         xor  ah,ah
         mov  si,ax
-        mov  ah,[BNOISE+si]
+        mov  ah,[cs:BNOISE+si]
         mov  al,[dbase]
         cmp  [dfrac],ah
-        jbe  @@l1
+        jbe  .l1
         inc  al
-@@l1:   stosb
+.l1:   stosb
         add  bx,[cosr]          ; one pixel east in the WORLD frame
         sub  dx,[sinr]
-        loop @@p
+        loop .p
         pop  bp
         pop  si
         pop  dx
         pop  bx
-@@z:    ret
+.z:    ret
 
 ; ---- WSTART: world coords of (BX = x, AX = y) into wt8/wf8, 8.8 ----------
 WSTART: push cx
@@ -468,17 +463,17 @@ WSTART: push cx
         mov  si,ax              ; si = dy
         sub  bx,[cx0]           ; bx = dx
         mov  ax,bx
-        imul word ptr [cosr]
+        imul word [cosr]
         mov  cx,ax
         mov  ax,si
-        imul word ptr [sinr]
+        imul word [sinr]
         add  ax,cx
         mov  [wt8],ax           ; t*256 = dx*cos + dy*sin
         mov  ax,si
-        imul word ptr [cosr]
+        imul word [cosr]
         mov  cx,ax
         mov  ax,bx
-        imul word ptr [sinr]
+        imul word [sinr]
         sub  cx,ax
         mov  [wf8],cx           ; f*256 = dy*cos - dx*sin
         pop  si
@@ -503,23 +498,23 @@ ROWAD:  push bx
 ROTPT:  push bx
         push si
         mov  si,ax              ; si = t
-        imul word ptr [cosr]
+        imul word [cosr]
         mov  cx,256
         idiv cx
         mov  di,ax              ; t*cos
         mov  ax,bx
-        imul word ptr [sinr]
+        imul word [sinr]
         mov  cx,256
         idiv cx
         sub  di,ax              ; x = cx0 + (t*cos - f*sin)/256
         add  di,[cx0]
         mov  ax,si
-        imul word ptr [sinr]
+        imul word [sinr]
         mov  cx,256
         idiv cx
         mov  si,ax              ; t*sin
         mov  ax,bx
-        imul word ptr [cosr]
+        imul word [cosr]
         mov  cx,256
         idiv cx
         add  ax,si              ; y = hcur + (t*sin + f*cos)/256
@@ -537,13 +532,13 @@ ROTPT:  push bx
 ; A pixel that lands off the glass is skipped, not clipped.
 ;  in: AX=x0, DX=y0 (screen), CX=length, dbase/dfrac shade, cfv the f
 CLSEG:  or   cx,cx
-        jle  @@z
+        jle  .z
         push bp
         push cx                 ; CL is needed for the shifts below
         mov  [cxv],ax           ; the screen walk: integers plus an 8.8
         mov  [cyv],dx           ; error each, so nothing overflows at
-        mov  word ptr [cxe],0   ; x = 300 the way a packed 8.8 would
-        mov  word ptr [cye],0
+        mov  word [cxe],0   ; x = 300 the way a packed 8.8 would
+        mov  word [cye],0
         mov  cl,8
         mov  ax,[cosr]
         mov  bx,ax
@@ -564,87 +559,87 @@ CLSEG:  or   cx,cx
         mov  [crb],ax           ; the row base moves by +-320, never by
         mov  bx,[cfv]           ; a multiply. f is CONSTANT along the
         and  bx,255             ; segment - it is a line parallel to the
-        mov  al,[TSKY+bx]       ; horizon - so its tile row is too
+        mov  al,[cs:TSKY+bx]       ; horizon - so its tile row is too
         xor  ah,ah
         mov  [ctrow],ax
         xor  bx,bx              ; bx = the walk's column counter
         pop  cx
-@@p:    mov  ax,[cxv]
+.p:    mov  ax,[cxv]
         or   ax,ax
-        jl   @@nx
+        jl   .nx
         cmp  ax,319
-        jg   @@nx
+        jg   .nx
         mov  dx,[cyv]
         or   dx,dx
-        jl   @@nx
+        jl   .nx
         cmp  dx,199
-        jg   @@nx
+        jg   .nx
         mov  di,[crb]
         add  di,ax
         mov  ax,bx
         and  ax,15
         add  ax,[ctrow]
         mov  si,ax
-        mov  ah,[BNOISE+si]
+        mov  ah,[cs:BNOISE+si]
         mov  al,[dbase]
         cmp  [dfrac],ah
-        jbe  @@p1
+        jbe  .p1
         inc  al
-@@p1:   mov  es:[di],al
+.p1:   mov  [es:di],al
         mov  si,[cdup]          ; and a twin one pixel ACROSS the line:
         or   si,si              ; neighbouring segments sit 1 px apart
-        jz   @@nx               ; perpendicular, and a rotated lattice
+        jz   .nx               ; perpendicular, and a rotated lattice
         cmp  si,320             ; drops pixels between them - this is
-        je   @@d1               ; what closes the gaps
-        cmp  word ptr [cxv],319
-        jge  @@nx
-@@d1:   add  si,di
-        mov  es:[si],al
-@@nx:   inc  bx
+        je   .d1               ; what closes the gaps
+        cmp  word [cxv],319
+        jge  .nx
+.d1:   add  si,di
+        mov  [es:si],al
+.nx:   inc  bx
         mov  ax,[dxi]
         add  [cxv],ax
         mov  ax,[dxf]
         add  [cxe],ax
-        jnc  @@y
-        inc  word ptr [cxv]
-@@y:    mov  ax,[dyi]
+        jnc  .y
+        inc  word [cxv]
+.y:    mov  ax,[dyi]
         or   ax,ax
-        jz   @@y1
+        jz   .y1
         add  [cyv],ax
         mov  dx,320
         cmp  ax,0
-        jg   @@y0
+        jg   .y0
         neg  dx
-@@y0:   add  [crb],dx
-@@y1:   mov  ax,[dyf]
+.y0:   add  [crb],dx
+.y1:   mov  ax,[dyf]
         add  [cye],ax
-        jnc  @@y2
-        inc  word ptr [cyv]
-        add  word ptr [crb],320
-@@y2:   loop @@p
+        jnc  .y2
+        inc  word [cyv]
+        add  word [crb],320
+.y2:   loop .p
         pop  bp
-@@z:    ret
+.z:    ret
 
 ; ---- WCAM2: world delta (wdx2 east, wdz2 north) -> cldu, cldd -------------
 ; OWLFLY's ROTXZ with NEWTON's 32-bit middles: d = dz*cos + dx*sin,
 ; u = dx*cos - dz*sin, exact for any 16-bit delta.
 WCAM2:  mov  ax,[wdz2]
-        imul word ptr [hcos]
+        imul word [hcos]
         mov  bx,ax
         mov  cx,dx
         mov  ax,[wdx2]
-        imul word ptr [hsin]
+        imul word [hsin]
         add  bx,ax
         adc  cx,dx
         mov  al,bh
         mov  ah,cl
         mov  [cldd],ax
         mov  ax,[wdx2]
-        imul word ptr [hcos]
+        imul word [hcos]
         mov  bx,ax
         mov  cx,dx
         mov  ax,[wdz2]
-        imul word ptr [hsin]
+        imul word [hsin]
         sub  bx,ax
         sbb  cx,dx
         mov  al,bh
@@ -660,26 +655,26 @@ WCAM2:  mov  ax,[wdz2]
 ; hides behind a ridge.
 WCLOUD: mov  ax,[sinr]          ; the twin-pixel direction, once
         or   ax,ax
-        jge  @@s1
+        jge  .s1
         neg  ax
-@@s1:   mov  bx,[cosr]
+.s1:   mov  bx,[cosr]
         or   bx,bx
-        jge  @@s2
+        jge  .s2
         neg  bx
-@@s2:   mov  word ptr [cdup],320
+.s2:   mov  word [cdup],320
         cmp  ax,bx
-        jle  @@s3
-        mov  word ptr [cdup],1
-@@s3:   ; ---- cull and collect ----
+        jle  .s3
+        mov  word [cdup],1
+.s3:   ; ---- cull and collect ----
         xor  si,si              ; instance index
-        mov  word ptr [qcn],0
-@@cull: mov  ax,si
+        mov  word [qcn],0
+.cull: mov  ax,si
         add  ax,ax
         mov  di,ax
-        mov  ax,[CLX+di]
+        mov  ax,[cs:CLX+di]
         sub  ax,[camx]
         mov  [wdx2],ax
-        mov  ax,[CLZ+di]
+        mov  ax,[cs:CLZ+di]
         sub  ax,[camz]
         mov  [wdz2],ax
         push si
@@ -687,62 +682,62 @@ WCLOUD: mov  ax,[sinr]          ; the twin-pixel direction, once
         pop  si
         mov  ax,[cldd]
         cmp  ax,250
-        jl   @@next
+        jl   .next
         cmp  ax,11500
-        jg   @@next
+        jg   .next
         mov  bx,[cldu]
         or   bx,bx
-        jns  @@c1
+        jns  .c1
         neg  bx
-@@c1:   mov  cx,ax
+.c1:   mov  cx,ax
         add  cx,cx
         cmp  bx,cx              ; more than two widths off the bow
-        jg   @@next
+        jg   .next
         mov  bx,[qcn]
         cmp  bx,20              ; the visible list has walls
-        jae  @@next
+        jae  .next
         add  bx,bx
-        mov  [VLD+bx],ax        ; keep its distance...
+        mov  [cs:VLD+bx],ax        ; keep its distance...
         mov  ax,[cldu]
-        mov  [VLU+bx],ax        ; ...and its sideways reach
+        mov  [cs:VLU+bx],ax        ; ...and its sideways reach
         shr  bx,1
         mov  ax,si
-        mov  [VLI+bx],al        ; ...and who it is
-        inc  word ptr [qcn]
-@@next: inc  si
+        mov  [cs:VLI+bx],al        ; ...and who it is
+        inc  word [qcn]
+.next: inc  si
         cmp  si,96
-        jb   @@cull
+        jb   .cull
         ; ---- draw, farthest first ----
-@@pick: mov  word ptr [qcb],-1
+.pick: mov  word [qcb],-1
         mov  bx,-1
         xor  si,si
-@@fmax: cmp  si,[qcn]
-        jae  @@fdn
+.fmax: cmp  si,[qcn]
+        jae  .fdn
         mov  di,si
         add  di,di
-        mov  ax,[VLD+di]
+        mov  ax,[cs:VLD+di]
         cmp  ax,bx
-        jle  @@fnx
+        jle  .fnx
         mov  bx,ax
         mov  [qcb],si
-@@fnx:  inc  si
-        jmp  @@fmax
-@@fdn:  cmp  word ptr [qcb],-1
-        je   @@done
+.fnx:  inc  si
+        jmp  .fmax
+.fdn:  cmp  word [qcb],-1
+        je   .done
         mov  si,[qcb]
         add  si,si
-        mov  ax,[VLD+si]
+        mov  ax,[cs:VLD+si]
         mov  [qcd],ax           ; this cloud's d
-        mov  ax,[VLU+si]
+        mov  ax,[cs:VLU+si]
         mov  [qcu],ax           ; and u
-        mov  word ptr [VLD+si],-1
+        mov  word [cs:VLD+si],-1
         shr  si,1
-        mov  bl,[VLI+si]
+        mov  bl,[cs:VLI+si]
         xor  bh,bh
         mov  [qci],bx
         call CDRAW
-        jmp  @@pick
-@@done: ret
+        jmp  .pick
+.done: ret
 
 ; ---- CDRAW: one cloud, rows of CLSEG under the shape tables ---------------
 CDRAW:  mov  bx,[qci]
@@ -751,68 +746,68 @@ CDRAW:  mov  bx,[qci]
         mov  ax,[qcu]           ; t of the centre: 220*u/d
         mov  cx,220
         imul cx
-        idiv word ptr [qcd]
+        idiv word [qcd]
         mov  [qct],ax
         mov  ax,[camy]          ; the camera height in world units
-        sub  ax,[CLH+di]        ; minus the cloud's base
+        sub  ax,[cs:CLH+di]        ; minus the cloud's base
         mov  cx,220
         imul cx
-        idiv word ptr [qcd]
+        idiv word [qcd]
         mov  [qcf],ax           ; f of the cloud base
         cmp  ax,-950
-        jl   @@out
+        jl   .out
         cmp  ax,1000
-        jg   @@out
-        mov  ax,[CLM+di]        ; scale: 352*size/d, 8.8 of table cols
+        jg   .out
+        mov  ax,[cs:CLM+di]        ; scale: 352*size/d, 8.8 of table cols
         mov  cx,352
         imul cx
-        idiv word ptr [qcd]
+        idiv word [qcd]
         cmp  ax,8
-        jge  @@sc1
+        jge  .sc1
         mov  ax,8
-@@sc1:  cmp  ax,640
-        jle  @@sc2
+.sc1:  cmp  ax,640
+        jle  .sc2
         mov  ax,640
-@@sc2:  mov  [qcs],ax
+.sc2:  mov  [qcs],ax
         mov  bx,ax              ; rows on screen: 64*scale/512 (clouds
         mov  cl,3               ; squat: half as tall as wide)
         shr  bx,cl
         cmp  bx,2
-        jge  @@h1
+        jge  .h1
         mov  bx,2
-@@h1:   cmp  bx,80
-        jle  @@h2
+.h1:   cmp  bx,80
+        jle  .h2
         mov  bx,80
-@@h2:   mov  [qch],bx
+.h2:   mov  [qch],bx
         mov  ax,16384           ; source step per screen row, 8.8
         cwd
         idiv bx
         mov  [qcp],ax
-        mov  word ptr [qcr],0   ; the source walker
-        mov  word ptr [qcw],0   ; the screen row walker
+        mov  word [qcr],0   ; the source walker
+        mov  word [qcw],0   ; the screen row walker
         mov  ax,[qci]
         mov  cl,6
         shl  ax,cl              ; shape base = shape*64 (shape = index&3
         and  ax,255             ; folds all the clouds onto four coats)
         mov  [qcb],ax
-@@row:  mov  ax,[qcr]
+.row:  mov  ax,[qcr]
         mov  al,ah
         xor  ah,ah              ; source row 0..63
         add  ax,[qcb]
         mov  si,ax
-        mov  al,[CSHW+si]
+        mov  al,[cs:CSHW+si]
         or   al,al
-        jz   @@nr
+        jz   .nr
         xor  ah,ah
         mov  cx,[qcs]
         imul cx
         mov  al,ah              ; width in px: W*scale/256
         mov  ah,dl
         or   ax,ax
-        jnz  @@w1
+        jnz  .w1
         mov  ax,1
-@@w1:   mov  [qcv],ax
-        mov  al,[CSHS+si]
+.w1:   mov  [qcv],ax
+        mov  al,[cs:CSHS+si]
         xor  ah,ah
         sub  ax,70              ; the silhouette's own centre
         mov  cx,[qcs]
@@ -831,9 +826,9 @@ CDRAW:  mov  bx,[qci]
         imul cx
         add  ax,40
         cmp  ax,511
-        jbe  @@sh1
+        jbe  .sh1
         mov  ax,511
-@@sh1:  mov  [dfrac],al
+.sh1:  mov  [dfrac],al
         mov  al,ah
         add  al,SKYZ+4
         mov  [dbase],al
@@ -842,13 +837,13 @@ CDRAW:  mov  bx,[qci]
         call ROTPT
         mov  cx,[qcv]
         call CLSEG
-@@nr:   mov  ax,[qcp]
+.nr:   mov  ax,[qcp]
         add  [qcr],ax
-        inc  word ptr [qcw]
+        inc  word [qcw]
         mov  ax,[qcw]
         cmp  ax,[qch]
-        jl   @@row
-@@out:  ret
+        jl   .row
+.out:  ret
 
 ; ---- XBAKE: sky ramp + the cloud wardrobe + the weather map ---------------
 ; TSKY: tile row per |f| - the sky's rows never move. SBASE/SFRAC: the
@@ -856,96 +851,96 @@ CDRAW:  mov  bx,[qci]
 ; neighbours. Four cloud coats cut by a random walk, then ninety-six
 ; clouds scattered over the whole torus.
 XBAKE:  xor  si,si              ; the sky's tile rows
-@@ts:   mov  ax,si
+.ts:   mov  ax,si
         and  ax,15
         mov  cl,4
         shl  ax,cl
-        mov  [TSKY+si],al
+        mov  [cs:TSKY+si],al
         inc  si
         cmp  si,256
-        jb   @@ts
+        jb   .ts
         xor  si,si              ; sky ramp by height above the horizon
-@@sk:   mov  ax,si
+.sk:   mov  ax,si
         add  ax,ax
         add  ax,ax
         add  ax,si              ; ax = f*5, split 8.8
         cmp  ah,4
-        jb   @@s2
+        jb   .s2
         mov  dl,SKYZ            ; past the ramp: zenith deep
         xor  al,al
-        jmp  @@s3
-@@s2:   or   al,al
-        jnz  @@s4
+        jmp  .s3
+.s2:   or   al,al
+        jnz  .s4
         mov  dl,SKYZ+4
         sub  dl,ah
-        jmp  @@s3
-@@s4:   mov  dl,SKYZ+3
+        jmp  .s3
+.s4:   mov  dl,SKYZ+3
         sub  dl,ah
         neg  al
-@@s3:   mov  [SBASE+si],dl
-        mov  [SFRAC+si],al
+.s3:   mov  [cs:SBASE+si],dl
+        mov  [cs:SFRAC+si],al
         inc  si
         cmp  si,200
-        jb   @@sk
+        jb   .sk
         ; ---- four cloud coats, cut fresh every launch ----
         xor  bp,bp              ; bp = shape base in the tables
-@@sh:   xor  bx,bx              ; the width walk
+.sh:   xor  bx,bx              ; the width walk
         mov  dx,55              ; the start walk begins near centre
         xor  si,si
-@@cw:   call RNDS
+.cw:   call RNDS
         mov  al,ah
         xor  ah,ah
         and  ax,7
         sub  ax,2               ; drift +3/-2: clouds like to grow
         add  bx,ax
         cmp  si,40
-        jb   @@w1
+        jb   .w1
         sub  bx,3               ; ...and taper at the top
-@@w1:   or   bx,bx
-        jns  @@w2
+.w1:   or   bx,bx
+        jns  .w2
         xor  bx,bx
-@@w2:   cmp  bx,105
-        jle  @@w3
+.w2:   cmp  bx,105
+        jle  .w3
         mov  bx,105
-@@w3:   call RNDS
+.w3:   call RNDS
         mov  al,ah
         xor  ah,ah
         and  ax,3
         dec  ax
         add  dx,ax
         cmp  dx,15
-        jge  @@w4
+        jge  .w4
         mov  dx,15
-@@w4:   cmp  dx,110
-        jle  @@w5
+.w4:   cmp  dx,110
+        jle  .w5
         mov  dx,110
-@@w5:   mov  di,bp
+.w5:   mov  di,bp
         add  di,si
-        mov  [CSHW+di],bl
-        mov  [CSHS+di],dl
+        mov  [cs:CSHW+di],bl
+        mov  [cs:CSHS+di],dl
         inc  si
         cmp  si,64
-        jb   @@cw
+        jb   .cw
         add  bp,64
         cmp  bp,256
-        jb   @@sh
+        jb   .sh
         ; ---- and NINETY-SIX of them, scattered over the whole torus ----
         xor  si,si
-@@ci:   call RNDS
-        mov  [CLX+si],ax        ; anywhere at all: the world wraps
+.ci:   call RNDS
+        mov  [cs:CLX+si],ax        ; anywhere at all: the world wraps
         call RNDS
-        mov  [CLZ+si],ax
+        mov  [cs:CLZ+si],ax
         call RNDS
         and  ax,1023
         add  ax,400
-        mov  [CLH+si],ax        ; cloudbase 400..1423: real cumulus
+        mov  [cs:CLH+si],ax        ; cloudbase 400..1423: real cumulus
         call RNDS               ; heights, or the sky hugs the horizon
         and  ax,1023
         add  ax,500
-        mov  [CLM+si],ax        ; size 500..1523: cumulus are BIG
+        mov  [cs:CLM+si],ax        ; size 500..1523: cumulus are BIG
         add  si,2
         cmp  si,192
-        jb   @@ci
+        jb   .ci
         ret
 
 ; ---- RNDS: the engine's RND16, restated here ------------------------------
@@ -965,4 +960,3 @@ RNDS:   push bx
 ; (the 8K window guard moved to NET.INC - it must measure sky + net
 ; together, and NET.INC appends to this same segment)
 
-SKYSEG  ENDS

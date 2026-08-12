@@ -31,13 +31,12 @@
 ;    NETPOSF   - broadcast our POS (self-gated to one per BIOS tick)
 ; ============================================================================
 
-SKYSEG  SEGMENT PARA PUBLIC 'CODE'
-        ASSUME  CS:SKYSEG, DS:CODE, ES:NOTHING, SS:CODE
+; continues segment SKYSEG, opened in SKY.INC
 
-NETSOCK equ 5757h               ; the palindrome socket
-NETSLT  equ 36                  ; remote pilots wear AI slots 36..39
-NRMT    equ 4
-NLSTN   equ 4                   ; listen ECBs in flight
+NETSOCK = 5757h               ; the palindrome socket
+NETSLT  = 36                  ; remote pilots wear AI slots 36..39
+NRMT    = 4
+NLSTN   = 4                   ; listen ECBs in flight
 
 ; ---- ECB field map (one fragment) ------------------------------------------
 ; THE LAYOUT THAT ACTUALLY FLIES (proven in EXAMPLES\BBS.ASM): the ECB
@@ -45,24 +44,24 @@ NLSTN   equ 4                   ; listen ECBs in flight
 ; textbook 38-byte map put our segment word where DOSBox reads the
 ; fragment count: 4514 fragments of garbage = the send that never
 ; returned (postmortem 2026-07-23).
-E_LNK   equ 0                   ; link dword
-E_ESR   equ 4                   ; ESR far address, 0 = we poll
-E_INUSE equ 8                   ; nonzero while the driver owns it
-E_CC    equ 9                   ; completion code, 0 = clean
-E_SOCK  equ 10                  ; socket, raw
-E_IMM   equ 28                  ; immediate address (6)
-E_FCNT  equ 34                  ; fragment count
-E_F1OF  equ 36                  ; fragment 1: offset, segment, length
-E_F1SG  equ 38
-E_F1LN  equ 40
-ECBSZ   equ 42
+E_LNK   = 0                   ; link dword
+E_ESR   = 4                   ; ESR far address, 0 = we poll
+E_INUSE = 8                   ; nonzero while the driver owns it
+E_CC    = 9                   ; completion code, 0 = clean
+E_SOCK  = 10                  ; socket, raw
+E_IMM   = 28                  ; immediate address (6)
+E_FCNT  = 34                  ; fragment count
+E_F1OF  = 36                  ; fragment 1: offset, segment, length
+E_F1SG  = 38
+E_F1LN  = 40
+ECBSZ   = 42
 
 ; ---- IPX header field map --------------------------------------------------
-H_PT    equ 5                   ; packet type (4 = IPX)
-H_DNET  equ 6                   ; destination network (4)
-H_DNODE equ 10                  ; destination node (6)
-H_DSOCK equ 16                  ; destination socket
-HDRSZ   equ 30
+H_PT    = 5                   ; packet type (4 = IPX)
+H_DNET  = 6                   ; destination network (4)
+H_DNODE = 10                  ; destination node (6)
+H_DSOCK = 16                  ; destination socket
+HDRSZ   = 30
 
 ; ---- the wire's own state (CS-relative, far from the crowded 64K) ----------
 ipxep   dd 0                    ; the IPX far entry point
@@ -84,26 +83,22 @@ RECB    db NLSTN*ECBSZ dup(0)
 RBUF    db NLSTN*64 dup(0)
 
 ; ============================ the far doors =================================
-NETINITF PROC FAR
+NETINITF:
         call NETINIT
-        ret
-NETINITF ENDP
-NETPOLLF PROC FAR
+        retf
+NETPOLLF:
         call NETPOLL
-        ret
-NETPOLLF ENDP
-NETHOSTF PROC FAR
-        mov  byte ptr [nethost],1
-        ret
-NETHOSTF ENDP
-NETPOSF PROC FAR
+        retf
+NETHOSTF:
+        mov  byte [cs:nethost],1
+        retf
+NETPOSF:
         call NETPOS
-        ret
-NETPOSF ENDP
+        retf
 ; ---- NETHITF: our guns hit a REAL pilot - tell him, do not kill him -------
 ; in: AL = his plane slot (NETSLT..NETSLT+NRMT-1), AH = damage points.
 ; His machine decides whether that was the last one; ours only reports.
-NETHITF PROC FAR
+NETHITF:
         push bx
         push cx
         push dx
@@ -111,29 +106,28 @@ NETHITF PROC FAR
         mov  dh,ah              ; the damage, kept clear of the maths
         xor  ah,ah
         sub  ax,NETSLT
-        js   @@hx
+        js   .hx
         cmp  ax,NRMT
-        jae  @@hx               ; not a wire slot: nothing to report
+        jae  .hx               ; not a wire slot: nothing to report
         add  ax,ax
         mov  si,ax
-        mov  ax,[rpid+si]       ; who wears that slot
+        mov  ax,[cs:rpid+si]       ; who wears that slot
         or   ax,ax
-        jz   @@hx               ; nobody home
-        mov  byte ptr [SPAY],'H'
-        mov  word ptr [SPAY+1],ax   ; the victim
+        jz   .hx               ; nobody home
+        mov  byte [cs:SPAY],'H'
+        mov  word [cs:SPAY+1],ax   ; the victim
         mov  ax,[ggid]
-        mov  word ptr [SPAY+3],ax   ; our sky
-        mov  ax,[mypid]
-        mov  word ptr [SPAY+5],ax   ; the shooter
-        mov  [SPAY+7],dh
+        mov  word [cs:SPAY+3],ax   ; our sky
+        mov  ax,[cs:mypid]
+        mov  word [cs:SPAY+5],ax   ; the shooter
+        mov  [cs:SPAY+7],dh
         mov  cx,8
         call NETXMIT
-@@hx:   pop  si
+.hx:   pop  si
         pop  dx
         pop  cx
         pop  bx
-        ret
-NETHITF ENDP
+        retf
 
 ; ---- NETINIT: find IPX, open the socket, learn our name --------------------
 NETINIT:
@@ -141,9 +135,9 @@ NETINIT:
         mov  ax,7A00h
         int  2Fh
         cmp  al,0FFh
-        jne  @@no
-        mov  word ptr [ipxep],di
-        mov  word ptr [ipxep+2],es
+        jne  .no
+        mov  word [cs:ipxep],di
+        mov  word [cs:ipxep+2],es
         mov  bx,0               ; open socket: DX = number, AL = live
         mov  al,0               ; until program exit
         mov  dx,NETSOCK
@@ -151,7 +145,7 @@ NETINIT:
         sti                     ; the driver may hand IF back OFF - and
                                 ; a frozen BIOS tick starves every wait
         or   al,al
-        jnz  @@no
+        jnz  .no
         ; (an IRQ 11 mask lived here for one afternoon: it silenced
         ; DOSBox's ESR bell - and with it, packet DELIVERY. The menu
         ; freeze it was blamed for turned out to be the first UEDGE's
@@ -159,39 +153,39 @@ NETINIT:
         mov  bx,9               ; our internetwork address -> mynode
         mov  ax,SKYSEG
         mov  es,ax
-        mov  si,offset mynode
+        mov  si,mynode
         int  7Ah
         sti                     ; the driver may hand IF back OFF - and
                                 ; a frozen BIOS tick starves every wait
-        mov  ax,word ptr [mynode+8] ; the node's tail names us on the
-        mov  [mypid],ax             ; wire (DOSBox hands out unique
+        mov  ax,word [cs:mynode+8] ; the node's tail names us on the
+        mov  [cs:mypid],ax             ; wire (DOSBox hands out unique
         or   ax,ax                  ; nodes; zero would read as free)
-        jnz  @@pid
+        jnz  .pid
         inc  ax
-        mov  [mypid],ax
-@@pid:  xor  si,si              ; post the listens
-@@pl:   push si
+        mov  [cs:mypid],ax
+.pid:  xor  si,si              ; post the listens
+.pl:   push si
         call NETLSTN
         pop  si
         inc  si
         cmp  si,NLSTN
-        jb   @@pl
-        mov  byte ptr [netok],1
+        jb   .pl
+        mov  byte [cs:netok],1
         ; ---- is the wire actually CONNECTED? Send a probe: DOSBox
         ; marks it undeliverable when no ipxnet server is on the other
         ; end, and the completion code says so. The menu shows the
         ; verdict, so "why can't we see each other" answers itself.
-        mov  byte ptr [SPAY],'W'
+        mov  byte [cs:SPAY],'W'
         mov  cx,1
         call NETXMIT
         mov  al,1               ; 1 = IPX up but the wire is DARK
-        cmp  byte ptr [SECB+E_CC],0
-        jne  @@drk
+        cmp  byte [cs:SECB+E_CC],0
+        jne  .drk
         mov  al,2               ; 2 = the wire is LIVE
-@@drk:  mov  dx,[mypid]
+.drk:  mov  dx,[cs:mypid]
         pop  es
         ret
-@@no:   mov  byte ptr [netok],0
+.no:   mov  byte [cs:netok],0
         xor  al,al
         pop  es
         ret
@@ -202,21 +196,21 @@ NETLSTN:
         mov  ax,si
         mov  bx,ECBSZ
         mul  bx
-        mov  di,offset RECB
+        mov  di,RECB
         add  di,ax              ; DI -> the ECB
         mov  ax,si
         mov  cl,6
         shl  ax,cl
-        add  ax,offset RBUF     ; its 64-byte buffer
-        mov  word ptr cs:[di+E_LNK],0
-        mov  word ptr cs:[di+E_LNK+2],0
-        mov  word ptr cs:[di+E_ESR],0   ; no ESR: we poll
-        mov  word ptr cs:[di+E_ESR+2],0
-        mov  word ptr cs:[di+E_SOCK],NETSOCK
-        mov  word ptr cs:[di+E_FCNT],1
-        mov  word ptr cs:[di+E_F1OF],ax
-        mov  word ptr cs:[di+E_F1SG],SKYSEG
-        mov  word ptr cs:[di+E_F1LN],64
+        add  ax,RBUF     ; its 64-byte buffer
+        mov  word [cs:di+E_LNK],0
+        mov  word [cs:di+E_LNK+2],0
+        mov  word [cs:di+E_ESR],0   ; no ESR: we poll
+        mov  word [cs:di+E_ESR+2],0
+        mov  word [cs:di+E_SOCK],NETSOCK
+        mov  word [cs:di+E_FCNT],1
+        mov  word [cs:di+E_F1OF],ax
+        mov  word [cs:di+E_F1SG],SKYSEG
+        mov  word [cs:di+E_F1LN],64
         mov  ax,SKYSEG
         mov  es,ax
         mov  si,di              ; ES:SI -> ECB
@@ -230,52 +224,52 @@ NETLSTN:
 ; ---- NETXMIT: broadcast SHDR+SPAY, CX = payload bytes ----------------------
 ; Quietly drops the packet if the send ECB is still in flight.
 NETXMIT:
-        cmp  byte ptr [netok],0
-        je   @@drop
-        cmp  byte ptr [SECB+E_INUSE],0
-        jne  @@drop
+        cmp  byte [cs:netok],0
+        je   .drop
+        cmp  byte [cs:SECB+E_INUSE],0
+        jne  .drop
         push es
-        mov  byte ptr [SHDR+H_PT],4
-        mov  ax,word ptr [mynode]   ; our own network number: DOSBox
-        mov  word ptr [SHDR+H_DNET],ax   ; broadcasts stay on the wire
-        mov  ax,word ptr [mynode+2]
-        mov  word ptr [SHDR+H_DNET+2],ax
+        mov  byte [cs:SHDR+H_PT],4
+        mov  ax,word [cs:mynode]   ; our own network number: DOSBox
+        mov  word [cs:SHDR+H_DNET],ax   ; broadcasts stay on the wire
+        mov  ax,word [cs:mynode+2]
+        mov  word [cs:SHDR+H_DNET+2],ax
         mov  ax,0FFFFh
-        mov  word ptr [SHDR+H_DNODE],ax
-        mov  word ptr [SHDR+H_DNODE+2],ax
-        mov  word ptr [SHDR+H_DNODE+4],ax
-        mov  word ptr [SHDR+H_DSOCK],NETSOCK
-        mov  word ptr [SECB+E_LNK],0
-        mov  word ptr [SECB+E_LNK+2],0
-        mov  word ptr [SECB+E_ESR],0
-        mov  word ptr [SECB+E_ESR+2],0
-        mov  word ptr [SECB+E_SOCK],NETSOCK
-        mov  word ptr [SECB+E_IMM],0FFFFh
-        mov  word ptr [SECB+E_IMM+2],0FFFFh
-        mov  word ptr [SECB+E_IMM+4],0FFFFh
-        mov  word ptr [SECB+E_FCNT],1
-        mov  word ptr [SECB+E_F1OF],offset SHDR
-        mov  word ptr [SECB+E_F1SG],SKYSEG
+        mov  word [cs:SHDR+H_DNODE],ax
+        mov  word [cs:SHDR+H_DNODE+2],ax
+        mov  word [cs:SHDR+H_DNODE+4],ax
+        mov  word [cs:SHDR+H_DSOCK],NETSOCK
+        mov  word [cs:SECB+E_LNK],0
+        mov  word [cs:SECB+E_LNK+2],0
+        mov  word [cs:SECB+E_ESR],0
+        mov  word [cs:SECB+E_ESR+2],0
+        mov  word [cs:SECB+E_SOCK],NETSOCK
+        mov  word [cs:SECB+E_IMM],0FFFFh
+        mov  word [cs:SECB+E_IMM+2],0FFFFh
+        mov  word [cs:SECB+E_IMM+4],0FFFFh
+        mov  word [cs:SECB+E_FCNT],1
+        mov  word [cs:SECB+E_F1OF],SHDR
+        mov  word [cs:SECB+E_F1SG],SKYSEG
         mov  ax,HDRSZ
         add  ax,cx
-        mov  word ptr [SECB+E_F1LN],ax
+        mov  word [cs:SECB+E_F1LN],ax
         mov  ax,SKYSEG
         mov  es,ax
-        mov  si,offset SECB
+        mov  si,SECB
         mov  bx,3               ; SendPacket
         int  7Ah
         sti                     ; the driver may hand IF back OFF - and
                                 ; a frozen BIOS tick starves every wait
         mov  cx,5000            ; BBS.ASM's manner: give the driver its
-@@sw:   cmp  byte ptr [SECB+E_INUSE],0   ; time (bounded - a game frame
-        je   @@sd               ; must never wedge on the wire)
+.sw:   cmp  byte [cs:SECB+E_INUSE],0   ; time (bounded - a game frame
+        je   .sd               ; must never wedge on the wire)
         mov  bx,0Ah             ; RelinquishControl
         int  7Ah
         sti                     ; the driver may hand IF back OFF - and
                                 ; a frozen BIOS tick starves every wait
-        loop @@sw
-@@sd:   pop  es
-@@drop: ret
+        loop .sw
+.sd:   pop  es
+.drop: ret
 
 ; (HELLO/SEED retired: the menu joins from the 'G' ads, which carry
 ; the seed already - the handshake became a billboard)
@@ -283,112 +277,112 @@ NETXMIT:
 ; ---- NETPOS: our position, one broadcast per BIOS tick ---------------------
 ; Every ~18 ticks the HOST also advertises the sky itself: gid, seed,
 ; heads, the war score and the name - the menu's whole world.
-NETPOS: cmp  byte ptr [netok],0
-        je   @@r
+NETPOS: cmp  byte [cs:netok],0
+        je   .r
         mov  ax,[lasttk]
-        cmp  ax,[sentk]
-        je   @@r
-        mov  [sentk],ax
+        cmp  ax,[cs:sentk]
+        je   .r
+        mov  [cs:sentk],ax
         ; ---- 'R': a radar station just fell on this machine. One shot,
         ; sent ahead of the position packet (it borrows the same SPAY);
         ; the host's 'G' ad below is what makes it stick for everyone.
-        cmp  byte ptr [rsnet],0
-        je   @@nors
-        mov  byte ptr [SPAY],'R'
-        mov  ax,[mypid]
-        mov  word ptr [SPAY+1],ax
+        cmp  byte [rsnet],0
+        je   .nors
+        mov  byte [cs:SPAY],'R'
+        mov  ax,[cs:mypid]
+        mov  word [cs:SPAY+1],ax
         mov  ax,[ggid]
-        mov  word ptr [SPAY+3],ax
+        mov  word [cs:SPAY+3],ax
         mov  al,[rsnet]
         dec  al
-        mov  [SPAY+5],al
+        mov  [cs:SPAY+5],al
         mov  cx,6
         call NETXMIT
-        mov  byte ptr [rsnet],0
-@@nors:
-        mov  byte ptr [SPAY],'P'
-        mov  ax,[mypid]
-        mov  word ptr [SPAY+1],ax
+        mov  byte [rsnet],0
+.nors:
+        mov  byte [cs:SPAY],'P'
+        mov  ax,[cs:mypid]
+        mov  word [cs:SPAY+1],ax
         mov  ax,[ggid]
-        mov  word ptr [SPAY+3],ax
+        mov  word [cs:SPAY+3],ax
         mov  ax,[camx]
-        mov  word ptr [SPAY+5],ax
+        mov  word [cs:SPAY+5],ax
         mov  ax,[camy]
-        mov  word ptr [SPAY+7],ax
+        mov  word [cs:SPAY+7],ax
         mov  ax,[camz]
-        mov  word ptr [SPAY+9],ax
+        mov  word [cs:SPAY+9],ax
         mov  ax,[heading]
-        mov  word ptr [SPAY+11],ax
+        mov  word [cs:SPAY+11],ax
         mov  al,[dying]         ; OUR life is ours to report: nobody else
-        mov  [SPAY+13],al       ; may declare this jet down
+        mov  [cs:SPAY+13],al       ; may declare this jet down
         mov  ax,[lastklr]
-        mov  word ptr [SPAY+14],ax  ; and who did it (his canopy scores)
+        mov  word [cs:SPAY+14],ax  ; and who did it (his canopy scores)
         mov  cx,16
         call NETXMIT
-        cmp  byte ptr [nethost],0
-        je   @@r
+        cmp  byte [cs:nethost],0
+        je   .r
         mov  ax,[lasttk]        ; the once-a-second sky ad
-        sub  ax,[adtk]
+        sub  ax,[cs:adtk]
         cmp  ax,18
-        jb   @@r
+        jb   .r
         mov  ax,[lasttk]
-        mov  [adtk],ax
+        mov  [cs:adtk],ax
         call NETADS
-@@r:    ret
+.r:    ret
 
 ; ---- NETADS: broadcast the sky ad ('G') ------------------------------------
-NETADS: mov  byte ptr [SPAY],'G'
+NETADS: mov  byte [cs:SPAY],'G'
         mov  ax,[ggid]
-        mov  word ptr [SPAY+1],ax
+        mov  word [cs:SPAY+1],ax
         mov  ax,[wseed]
-        mov  word ptr [SPAY+3],ax
+        mov  word [cs:SPAY+3],ax
         mov  al,1               ; heads: us + everyone on our wire
         xor  si,si
-@@hc:   mov  di,si
+.hc:   mov  di,si
         add  di,di
-        cmp  word ptr [rpid+di],0
-        je   @@hn
+        cmp  word [cs:rpid+di],0
+        je   .hn
         inc  al
-@@hn:   inc  si
+.hn:   inc  si
         cmp  si,NRMT
-        jb   @@hc
-        mov  [SPAY+5],al
+        jb   .hc
+        mov  [cs:SPAY+5],al
         ; the war score: kills BY green = yellows down (20..39), and
         ; the mirror. A botless arena reports zeros.
         xor  al,al
         xor  ah,ah
-        cmp  byte ptr [gbots],0
-        je   @@sc0
+        cmp  byte [gbots],0
+        je   .sc0
         xor  si,si
-@@scl:  cmp  byte ptr [premote+si+1],0
-        jne  @@scn              ; a live pilot is nobody's kill
-        cmp  byte ptr [pst+si+1],0
-        je   @@scn
+.scl:  cmp  byte [premote+si+1],0
+        jne  .scn              ; a live pilot is nobody's kill
+        cmp  byte [pst+si+1],0
+        je   .scn
         cmp  si,19              ; slots 1..19 green, 20..39 yellow
-        jae  @@scy
+        jae  .scy
         inc  ah                 ; a green down: yellow scores
-        jmp  @@scn
-@@scy:  inc  al                 ; a yellow down: green scores
-@@scn:  inc  si
+        jmp  .scn
+.scy:  inc  al                 ; a yellow down: green scores
+.scn:  inc  si
         cmp  si,39
-        jb   @@scl
-@@sc0:  mov  [SPAY+6],al
-        mov  [SPAY+7],ah
+        jb   .scl
+.sc0:  mov  [cs:SPAY+6],al
+        mov  [cs:SPAY+7],ah
         mov  al,[gbots]
-        mov  [SPAY+8],al
+        mov  [cs:SPAY+8],al
         xor  al,al              ; +17: which stations are rubble. The ad is
-        cmp  byte ptr [rsst],0  ; the TRUTH - an 'R' packet can be lost, this
-        je   @@r0               ; one comes round again every second
+        cmp  byte [rsst],0  ; the TRUTH - an 'R' packet can be lost, this
+        je   .r0               ; one comes round again every second
         or   al,1
-@@r0:   cmp  byte ptr [rsst+1],0
-        je   @@r1
+.r0:   cmp  byte [rsst+1],0
+        je   .r1
         or   al,2
-@@r1:   mov  [SPAY+17],al
+.r1:   mov  [cs:SPAY+17],al
         push es
         mov  ax,SKYSEG          ; the name rides at +9: DS gname ->
         mov  es,ax              ; our own SPAY via es:di
-        mov  si,offset gname
-        mov  di,offset SPAY+9
+        mov  si,gname
+        mov  di,SPAY+9
         mov  cx,8
         cld
         rep  movsb
@@ -400,105 +394,105 @@ NETADS: mov  byte ptr [SPAY],'G'
 ; ---- NETPOLL: drain the listens, keep the remote pilots honest -------------
 NETPOLL:
         xor  ax,ax
-        cmp  byte ptr [netok],0
-        jne  @@go
+        cmp  byte [cs:netok],0
+        jne  .go
         ret
-@@go:   xor  si,si              ; walk the listen ECBs
-@@e:    push si
+.go:   xor  si,si              ; walk the listen ECBs
+.e:    push si
         mov  ax,si
         mov  bx,ECBSZ
         mul  bx
-        mov  di,offset RECB
+        mov  di,RECB
         add  di,ax
-        cmp  byte ptr cs:[di+E_INUSE],0
-        jne  @@next             ; still listening
-        cmp  byte ptr cs:[di+E_CC],0
-        jne  @@rearm            ; a bad landing: just relisten
+        cmp  byte [cs:di+E_INUSE],0
+        jne  .next             ; still listening
+        cmp  byte [cs:di+E_CC],0
+        jne  .rearm            ; a bad landing: just relisten
         mov  ax,si              ; the packet: RBUF + si*64 + HDRSZ
         mov  cl,6
         shl  ax,cl
-        add  ax,offset RBUF+HDRSZ
+        add  ax,RBUF+HDRSZ
         mov  bx,ax              ; BX -> payload
-        mov  al,cs:[bx]
+        mov  al,[cs:bx]
         cmp  al,'P'
-        je   @@pos
+        je   .pos
         cmp  al,'G'
-        je   @@gad
+        je   .gad
         cmp  al,'H'
-        je   @@hit
+        je   .hit
         cmp  al,'R'
-        je   @@rst
-        jmp  @@rearm
-@@rst:  ; ---- a radar station went down on somebody else's machine ----
-        mov  dx,word ptr cs:[bx+3]  ; in OUR sky?
+        je   .rst
+        jmp  .rearm
+.rst:  ; ---- a radar station went down on somebody else's machine ----
+        mov  dx,word [cs:bx+3]  ; in OUR sky?
         cmp  dx,[ggid]
-        jne  @@rearm
-        mov  al,cs:[bx+5]
+        jne  .rearm
+        mov  al,[cs:bx+5]
         cmp  al,NRSTA
-        jae  @@rearm
+        jae  .rearm
         xor  ah,ah
         call RSDOWN
-        jmp  @@rearm
-@@hit:  ; ---- somebody's guns found us: only WE may act on it ----
-        mov  ax,word ptr cs:[bx+1]  ; is this hit addressed to us?
-        cmp  ax,[mypid]
-        jne  @@rearm
-        mov  dx,word ptr cs:[bx+3]  ; and in our sky?
+        jmp  .rearm
+.hit:  ; ---- somebody's guns found us: only WE may act on it ----
+        mov  ax,word [cs:bx+1]  ; is this hit addressed to us?
+        cmp  ax,[cs:mypid]
+        jne  .rearm
+        mov  dx,word [cs:bx+3]  ; and in our sky?
         cmp  dx,[ggid]
-        jne  @@rearm
-        mov  al,cs:[bx+7]           ; how hard - the main segment applies
+        jne  .rearm
+        mov  al,[cs:bx+7]           ; how hard - the main segment applies
         add  [nethdm],al            ; it (CRASHHANDLE is near code)
-        mov  ax,word ptr cs:[bx+5]
+        mov  ax,word [cs:bx+5]
         mov  [nethby],ax            ; remember the shooter for his score
-        jmp  @@rearm
-@@gad:  ; ---- a sky's ad: upsert the menu's list (UISEG) ----
+        jmp  .rearm
+.gad:  ; ---- a sky's ad: upsert the menu's list (UISEG) ----
         push es
         push si
         mov  ax,UISEG
         mov  es,ax
-        mov  dx,word ptr cs:[bx+1]  ; its gid
+        mov  dx,word [cs:bx+1]  ; its gid
         mov  bp,-1                  ; first free row
         xor  si,si
-@@gf:   mov  ax,si
+.gf:   mov  ax,si
         mov  cl,4
         shl  ax,cl
         mov  di,ax
-        cmp  word ptr es:[GLIST+di],dx
-        je   @@gu               ; known sky: refresh it
-        cmp  word ptr es:[GLIST+di],0
-        jne  @@gn
+        cmp  word [es:GLIST+di],dx
+        je   .gu               ; known sky: refresh it
+        cmp  word [es:GLIST+di],0
+        jne  .gn
         cmp  bp,-1
-        jne  @@gn
+        jne  .gn
         mov  bp,si              ; remember the empty bunk
-@@gn:   inc  si
+.gn:   inc  si
         cmp  si,NGL
-        jb   @@gf
+        jb   .gf
         cmp  bp,-1
-        je   @@gz               ; the board is full: let it pass
+        je   .gz               ; the board is full: let it pass
         mov  si,bp
         mov  ax,si
         mov  cl,4
         shl  ax,cl
         mov  di,ax
-@@gu:   mov  word ptr es:[GLIST+di],dx
-        mov  ax,word ptr cs:[bx+3]
-        mov  word ptr es:[GLIST+di+2],ax ; seed
-        mov  al,cs:[bx+5]
-        mov  es:[GLIST+di+4],al     ; heads
-        mov  al,cs:[bx+6]
-        mov  es:[GLIST+di+5],al     ; the score
-        mov  al,cs:[bx+7]
-        mov  es:[GLIST+di+6],al
-        mov  al,cs:[bx+8]
-        mov  es:[GLIST+di+7],al     ; bots
+.gu:   mov  word [es:GLIST+di],dx
+        mov  ax,word [cs:bx+3]
+        mov  word [es:GLIST+di+2],ax ; seed
+        mov  al,[cs:bx+5]
+        mov  [es:GLIST+di+4],al     ; heads
+        mov  al,[cs:bx+6]
+        mov  [es:GLIST+di+5],al     ; the score
+        mov  al,[cs:bx+7]
+        mov  [es:GLIST+di+6],al
+        mov  al,[cs:bx+8]
+        mov  [es:GLIST+di+7],al     ; bots
         add  di,8                   ; the name rides at +8
         xor  si,si
-@@gnm:  mov  al,cs:[bx+si+9]
-        mov  es:[GLIST+di],al
+.gnm:  mov  al,[cs:bx+si+9]
+        mov  [es:GLIST+di],al
         inc  di
         inc  si
         cmp  si,8
-        jb   @@gnm
+        jb   .gnm
         sub  di,16                  ; back to the entry base
         mov  ax,di                  ; freshness stamp
         mov  cl,3
@@ -507,40 +501,40 @@ NETPOLL:
         push es
         mov  ax,40h
         mov  es,ax
-        mov  ax,es:[6Ch]
+        mov  ax,[es:6Ch]
         pop  es
-        mov  word ptr es:[GLAST+di],ax
+        mov  word [es:GLAST+di],ax
         ; ---- the ad also carries the radar stations. If the host says one
         ; is rubble and ours is still standing, an 'R' went missing: take
         ; it down now. The other way round never happens - only the owner
         ; of the sky publishes, and nothing ever stands back up.
-        mov  dx,word ptr cs:[bx+1]
+        mov  dx,word [cs:bx+1]
         cmp  dx,[ggid]
-        jne  @@gz
-        mov  al,cs:[bx+17]
+        jne  .gz
+        mov  al,[cs:bx+17]
         mov  dl,al
         test al,1
-        jz   @@ga1
+        jz   .ga1
         xor  ax,ax
         call RSDOWN
-@@ga1:  test dl,2
-        jz   @@gz
+.ga1:  test dl,2
+        jz   .gz
         mov  ax,1
         call RSDOWN
-@@gz:   pop  si
+.gz:   pop  si
         pop  es
-        jmp  @@rearm
-@@pos:  mov  ax,word ptr cs:[bx+1]  ; whose position?
-        cmp  ax,[mypid]
-        je   @@rearm            ; our own echo
+        jmp  .rearm
+.pos:  mov  ax,word [cs:bx+1]  ; whose position?
+        cmp  ax,[cs:mypid]
+        je   .rearm            ; our own echo
         or   ax,ax
-        jz   @@rearm
-        mov  dx,word ptr cs:[bx+3]  ; whose SKY?
+        jz   .rearm
+        mov  dx,word [cs:bx+3]  ; whose SKY?
         cmp  dx,[ggid]
-        jne  @@rearm            ; a different game on the same wire
+        jne  .rearm            ; a different game on the same wire
         call RSLOT              ; DI = remote index 0..3 or -1
         cmp  di,-1
-        je   @@rearm
+        je   .rearm
         push si                 ; callsign letter = 'A' + pid mod 26
         xor  dx,dx              ; (AX still carries the pid here)
         mov  si,26
@@ -554,64 +548,64 @@ NETPOLL:
         mov  si,di
         add  si,si
         mov  ax,[lasttk]
-        mov  [rlast+si],ax
+        mov  [cs:rlast+si],ax
         mov  ax,di
         add  ax,NETSLT          ; the plane slot
         mov  si,ax
-        mov  byte ptr [premote+si],1
-        mov  byte ptr [ptype+si],0
-        mov  al,cs:[bx+13]      ; ALIVE OR DOWN - his word, not our guns'
+        mov  byte [premote+si],1
+        mov  byte [ptype+si],0
+        mov  al,[cs:bx+13]      ; ALIVE OR DOWN - his word, not our guns'
         or   al,al
-        jnz  @@rdown
-        mov  byte ptr [pst+si],0
-        jmp  @@rp
-@@rdown:cmp  byte ptr [pst+si],0
-        jne  @@rp               ; already down: no second funeral
+        jnz  .rdown
+        mov  byte [pst+si],0
+        jmp  .rp
+.rdown:cmp  byte [pst+si],0
+        jne  .rp               ; already down: no second funeral
         mov  ax,si              ; hand the breakup to the main segment:
         add  ax,ax              ; BOOM is near code and we are far
         mov  [netdead],ax
-        mov  ax,word ptr cs:[bx+14]
+        mov  ax,word [cs:bx+14]
         or   ax,ax
-        jz   @@rp
-        cmp  ax,[mypid]         ; we shot him down: chalk it on the canopy
-        jne  @@rp
-        inc  word ptr [psc]
-@@rp:   add  si,si              ; word index
-        mov  ax,word ptr cs:[bx+5]
+        jz   .rp
+        cmp  ax,[cs:mypid]         ; we shot him down: chalk it on the canopy
+        jne  .rp
+        inc  word [psc]
+.rp:   add  si,si              ; word index
+        mov  ax,word [cs:bx+5]
         mov  [pax+si],ax
-        mov  ax,word ptr cs:[bx+7]
+        mov  ax,word [cs:bx+7]
         mov  [pay+si],ax
-        mov  ax,word ptr cs:[bx+9]
+        mov  ax,word [cs:bx+9]
         mov  [paz+si],ax
-        mov  ax,word ptr cs:[bx+11]
+        mov  ax,word [cs:bx+11]
         mov  [pah+si],ax
         pop  si
-@@rearm:
+.rearm:
         pop  si
         push si
         call NETLSTN            ; back on watch
-@@next: pop  si
+.next: pop  si
         inc  si
         cmp  si,NLSTN
-        jb   @@e
+        jb   .e
         ; ---- sweep the ghosts: silence for ~5 s frees the slot ----
         xor  si,si
-@@sw:   mov  di,si
+.sw:   mov  di,si
         add  di,di
-        cmp  word ptr [rpid+di],0
-        je   @@swn
+        cmp  word [cs:rpid+di],0
+        je   .swn
         mov  ax,[lasttk]
-        sub  ax,[rlast+di]
+        sub  ax,[cs:rlast+di]
         cmp  ax,90
-        jb   @@swn
-        mov  word ptr [rpid+di],0
+        jb   .swn
+        mov  word [cs:rpid+di],0
         mov  bx,si
         add  bx,NETSLT
-        mov  byte ptr [pst+bx],1     ; the jet fades from the sky
-        mov  byte ptr [premote+bx],0
-@@swn:  inc  si
+        mov  byte [pst+bx],1     ; the jet fades from the sky
+        mov  byte [premote+bx],0
+.swn:  inc  si
         cmp  si,NRMT
-        jb   @@sw
+        jb   .sw
         xor  ax,ax
         ret
 
@@ -619,13 +613,12 @@ NETPOLL:
 ; Dots every 4096 world units through WCAM2 (the same yaw the world
 ; turns by), clipped in PIXEL space so any zoom fits, plus two
 ; brighter dots up the NORTH radius. ES = bufseg (the caller's).
-RGRIDF  PROC FAR
+RGRIDF:
         call RGRID
-        ret
-RGRIDF  ENDP
-RGRID:  mov  word ptr [rgk],-4
-@@gx:   mov  word ptr [rgj],-4
-@@gz:   mov  ax,[camx]
+        retf
+RGRID:  mov  word [rgk],-4
+.gx:   mov  word [rgj],-4
+.gz:   mov  ax,[camx]
         and  ax,0F000h          ; the nearest grid corner west of us
         mov  bx,[rgk]
         mov  cl,12
@@ -645,15 +638,15 @@ RGRID:  mov  word ptr [rgk],-4
         mov  ax,[cldu]
         sar  ax,cl
         cmp  ax,[rbrad]
-        jg   @@gn
+        jg   .gn
         cmp  ax,[rbradn]
-        jl   @@gn
+        jl   .gn
         mov  bx,[cldd]
         sar  bx,cl
         cmp  bx,[rbrad]
-        jg   @@gn
+        jg   .gn
         cmp  bx,[rbradn]
-        jl   @@gn
+        jl   .gn
         add  ax,[rbcx]          ; the rose rides the scope frame now - it
         push ax                 ; used to carry 87,171 as immediates and
         mov  ax,[rbcy]          ; sat off-centre the moment the artwork
@@ -663,13 +656,13 @@ RGRID:  mov  word ptr [rgk],-4
         pop  ax
         add  di,ax
         mov  al,30              ; quiet trim grey
-        mov  es:[di],al
-@@gn:   inc  word ptr [rgj]
-        cmp  word ptr [rgj],5
-        jl   @@gz
-        inc  word ptr [rgk]
-        cmp  word ptr [rgk],5
-        jl   @@gx
+        mov  [es:di],al
+.gn:   inc  word [rgj]
+        cmp  word [rgj],5
+        jl   .gz
+        inc  word [rgk]
+        cmp  word [rgk],5
+        jl   .gx
         ; -- the north anchor: two brighter dots up the N radius, set from
         ; the scope's own reach so they stay at its rim, not marooned in
         ; the middle of a screen that has since grown --
@@ -700,7 +693,7 @@ RNDOT:  mov  ax,[hsin]          ; one wall-grey dot SI px north
         pop  ax
         add  di,ax
         mov  al,0
-        mov  es:[di],al
+        mov  [es:di],al
         ret
 
 ; ---- RSDOWN: the wire says station AX is rubble ----------------------------
@@ -709,43 +702,43 @@ RNDOT:  mov  ax,[hsin]          ; one wall-grey dot SI px north
 ; the wreck pool (no near calls home), so it leaves a flag and NETAPPLY,
 ; over in the main segment, breaks the thing up where everyone can see it.
 RSDOWN: mov  di,ax
-        cmp  byte ptr [rsst+di],0
-        jne  @@d
-        mov  byte ptr [rsst+di],1
+        cmp  byte [rsst+di],0
+        jne  .d
+        mov  byte [rsst+di],1
         push ax
         add  ax,ax              ; a lock on it dies with it
         add  ax,RSLK
         cmp  ax,[locki]
-        jne  @@nl
-        mov  word ptr [locki],0FFFFh
-@@nl:   pop  ax
+        jne  .nl
+        mov  word [locki],0FFFFh
+.nl:   pop  ax
         inc  al
         mov  [rsboom],al
-@@d:    ret
+.d:    ret
 
 ; ---- RSLOT: pid in AX -> remote index in DI (alloc), -1 if full ------------
 RSLOT:  push si
         xor  si,si
-@@f:    mov  di,si
+.f:    mov  di,si
         add  di,di
-        cmp  [rpid+di],ax
-        je   @@got
+        cmp  [cs:rpid+di],ax
+        je   .got
         inc  si
         cmp  si,NRMT
-        jb   @@f
+        jb   .f
         xor  si,si              ; not seen before: first free bunk
-@@a:    mov  di,si
+.a:    mov  di,si
         add  di,di
-        cmp  word ptr [rpid+di],0
-        je   @@new
+        cmp  word [cs:rpid+di],0
+        je   .new
         inc  si
         cmp  si,NRMT
-        jb   @@a
+        jb   .a
         mov  di,-1              ; the sky is full
         pop  si
         ret
-@@new:  mov  [rpid+di],ax
-@@got:  mov  di,si
+.new:  mov  [cs:rpid+di],ax
+.got:  mov  di,si
         pop  si
         ret
 
@@ -755,13 +748,11 @@ RSLOT:  push si
 ; the neighbour eat the cloud tables (postmortem 2026-07-23) - and
 ; the ORG pad below CLAIMS the full window, so the linker parks
 ; UISEG exactly at CS+1200h.
-        PUBLIC SKYEND           ; how full this window is, in the linker map
-SKYEND  label byte
-IF ($-BNOISE) GT 8176
+label SKYEND byte
+if ($-BNOISE) > 8176
         %OUT *** SKYSEG overflows its 8K window before UISEG ***
         .ERR
-ENDIF
-        ORG  1FF0h
+end if
+        rb 1FF0h - $
         db   16 dup(?)
 
-SKYSEG  ENDS

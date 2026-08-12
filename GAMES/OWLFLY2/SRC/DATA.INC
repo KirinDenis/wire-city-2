@@ -23,9 +23,9 @@ gear    db 0                    ; L: three legs in the wind
 ; lives out in UISEG); GEARDRAWF in SYMSEG draws whichever step it lands on,
 ; straight out of GEARM.INC. Step 0 is stowed and is not drawn at all.
 gearp   db 0
-GEARNS  equ 6                   ; steps of travel, and the vertices a leg has.
-GEARNV  equ 16                  ;  The guard beside the include in SYM.INC
-GEARNF  equ 4                   ;  checks GEARM.INC against these three.
+GEARNS  = 6                   ; steps of travel, and the vertices a leg has.
+GEARNV  = 16                  ;  The guard beside the include in SYM.INC
+GEARNF  = 4                   ;  checks GEARM.INC against these three.
 abrk    db 0                    ; B: the airbrake
 prevfl  db 0                    ; ...their key-down edges
 prevgr  db 0
@@ -102,7 +102,7 @@ mmrow0  dw 0                    ;  ...and row (row 0 is the world's north)
 mmspx   dw 0                    ; how many nodes fit across at this zoom...
 mmspy   dw 0                    ;  ...and down. Both change with mmzs.
 resseg  dw 0                    ; segment CITY.DAT is loaded into (CS+2000h)
-pimgo   dw 0                    ; cockpit bitmap offset in resseg (0 = none)
+pimgo   dw 0                    ; cockpit bitmap in resseg (0 = none)
 cpsseg  dw 0                    ; CPSIDE.DAT's own page, ABOVE scrseg so that
                                 ; opening it moves nothing (0 = not loaded)
 cplo    dw 0                    ; the left view's RLE stream in it
@@ -119,7 +119,7 @@ swayx   dw 0                    ; sway: this tick's X shift (screen px)
 swayy   dw 0                    ; sway: this tick's Y shift (screen px)
 
 ; ---- AI traffic: low-poly jets (see PLANES.INC) ----------------------------
-NPLANE  equ 40                  ; 20 v 20 (slot 0 never flies: that seat
+NPLANE  = 40                  ; 20 v 20 (slot 0 never flies: that seat
                                 ; is the player's - green team = you + 19)
 pax     dw NPLANE dup(0)        ; world position
 pay     dw NPLANE dup(0)
@@ -136,7 +136,7 @@ pltr    db NPLANE dup(0)        ; callsign letter of the human in the
 ; hit over the wire, and his own POS packet says whether he is still flying.
 ; Before this, a shot-down human exploded locally and kept flying anyway -
 ; his next POS resurrected him one tick later (the Highlander bug 2026-07-27).
-netdead dw 0FFFFh               ; plane offset the wire says is down
+netdead dw 0FFFFh               ; plane the wire says is down
 netboom db 0                    ; 1 = this BOOM is the wire's, let it pass
 nethdm  db 0                    ; damage points that arrived for US
 nethby  dw 0                    ; who dealt them (pid)
@@ -170,22 +170,22 @@ bordz   dw 17 dup(0)            ; the front line: jagged z offsets (BRDGEN)
 ; Slot 0 is OURS (south of the border), slot 1 is THEIRS (north). They are
 ; not aircraft: they never move, they turn only their dish, and each one
 ; is the eye of its own side - lose yours and the scope goes to snow.
-NRSTA   equ 2
-RSHITS  equ 8                   ; cannon hits it soaks (a jet takes 2..5)
-RSPINV  equ 3                   ; dish angle per tick: one turn in ~4.7 s
-RSMDMG  equ 4                   ; a missile is worth four shells: two level it
+NRSTA   = 2
+RSHITS  = 8                   ; cannon hits it soaks (a jet takes 2..5)
+RSPINV  = 3                   ; dish angle per tick: one turn in ~4.7 s
+RSMDMG  = 4                   ; a missile is worth four shells: two level it
 ; A locked STATION rides in locki as 0FFF0h + index*2. Two things fall out
 ; of that encoding for free: 0FFFFh (no lock) is still no lock, and bit 1 -
 ; the parity every IFF test in the game already reads - comes out FRIENDLY
 ; for ours (0FFF0h) and HOSTILE for theirs (0FFF2h). Real plane offsets are
 ; 0..78, so anything at or above RSLK is a station and nothing else.
-RSLK    equ 0FFF0h
-RSAPRON equ 800                 ; how far off the runway centreline the mast
+RSLK    = 0FFF0h
+RSAPRON = 800                 ; how far off the runway centreline the mast
                                 ;  stands. The strip is 150 half-width and
                                 ;  the flattened patch reaches 1024 either
                                 ;  way, so this is beside the concrete and
                                 ;  still on the aerodrome's own flat ground
-RSRAD   equ 90                  ; its footprint, half-width. Wider than the
+RSRAD   = 90                  ; its footprint, half-width. Wider than the
                                 ;  dish (54) ON PURPOSE: a cannon round steps
                                 ;  150 units a tick, so a box thinner than
                                 ;  that can be jumped clean over between two
@@ -197,14 +197,14 @@ RSRAD   equ 90                  ; its footprint, half-width. Wider than the
 ; picture and the instruments follow it - no coordinate is retyped by hand
 ; any more. PZRDR is the left screen, PZADI the centre, PZMAP the right;
 ; the names are historical, the middle one has not been an ADI for a while.
-        INCLUDE PANELZON.INC
+        include 'PANELZO.INC'
 ; The rest of the panel's furniture, measured off the converted bitmap by
 ; hand. These SHOULD be cyan markup zones in the artwork so Panel2Inc finds
 ; them too - it already reports every cyan blob it sees. Until the artist
 ; paints them, they live here and have to be re-measured if the picture
 ; moves. The digit row is the IAS/ALT/HDG/VERT strip under the centre
 ; screen; the two columns are the annunciator stacks at the panel's ends.
-PZDIGY  equ 193                 ; the seven-segment row, y. Two lower than
+PZDIGY  = 193                 ; the seven-segment row, y. Two lower than
                                 ;  it was: the pilot put printed SPD / ALT /
                                 ;  HDG / G legends above the row when he
                                 ;  retouched the panel, and the digits were
@@ -215,21 +215,21 @@ PZDIGY  equ 193                 ; the seven-segment row, y. Two lower than
 ; five are hand-written and cannot move. They are also a long way dimmer
 ; than the HUD set, on purpose - the HUD is projected over a bright sky and
 ; has to shout; a panel is read off black plastic at arm's length.
-PNLCAP  equ 108                 ; the lamp captions
-PNLDIM  equ 109                 ; a legend that is not lit
-PNLGRN  equ 110                 ; a system is on / out
-PNLAMB  equ 111                 ; a caution
-PNLRED  equ 112                 ; a warning
+PNLCAP  = 108                 ; the lamp captions
+PNLDIM  = 109                 ; a legend that is not lit
+PNLGRN  = 110                 ; a system is on / out
+PNLAMB  = 111                 ; a caution
+PNLRED  = 112                 ; a warning
 ; ...and the SHADED half of each, exactly three slots higher, so a lamp
 ; only has to know its bright colour and add three for its own shadow.
 ; A lamp on this panel is a round lens, not a square: lit at the top left
 ; and falling away to the bottom right, which is what makes four pixels
 ; read as something with a volume instead of a blob of colour.
-PNLSHAD equ 3                   ; core colour + this = its shadow
-PNLGRN2 equ 113
-PNLAMB2 equ 114
-PNLRED2 equ 115
-PNLNOIS equ 116                 ; the speckle on the annunciator glass. A
+PNLSHAD = 3                   ; core colour + this = its shadow
+PNLGRN2 = 113
+PNLAMB2 = 114
+PNLRED2 = 115
+PNLNOIS = 116                 ; the speckle on the annunciator glass. A
                                 ;  black rectangle reads as a hole cut in
                                 ;  the panel; a barely-lit one reads as
                                 ;  glass with a lamp behind it
@@ -237,10 +237,10 @@ PNLNOIS equ 116                 ; the speckle on the annunciator glass. A
 ; PNLSHAD is a lens's own curvature and is meant to be seen; this is the
 ; faint banding an old lit display has, and is meant NOT to be. Every
 ; fourth row at half brightness was a zebra; at a tenth it is a surface.
-PNLBAND equ 7                   ; core colour + this = its scanline
-PNLGRN3 equ 117
-PNLAMB3 equ 118
-PNLRED3 equ 119
+PNLBAND = 7                   ; core colour + this = its scanline
+PNLGRN3 = 117
+PNLAMB3 = 118
+PNLRED3 = 119
 ; How fast the panel blinks, as a bit of the tick counter. 4 was twice a
 ; second and read as an alarm going off; 8 is once, which reads as a lamp
 ; that wants attention without shouting.
@@ -251,43 +251,43 @@ PNLRED3 equ 119
 ; The old rule was right about rates and wrong about lamps - ten things
 ; moving in perfect lockstep read as one timer driving ten holes, which is
 ; what they were. Everything else on the panel still winks off this.
-PNLBLNK equ 8
-PZDIG0  equ 124                 ; IAS
-PZDIG1  equ 141                 ; ALT (five digits of room)
-PZDIG2  equ 164                 ; HDG
-PZDIG3  equ 182                 ; VERT
-PZLCX   equ 14                  ; left annunciator column: x and width
-PZLCW   equ 16
-PZRCX   equ 289                 ; right annunciator column
-PZRCW   equ 18
+PNLBLNK = 8
+PZDIG0  = 124                 ; IAS
+PZDIG1  = 141                 ; ALT (five digits of room)
+PZDIG2  = 164                 ; HDG
+PZDIG3  = 182                 ; VERT
+PZLCX   = 14                  ; left annunciator column: x and width
+PZLCW   = 16
+PZRCX   = 289                 ; right annunciator column
+PZRCW   = 18
 ; The clear glass runs from under the overhead bank (row 17) to the top of
 ; the panel (row 121). Its middle is where the view belongs when the cockpit
 ; is up - see SETHORIZ. The screen's middle is row 100, which is nearly at
 ; the panel's edge.
-PZGLASSC equ 69
+PZGLASSC = 69
 ; The canopy bows lean 17 pixels across 60 rows on the artwork - 9/32, near
 ; enough. The speed and altitude tapes ride them: what leans is WHERE each
 ; tick and number sits, shifted along x by how far its row is from the
 ; tape's middle. The ticks themselves stay level, and so do the numbers -
 ; a 4x6 font cannot turn, and a real tape does not turn them either.
-HBPIV   equ 83                  ; the row the lean pivots about
-HBLEAN  equ 9                   ; ...and how hard, in thirty-seconds a row
+HBPIV   = 83                  ; the row the lean pivots about
+HBLEAN  = 9                   ; ...and how hard, in thirty-seconds a row
 hbslp   dw 0                    ; the lean in force: -HBLEAN on the left
                                 ;  tape, +HBLEAN on the right, 0 with the
                                 ;  cockpit down (no bows to follow)
 ; The overhead black plate between the two lamp clusters - the burner strip
 ; and the wire count share it, and PANELBMP draws AB ON last so the burner
 ; wins while it is lit. Raise or lower BOTH by moving these.
-PZABX   equ 151
-PZABY   equ 6
-PZLAMPY equ 129                 ; first lamp slot, five of them 10 apart
-PZLAMPH equ 10
-PZTHRX  equ 35                  ; throttle ladder. It used to stand at 38,
-PZTHRY  equ 176                 ;  where its right-hand pixels climbed onto
+PZABX   = 151
+PZABY   = 6
+PZLAMPY = 129                 ; first lamp slot, five of them 10 apart
+PZLAMPH = 10
+PZTHRX  = 35                  ; throttle ladder. It used to stand at 38,
+PZTHRY  = 176                 ;  where its right-hand pixels climbed onto
                                 ;  the radar screen's bezel. Moved in beside
                                 ;  the FLAPS/GEAR column, on the bare strip
                                 ;  of metal that is actually free
-PZTHRW  equ 5                   ; ...and how wide a rung is
+PZTHRW  = 5                   ; ...and how wide a rung is
 ; ---- the moving map ------------------------------------------------------
 ; The map fills the WHOLE centre screen now and it zooms. Two things made
 ; that easy, and both come from the world itself: it is 64x64 nodes, and it
@@ -297,8 +297,8 @@ PZTHRW  equ 5                   ; ...and how wide a rung is
 ; pixels that used to be a grey margin are now the far side of the world.
 ; (It was 32x32 nodes at half scale, then 48x48 at three quarters, both
 ; nailed to the world's corners with the jet wandering about inside.)
-PZMMX   equ PZADIX0             ; the map IS the screen now
-PZMMY   equ PZADIY0
+PZMMX   = PZADIX0             ; the map IS the screen now
+PZMMY   = PZADIY0
 ; Zoom steps. Step 0 is THE WHOLE WORLD - three pixels to four nodes - and
 ; it had to be added: the widest setting used to be one pixel a node, which
 ; on a 55-wide screen is 55 of the 64 columns, and reads as "I can only see
@@ -310,10 +310,10 @@ PZMMY   equ PZADIY0
 ; and a scatter of single pixels is not a map. The page costs nothing: scrseg
 ; is a whole 64K and only the first 4K of it was ever used (cpsseg is a full
 ; 64K above it, not 4K - see CPSLOADF).
-MMWIDE  equ 1000h
-MMZN    equ 4
-MMZALL  equ 0                   ; the index of the whole-world step
-MMZICO  equ 3                   ; ...and the step from which the MAP stops
+MMWIDE  = 1000h
+MMZN    = 4
+MMZALL  = 0                   ; the index of the whole-world step
+MMZICO  = 3                   ; ...and the step from which the MAP stops
                                 ;  drawing marks and starts drawing the same
                                 ;  symbols the scope uses. The CLOSEST step
                                 ;  only. It was tried at 2 as well: a symbol
@@ -328,15 +328,15 @@ MMZICO  equ 3                   ; ...and the step from which the MAP stops
 ; carried in rbcx/rbcy/rbrad and every piece of scope furniture reads it:
 ; the blips, the missile sparks, the ground-radar crosses, the range rose
 ; and the snow. Three rows of margin keep a blip's own shape on the glass.
-PZRDRR  equ (PZRDRH-6)/2
-PZADIR  equ (PZADIH-6)/2
-RSTOP   equ 190                 ; and how high the mast and dish reach
+PZRDRR  = (PZRDRH-6)/2
+PZADIR  = (PZADIH-6)/2
+RSTOP   = 190                 ; and how high the mast and dish reach
 ; ---- the Shilkas: three a side, over the lines they cover -----------------
 ; Slots 0..2 are OURS (south of the border), 3..5 THEIRS. The vehicles have
 ; no state words HERE - it all lives in UISEG beside the code that owns it
 ; (see SHKINIT in UI.INC) - but the COUNT is an immediate, and a one-pass
 ; assembler wants those before the include that uses them.
-NSHILK  equ 20                  ; ten a side. Their job is to cover the
+NSHILK  = 20                  ; ten a side. Their job is to cover the
                                 ;  radar and the cities, so they are laid
                                 ;  out in two belts per side: one forward
                                 ;  over the towns, one back over the mast
@@ -345,8 +345,8 @@ NSHILK  equ 20                  ; ten a side. Their job is to cover the
 ; zero IS water, and anything over GNDHI is the steep stuff. A radar station
 ; floating on the sea was the old behaviour and it looked exactly as silly
 ; as it sounds.
-GNDLO   equ 20                  ; above the waterline by a real margin
-GNDHI   equ 430                 ; and below the mountains
+GNDLO   = 20                  ; above the waterline by a real margin
+GNDHI   = 430                 ; and below the mountains
 ; A locked SHILKA rides in locki as SHKLK + index*2, the trick the stations
 ; play one shelf up. Plane offsets are 0..78 and stations 0FFF0h..0FFF2h, so
 ; a single compare sorts all three - and bit 1, the parity every IFF test in
@@ -358,24 +358,24 @@ GNDHI   equ 430                 ; and below the mountains
 ; 0FFE0h when there were six Shilkas, which left room for eight; the day the
 ; flak went to twenty, locking number eight started decoding as a radar
 ; STATION (and past number nine as a read off the end of a two-entry array),
-; and locking number sixteen wrapped past 0FFFFh into PLANE OFFSET ZERO -
+; and locking number sixteen wrapped past 0FFFFh into PLANE ZERO -
 ; the pilot's own aeroplane. F4 then orbited the player, who is not drawn in
 ; that view, and the scope's Shilka "vanished". Nothing here may be a typed
 ; constant again: the shelf is measured from the one above it.
-SHKLK   equ RSLK - NSHILK*2
-IF SHKLK LE (NPLANE*2)
+SHKLK   = RSLK - NSHILK*2
+if SHKLK <= (NPLANE*2)
         %OUT *** the Shilka lock shelf has grown down into plane offsets ***
         .ERR
-ENDIF
-IF (SHKLK AND 2) NE 0
+end if
+if (SHKLK AND 2) <> 0
         %OUT *** SHKLK must be even-parity: the IFF reads bit 1 of the lock ***
         .ERR
-ENDIF
-SHKTOP  equ 54                  ; how high the vehicle stands, in engine
+end if
+SHKTOP  = 54                  ; how high the vehicle stands, in engine
                                 ;  units - aim at half of it, the turret
-SHKHITS equ 4                   ; cannon shells it soaks before it burns
-SHKMDMG equ 4                   ; and a missile is worth all four
-SHKRAD  equ 90                  ; the HIT box, half-width - and the vehicle
+SHKHITS = 4                   ; cannon shells it soaks before it burns
+SHKMDMG = 4                   ; and a missile is worth all four
+SHKRAD  = 90                  ; the HIT box, half-width - and the vehicle
                                 ;  is only 50 across, so this is deliberately
                                 ;  too big. A cannon round steps ~150 units
                                 ;  a tick: a box thinner than the step is
@@ -383,39 +383,39 @@ SHKRAD  equ 90                  ; the HIT box, half-width - and the vehicle
                                 ;  which is why RSRAD is 90 as well. It is
                                 ;  the difference between a target and a
                                 ;  thing you empty the guns at for nothing.
-SHKHBOX equ 120                 ; ...and how high that box reaches
-SHKGRNG equ 3200                ; how far its guns reach: inside this it
+SHKHBOX = 120                 ; ...and how high that box reaches
+SHKGRNG = 3200                ; how far its guns reach: inside this it
                                 ;  tracks, and a high pass stays safe
-SHKTRAV equ 4                   ; turret slew, of 256 a tick - about seven
+SHKTRAV = 4                   ; turret slew, of 256 a tick - about seven
                                 ;  seconds for a full turn. THE LAG IS THE
                                 ;  CHARACTER: a mount that snaps onto you is
                                 ;  a turret, one you can out-turn is a Shilka
-SHKDSPN equ 7                   ; and the RADAR turns steadily on its own,
+SHKDSPN = 7                   ; and the RADAR turns steadily on its own,
                                 ;  a full sweep in two seconds - that is the
                                 ;  part that spins, not the guns
-SHKELEV equ 3                   ; barrels rise this fast, of 256 a tick
-SHKELMX equ 56                  ; ...and no higher than about 78 degrees:
+SHKELEV = 3                   ; barrels rise this fast, of 256 a tick
+SHKELMX = 56                  ; ...and no higher than about 78 degrees:
                                 ;  straight overhead is the one place a
                                 ;  Shilka cannot reach, and a pilot who
                                 ;  finds that out has earned the pass
-SHKTRNY equ 29                  ; the TRUNNION, in model units: where the
-SHKTRNZ equ 15                  ;  barrels are bolted to the drum
+SHKTRNY = 29                  ; the TRUNNION, in model units: where the
+SHKTRNZ = 15                  ;  barrels are bolted to the drum
 ; ---- driving and shooting -------------------------------------------------
-SHKSPD  equ 3                   ; world units a tick: a crawl, on purpose.
+SHKSPD  = 3                   ; world units a tick: a crawl, on purpose.
                                 ;  It is not the war, it is scenery that
                                 ;  shoots - and a gun that repositions fast
                                 ;  is a gun you can never plan around
-SHKSTR  equ 2                   ; how fast the hull comes round, of 256
-SHKLSH  equ 1400                ; how far it will stray from its post before
+SHKSTR  = 2                   ; how fast the hull comes round, of 256
+SHKLSH  = 1400                ; how far it will stray from its post before
                                 ;  it turns back. It PATROLS; it does not
                                 ;  wander off and leave the city open
-SHKLEG  equ 90                  ; ticks on one leg before it picks a new one
-SHKFRAT equ 8                   ; ticks between bursts - about two a second
-SHKAPER equ 5                   ; how closely the mount must be on the mark
+SHKLEG  = 90                  ; ticks on one leg before it picks a new one
+SHKFRAT = 8                   ; ticks between bursts - about two a second
+SHKAPER = 5                   ; how closely the mount must be on the mark
                                 ;  before it fires, in compass units. This
                                 ;  is the whole difference between a gun
                                 ;  that hoses the sky and one that aims
-SHKHITC equ 1                   ; the dice: 1 of 2 bursts connects, against
+SHKHITC = 1                   ; the dice: 1 of 2 bursts connects, against
                                 ;  the AI's 1 of 4. He asked for accurate
 ; ---- THE AERODROMES -------------------------------------------------------
 ; Four strips, interleaved by side the way everything else in this game is:
@@ -434,13 +434,13 @@ SHKHITC equ 1                   ; the dice: 1 of 2 bursts connects, against
 ; the value is forced into the PLAINS band, below the city: no block whose
 ; centre lands on a runway can ever be zoned built-up, so nothing grows on
 ; the aerodrome without a line of code to prevent it.
-NAF    equ 4
-AFHLO  equ 96                  ; the band a strip's height is clamped into -
-AFHHI  equ 116                 ;  inside 88..119, which is plain grass
-AFNW   equ 2                   ; the patch AFPATCH JUDGES, in heightmap
-AFNL   equ 4                   ;  NODES: 2 x 4 = 2048 x 4096 world units
-AFSW   equ 5                   ; ...and the patch AFINITF actually IRONS.
-AFSL   equ 7                   ;  TERRH does not read A node, it INTERPOLATES
+NAF    = 4
+AFHLO  = 96                  ; the band a strip's height is clamped into -
+AFHHI  = 116                 ;  inside 88..119, which is plain grass
+AFNW   = 2                   ; the patch AFPATCH JUDGES, in heightmap
+AFNL   = 4                   ;  NODES: 2 x 4 = 2048 x 4096 world units
+AFSW   = 5                   ; ...and the patch AFINITF actually IRONS.
+AFSL   = 7                   ;  TERRH does not read A node, it INTERPOLATES
                                ;  the four around the point - so ironing only
                                ;  the judged patch left every height under
                                ;  the concrete a blend of flat runway and the
@@ -460,11 +460,11 @@ AFSL   equ 7                   ;  TERRH does not read A node, it INTERPOLATES
                                ;  ironing more ground can never hurt.
                                ;  WANTS EYES: this is a 5x7-node plateau now,
                                ;  5120 x 7168 units, four of them in a world.
-AFLEN  equ 1500                ; the concrete itself, half-length along z...
-AFW    equ 150                 ;  ...and half-width across it
-AFSEG   equ 6                  ; slabs the strip is laid in - see AFDRAWF for
-AFSEGD  equ AFLEN/AFSEG        ;  why it is not one, and why 250 is the size
-AFVIS   equ 12000              ; how far the concrete is drawn, on EITHER
+AFLEN  = 1500                ; the concrete itself, half-length along z...
+AFW    = 150                 ;  ...and half-width across it
+AFSEG   = 6                  ; slabs the strip is laid in - see AFDRAWF for
+AFSEGD  = AFLEN/AFSEG        ;  why it is not one, and why 250 is the size
+AFVIS   = 12000              ; how far the concrete is drawn, on EITHER
                                ;  axis. At this range a strip is five pixels
                                ;  across; nearer than this the quads are
                                ;  small enough that all four corners of one
@@ -474,13 +474,13 @@ AFVIS   equ 12000              ; how far the concrete is drawn, on EITHER
                                ;  the windscreen
                                ;  NOT "AFZ": TASM folds case and that is the
                                ;  afz array two dozen lines down
-AFPAINT equ 8                  ; the markings: white, the way they are white
-AFEDGE  equ 12                 ; the edge lines, half-width...
-AFCTR   equ 8                  ;  ...the centreline...
-AFTHR   equ 60                 ;  ...and the threshold bar, half-depth
-AFSEA  equ 92                  ; no corner of a strip may sit this low...
-AFTOP  equ 190                 ;  ...and none of it this high
-AFREACH equ 12                 ; how far the siting walk may go, in NODES.
+AFPAINT = 8                  ; the markings: white, the way they are white
+AFEDGE  = 12                 ; the edge lines, half-width...
+AFCTR   = 8                  ;  ...the centreline...
+AFTHR   = 60                 ;  ...and the threshold bar, half-depth
+AFSEA  = 92                  ; no corner of a strip may sit this low...
+AFTOP  = 190                 ;  ...and none of it this high
+AFREACH = 12                 ; how far the siting walk may go, in NODES.
                                ;  Measured, not guessed: twelve places all
                                ;  four fields in every one of forty test
                                ;  worlds, six leaves one placement in
@@ -498,30 +498,30 @@ AFREACH equ 12                 ; how far the siting walk may go, in NODES.
 ; either way in x, 2048 in z - or a building stands on a slope it was never
 ; levelled for. The furthest thing out is the tower cab at 360, and the
 ; longest reach along the strip is a hangar at 690. Both are well inside.
-AFAPX   equ 620                ; the apron: how far off the centreline the
+AFAPX   = 620                ; the apron: how far off the centreline the
                                ;  hangars stand. Clear of the concrete
                                ;  (AFW=150) and short of the mast (RSAPRON
                                ;  =800), which parks the row between them
-AFHGN   equ 3                  ; three hangars...
-AFHGS   equ 620                ;  ...this far apart along the strip
-AFHGW   equ 90                 ; one of them: half-width across the apron,
-AFHGD   equ 70                 ;  half-depth along it, and 23 metres tall -
-AFHGH   equ 46                 ;  a fighter shed, not an airliner's
-AFTWX   equ 330                ; THE TOWER STANDS CLOSER IN AND WELL DOWN THE
-AFTWZ   equ 900               ;  FIELD, abeam the touchdown point rather than
+AFHGN   = 3                  ; three hangars...
+AFHGS   = 620                ;  ...this far apart along the strip
+AFHGW   = 90                 ; one of them: half-width across the apron,
+AFHGD   = 70                 ;  half-depth along it, and 23 metres tall -
+AFHGH   = 46                 ;  a fighter shed, not an airliner's
+AFTWX   = 330                ; THE TOWER STANDS CLOSER IN AND WELL DOWN THE
+AFTWZ   = 900               ;  FIELD, abeam the touchdown point rather than
                                ;  at midfield: it is the thing you have in the
                                ;  corner of your eye on short finals, and that
                                ;  is the whole reason to put a landmark beside
                                ;  a runway at all
-AFTWW   equ 16                 ; the shaft, half-width...
-AFTWH   equ 96                 ;  ...and 48 metres of it
-AFTCW   equ 30                 ; the cab OVERHANGS the shaft, the way a real
-AFTCH   equ 26                 ;  one does - it is how a tower reads as a
+AFTWW   = 16                 ; the shaft, half-width...
+AFTWH   = 96                 ;  ...and 48 metres of it
+AFTCW   = 30                 ; the cab OVERHANGS the shaft, the way a real
+AFTCH   = 26                 ;  one does - it is how a tower reads as a
                                ;  tower and not as a chimney
-AFBWL   equ 0                  ; the paint: the greys the mast already wears,
-AFBWS   equ 16                 ;  lit face and shaded face...
-AFBRF   equ 17                 ;  ...and the roof
-AFTGL   equ 20                 ; the cab is GLASS, and it is the only glass on
+AFBWL   = 0                  ; the paint: the greys the mast already wears,
+AFBWS   = 16                 ;  lit face and shaded face...
+AFBRF   = 17                 ;  ...and the roof
+AFTGL   = 20                 ; the cab is GLASS, and it is the only glass on
                                ;  the field. No window lattice runs on any of
                                ;  this: EDGEWIN wants bhw>=50 AND 60 units of
                                ;  wall, and every box here misses one or the
@@ -539,7 +539,7 @@ rsz     dw 0,0
 rsst    db 0,0                  ; 0 = standing, 1 = down
 rshp    db 0,0                  ; hits it still has in it (a building, not a jet)
 rspin   dw 0                    ; the dish angle 0..255 - both dishes turn
-rsi     dw 0                    ; the station being ticked or drawn
+rs_i     dw 0                    ; the station being ticked or drawn
 rhx     dw 0                    ; RSHIT's question: did anything of ours
 rhy     dw 0                    ;  reach this point in the world...
 rhz     dw 0
@@ -553,8 +553,8 @@ airng   dw 10000                ; how far the AI may shoot: its own radar
 ; the "camera appears somewhere odd" on a ground target. It is a variable
 ; now, set by what is being orbited, and Z/X move it while you watch.
 tgrad   dw 100                  ; how far the orbit camera stands off
-TGRMIN  equ 70                  ; ...and how close or far it may be wound
-TGRMAX  equ 2400
+TGRMIN  = 70                  ; ...and how close or far it may be wound
+TGRMAX  = 2400
 tgzo    dw 75                   ; TGT page: stand-off and vertical centre
 tgyc    dw 0                    ;  of the model on the glass
 lkx     dw 0                    ; LKPOS: where the locked target actually is,
@@ -576,15 +576,15 @@ TYPTAB  dw TYPN0,TYPN1,TYPN2,TYPN3,TYPN4
 ; twin-tail. Its first 13 vertices keep the CLASSIC meanings - nose,
 ; rear box, wingtips, roots, left fin - because the wreck pool below
 ; cuts its debris from the classic MFACE over exactly those.
-        INCLUDE F15M.INC
+        include 'F15M.INC'
 ; ---- the ground radar station, baked the same way from res\RBASE.OBJ and
 ; res\RDISH.OBJ: a lattice tower and a SIX-panel dish. Six, not the eight
 ; the trainer's dish has - this world is cut from flat chunks and a smooth
 ; bowl read as a foreign object (user's call, 2026-07-28). Both stand at
 ; the station's feet: the tower spans y 0..40, the dish y 26..58, so one
 ; position draws both and the dish alone takes the spin.
-        INCLUDE RBASEM.INC
-        INCLUDE RDISHM.INC
+        include 'RBASEM.INC'
+        include 'RDISHM.INC'
 ; ---- the ZSU-23-4 "Shilka", baked from res\SHULL.OBJ and res\STURR.OBJ.
 ; Two models, one vehicle, the station's trick again: the CHASSIS on the
 ; driving heading and the TURRET on its own, both drawn at the same world
@@ -597,10 +597,10 @@ TYPTAB  dw TYPN0,TYPN1,TYPN2,TYPN3,TYPN4
 ; segment, and they have to: MODELDRAW reads them through DS, and DS is
 ; the main segment even out in UISEG. Everything that merely computes -
 ; the sites, the state, the tick and the draw loop - is in UI.INC.
-        INCLUDE SHULLM.INC
-        INCLUDE STURRM.INC
-        INCLUDE SDISHM.INC
-        INCLUDE SBARRM.INC
+        include 'SHULLM.INC'
+        include 'STURRM.INC'
+        include 'SDISHM.INC'
+        include 'SBARRM.INC'
 ; the classic eight faces, kept ONLY for the wreck pool (see above)
 MFACE   db 0,1,2,0, 24          ; body top (sun-lit white)
         db 0,3,4,0, 16          ; body bottom (shade)
@@ -610,7 +610,7 @@ MFACE   db 0,1,2,0, 24          ; body top (sun-lit white)
         db 7,6,9,7, 0           ; wing R
         db 10,11,12,10, 25      ; tail fin
         db 1,2,4,3, 94          ; engine nozzle: palette-cycled fire
-NFACE   equ 8
+NFACE   = 8
 GLOWT   db 63,52,12             ; nozzle DAC cycle: yellow
         db 63,34, 6             ; orange
         db 56,14, 4             ; red
@@ -769,11 +769,11 @@ pdz     dw 0
 pidx    dw 0                    ; draw loop: plane offset
 pfc     dw 0                    ; draw loop: face counter
 tpi     dw 0                    ; draw loop: trail point counter
-TLN     equ 12                  ; contrail points per plane
+TLN     = 12                  ; contrail points per plane
 ; TLX/TLY/TLZ live in BSS now (see CITY.ASM): spawn-generated, and the
 ; segment budget is too tight to ship 3.8K of zeroes in the image
 tlh     dw 0                    ; shared ring head (byte offset, step 2)
-locki   dw 0FFFFh               ; locked plane offset (0FFFFh = no lock)
+locki   dw 0FFFFh               ; locked plane (0FFFFh = no lock)
 lockd   dw 0                    ; lock scan: best distance so far
 prevt   db 0                    ; Enter key edge detector
 prevm   db 0                    ; M key edge detector
@@ -813,14 +813,14 @@ bqac    dw 0                    ;  ...and out to the right, in symbol units
 ; symbol is not to scale and never was: it says which way he is pointing
 ; and roughly how far, relative to the others. That is all a pilot has
 ; time to read.
-BQZHOUS equ 7                   ; and at THIS zoom or closer, the ground
+BQZHOUS = 7                   ; and at THIS zoom or closer, the ground
                                 ;  itself: the city, cell by cell. Only the
                                 ;  two tightest settings - there is no list
                                 ;  of buildings to walk, every cell has to
                                 ;  be asked, and at the widest zoom the
                                 ;  scope covers eighty cells each way
-BQZICON equ 8                   ; at this zoom or closer: aeroplanes
-BQZCROS equ 9                   ; at this one: crosses. Beyond: dots.
+BQZICON = 8                   ; at this zoom or closer: aeroplanes
+BQZCROS = 9                   ; at this one: crosses. Beyond: dots.
 rbrad   dw PZRDRR               ; ...and how far it reaches, in pixels. Kept
 rbradn  dw -PZRDRR              ;  negated too: the clip is two compares in
                                 ;  the hottest loop on the panel, and a NEG
@@ -850,7 +850,7 @@ MSGRNG  db 'RNG',0
 WEDG    db 0,1, 0,2, 0,3, 0,4, 1,2, 3,4, 1,3, 2,4
         db 7,5, 5,8, 8,7, 7,6, 6,9, 9,7
         db 10,11, 11,12, 12,10
-NWEDG   equ 17
+NWEDG   = 17
 ; ---- missiles and wrecks ----------------------------------------------------
 pst     db NPLANE dup(0)        ; plane state: 0 = flying, else respawn timer
 pammo   db 4                    ; player missiles on the rails
@@ -884,12 +884,12 @@ mlife   dw 0                    ; ticks to self-destruct
 ; The pool itself lives OUT in SYMSEG with the loops that walk it - it is
 ; ninety-six bytes of array and the main segment had a hundred and eleven.
 ; Only these two words stay home, because MCEND reads them.
-NPMSL   equ 4
+NPMSL   = 4
 msi     dw 0                    ; the slot in the working set, as a WORD index
 mcsl    dw 0                    ; ...and the one the missile camera rides
 wnext   dw 0                    ; wreck pool: next slot byte offset
 ; ---- AI missile pool (the war fights itself) --------------------------------
-NAMSL   equ 4
+NAMSL   = 4
 amact   db NAMSL dup(0)         ; slot in flight?
 amx     dw NAMSL dup(0)         ; position
 amy     dw NAMSL dup(0)
@@ -982,7 +982,7 @@ sbn2    dw 0                    ; the audio spool: the note chases the
 ; reason this is small: the camera it needs was written for F4.
 spect   db 0                    ; 1 = watching, not flying
 sptmr   dw 0                    ; ticks until it moves on by itself
-SPTIME  equ 273                 ; ...which is fifteen seconds at 18.2 Hz
+SPTIME  = 273                 ; ...which is fifteen seconds at 18.2 Hz
 prevsp  db 0                    ; Space's own edge, while spectating
 tgspare dw 0FFFFh               ; the first living jet the walk saw, for when
                                 ;  no human is up (0FFFFh = it saw none)
@@ -1050,7 +1050,7 @@ gunreg  dw 0                    ; belt regen timer
 guntik  db 0                    ; tracers on screen while > 0
 hitfx   dw 0FFFFh               ; plane flashing from a cannon hit
 hitft   dw 0                    ; ...and for how many ticks
-NTRC    equ 16                  ; tracer rounds in the pool
+NTRC    = 16                  ; tracer rounds in the pool
 trcact  db NTRC dup(0)          ; round in flight?
 tcx     dw NTRC dup(0)          ; position
 tcy     dw NTRC dup(0)
@@ -1091,7 +1091,7 @@ SFNAME  db 'CPSIDE.DAT',0       ; the 90-degree views; optional, see CITY.ASM
 ; file, no bank, the game runs on in silence.
 SXNAME  db 'SFX.DAT',0
 sfxseg  dw 0                    ; where the bank was loaded (0 = none)
-        INCLUDE SFXIDX.INC      ; SFXN and the SFX_* indices, from Snd2Dat
+        include 'SFXIDX.INC'   ; SFXN and the SFX_* indices, from Snd2Dat
 RESMSG  db 'CITY.DAT not found - keep it next to CITY.COM',13,10,'$'
 ; (F15FN/MHDR gone: the model is baked into the image at build time)
 ; ---- Ctrl+D: the diagnostic marks. OFF by default, and that is the point -
@@ -1136,7 +1136,7 @@ mrow    dw 0                    ; BGND: current row and its buffer base
 rowb    dw 0
 fmv     dw 0                    ; f at the pivot column of the row
 spa     dw 0                    ; the span: start, length, sky-or-ground
-spl     dw 0
+spanl     dw 0
 sptype  db 0
 qcn     dw 0                    ; clouds: visible count, scratch, and the
 qcb     dw 0                    ; one being drawn (d, u, index, t, f,
@@ -1183,8 +1183,8 @@ dsac    dw 0                    ; DS: accumulator
 ; minimap moved out to the far scratch segment [scrseg] to free 4K of BSS.
 
 ; ---- 3D terrain mesh state (one node = 4 cells = 1024 world units) ---------
-NR      equ 20                  ; terrain draw radius in nodes around camera
-NSIDE   equ 41                  ; cached node grid side (2*NR+1)
+NR      = 20                  ; terrain draw radius in nodes around camera
+NSIDE   = 41                  ; cached node grid side (2*NR+1)
 tnx     dw 0                    ; camera node x = (camx+BIAS)>>10
 tnz     dw 0                    ; camera node z
 tidx    dw 0                    ; index into TORD
@@ -1204,7 +1204,7 @@ PUFO    dw 0,21,42              ; smoke puff phase offsets (loop of 64)
 SIY     dw 4 dup(0)             ; stashed face Y (PITCH4 mutates IY/IZ, and a
 SIZ     dw 4 dup(0)             ; fill+stroke pair would pitch them twice)
 
-; building draw order: every cell offset in [-24..24]^2 sorted by squared
+; building draw order: every cell in [-24..24]^2 sorted by squared
 ; distance DESCENDING (painter far -> near). Replaces both the old bucket
 ; scan and the far-belt megablock stand-ins: real buildings all the way out.
 BORD    db -24,24, 24,24, 24,-24, -24,-24, 24,23, -23,24, 23,-24, -23,-24, 23,24, -24,-23
@@ -1656,8 +1656,8 @@ rsin    dw 0                    ; sin(roll)*256
 rcos    dw 0                    ; cos(roll)*256
 wdx     dw 0
 wdz     dw 0
-rcx     dw 0
-rcz     dw 0
+rc_x     dw 0
+rc_z     dw 0
 rddx    dw 0
 rddy    dw 0
 rsxo    dw 0
@@ -1666,7 +1666,7 @@ camgi   dw 0
 camgj   dw 0
 gi      dw 0
 gj      dw 0
-cdi     dw 0                    ; cell offset from camera (was 'di' - clashed with reg)
+cdi     dw 0                    ; cell from camera (was 'di' - clashed with reg)
 cdj     dw 0
 ring    dw 0                    ; current d^2 painter bucket
 bstreet dw 0
@@ -1807,8 +1807,8 @@ HCOL    db 8
 ;            8 HUD       9 sky band    10 ground     11 field/ground band
 ;            12 haze     13 mountains  14 water      15 forest
 ;            16 wall E/W (shade)       17 roof
-NPALC   equ 137                 ; ...+ asphalt + 8 vehicle pairs (120..136)
-NPALCOLD equ 120                ; 31 game + 63 cockpit + glow + 2 IFF +
+NPALC   = 137                 ; ...+ asphalt + 8 vehicle pairs (120..136)
+NPALCOLD = 120                ; 31 game + 63 cockpit + glow + 2 IFF +
                                 ; amber + 7 NEWTON sky (SKYZ..SKYZ+6) +
                                 ; ladder dim + HUD cyan + true black
                                 ; + 5 PANEL colours (108..112): the cockpit
@@ -1818,7 +1818,7 @@ NPALCOLD equ 120                ; 31 game + 63 cockpit + glow + 2 IFF +
 ;  once-at-startup DAC data - the stack guard's rent for the SA pages.
 ;  The tables and the loader live in UI.INC as APPLYPALF.)
 
-STARN   equ 16                  ; stars as DIRECTIONS: azimuth, elevation
+STARN   = 16                  ; stars as DIRECTIONS: azimuth, elevation
 STARTAB dw 10,18, 35,40, 60,12, 85,55, 110,30, 135,60, 160,22, 185,45
         dw 210,15, 235,58, 5,35, 50,28, 75,56, 100,10, 200,50, 150,38
 

@@ -13,17 +13,19 @@
 ;              255 = transparent. Generated from res\panel1.bmp by
 ;              res\mkpanel.py (also emits PALPNL.INC for DATA.INC).
 ; ============================================================================
-        .8086
-CODE    SEGMENT
-        ASSUME  CS:CODE
-        ORG 100h
+format binary as 'com'
+        org 100h
+
+        ; .8086 in the TASM source. FASM has no such directive - without this
+        ; include it silently uses 386 jumps when a target is out of range.
+        include '..\..\..\ENGINE\E_8086.INC'
 RESBASE:
         db 'W','C'              ; magic
         db 1                    ; format version
         db 2                    ; resource count
         ; ---- directory ----
         db 1                    ; resource id 1: the 4x6 font
-        dw FONT-RESBASE         ; offset  (TASM does the math)
+        dw FONT-RESBASE         ; (TASM does the math)
         dw FONTEND-FONT         ; length
         db 2                    ; resource id 2: the photo cockpit bitmap
         dw PIMG-RESBASE
@@ -77,8 +79,6 @@ FONTEND:
 
 ; ---- resource 2: the cockpit bitmap (generated - do not edit by hand) ----
 PIMG:
-        include PANELIMG.INC
+        include 'PANELIM.INC'
 PIMGEND:
 
-CODE    ENDS
-        END RESBASE

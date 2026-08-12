@@ -118,9 +118,13 @@ designed, staged, and left on the drawing board: the 64K was spoken for.
 
 ## Build pipeline
 
-`MAKE.BAT` (Windows) → converters (`mkpanel.py`, `mkengine.py`) →
-headless DOSBox → TASM 3.2 one-pass + TLINK /t → `INSTALL\CITY.COM`.
-The one-pass rules that shaped the code:
+`CONVERT.BAT` (Windows, only when the artwork changes) → `MAKE` inside DOS
+→ flat assembler, three passes, no linker → `INSTALL\FLYOWL2.EXE`.
+
+It was built with TASM 3.2 and TLINK until the migration, and the code still
+carries the shape that one-pass assembly gave it. Those rules are no longer
+enforced by the assembler - FASM makes as many passes as it needs - but the
+code was written under them and they are why it looks the way it does:
 
 - constants used as immediates must be defined BEFORE the include
 - symbols are case-insensitive (TRX vs trx: one namespace)

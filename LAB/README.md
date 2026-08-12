@@ -5,10 +5,16 @@ it. Not a game and not a teaching machine: a **workbench**, for the work
 on how buildings look. No flight model, no physics, no combat, no panel,
 no sound.
 
+Mount the repository in DOSBox and, in this folder:
+
 ```
-MAKE.BAT LAB      (from the repo root, Windows)
-LAB\RUN.BAT       (runs it in DOSBox)
+MAKE            assemble  ->  HOUSE.COM
+RUN             walk round it
 ```
+
+From Windows, `MAKEWIN` and `RUNWIN` do the same without your opening DOSBox
+by hand. `MAKEWIN CHECK` accounts for every byte of the difference against the
+Turbo Assembler build frozen in [`TASM/LAB`](../TASM/LAB).
 
 ## Why it is a separate program
 

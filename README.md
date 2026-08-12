@@ -3,9 +3,10 @@
 ### ▶ Play: https://kirindenis.github.io/wire-city-2/
 ### 💬 Community: [facebook.com/groups/OWLOS](https://www.facebook.com/groups/OWLOS)
 
-Real games in real **8086 assembly** (TASM 3.2, VGA mode 13h, integer math,
-no libraries), running in the browser through DOSBox-WASM — and readable to
-the last byte. Built by the team behind **[Owlos](https://owlos.sk/)**:
+Real games in real **8086 assembly** (VGA mode 13h, integer maths, no
+libraries), running in the browser through DOSBox-WASM — and readable to the
+last byte. The assembler ships with them, so you can rebuild any of it
+yourself without buying or installing a thing. Built by the team behind **[Owlos](https://owlos.sk/)**:
 keeping legacy systems alive is our day job; writing new software for
 MS-DOS is how we relax.
 
@@ -60,12 +61,24 @@ what it looks like applied.
 
 ## The teaching machines
 
-Standalone `.COM`s a few KB each, built on the same [ENGINE/](ENGINE/)
-modules the games use — see [EXAMPLES/](EXAMPLES/README.md):
+Thirteen standalone `.COM`s, a few KB each, built on the same
+[ENGINE/](ENGINE/) modules the games use — each demonstrates one technique on
+the real engine code rather than on a copy of it. See
+[EXAMPLES/](EXAMPLES/README.md):
 [the hangar](https://kirindenis.github.io/wire-city-2/play.html?g=jet) ·
 [the island factory](https://kirindenis.github.io/wire-city-2/play.html?g=terra) ·
 [the avionics](https://kirindenis.github.io/wire-city-2/play.html?g=avio) ·
-the ring mixer (build it) · the 1986 network chat (in the workshop).
+the ring mixer · the take-off, the approach and the touchdown as three
+separate programs · a particle trail · a network chat over IPX.
+
+They all build from their own folder with nothing but this repository:
+
+```
+cd EXAMPLES
+MAKE            all thirteen
+MAKE JET        just that one
+RUN JET
+```
 
 ## Reading
 
@@ -80,20 +93,75 @@ whole machine · [3D graphics](docs/GRAPHICS.md) (and
 ```
 GAMES/OWLFLY2/    OWL FLY II, the multiplayer successor (EXE, far segments)
 GAMES/OWLFLY/     the flight simulator: SRC/, res/, INSTALL/, its README
-GAMES/WIRECITY/   the 1986 original: one CITY.ASM, its README
+GAMES/WIRECITY/   the wireframe night-flight: one CITY.ASM, its README
 ENGINE/           engine modules with documented contracts (shared by all)
-EXAMPLES/         the teaching machines (each states its contract)
+EXAMPLES/         the thirteen teaching machines (each states its contract)
 LAB/              the workbench: one city block that holds still, and a
                   camera to walk round it (HOUSE.COM) - not shipped
 docs/             the arcade site: gallery, players, bundles, deep dives
-MAKE.BAT          builds everything: converters + headless DOSBox + TASM
+TOOLS/            the assembler, the DPMI host and the converters
+                  - see THIRD-PARTY.md for what is whose
+TASM/             the Turbo Assembler originals of everything that has
+                  finished migrating, with the binaries they produced
+GO.BAT            start here, inside DOS. The only batch file in the root,
+                  and it builds nothing - each program builds itself
 ```
 
-Build: `MAKE.BAT` from the repo root (needs Python+Pillow and paths in a
-gitignored `LOCAL.BAT`; see [GAMES/OWLFLY/README.md](GAMES/OWLFLY/README.md)
-for details). The site deploys from `docs/` via GitHub Pages;
-`PUBLISH.BAT` packs a fresh game bundle (filename-versioned — js-dos caches
-by path).
+Everything that serves one program lives in that program's folder — its
+source, its `MAKE`, its `RUN`, its README. A root full of per-game batch
+files is the mess this layout exists to avoid.
+
+**Building it, in DOS.** Mount this folder in DOSBox and type `GO`. It tells
+you the rest: each program is built and run from its own directory, with
+`MAKE` and `RUN`. Nothing has to be bought, downloaded or installed. The
+assembler is [flat assembler](https://flatassembler.net/) in `TOOLS/FASM`,
+free to use and to pass on; `MAKE` also loads the small DPMI host in
+`TOOLS/CWSDPMI`, because FASM is a 32-bit program and DOS is not.
+
+**Building it, from Windows.** Every folder has a `MAKEWIN` and a `RUNWIN`
+that open DOSBox for you and close it again. They are not a second build —
+they drive the same `MAKE.BAT` the DOS route uses, so there is only ever one
+way anything here is assembled. Machine paths go in a gitignored `LOCAL.BAT`
+(`set DOSBOX=...`).
+
+The site deploys from `docs/` via GitHub Pages; `PUBLISH.BAT` packs a fresh
+game bundle (filename-versioned — js-dos caches by path).
+
+## Off Turbo Assembler, all of it
+
+This was written with Borland's **Turbo Assembler**, which is commercial
+software: it cannot be shipped, so it cannot be handed to you, so the sources
+were not really yours to build. **Every program has now moved to FASM** — the
+three games, the trainer, the force-model aeroplane, the lab, the model
+precompiler and all thirteen teaching machines. The assembler that builds
+them is in this repository and free to pass on.
+
+The originals are frozen in [`TASM/`](TASM/) with the binaries they produced,
+and those binaries are the point: a translation between assemblers cannot be
+checked with a checksum, because the two builds are not meant to match. TASM
+is one-pass, so it reserves room for a long jump and pads what it could not
+take back with `NOP`. The standard here is **complete accounting** — every
+byte of the difference named. [`TOOLS/BinAccount`](TOOLS/BinAccount) decodes
+both builds instruction by instruction and stops at anything it cannot
+explain.
+
+```bash
+dotnet run --project TOOLS\BinAccount -c Release -- TASM\EXAMPLES\JET.COM EXAMPLES\JET.COM
+```
+
+All twenty programs pass. OWL FLY II, the one real EXE, is checked segment by
+segment — its five windows sit end to end and the game counts paragraphs past
+them, so the boundaries are read from the executable's own relocation table
+and each is accounted for on its own.
+
+That is not ceremony. It caught ten **386 instructions** in a WIRE CITY build
+that looked finished: TASM's `.8086` restricts the instruction set, FASM has
+no equivalent directive, and the restriction was silently lost in
+translation. The build ran perfectly on every emulator and would have died on
+the machine the code is written for.
+[`ENGINE/E_8086.INC`](ENGINE/E_8086.INC) puts it back — and the same file
+now carries `LOOP` and `JCXZ`, which reach 127 bytes and have no long form on
+any processor at all.
 
 ## What is in the workshop
 

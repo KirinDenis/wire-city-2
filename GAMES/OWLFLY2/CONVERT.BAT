@@ -1,52 +1,21 @@
 @echo off
 REM ============================================================================
-REM MAKE.BAT [target] - the arcade build orchestrator. Run from Windows.
-REM   MAKE            - build EVERYTHING (all games + examples)
-REM   MAKE OWLFLY     - the flight simulator only (converters + TASM)
-REM   MAKE WIRECITY   - the 1986 original only
-REM   MAKE EXAMPLES   - the teaching machines only
-REM   MAKE LAB        - the house lab (LAB\HOUSE.COM), TASM only
-REM   MAKE TOOLS      - the DOS toolchain (OBJ2DAT model precompiler)
-REM   MAKE TRAINER    - the flight school (model DAT + TASM)
-REM   MAKE NEWTON     - the force-model aeroplane (TASM only, archived)
-REM   MAKE OWLFLY2    - OWL FLY II, the successor (converters + TASM)
-REM Per-game folders have one-line wrappers calling this with their target.
-REM All build logic lives HERE: DOSBox always mounts the repo root as C:
-REM because ENGINE\ is shared by every target. Log: BUILD.LOG in the root.
-REM Machine paths live in LOCAL.BAT (gitignored):
-REM   set DOSBOX=C:\Games\DOSBox\DOSBox.exe
-REM   set TASMDIR=d:\borland\bp
+REM CONVERT.BAT - prepare OWL FLY II's art, models and sound, on Windows.
+REM
+REM   CONVERT
+REM
+REM These are the modern half of the toolchain, and they run BEFORE the DOS
+REM build: they turn drawn pictures, Wavefront models and ordinary WAVs into
+REM the byte tables and blobs the 8086 loads. Their output is committed, so a
+REM plain MAKEWIN does not need this to have run - only a change to the
+REM artwork does.
+REM
+REM They are C#, per the project's tooling contract, and need the .NET SDK.
+REM They came out of the repository-wide MAKEWIN.BAT when OWL FLY II finished
+REM migrating and that file was retired.
 REM ============================================================================
-cd /d %~dp0
-if exist LOCAL.BAT call .\LOCAL.BAT
-if "%DOSBOX%"=="" set DOSBOX=dosbox.exe
-if "%TASMDIR%"=="" set TASMDIR=c:\bp
-set TARGET=%~1
-if "%TARGET%"=="" set TARGET=ALL
+cd /d %~dp0..\..
 
-if "%TARGET%"=="WIRECITY" goto skipconv
-if "%TARGET%"=="EXAMPLES" goto skipconv
-if "%TARGET%"=="LAB" goto skipconv
-if "%TARGET%"=="TOOLS" goto skipconv
-if "%TARGET%"=="NEWTON" goto skipconv
-if "%TARGET%"=="TRAINER" goto trconv
-goto convdone
-:trconv
-echo === 1/2 TRAINER converters (instrument panel) ===
-python GAMES\TRAINER\res\mkpanel.py
-if errorlevel 1 goto err
-goto skipconv
-:convdone
-echo === 1/2 OWLFLY converters (panel + engine sample) ===
-REM OWLFLY (the first one) still rides the old Python pair. OWLFLY2 does
-REM NOT: its cockpit goes through TOOLS\Panel2Inc below - C#, per the
-REM tooling contract. Until 2026-07-29 nothing rebuilt OWLFLY2's panel at
-REM all: it carried a stale copy of OWLFLY's generated INCs, so editing
-REM its artwork changed precisely nothing.
-python GAMES\OWLFLY\res\mkpanel.py
-if errorlevel 1 goto err
-python GAMES\OWLFLY\res\mkengine.py
-if errorlevel 1 goto err
 REM The cockpit source. cockpit2.png is the big original (1586x992); the
 REM converter shrinks it. cockpit2_edit.png, if it exists, WINS - that is
 REM the hand-worked 320x200 panel, and pixel work at final resolution is
@@ -98,24 +67,10 @@ REM silence around it) and normalises what actually ships, so the caps are
 REM the only place loudness and length are decided. The third field pushes
 REM one sound back behind the others.
 dotnet run --project TOOLS\Snd2Dat -c Release -- -o GAMES\OWLFLY2\INSTALL -src GAMES\OWLFLY2\SRC "GUN=GAMES\OWLFLY2\res\snd\selfgun.wav,0.22,1.0" "FLAK=GAMES\OWLFLY2\res\snd\shilkagun.wav,0.22,0.85" "RKT=GAMES\OWLFLY2\res\snd\rocket.wav,0.90,1.0" "BOOM=GAMES\OWLFLY2\res\snd\Explosion.wav,1.10,1.0" "DETH=GAMES\OWLFLY2\res\snd\self_explosion.wav,1.30,1.0" "CAUT=GAMES\OWLFLY2\res\snd\alarm.wav,0.55,0.7" "WARN=GAMES\OWLFLY2\res\snd\critical-alarm.wav,0.55,0.85"
-if errorlevel 1 goto err
-:skipconv
-
-echo === 2/2 DOSBox build: %TARGET% ===
-if exist BUILD.LOG del BUILD.LOG
-set MKROOT=%~dp0
-if "%MKROOT:~-1%"=="\" set MKROOT=%MKROOT:~0,-1%
-"%DOSBOX%" -noautoexec -noconsole -c "mount c %MKROOT%" -c "mount d %TASMDIR%" -c "c:" -c "buildq.bat %TARGET%" -c "exit"
-if not exist BUILD.LOG goto norun
-type BUILD.LOG
-findstr /C:"BUILD OK" BUILD.LOG >nul
-if errorlevel 1 goto err
 echo.
-echo MAKE OK [%TARGET%]
+echo Done. Now build it: MAKEWIN, in the game's folder.
 goto end
-:norun
-echo BUILD.LOG was never written - the DOSBox mount or BUILDQ.BAT failed
 :err
 echo.
-echo MAKE FAILED [%TARGET%] - see messages above
+echo A converter failed - see the messages above.
 :end

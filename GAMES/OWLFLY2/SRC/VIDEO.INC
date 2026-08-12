@@ -19,24 +19,24 @@ CLEARBUF:
         mov  [sinr],ax
         mov  ax,[rcos]
         mov  [cosr],ax
-        imul word ptr [pofs]    ; (AX still holds rcos here)
+        imul word [pofs]    ; (AX still holds rcos here)
         mov  bx,256
         idiv bx
         add  ax,[horiz]
         mov  [hcur],ax
         mov  ax,[pofs]
-        imul word ptr [rsin]
+        imul word [rsin]
         mov  bx,256
         idiv bx
         neg  ax
         add  ax,160
         mov  [cx0],ax
-        mov  word ptr [pmrow],-9999 ; new frame: the pattern cache is stale
-        mov  byte ptr [wdith],0
-        cmp  word ptr [sinr],0  ; banked: the grain must turn with the
-        je   @@lvl              ; world - per-pixel walk, not the tile
-        mov  byte ptr [wdith],1
-@@lvl:  call FAR PTR SKYFILL
+        mov  word [pmrow],-9999 ; new frame: the pattern cache is stale
+        mov  byte [wdith],0
+        cmp  word [sinr],0  ; banked: the grain must turn with the
+        je   .lvl              ; world - per-pixel walk, not the tile
+        mov  byte [wdith],1
+.lvl:  call SKYSEG:SKYFILL
         ret
 
 ; ============================================================================
@@ -58,10 +58,10 @@ BLIT:   push ds
 ;  WAIT FOR VERTICAL RETRACE (sync)
 ; ============================================================================
 WAITV:  mov  dx,3DAh
-@@w1:   in   al,dx
+.w1:   in   al,dx
         test al,8
-        jnz  @@w1
-@@w2:   in   al,dx
+        jnz  .w1
+.w2:   in   al,dx
         test al,8
-        jz   @@w2
+        jz   .w2
         ret

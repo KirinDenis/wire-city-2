@@ -134,8 +134,36 @@ Raid it for parts; do not resurrect it whole.
 
 ## Building
 
-    MAKE.BAT            (or MAKE.BAT OWLFLY2 from the repo root)
+Everything you need is in this repository. Mount it in DOSBox and, in this
+folder:
 
-Output: `INSTALL\FLYOWL2.EXE` + `INSTALL\CITY.DAT` (no ENGINE.RAW:
-the turbine is generated at startup - GENBED). Web bundle:
-`docs\pack.ps1 -Game OWLFLY2`; deploy with `PUBLISH.BAT OWLFLY2`.
+```
+MAKE            assemble  ->  INSTALL\FLYOWL2.EXE and the two blobs
+RUN             fly it
+```
+
+Three assemblies, and only the last is a program. `SRC/RESDAT.ASM` and
+`SRC/SIDEDAT.ASM` are artwork, palettes and fonts laid out as bytes; they
+become `CITY.DAT` and `CPSIDE.DAT`, which the game loads at startup. There is
+no `ENGINE.RAW` - the turbine is generated at startup by GENBED.
+
+The assembler is [flat assembler](https://flatassembler.net/) in `TOOLS/FASM`,
+free to use and to pass on, and it writes the executable itself: no linker.
+
+**This is the only EXE here**, and the only program with more than one
+segment. Five sit end to end - the main one at 64K, then SKYSEG, UISEG,
+SYMSEG and TOWNSEG - and the game works out where its back buffer goes by
+counting paragraphs past all of them. That is why each segment ends by
+claiming its whole window: change a size and everything above it moves.
+
+From Windows, `MAKEWIN` and `RUNWIN` drive the same build through DOSBox, and
+`MAKEWIN CHECK` accounts for every byte of the difference against the Turbo
+Assembler build frozen in [`TASM/OWLFLY2`](../../TASM/OWLFLY2) - segment by
+segment, because each is padded to a fixed window and the two builds are the
+same length there even where the code shrank.
+
+`CONVERT.BAT` rebakes the cockpit, the models and the sound bank. Its output
+is committed, so the build above does not need it to have run.
+
+Web bundle: `docs\pack.ps1 -Game OWLFLY2`; deploy with `PUBLISH.BAT OWLFLY2`.
+

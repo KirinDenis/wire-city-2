@@ -68,28 +68,28 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         mov  bx,[gj]
         call GETZONE
         cmp  ax,1
-        je   @@st               ; plains: the terrain mesh paints the land
+        je   .st               ; plains: the terrain mesh paints the land
         cmp  ax,2
-        je   @@st               ; mountains: the terrain mesh IS the mountain
+        je   .st               ; mountains: the terrain mesh IS the mountain
         cmp  ax,3
-        je   @@st               ; water: the terrain mesh paints the sea
+        je   .st               ; water: the terrain mesh paints the sea
         cmp  ax,4
-        je   @@st               ; foothills: terrain paints the woods
+        je   .st               ; foothills: terrain paints the woods
         mov  ax,[gi]
         and  ax,3
-        jz   @@st              ; gi on an avenue -> street
+        jz   .st              ; gi on an avenue -> street
         mov  ax,[gj]
         and  ax,3
-        jz   @@st              ; gj on an avenue -> street
+        jz   .st              ; gj on an avenue -> street
         call CELLHASH          ; ax = hash of (gi,gj)
         mov  bx,ax
         and  bx,31              ; hash 7/8/9 of 32 -> flat terrain patches
         cmp  bx,7
-        je   @@forest
+        je   .forest
         cmp  bx,8
-        je   @@water
+        je   .water
         cmp  bx,9
-        je   @@field
+        je   .field
         ; --- superblock clustering: only ~3/16 of 8x8 blocks are built up.
         ; Structures stay grouped (a built block keeps full density) but the
         ; groups themselves are rare - SimCity-style districts on open land.
@@ -98,7 +98,7 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         mov  [sbh],ax
         and  ax,15
         cmp  ax,3
-        jae  @@unbuilt          ; empty block: open ground (patches still apply)
+        jae  .unbuilt          ; empty block: open ground (patches still apply)
         pop  ax
         ; district type from the block hash: 0/3 residential, 1 downtown, 2 industry
         mov  bx,[sbh]
@@ -128,47 +128,47 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         and  bx,7
         mov  si,[bdist]
         cmp  si,1
-        je   @@com
+        je   .com
         cmp  si,2
-        je   @@ind
+        je   .ind
         ; --- residential: low boxes, an occasional tower ---
-        mov  word ptr [btype],0
+        mov  word [btype],0
         cmp  bx,6
-        jb   @@rh
-        mov  word ptr [btype],2 ; tower
-@@rh:   mov  bx,ax
+        jb   .rh
+        mov  word [btype],2 ; tower
+.rh:   mov  bx,ax
         and  bx,63
         add  bx,60              ; height 60..123
         mov  [bhgt2],bx
-        jmp  @@bdone
-@@com:  ; --- commercial downtown: tall mixed skyline ---
-        mov  word ptr [btype],0
+        jmp  .bdone
+.com:  ; --- commercial downtown: tall mixed skyline ---
+        mov  word [btype],0
         cmp  bx,3
-        jb   @@ch               ; 0..2 tall box
+        jb   .ch               ; 0..2 tall box
         cmp  bx,5
-        jb   @@ctw              ; 3..4 tower
+        jb   .ctw              ; 3..4 tower
         cmp  bx,7
-        jb   @@csp              ; 5..6 spire
-        mov  word ptr [btype],3 ; 7 arch
-        jmp  @@ch
-@@ctw:  mov  word ptr [btype],2
-        jmp  @@ch
-@@csp:  mov  word ptr [btype],1
-@@ch:   ; downtown height: towers cluster toward the block centre.
+        jb   .csp              ; 5..6 spire
+        mov  word [btype],3 ; 7 arch
+        jmp  .ch
+.ctw:  mov  word [btype],2
+        jmp  .ch
+.csp:  mov  word [btype],1
+.ch:   ; downtown height: towers cluster toward the block centre.
         ; dist = |gi&7 - 4| + |gj&7 - 4| (0..8); centre -> +288 bonus.
         push ax
         mov  bx,[gi]
         and  bx,7
         sub  bx,4
-        jns  @@a1
+        jns  .a1
         neg  bx
-@@a1:   mov  si,bx              ; |gi&7 - 4|
+.a1:   mov  si,bx              ; |gi&7 - 4|
         mov  bx,[gj]
         and  bx,7
         sub  bx,4
-        jns  @@a2
+        jns  .a2
         neg  bx
-@@a2:   add  si,bx              ; manhattan dist to superblock centre, 0..8
+.a2:   add  si,bx              ; manhattan dist to superblock centre, 0..8
         mov  ax,8
         sub  ax,si
         mov  bx,36
@@ -180,37 +180,37 @@ HBLD:   mov  ax,[gi]            ; world zoning first: city / plains / mountains
         add  bx,50
         add  bx,si              ; height 50..401 (respawn clears all)
         mov  [bhgt2],bx
-        jmp  @@bdone
-@@ind:  ; --- industrial: smoking factories and low sheds (always grey) ---
-        mov  word ptr [bschm],0
-        mov  word ptr [btype],4
+        jmp  .bdone
+.ind:  ; --- industrial: smoking factories and low sheds (always grey) ---
+        mov  word [bschm],0
+        mov  word [btype],4
         cmp  bx,5
-        jb   @@ih               ; 0..4 factory with chimney
-        mov  word ptr [btype],0 ; 5..7 plain shed
-@@ih:   mov  bx,ax
+        jb   .ih               ; 0..4 factory with chimney
+        mov  word [btype],0 ; 5..7 plain shed
+.ih:   mov  bx,ax
         and  bx,31
         add  bx,50              ; low industry: 50..81
         mov  [bhgt2],bx
-@@bdone:
-        mov  word ptr [bstreet],0
+.bdone:
+        mov  word [bstreet],0
         ret
-@@st:   mov  word ptr [bstreet],1
+.st:   mov  word [bstreet],1
         ret
-@@unbuilt:
+.unbuilt:
         pop  ax                 ; discard the kept cell hash
-        jmp  @@st
-@@forest:
-        mov  byte ptr [bcol],15
-        jmp  @@patch
-@@water:
-        mov  byte ptr [bcol],14
-        jmp  @@patch
-@@field:
-        mov  byte ptr [bcol],11
-@@patch:                        ; flat ground patch fills most of the cell
-        mov  word ptr [bhw],116
-        mov  word ptr [bhd],116
-        mov  word ptr [bstreet],2
+        jmp  .st
+.forest:
+        mov  byte [bcol],15
+        jmp  .patch
+.water:
+        mov  byte [bcol],14
+        jmp  .patch
+.field:
+        mov  byte [bcol],11
+.patch:                        ; flat ground patch fills most of the cell
+        mov  word [bhw],116
+        mov  word [bhd],116
+        mov  word [bstreet],2
         ret
 
 ; SBHASH - superblock (8x8 cells) hash for cell [gi],[gj] -> AX.
@@ -262,33 +262,33 @@ WINFACE:
         ; require all 4 corners in front of near plane
         mov  ax,[IZ]
         cmp  ax,NEARZ
-        jl   @@ret
+        jl   .ret
         mov  ax,[IZ+2]
         cmp  ax,NEARZ
-        jl   @@ret
+        jl   .ret
         mov  ax,[IZ+4]
         cmp  ax,NEARZ
-        jl   @@ret
+        jl   .ret
         mov  ax,[IZ+6]
         cmp  ax,NEARZ
-        jl   @@ret
+        jl   .ret
         ; project 4 corners -> wqx/wqy (pitch them like CLIPNEAR does,
         ; or the glass detaches from the wall in a dive)
         call PITCH4
         mov  ax,[IZ]            ; pitched corners can cross the near plane
         cmp  ax,NEARZ
-        jl   @@ret
+        jl   .ret
         mov  ax,[IZ+2]
         cmp  ax,NEARZ
-        jl   @@ret
+        jl   .ret
         mov  ax,[IZ+4]
         cmp  ax,NEARZ
-        jl   @@ret
+        jl   .ret
         mov  ax,[IZ+6]
         cmp  ax,NEARZ
-        jl   @@ret
-        mov  word ptr [pk],0
-@@pj:   mov  si,[pk]
+        jl   .ret
+        mov  word [pk],0
+.pj:   mov  si,[pk]
         add  si,si
         mov  ax,[IX+si]
         mov  dx,[IY+si]
@@ -298,14 +298,14 @@ WINFACE:
         add  si,si
         mov  [wqx+si],ax
         mov  [wqy+si],dx
-        inc  word ptr [pk]
+        inc  word [pk]
         mov  ax,[pk]
         cmp  ax,4
-        jl   @@pj
+        jl   .pj
         ; grid 3 cols x 5 rows, bilinear in screen space; each window = 3x3 px
-        mov  byte ptr [wr],0
-@@rl:   mov  byte ptr [wc],0
-@@cl:
+        mov  byte [wr],0
+.rl:   mov  byte [wc],0
+.cl:
         ; u = (2*wc+1)/6  -> work with numerator wfu over 6
         mov  al,[wc]
         cbw
@@ -321,14 +321,14 @@ WINFACE:
         ; top point = wq1 + (wq2-wq1)*u/6
         mov  ax,[wqx+4]
         sub  ax,[wqx+2]
-        imul word ptr [wfu]
+        imul word [wfu]
         mov  bx,6
         idiv bx
         add  ax,[wqx+2]
         mov  [sx0],ax           ; reuse sx0/sy0 = top
         mov  ax,[wqy+4]
         sub  ax,[wqy+2]
-        imul word ptr [wfu]
+        imul word [wfu]
         mov  bx,6
         idiv bx
         add  ax,[wqy+2]
@@ -336,14 +336,14 @@ WINFACE:
         ; bottom point = wq0 + (wq3-wq0)*u/6
         mov  ax,[wqx+6]
         sub  ax,[wqx]
-        imul word ptr [wfu]
+        imul word [wfu]
         mov  bx,6
         idiv bx
         add  ax,[wqx]
         mov  [sx1],ax           ; reuse sx1/sy1 = bottom
         mov  ax,[wqy+6]
         sub  ax,[wqy]
-        imul word ptr [wfu]
+        imul word [wfu]
         mov  bx,6
         idiv bx
         add  ax,[wqy]
@@ -351,14 +351,14 @@ WINFACE:
         ; px = top + (bottom-top)*v/8
         mov  ax,[sx1]
         sub  ax,[sx0]
-        imul word ptr [wfv]
+        imul word [wfv]
         mov  bx,10
         idiv bx
         add  ax,[sx0]
         mov  [wpx],ax
         mov  ax,[sy1]
         sub  ax,[sy0]
-        imul word ptr [wfv]
+        imul word [wfv]
         mov  bx,10
         idiv bx
         add  ax,[sy0]
@@ -366,45 +366,45 @@ WINFACE:
         ; bounds
         mov  ax,[wpx]
         cmp  ax,2
-        jl   @@wn
+        jl   .wn
         cmp  ax,317
-        jg   @@wn
+        jg   .wn
         mov  ax,[wpy]
         cmp  ax,2
-        jl   @@wn
+        jl   .wn
         cmp  ax,197
-        jg   @@wn
+        jg   .wn
         call WLIT2
-        jz   @@wn
+        jz   .wn
         mov  al,3                   ; window block: 3x3 near, 1x1 mid-range
-        cmp  word ptr [minrz],600
-        jle  @@wsz
+        cmp  word [minrz],600
+        jle  .wsz
         mov  al,1
-@@wsz:  mov  [wbsz],al
-        mov  byte ptr [wbj],0
-@@wby:  mov  byte ptr [wbi],0
-@@wbx:  mov  al,[wbi]
+.wsz:  mov  [wbsz],al
+        mov  byte [wbj],0
+.wby:  mov  byte [wbi],0
+.wbx:  mov  al,[wbi]
         cbw
         add  ax,[wpx]
         mov  bl,[wbj]
         xor  bh,bh
         add  bx,[wpy]
         call PUTPIXEL
-        inc  byte ptr [wbi]
+        inc  byte [wbi]
         mov  al,[wbi]
         cmp  al,[wbsz]
-        jl   @@wbx
-        inc  byte ptr [wbj]
+        jl   .wbx
+        inc  byte [wbj]
         mov  al,[wbj]
         cmp  al,[wbsz]
-        jl   @@wby
-@@wn:   inc  byte ptr [wc]
-        cmp  byte ptr [wc],3
-        jl   @@cl
-        inc  byte ptr [wr]
-        cmp  byte ptr [wr],5
-        jl   @@rl
-@@ret:  ret
+        jl   .wby
+.wn:   inc  byte [wc]
+        cmp  byte [wc],3
+        jl   .cl
+        inc  byte [wr]
+        cmp  byte [wr],5
+        jl   .rl
+.ret:  ret
 
 ; lit? hash from gi,gj,fa,wr,wc -> ZF=1 not lit else COLOR set
 WLIT2:  mov  ax,[gi]
@@ -442,15 +442,15 @@ WLIT2:  mov  ax,[gi]
         mov  bx,ax
         and  bx,7
         cmp  bx,3
-        jl   @@lit
+        jl   .lit
         xor  al,al
         ret
-@@lit:  mov  bx,ax
+.lit:  mov  bx,ax
         and  bx,31
-        jnz  @@cy
-        mov  byte ptr [COLOR],5
-        jmp  @@d
-@@cy:   mov  byte ptr [COLOR],4
-@@d:    mov  al,1
+        jnz  .cy
+        mov  byte [COLOR],5
+        jmp  .d
+.cy:   mov  byte [COLOR],4
+.d:    mov  al,1
         or   al,al
         ret

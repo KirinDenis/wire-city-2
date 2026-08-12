@@ -6,7 +6,7 @@
 
 ; ---- BRDGEN: the front line - 17 jagged z offsets around the map centre ---
 BRDGEN: xor  si,si
-@@b:    call RND16
+.b:    call RND16
         mov  bl,ah              ; high byte (the TERRA resonance lesson)
         xor  bh,bh
         sub  bx,128
@@ -16,7 +16,7 @@ BRDGEN: xor  si,si
         mov  [bordz+si],ax
         add  si,2
         cmp  si,17*2
-        jb   @@b
+        jb   .b
         ret
 
 ; ============================================================================
@@ -38,9 +38,9 @@ TERRPREP:
         mov  cl,8
         shr  ax,cl
         mov  [tnz],ax
-        mov  word ptr [tta],0
-@@al:   mov  word ptr [ttb],0
-@@bl:   ; world position of node (tnx+tta-NR, tnz+ttb-NR)
+        mov  word [tta],0
+.al:   mov  word [ttb],0
+.bl:   ; world position of node (tnx+tta-NR, tnz+ttb-NR)
         mov  ax,[tnx]
         add  ax,[tta]
         sub  ax,NR
@@ -82,9 +82,9 @@ TERRPREP:
         add  ax,[ttb]
         mov  si,ax
         add  si,si              ; word offset
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [TRX+si],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [TRZ+si],ax
         call HGET               ; AL = raw H of node (BX,DX preserved inside)
         mov  di,si
@@ -95,12 +95,12 @@ TERRPREP:
         call WORLDH
         pop  si
         mov  [TWH+si],ax
-        inc  word ptr [ttb]
-        cmp  word ptr [ttb],NSIDE
-        jl   @@bl
-        inc  word ptr [tta]
-        cmp  word ptr [tta],NSIDE
-        jl   @@al
+        inc  word [ttb]
+        cmp  word [ttb],NSIDE
+        jl   .bl
+        inc  word [tta]
+        cmp  word [tta],NSIDE
+        jl   .al
         ret
 
 ; ============================================================================
@@ -109,8 +109,8 @@ TERRPREP:
 ;  snow. Near quads also get a grid stroke. Buildings draw after this.
 ; ============================================================================
 TERRAIN:
-        mov  word ptr [tidx],0
-@@tl:   mov  si,[tidx]
+        mov  word [tidx],0
+.tl:   mov  si,[tidx]
         add  si,si
         mov  al,[TORD+si]       ; di (signed)
         cbw
@@ -164,66 +164,66 @@ TERRAIN:
         ; quick cull: all corners behind, or all beyond FARZ
         mov  ax,[IZ]
         cmp  ax,[IZ+2]
-        jge  @@z1
+        jge  .z1
         mov  ax,[IZ+2]
-@@z1:   cmp  ax,[IZ+4]
-        jge  @@z2
+.z1:   cmp  ax,[IZ+4]
+        jge  .z2
         mov  ax,[IZ+4]
-@@z2:   cmp  ax,[IZ+6]
-        jge  @@z3
+.z2:   cmp  ax,[IZ+6]
+        jge  .z3
         mov  ax,[IZ+6]
-@@z3:   cmp  ax,NEARZ
-        jl   @@next             ; max z < NEARZ -> fully behind
+.z3:   cmp  ax,NEARZ
+        jl   .next             ; max z < NEARZ -> fully behind
         mov  ax,[IZ]
         cmp  ax,[IZ+2]
-        jle  @@n1
+        jle  .n1
         mov  ax,[IZ+2]
-@@n1:   cmp  ax,[IZ+4]
-        jle  @@n2
+.n1:   cmp  ax,[IZ+4]
+        jle  .n2
         mov  ax,[IZ+4]
-@@n2:   cmp  ax,[IZ+6]
-        jle  @@n3
+.n2:   cmp  ax,[IZ+6]
+        jle  .n3
         mov  ax,[IZ+6]
-@@n3:   cmp  ax,FARZ
-        jg   @@next             ; min z beyond far -> skip
+.n3:   cmp  ax,FARZ
+        jg   .next             ; min z beyond far -> skip
         ; colour from the max raw H of the 4 corners
         mov  di,si
         shr  di,1               ; byte index
         mov  al,[TH+di]
         mov  ah,[TH+di+41]
         cmp  al,ah
-        jae  @@c1
+        jae  .c1
         mov  al,ah
-@@c1:   mov  ah,[TH+di+42]
+.c1:   mov  ah,[TH+di+42]
         cmp  al,ah
-        jae  @@c2
+        jae  .c2
         mov  al,ah
-@@c2:   mov  ah,[TH+di+1]
+.c2:   mov  ah,[TH+di+1]
         cmp  al,ah
-        jae  @@c3
+        jae  .c3
         mov  al,ah
-@@c3:   ; al = max H
+.c3:   ; al = max H
         cmp  al,88
-        jb   @@water
+        jb   .water
         cmp  al,168
-        jb   @@grass
+        jb   .grass
         cmp  al,200
-        jb   @@woods
+        jb   .woods
         cmp  al,230
-        jb   @@rock
-        mov  byte ptr [COLOR],8 ; snow caps
-        jmp  @@fill
-@@water:
-        mov  byte ptr [COLOR],14
-        jmp  @@fill
-@@grass:
-        mov  byte ptr [COLOR],10
-        jmp  @@fill
-@@woods:
-        mov  byte ptr [COLOR],15
-        jmp  @@fill
-@@rock: mov  byte ptr [COLOR],13
-@@fill: ; PITCH4 (inside FACEFILL's clip) rotates IY/IZ in place; stash them
+        jb   .rock
+        mov  byte [COLOR],8 ; snow caps
+        jmp  .fill
+.water:
+        mov  byte [COLOR],14
+        jmp  .fill
+.grass:
+        mov  byte [COLOR],10
+        jmp  .fill
+.woods:
+        mov  byte [COLOR],15
+        jmp  .fill
+.rock: mov  byte [COLOR],13
+.fill: ; PITCH4 (inside FACEFILL's clip) rotates IY/IZ in place; stash them
         ; so the stroke pass below starts from unpitched vertices, not
         ; double-pitched ones (that was the "grid drifts away" bug).
         mov  ax,[IY]
@@ -247,15 +247,15 @@ TERRAIN:
         mov  ax,[tta]
         sub  ax,NR
         cmp  ax,-3
-        jl   @@next
+        jl   .next
         cmp  ax,2
-        jg   @@next
+        jg   .next
         mov  ax,[ttb]
         sub  ax,NR
         cmp  ax,-3
-        jl   @@next
+        jl   .next
         cmp  ax,2
-        jg   @@next
+        jg   .next
         mov  ax,[SIY]           ; restore the unpitched vertices
         mov  [IY],ax
         mov  ax,[SIY+2]
@@ -272,11 +272,11 @@ TERRAIN:
         mov  [IZ+4],ax
         mov  ax,[SIZ+6]
         mov  [IZ+6],ax
-        mov  byte ptr [COLOR],28 ; dark ground colour: edges sit IN the relief
+        mov  byte [COLOR],28 ; dark ground colour: edges sit IN the relief
         call FACESTROKE
-@@next: inc  word ptr [tidx]
-        cmp  word ptr [tidx],1600
-        jl   @@tl
+.next: inc  word [tidx]
+        cmp  word [tidx],1600
+        jl   .tl
         ret
 
 ; (MMAPGEN went out to SYMSEG as MMAPGENF on 2026-08-05. It bakes the
@@ -323,10 +323,10 @@ MINIMAP:
         add  di,251             ; side edges
         mov  al,8
         mov  cx,66
-@@fr:   mov  es:[di],al
-        mov  es:[di+65],al
+.fr:   mov  [es:di],al
+        mov  [es:di+65],al
         add  di,320
-        loop @@fr
+        loop .fr
         ; blit the baked map (it lives in the far scratch segment)
         mov  ax,[mapt]
         call ROW320
@@ -336,16 +336,16 @@ MINIMAP:
         mov  ds,ax
         xor  si,si
         mov  cx,64
-@@row:  push cx
+.row:  push cx
         mov  cx,32
         rep  movsw              ; one 64-byte map row
         pop  cx
         add  di,320-64
-        loop @@row
+        loop .row
         pop  ds
         ; the front line: a jagged red stroke across the map
         xor  cx,cx
-@@bd:   mov  bx,cx
+.bd:   mov  bx,cx
         shr  bx,1
         shr  bx,1               ; band = column/4
         add  bx,bx
@@ -364,10 +364,10 @@ MINIMAP:
         add  di,252
         add  di,cx
         mov  al,19
-        mov  es:[di],al
+        mov  [es:di],al
         inc  cx
         cmp  cx,64
-        jb   @@bd
+        jb   .bd
         ; plane blip at node (camx,camz)
         mov  ax,[camx]
         add  ax,BIAS
@@ -394,10 +394,10 @@ MINIMAP:
         add  di,252             ; map column
         add  di,bx
         mov  al,8               ; white 2x2 blip
-        mov  es:[di],al
-        mov  es:[di+1],al
-        mov  es:[di+320],al
-        mov  es:[di+321],al
+        mov  [es:di],al
+        mov  [es:di+1],al
+        mov  [es:di+320],al
+        mov  [es:di+321],al
         ; heading tick: 3 map pixels ahead of the blip
         mov  ax,[hsin]
         add  ax,ax
@@ -415,10 +415,10 @@ MINIMAP:
         imul cx                 ; DX:AX = dzn*320
         mov  cx,ax
         mov  ax,si
-        sub  ax,cx              ; pixel offset = dxn - dzn*320
+        sub  ax,cx              ; pixel = dxn - dzn*320
         add  di,ax
         mov  al,19              ; red course tick
-        mov  es:[di],al
+        mov  [es:di],al
         ret
 
 ; ============================================================================
@@ -482,20 +482,20 @@ TERRH:  mov  ax,[camx]
         ; ha = h00 + (h10-h00)*fx/64 ; hb = h01 + (h11-h01)*fx/64
         mov  ax,[x1]
         sub  ax,[x0]
-        imul word ptr [dsx]
+        imul word [dsx]
         mov  bx,64
         idiv bx
         add  ax,[x0]
         mov  [x0],ax            ; ha
         mov  ax,[y1]
         sub  ax,[y0]
-        imul word ptr [dsx]
+        imul word [dsx]
         mov  bx,64
         idiv bx
         add  ax,[y0]            ; hb
         ; h = ha + (hb-ha)*fz/64
         sub  ax,[x0]
-        imul word ptr [dsy]
+        imul word [dsy]
         mov  bx,64
         idiv bx
         add  ax,[x0]

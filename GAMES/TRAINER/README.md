@@ -25,9 +25,22 @@ between a grease, a bounce and a crash.
 
 ## Build
 
-Inside DOS (repo root mounted as C:): run `BUILD.BAT` in this folder.
-From Windows: `MAKE.BAT` here, or `MAKE TRAINER` from the repo root —
-it converts the model with OBJ2DAT and assembles with TASM in DOSBox.
+Mount the repository in DOSBox and, in this folder:
+
+```
+MAKE            pack the models, then assemble  ->  FIELD.COM
+RUN             fly it
+```
+
+`MAKE` runs `TOOLS\OBJ2DAT.COM` over the six Wavefront models in `res/`
+first — the game cannot read text at runtime — then assembles `SRC/FIELD.ASM`
+with [flat assembler](https://flatassembler.net/) from `TOOLS/FASM`. Both are
+in this repository; nothing has to be bought or installed. Build `OBJ2DAT`
+first if it is not there: `cd TOOLS`, `MAKE`.
+
+From Windows, `MAKEWIN` and `RUNWIN` do the same without your opening DOSBox
+by hand, and `MAKEWIN CHECK` accounts for every byte of the difference against
+the Turbo Assembler build frozen in [`TASM/TRAINER`](../../TASM/TRAINER).
 
 ## Keys
 

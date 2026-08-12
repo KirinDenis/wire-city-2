@@ -45,49 +45,49 @@
 ;  next slab, AoA staple (stay in the bracket!), the G readout,
 ;  GEAR/FLAP/BRK/STALL lights.
 ; ============================================================================
-SNDN    equ 8000h               ; ring length; must precede the code
-TCIDLE  equ 75                  ; DSP time constant at idle  (~5512 Hz)
-TCAPP   equ 92                  ; parked idle note
-HGEAR   equ 436                 ; camera height on the gear, 1/64 m (6.8)
-H0      equ 436                 ; you start ON the slab
-V0      equ 0                   ; parked
-THRESH  equ 1000                ; first runway threshold, m of world
-RWLEN   equ 2400                ; runway length, m
-RWGAP   equ 16384               ; a fresh runway every 16 384 m. Power of
+SNDN    = 8000h               ; ring length; must precede the code
+TCIDLE  = 75                  ; DSP time constant at idle  (~5512 Hz)
+TCAPP   = 92                  ; parked idle note
+HGEAR   = 436                 ; camera height on the gear, 1/64 m (6.8)
+H0      = 436                 ; you start ON the slab
+V0      = 0                   ; parked
+THRESH  = 1000                ; first runway threshold, m of world
+RWLEN   = 2400                ; runway length, m
+RWGAP   = 16384               ; a fresh runway every 16 384 m. Power of
                                 ; two ON PURPOSE: the world is 65 536 m
                                 ; around (posm wraps with the WORD), the
                                 ; heightmap is 64 nodes of 1024 m - the
                                 ; torus, the runways and the arithmetic
                                 ; all close at the same seam, which is
                                 ; to say: no seam at all
-TNODE   equ 1024                ; heightmap node spacing, metres
-NEARD   equ 8                   ; the near plane, metres. It was 48 and
+TNODE   = 1024                ; heightmap node spacing, metres
+NEARD   = 8                   ; the near plane, metres. It was 48 and
                                 ; the bottom of the glass looked at
                                 ; ground 15..47 m away - an amputated
                                 ; band the pilot read as falling through
                                 ; the world. Eight covers the deepest
                                 ; visible row from gear height in the
                                 ; worst low bank, with margin
-NR      equ 12                  ; terrain cache radius, nodes (12 km)
-NSIDE   equ 25                  ; the cached lattice is NSIDE x NSIDE
-SEAM    equ 976                 ; stripe cycle, 1/16 m (61 m)
-PAINT   equ 592                 ; painted part, 1/16 m (37 m)
-CALIB   equ 0                   ; 1 = the CALIBRATION WORLD: flat, and
+NR      = 12                  ; terrain cache radius, nodes (12 km)
+NSIDE   = 25                  ; the cached lattice is NSIDE x NSIDE
+SEAM    = 976                 ; stripe cycle, 1/16 m (61 m)
+PAINT   = 592                 ; painted part, 1/16 m (37 m)
+CALIB   = 0                   ; 1 = the CALIBRATION WORLD: flat, and
                                 ; every 1024 m node square wears a colour
                                 ; that is a pure function of its world
                                 ; coordinates - so what the eye sees can
                                 ; be CHECKED against where things are.
                                 ; Flip to 0 for the real island.
-VSTLC   equ 233                 ; stall speed clean, km/h  (mg/8 = v^2*a/1241
-VSTLF   equ 218                 ; stall with FLAPS, km/h    at the stick's
+VSTLC   = 233                 ; stall speed clean, km/h  (mg/8 = v^2*a/1241
+VSTLF   = 218                 ; stall with FLAPS, km/h    at the stick's
                                 ; alpha limit of 4352 - the physics, not taste)
 
-        .8086
-        LOCALS
-        JUMPS
-CODE    SEGMENT
-        ASSUME cs:CODE, ds:CODE, es:CODE, ss:CODE
-        ORG  100h
+format binary as 'com'
+        org 100h
+
+        ; .8086 in the TASM source. FASM has no such directive - without this
+        ; include it silently uses 386 jumps when a target is out of range.
+        include '..\..\..\ENGINE\E_8086.INC'
 
 START:  cld
         ; ---- find the DSP: reset pulse, wait for the 0AAh hello ----
@@ -101,21 +101,21 @@ START:  cld
         xor  al,al
         out  dx,al
         mov  cx,4000
-@@rst:  mov  dx,22Eh
+.rst:  mov  dx,22Eh
         in   al,dx
         test al,80h
-        jz   @@nx
+        jz   .nx
         mov  dx,22Ah
         in   al,dx
         cmp  al,0AAh
-        je   @@got
-@@nx:   loop @@rst
+        je   .got
+.nx:   loop .rst
         mov  ah,9               ; no Blaster: say so and leave
-        mov  dx,offset NOSB
+        mov  dx,NOSB
         int  21h
         mov  ax,4C01h
         int  21h
-@@got:  mov  ax,cs              ; back buffer: the 64K above the program
+.got:  mov  ax,cs              ; back buffer: the 64K above the program
         add  ax,1000h
         mov  [bufseg],ax
         mov  ax,cs              ; ring: the next 64K-aligned segment
@@ -123,30 +123,30 @@ START:  cld
         and  ax,0F000h
         mov  [sndseg],ax
         mov  si,0               ; the sky's tile rows never move
-@@ts:   mov  ax,si
+.ts:   mov  ax,si
         and  ax,15
         mov  cl,4
         shl  ax,cl
         mov  [TSKY+si],al
         inc  si
         cmp  si,256
-        jb   @@ts
+        jb   .ts
         push es                 ; ---- mint this run's island ----
         mov  ax,40h             ; seed the LCG from the clock: every
         mov  es,ax              ; launch grows a DIFFERENT world (the
-        mov  ax,es:[6Ch]        ; noise bed downstream neither knows
+        mov  ax,[es:6Ch]        ; noise bed downstream neither knows
         pop  es                 ; nor cares which noise it gets)
         or   ax,1               ; the LCG must never see zero
         mov  [rseed],ax
         call DSGEN
-IF CALIB EQ 1
+if CALIB = 1
         xor  si,si              ; the calibration world is a BILLIARD
-@@cfl:  mov  byte ptr [HMAP+si],88 ; TABLE: raw 88 = sea level = flat.
+.cfl:  mov  byte [HMAP+si],88 ; TABLE: raw 88 = sea level = flat.
         inc  si                 ; No hills to hide behind: if a square
         cmp  si,4096            ; dances, the RENDERER danced it
-        jb   @@cfl
-ENDIF
-IF CALIB EQ 2
+        jb   .cfl
+end if
+if CALIB = 2
         ; the PYRAMID: one mountain owning the whole map. 21 m of rise
         ; per 1024-m node, peak 672 m at node (32,32) = world
         ; (32768,32768): the height under ANY point is arithmetic you
@@ -154,21 +154,21 @@ IF CALIB EQ 2
         ; a frame breaks, its numbers pin the spot; after the fix we
         ; teleport straight back and compare.
         xor  si,si
-@@pyr:  mov  ax,si
+.pyr:  mov  ax,si
         mov  cl,6
         shr  ax,cl              ; node x (HMAP is x*64+z)
         sub  ax,32
-        jns  @@px1
+        jns  .px1
         neg  ax
-@@px1:  mov  bx,si
+.px1:  mov  bx,si
         and  bx,63              ; node z
         sub  bx,32
-        jns  @@pz1
+        jns  .pz1
         neg  bx
-@@pz1:  cmp  ax,bx              ; Chebyshev: a SQUARE pyramid
-        jae  @@pm1
+.pz1:  cmp  ax,bx              ; Chebyshev: a SQUARE pyramid
+        jae  .pm1
         mov  ax,bx
-@@pm1:  mov  bx,32
+.pm1:  mov  bx,32
         sub  bx,ax
         mov  ax,bx
         add  ax,ax
@@ -177,48 +177,48 @@ IF CALIB EQ 2
         mov  [HMAP+si],al
         inc  si
         cmp  si,4096
-        jb   @@pyr
-ENDIF
+        jb   .pyr
+end if
         ; ---- stamp the aprons: four flat fields for four runways ----
         ; Raw 88 is sea level, which WORLDH maps to exactly zero: the
         ; runways stand on still ground whatever island came up, and a
         ; half-blend ring keeps the hills from starting at the fence.
         ; This replaces the old corridor-wide valley: everywhere else
         ; the terrain is now REAL, including straight ahead.
-        mov  word ptr [dsx],0
-@@apr:  mov  ax,[dsx]
+        mov  word [dsx],0
+.apr:  mov  ax,[dsx]
         mov  cl,4
         shl  ax,cl              ; z node base = runway * 16
         mov  [dsh],ax
-        mov  word ptr [dsy],-1
-@@apz:  mov  bx,-3
-@@apx:  mov  dx,[dsh]
+        mov  word [dsy],-1
+.apz:  mov  bx,-3
+.apx:  mov  dx,[dsh]
         add  dx,[dsy]
         mov  al,88
         cmp  bx,-3
-        je   @@blnd
+        je   .blnd
         cmp  bx,3
-        je   @@blnd
-        cmp  word ptr [dsy],-1
-        je   @@blnd
-        cmp  word ptr [dsy],4
-        je   @@blnd
+        je   .blnd
+        cmp  word [dsy],-1
+        je   .blnd
+        cmp  word [dsy],4
+        je   .blnd
         call HPUT
-        jmp  @@apn
-@@blnd: call HGET
+        jmp  .apn
+.blnd: call HGET
         xor  ah,ah
         add  ax,88
         shr  ax,1
         call HPUT
-@@apn:  inc  bx
+.apn:  inc  bx
         cmp  bx,4
-        jl   @@apx
-        inc  word ptr [dsy]
-        cmp  word ptr [dsy],5
-        jl   @@apz
-        inc  word ptr [dsx]
-        cmp  word ptr [dsx],4
-        jl   @@apr
+        jl   .apx
+        inc  word [dsy]
+        cmp  word [dsy],5
+        jl   .apz
+        inc  word [dsx]
+        cmp  word [dsx],4
+        jl   .apr
         call BAKE               ; sky ramp + clouds (lost once in a
                                 ; block reshuffle: the world went
                                 ; palette-zero BLACK and the pixels
@@ -251,7 +251,7 @@ ENDIF
         ; ---- DSP: speaker on, approach power, the eternal block ----
         mov  ah,0D1h
         call SBWR
-        mov  byte ptr [curtc],TCAPP
+        mov  byte [curtc],TCAPP
         call SETTC
         mov  ah,48h
         call SBWR
@@ -272,22 +272,22 @@ ENDIF
         mov  [oldk9+2],es       ; the first repeat: that pause IS the
         push ds                 ; jerk. Our handler keeps key STATE, and
         mov  ax,2509h           ; the stick moves once per tick from it
-        mov  dx,offset KBINT
+        mov  dx,KBINT
         int  21h
         pop  ds
 
 ; ---- the main loop ---------------------------------------------------------
-@@loop: call HEAL
+.loop: call HEAL
         push es
         mov  ax,40h
         mov  es,ax
-        mov  ax,es:[6Ch]        ; the stock 18.2 Hz heartbeat
+        mov  ax,[es:6Ch]        ; the stock 18.2 Hz heartbeat
         pop  es
         cmp  ax,[ltick]
-        je   @@rend
+        je   .rend
         mov  [ltick],ax
         call TICK
-@@rend: call RENDER
+.rend: call RENDER
         call WAITVR
         push ds                 ; blit the frame
         mov  ax,0A000h
@@ -298,12 +298,12 @@ ENDIF
         mov  cx,32000
         rep  movsw
         pop  ds
-        cmp  byte ptr [KEYS+1],0 ; ESC is the only key the loop still
-        je   @@loop              ; reads for itself: everything that
+        cmp  byte [KEYS+1],0 ; ESC is the only key the loop still
+        je   .loop              ; reads for itself: everything that
                                  ; flies moved into KEYAPP, one move
                                  ; per tick, no typematic pause
 
-@@quit: mov  ah,0D3h            ; speaker off, DSP reset stops the loop
+.quit: mov  ah,0D3h            ; speaker off, DSP reset stops the loop
         call SBWR
         mov  dx,226h
         mov  al,1
@@ -344,14 +344,14 @@ KBINT:  push ax
         and  al,7Fh
         mov  bl,al
         xor  bh,bh
-        mov  di,offset KEYS
+        mov  di,KEYS
         add  di,bx
         test ah,80h
-        jnz  @@brk
-        mov  byte ptr [di],1
-        jmp  @@eoi
-@@brk:  mov  byte ptr [di],0
-@@eoi:  mov  al,20h
+        jnz  .brk
+        mov  byte [di],1
+        jmp  .eoi
+.brk:  mov  byte [di],0
+.eoi:  mov  al,20h
         out  20h,al
         pop  ds
         pop  di
@@ -360,37 +360,37 @@ KBINT:  push ax
         iret
 
 ; ---- RESETF: park a fresh jet on the slab ----------------------------------
-RESETF: mov  byte ptr [state],1
-        mov  byte ptr [abon],0
-        mov  word ptr [gam],0
-        mov  word ptr [gamf],0
-        mov  word ptr [sing],0
-        mov  word ptr [cosg],256
-        mov  byte ptr [ginv],0
-        mov  word ptr [roll],0
-        mov  word ptr [px],0
-        mov  word ptr [pxacc],0
-        mov  word ptr [hdg],0
-        mov  word ptr [hdgf],0
-        mov  word ptr [hgnd],0
-        mov  word ptr [h6],H0
-        mov  word ptr [hac],0
-        mov  word ptr [vs64],0
-        mov  word ptr [vsac],0
-        mov  word ptr [v16],V0
-        mov  word ptr [vacc],0
-        mov  word ptr [alpha8],3072
-        mov  word ptr [T4],250
-        mov  word ptr [Tt4],250
-        mov  word ptr [posm],1200
-        mov  word ptr [posacc],0
-        mov  word ptr [odo],0
-        mov  word ptr [hrow],95
-        mov  byte ptr [gear],1
-        mov  byte ptr [flaps],0
-        mov  byte ptr [brk],0
-        mov  byte ptr [air],0
-        mov  byte ptr [flew],0
+RESETF: mov  byte [state],1
+        mov  byte [abon],0
+        mov  word [gam],0
+        mov  word [gamf],0
+        mov  word [sing],0
+        mov  word [cosg],256
+        mov  byte [ginv],0
+        mov  word [roll],0
+        mov  word [px],0
+        mov  word [pxacc],0
+        mov  word [hdg],0
+        mov  word [hdgf],0
+        mov  word [hgnd],0
+        mov  word [h6],H0
+        mov  word [hac],0
+        mov  word [vs64],0
+        mov  word [vsac],0
+        mov  word [v16],V0
+        mov  word [vacc],0
+        mov  word [alpha8],3072
+        mov  word [T4],250
+        mov  word [Tt4],250
+        mov  word [posm],1200
+        mov  word [posacc],0
+        mov  word [odo],0
+        mov  word [hrow],95
+        mov  byte [gear],1
+        mov  byte [flaps],0
+        mov  byte [brk],0
+        mov  byte [air],0
+        mov  byte [flew],0
         ret
 
 ; ---- ACTRL: the Pilot Automatic - the arcade half of the two-mode deal -----
@@ -399,97 +399,97 @@ RESETF: mov  byte ptr [state],1
 ; a proportional pull on the error, with a stall guard that trades
 ; nose for speed before the wing quits. No second physics anywhere:
 ; an unseen pilot, not an unseen engine.
-ACTRL:  cmp  byte ptr [amode],0
-        je   @@ret
-        cmp  byte ptr [air],0
-        je   @@ret
+ACTRL:  cmp  byte [amode],0
+        je   .ret
+        cmp  byte [air],0
+        je   .ret
         mov  ax,[v16]           ; stall guard: below ~1.15 Vs the
         cmp  ax,1120            ; commanded path yields to the speed
-        jae  @@ng
-        cmp  word ptr [gtgt],-6
-        jle  @@ng
-        dec  word ptr [gtgt]
-@@ng:   mov  ax,[gtgt]
+        jae  .ng
+        cmp  word [gtgt],-6
+        jle  .ng
+        dec  word [gtgt]
+.ng:   mov  ax,[gtgt]
         sub  ax,[gam]
         and  ax,255
         cmp  ax,128
-        jb   @@w1
+        jb   .w1
         sub  ax,256             ; the error, folded signed
-@@w1:   mov  cx,96              ; gain doubled: the old 48 could not
+.w1:   mov  cx,96              ; gain doubled: the old 48 could not
         imul cx                 ; even reach negative alpha, and "down"
         cmp  ax,3800            ; was a word the autopilot knew but
-        jle  @@c1               ; could not do
+        jle  .c1               ; could not do
         mov  ax,3800
-@@c1:   cmp  ax,-3800
-        jge  @@c2
+.c1:   cmp  ax,-3800
+        jge  .c2
         mov  ax,-3800
-@@c2:   mov  [gerr],ax
+.c2:   mov  [gerr],ax
         mov  ax,[roll]
         call TSIN
         or   ax,ax
-        jns  @@c3
+        jns  .c3
         neg  ax
-@@c3:   mov  cx,5
+.c3:   mov  cx,5
         imul cx
         add  ax,2400            ; trim + coordination + the pull...
         add  ax,[gerr]
         add  ax,[gboost]        ; ...and the player's own G, when the
         cmp  ax,-1536           ; bank turns the arrows into a G lever
-        jge  @@c4
+        jge  .c4
         mov  ax,-1536
-@@c4:   cmp  ax,4352
-        jle  @@c5
+.c4:   cmp  ax,4352
+        jle  .c5
         mov  ax,4352
-@@c5:   mov  bx,[alpha8]        ; ease the stick, not teleport it
+.c5:   mov  bx,[alpha8]        ; ease the stick, not teleport it
         sub  ax,bx
         cmp  ax,80
-        jle  @@c6
+        jle  .c6
         mov  ax,80
-@@c6:   cmp  ax,-80
-        jge  @@c7
+.c6:   cmp  ax,-80
+        jge  .c7
         mov  ax,-80
-@@c7:   add  bx,ax
+.c7:   add  bx,ax
         mov  [alpha8],bx
-@@ret:  ret
+.ret:  ret
 
 ; ---- TICK: one 55 ms step - no controllers, no script: just you ------------
-TICK:   inc  word ptr [tcnt]
+TICK:   inc  word [tcnt]
         call DBGTICK            ; drain the umbilical and report
         call KEYAPP             ; one stick movement per tick, from the
                                 ; key STATE - whoever set it
         call ACTRL              ; ...and the Pilot Automatic, if hired
         mov  al,[state]
         or   al,al
-        jz   @@idle
+        jz   .idle
         cmp  al,1
-        je   @@fly
+        je   .fly
         ret                     ; state 6: hold the card
-@@idle: ; ---- parked on the card, engine at idle ----
-        test word ptr [tcnt],7
-        jnz  @@done
+.idle: ; ---- parked on the card, engine at idle ----
+        test word [tcnt],7
+        jnz  .done
         call RND16
         and  ax,1
         add  al,TCAPP
         mov  [curtc],al
         call SETTC
         ret
-@@fly:  cmp  byte ptr [air],0   ; tail protection on the ground
-        jne  @@fl1
-        cmp  word ptr [alpha8],3840
-        jle  @@fl1
-        mov  word ptr [alpha8],3840
-@@fl1:  call PHYSL
+.fly:  cmp  byte [air],0   ; tail protection on the ground
+        jne  .fl1
+        cmp  word [alpha8],3840
+        jle  .fl1
+        mov  word [alpha8],3840
+.fl1:  call PHYSL
         call ATT
         call ENG
-        cmp  byte ptr [air],0   ; flown and rolled to a stop?
-        jne  @@done
-        cmp  byte ptr [flew],0
-        je   @@done
-        cmp  word ptr [v16],0
-        jg   @@done
-        mov  byte ptr [state],6
-        mov  word ptr [cardp],offset MDONE
-@@done: ret
+        cmp  byte [air],0   ; flown and rolled to a stop?
+        jne  .done
+        cmp  byte [flew],0
+        je   .done
+        cmp  word [v16],0
+        jg   .done
+        mov  byte [state],6
+        mov  word [cardp],MDONE
+.done: ret
 
 ; ---- PHYSL: Newton per tick, landing configuration -------------------------
 ; L8 = v^2*alpha8/1082 (962 in ground effect below 9 m); sink and
@@ -498,100 +498,100 @@ TICK:   inc  word ptr [tcnt]
 ; world odometer advances for the stripes - and no seam clicks.
 PHYSL:  mov  bx,[Tt4]           ; the spool: thrust CHASES the lever
         sub  bx,[T4]            ; (~1.5 s time constant - and the note
-        jz   @@sp0              ; rides the real thrust, so you HEAR
+        jz   .sp0              ; rides the real thrust, so you HEAR
         mov  ax,bx              ; the turbine wind up and down)
         cwd
         mov  cx,16
         idiv cx
         or   ax,ax
-        jnz  @@sp1
+        jnz  .sp1
         mov  ax,1
         or   bx,bx
-        jns  @@sp1
+        jns  .sp1
         neg  ax
-@@sp1:  add  [T4],ax
-@@sp0:  mov  ax,[v16]
+.sp1:  add  [T4],ax
+.sp0:  mov  ax,[v16]
         mov  cl,4
         shr  ax,cl
         or   ax,ax
-        jnz  @@vg
+        jnz  .vg
         mov  ax,1               ; never divide by a parked jet
-@@vg:   mov  [vmv],ax
+.vg:   mov  [vmv],ax
         mul  ax
         mov  [v2v],ax
         mov  cx,1241            ; the clean wing...
-        cmp  byte ptr [flaps],0
-        je   @@k1
+        cmp  byte [flaps],0
+        je   .k1
         mov  cx,1082            ; ...FLAPS grow it
-@@k1:   cmp  word ptr [h6],576
-        jae  @@k2               ; (unsigned, like every h6 compare)
+.k1:   cmp  word [h6],576
+        jae  .k2               ; (unsigned, like every h6 compare)
         mov  ax,cx              ; ground effect: ~12% more lift
         mov  bx,8
         xor  dx,dx
         div  bx
         sub  cx,ax
-@@k2:   mov  bx,[alpha8]        ; alpha may be NEGATIVE now: pushing the
+.k2:   mov  bx,[alpha8]        ; alpha may be NEGATIVE now: pushing the
         cmp  bx,-1536           ; wing below the wind is how a nose gets
-        jge  @@ae1              ; pointed at the ground - the "cushion"
+        jge  .ae1              ; pointed at the ground - the "cushion"
         mov  bx,-1536           ; was a stick that could not push
-@@ae1:  cmp  bx,4608
-        jle  @@ae2
+.ae1:  cmp  bx,4608
+        jle  .ae2
         mov  bx,4608
-@@ae2:  or   bx,bx              ; unsigned MUL wants the magnitude
-        jns  @@lpp
+.ae2:  or   bx,bx              ; unsigned MUL wants the magnitude
+        jns  .lpp
         neg  bx
         mov  ax,[v2v]
         mul  bx
         cmp  dx,cx
-        jb   @@lnv
+        jb   .lnv
         mov  ax,60000
-        jmp  @@lns
-@@lnv:  div  cx
-@@lns:  mov  word ptr [lgv],0   ; the G readout shows no negative G
+        jmp  .lns
+.lnv:  div  cx
+.lns:  mov  word [lgv],0   ; the G readout shows no negative G
         shr  ax,1               ; dynamics at HALF SCALE (the ninth
         cmp  ax,30000           ; integer trap dodged by arithmetic,
-        jbe  @@ln2              ; not by a cap this time): mg/16 =
+        jbe  .ln2              ; not by a cap this time): mg/16 =
         mov  ax,30000           ; 7357, four G fit a signed word
-@@ln2:  neg  ax
+.ln2:  neg  ax
         mov  [ldyn],ax
-        jmp  @@lgo
-@@lpp:  mov  ax,[v2v]
+        jmp  .lgo
+.lpp:  mov  ax,[v2v]
         mul  bx
         cmp  dx,cx              ; the quotient would burst the word -
-        jb   @@ldv              ; saturate (a wing has limits; so does
+        jb   .ldv              ; saturate (a wing has limits; so does
         mov  ax,60000           ; a 16-bit DIV, and it FAULTS: this was
-        jmp  @@lst              ; the mystery freeze past ~550 km/h)
-@@ldv:  div  cx
-@@lst:  mov  [lgv],ax           ; the full value feeds the G readout
+        jmp  .lst              ; the mystery freeze past ~550 km/h)
+.ldv:  div  cx
+.lst:  mov  [lgv],ax           ; the full value feeds the G readout
         shr  ax,1
         cmp  ax,30000
-        jbe  @@lp2
+        jbe  .lp2
         mov  ax,30000
-@@lp2:  mov  [ldyn],ax
-@@lgo:  mov  ax,[ldyn]
-        cmp  byte ptr [air],0
-        jne  @@l2
+.lp2:  mov  [ldyn],ax
+.lgo:  mov  ax,[ldyn]
+        cmp  byte [air],0
+        jne  .l2
         cmp  ax,7357            ; on the wheels: the wing takes it?
-        jbe  @@gnd
-        mov  byte ptr [air],1   ; liftoff - by lift, as always
-        mov  byte ptr [flew],1
-        mov  word ptr [gtgt],6  ; AUTO's climb-out: a tidy 8 degrees
+        jbe  .gnd
+        mov  byte [air],1   ; liftoff - by lift, as always
+        mov  byte [flew],1
+        mov  word [gtgt],6  ; AUTO's climb-out: a tidy 8 degrees
         call UNLOAD
-        jmp  @@l2
-@@gnd:  mov  word ptr [vs64],0
-        mov  word ptr [gam],0   ; wheels on the world: the path is flat
-        mov  word ptr [gamf],0
-        mov  word ptr [sing],0
-        mov  word ptr [cosg],256
-        mov  word ptr [h6],HGEAR
-        cmp  byte ptr [gear],0  ; rolling with no legs: the belly
-        jne  @@gok              ; grinds and the day is over
-        cmp  word ptr [v16],32
-        jle  @@gok
-        mov  byte ptr [state],6
-        mov  word ptr [cardp],offset MBELLY
-@@gok:  jmp  @@long
-@@l2:   ; ---- the tilted lift vector, now in BOTH planes ------------
+        jmp  .l2
+.gnd:  mov  word [vs64],0
+        mov  word [gam],0   ; wheels on the world: the path is flat
+        mov  word [gamf],0
+        mov  word [sing],0
+        mov  word [cosg],256
+        mov  word [h6],HGEAR
+        cmp  byte [gear],0  ; rolling with no legs: the belly
+        jne  .gok              ; grinds and the day is over
+        cmp  word [v16],32
+        jle  .gok
+        mov  byte [state],6
+        mov  word [cardp],MBELLY
+.gok:  jmp  .long
+.l2:   ; ---- the tilted lift vector, now in BOTH planes ------------
         ; Bank the wing and the same lift splits: L*sin swings the
         ; heading, L*cos fights gravity in the vertical - and the
         ; vertical is a FULL CIRCLE now: v*dgamma = L*cos(phi) -
@@ -616,25 +616,25 @@ PHYSL:  mov  bx,[Tt4]           ; the spool: thrust CHASES the lever
         idiv cx                 ; pulling in the bank TIGHTENS it now
         mov  cx,[vmv]
         cmp  cx,16
-        jae  @@tnv
+        jae  .tnv
         mov  cx,16              ; divisor floor, the idiv rule
-@@tnv:  cwd
+.tnv:  cwd
         idiv cx
         mov  bx,[cosg]          ; near the vertical the heading is a
         or   bx,bx              ; word without meaning: hold it
-        jns  @@tg1
+        jns  .tg1
         neg  bx
-@@tg1:  cmp  bx,32
-        jl   @@tg2
+.tg1:  cmp  bx,32
+        jl   .tg2
         add  ax,[hdgf]
         mov  bx,ax
         mov  cl,8
         sar  bx,cl
         add  [hdg],bx
-        and  word ptr [hdg],255
+        and  word [hdg],255
         and  ax,255
         mov  [hdgf],ax
-@@tg2:  mov  ax,[roll]
+.tg2:  mov  ax,[roll]
         add  ax,64
         call TSIN               ; cos(roll)
         mov  cx,ax
@@ -660,22 +660,22 @@ PHYSL:  mov  bx,[Tt4]           ; the spool: thrust CHASES the lever
         mov  ax,cx
         mov  cx,[vmv]
         cmp  cx,16
-        jae  @@gnv
+        jae  .gnv
         mov  cx,16
-@@gnv:  cwd
+.gnv:  cwd
         idiv cx                 ; dgamma, 8.8 units/tick
         cmp  ax,512             ; ~36 deg/s: the airframe's pitch stop
-        jle  @@gc1
+        jle  .gc1
         mov  ax,512
-@@gc1:  cmp  ax,-512
-        jge  @@gc2
+.gc1:  cmp  ax,-512
+        jge  .gc2
         mov  ax,-512
-@@gc2:  add  ax,[gamf]
+.gc2:  add  ax,[gamf]
         mov  bx,ax
         mov  cl,8
         sar  bx,cl
         add  [gam],bx
-        and  word ptr [gam],255
+        and  word [gam],255
         and  ax,255
         mov  [gamf],ax
         mov  ax,[gam]
@@ -689,12 +689,12 @@ PHYSL:  mov  bx,[Tt4]           ; the spool: thrust CHASES the lever
         idiv cx                 ; 1/16 m/s * sin/256 -> 1/64 m/s
         neg  ax                 ; the tape's +down convention
         cmp  ax,15500
-        jle  @@vs1
+        jle  .vs1
         mov  ax,15500
-@@vs1:  cmp  ax,-15500
-        jge  @@vs2
+.vs1:  cmp  ax,-15500
+        jge  .vs2
         mov  ax,-15500
-@@vs2:  mov  [vs64],ax
+.vs2:  mov  [vs64],ax
         mov  ax,[vs64]          ; h -= vs: 14/256 of a unit per tick
         mov  cx,14
         imul cx
@@ -704,26 +704,26 @@ PHYSL:  mov  bx,[Tt4]           ; the spool: thrust CHASES the lever
         idiv cx
         sub  [h6],ax
         mov  [hac],dx
-        cmp  word ptr [h6],62000 ; this little world has a lid.
-        jbe  @@ce               ; UNSIGNED: 62000 is -3536 as a signed
-        mov  word ptr [h6],62000 ; word, and the signed jle held the
-        mov  word ptr [vs64],0  ; jet in a lid-floor trap forever
-@@ce:   cmp  word ptr [h6],HGEAR ; down at the slab?
-        ja   @@long
-        cmp  word ptr [vs64],16 ; only a real SINK is a touch; a
-        jg   @@tch              ; marginal liftoff rides the deck
-        mov  word ptr [h6],HGEAR ; until the climb is honest
-        jmp  @@long
-@@tch:  call TOUCH
-@@long: mov  ax,[v2v]           ; D4 = cdx*v^2/400: 1.00 clean,
+        cmp  word [h6],62000 ; this little world has a lid.
+        jbe  .ce               ; UNSIGNED: 62000 is -3536 as a signed
+        mov  word [h6],62000 ; word, and the signed jle held the
+        mov  word [vs64],0  ; jet in a lid-floor trap forever
+.ce:   cmp  word [h6],HGEAR ; down at the slab?
+        ja   .long
+        cmp  word [vs64],16 ; only a real SINK is a touch; a
+        jg   .tch              ; marginal liftoff rides the deck
+        mov  word [h6],HGEAR ; until the climb is honest
+        jmp  .long
+.tch:  call TOUCH
+.long: mov  ax,[v2v]           ; D4 = cdx*v^2/400: 1.00 clean,
         mov  cx,100             ; +0.25 gear, +0.25 flaps
-        cmp  byte ptr [gear],0
-        je   @@dg
+        cmp  byte [gear],0
+        je   .dg
         add  cx,25
-@@dg:   cmp  byte ptr [flaps],0
-        je   @@df
+.dg:   cmp  byte [flaps],0
+        je   .df
         add  cx,25
-@@df:   mul  cx
+.df:   mul  cx
         mov  cx,400
         div  cx
         mov  bx,[T4]
@@ -736,9 +736,9 @@ PHYSL:  mov  bx,[Tt4]           ; the spool: thrust CHASES the lever
         ; turn in knots, and lets a landing flare actually end.
         mov  ax,[ldyn]
         or   ax,ax              ; negative lift buys drag all the same
-        jns  @@dip
+        jns  .dip
         neg  ax
-@@dip:  mov  cl,3
+.dip:  mov  cl,3
         shr  ax,cl
         mul  ax                 ; (L/128)^2, all 32 bits of it
         mov  cx,[v2v]
@@ -746,22 +746,22 @@ PHYSL:  mov  bx,[Tt4]           ; the spool: thrust CHASES the lever
         shr  cx,1
         shr  cx,1               ; v^2/8, the calibrated denominator
         cmp  cx,8
-        jae  @@di1
+        jae  .di1
         mov  cx,8               ; a parked jet divides by nothing
-@@di1:  cmp  dx,cx              ; quotient past a word: saturate the tax
-        jae  @@di2
+.di1:  cmp  dx,cx              ; quotient past a word: saturate the tax
+        jae  .di2
         div  cx
         cmp  ax,9000
-        jbe  @@di3
-@@di2:  mov  ax,9000
-@@di3:  sub  bx,ax
-        cmp  byte ptr [air],0
-        jne  @@fr0
+        jbe  .di3
+.di2:  mov  ax,9000
+.di3:  sub  bx,ax
+        cmp  byte [air],0
+        jne  .fr0
         sub  bx,883             ; rolling friction...
-        cmp  byte ptr [brk],0
-        je   @@fr0
+        cmp  byte [brk],0
+        je   .fr0
         sub  bx,7400            ; ...and the brakes
-@@fr0:  mov  ax,bx              ; dv16(8.8) = N4*256/3412...
+.fr0:  mov  ax,bx              ; dv16(8.8) = N4*256/3412...
         mov  cx,256
         imul cx
         mov  cx,3412
@@ -780,13 +780,13 @@ PHYSL:  mov  bx,[Tt4]           ; the spool: thrust CHASES the lever
         idiv cx
         add  [v16],ax
         mov  [vacc],dx
-        cmp  word ptr [v16],0
-        jge  @@vf
-        mov  word ptr [v16],0
-@@vf:   cmp  word ptr [v16],3840 ; ~240 m/s: v^2 must stay in a word
-        jle  @@l4
-        mov  word ptr [v16],3840
-@@l4:   mov  ax,[v16]           ; the step this tick (metres, 8.8) -
+        cmp  word [v16],0
+        jge  .vf
+        mov  word [v16],0
+.vf:   cmp  word [v16],3840 ; ~240 m/s: v^2 must stay in a word
+        jle  .l4
+        mov  word [v16],3840
+.l4:   mov  ax,[v16]           ; the step this tick (metres, 8.8) -
         mov  bx,ax              ; along the heading, times cos(gamma):
         mov  cl,3               ; going straight up, the map stops
         sar  bx,cl
@@ -830,41 +830,41 @@ PHYSL:  mov  bx,[Tt4]           ; the spool: thrust CHASES the lever
         mov  cx,ax
         sub  ax,[hgnd]          ; how much it rose under us this tick
         mov  [hgnd],cx
-        cmp  byte ptr [air],0
-        je   @@hgw              ; on the wheels the strut just follows
+        cmp  byte [air],0
+        je   .hgw              ; on the wheels the strut just follows
         or   ax,ax
-        jns  @@hup
+        jns  .hup
         neg  ax                 ; falling ground: height above it grows
         mov  cx,64
         mul  cx                 ; metres -> 1/64 m, same as the rise
         add  [h6],ax
-        cmp  word ptr [h6],65000
-        jbe  @@hgw
-        mov  word ptr [h6],65000
-        jmp  @@hgw
-@@hup:  mov  cx,64
+        cmp  word [h6],65000
+        jbe  .hgw
+        mov  word [h6],65000
+        jmp  .hgw
+.hup:  mov  cx,64
         mul  cx                 ; metres -> 1/64 m (rise is small)
         sub  [h6],ax
-        jnc  @@hgw
-        mov  word ptr [h6],HGEAR ; the hill came up through the wheels:
-@@hgw:                           ; the TOUCH path will say the rest
+        jnc  .hgw
+        mov  word [h6],HGEAR ; the hill came up through the wheels:
+.hgw:                           ; the TOUCH path will say the rest
         mov  ax,[v16]           ; stripe odometer, 1/16 m
         xor  dx,dx
         mov  bx,18
         div  bx
         add  [odo],ax
-        cmp  word ptr [odo],SEAM
-        jb   @@l5
-        sub  word ptr [odo],SEAM
-@@l5:   ret
+        cmp  word [odo],SEAM
+        jb   .l5
+        sub  word [odo],SEAM
+.l5:   ret
 
 ; ---- ATT: attitude = alpha + flight path, mapped to the horizon row --------
 ; theta = alpha - gamma; gamma(8.8 deg) = 229*vs/vm. The nose-up creep
 ; through the float is this line doing its job.
-ATT:    cmp  byte ptr [air],0
-        jne  @@aa
-        mov  word ptr [fpr],0   ; on the wheels there is no flight path
-        mov  byte ptr [ginv],0
+ATT:    cmp  byte [air],0
+        jne  .aa
+        mov  word [fpr],0   ; on the wheels there is no flight path
+        mov  byte [ginv],0
         mov  ax,[alpha8]        ; on the ground the nose IS the alpha -
         sub  ax,3072            ; drawn at the same world scale as the
         mov  cx,182             ; sky it rotates into
@@ -878,14 +878,14 @@ ATT:    cmp  byte ptr [air],0
         mov  bx,ax
         add  bx,95
         cmp  bx,60
-        jge  @@g1
+        jge  .g1
         mov  bx,60
-@@g1:   cmp  bx,170
-        jle  @@g2
+.g1:   cmp  bx,170
+        jle  .g2
         mov  bx,170
-@@g2:   mov  [hrow],bx
+.g2:   mov  [hrow],bx
         ret
-@@aa:   ; the attitude is gamma + alpha and it WRAPS: fold it into
+.aa:   ; the attitude is gamma + alpha and it WRAPS: fold it into
         ; +-90 degrees with an inverted flag. The flag turns the whole
         ; rendered world through 180 - roll and heading both - which
         ; is exactly what the top of a loop looks like out the glass.
@@ -900,32 +900,32 @@ ATT:    cmp  byte ptr [air],0
         shl  bx,cl
         add  bx,[gamf]
         add  ax,bx              ; theta, 8.8 units on the full circle
-        mov  byte ptr [ginv],0
+        mov  byte [ginv],0
         cmp  ax,16384           ; past straight up...
-        jle  @@f1
+        jle  .f1
         mov  bx,-32768          ; 8000h: minus and plus 32768 are the
         sub  bx,ax              ; same word, so this IS 32768 - theta
         mov  ax,bx
-        mov  byte ptr [ginv],1
-        jmp  @@f3
-@@f1:   cmp  ax,-16384          ; ...or past straight down
-        jge  @@f3
+        mov  byte [ginv],1
+        jmp  .f3
+.f1:   cmp  ax,-16384          ; ...or past straight down
+        jge  .f3
         mov  bx,-32768
         sub  bx,ax
         mov  ax,bx              ; -32768 - theta
-        mov  byte ptr [ginv],1
-@@f3:   mov  cx,11              ; 5.5 px per unit: the WORLD's focal
+        mov  byte [ginv],1
+.f3:   mov  cx,11              ; 5.5 px per unit: the WORLD's focal
         imul cx                 ; length (220), not the HUD's. Drawn at
         mov  cx,512             ; 8 px/deg the horizon fled the glass at
         idiv cx                 ; twelve degrees of pitch and the whole
         add  ax,95              ; screen went ground - the two-focal-
         cmp  ax,-400            ; lengths debt, called in. Now horizon,
-        jge  @@a1               ; ladder, FPI and the terrain speak one
+        jge  .a1               ; ladder, FPI and the terrain speak one
         mov  ax,-400            ; scale, and the glass holds +-19 deg
-@@a1:   cmp  ax,600
-        jle  @@a2
+.a1:   cmp  ax,600
+        jle  .a2
         mov  ax,600
-@@a2:   mov  [hrow],ax
+.a2:   mov  [hrow],ax
         ; the FPI hangs alpha below the datum - the gap IS the AoA
         mov  ax,[alpha8]
         sub  ax,2400
@@ -958,16 +958,16 @@ ENG:    mov  ax,[T4]
         sar  bx,cl
         add  ax,bx
         cmp  ax,78
-        jge  @@e1
+        jge  .e1
         mov  ax,78
-@@e1:   cmp  ax,160
-        jle  @@e2
+.e1:   cmp  ax,160
+        jle  .e2
         mov  ax,160
-@@e2:   cmp  [curtc],al
-        je   @@e3
+.e2:   cmp  [curtc],al
+        je   .e3
         mov  [curtc],al
         call SETTC
-@@e3:   ret
+.e3:   ret
 
 ; ---- KNOCK: one knock into the ring, amplitude in [bamp] -------------------
 KNOCK:  push es
@@ -979,13 +979,13 @@ KNOCK:  push es
         mov  dx,[bamp]          ; down into the ground...
         neg  dx
         mov  cx,20
-@@d1:   call SFXMB
-        loop @@d1
+.d1:   call SFXMB
+        loop .d1
         mov  dx,[bamp]          ; ...and the bounce back
         shr  dx,1
         mov  cx,20
-@@d2:   call SFXMB
-        loop @@d2
+.d2:   call SFXMB
+        loop .d2
         pop  es
         ret
 
@@ -998,22 +998,22 @@ UNLOAD: push es
         and  di,SNDN-1
         mov  dx,-34             ; the mains
         mov  cx,16
-@@u1:   call SFXMB
-        loop @@u1
+.u1:   call SFXMB
+        loop .u1
         mov  dx,17
         mov  cx,16
-@@u2:   call SFXMB
-        loop @@u2
+.u2:   call SFXMB
+        loop .u2
         add  di,330             ; ~30 ms later...
         and  di,SNDN-1
         mov  dx,-22             ; ...the nose strut
         mov  cx,14
-@@u3:   call SFXMB
-        loop @@u3
+.u3:   call SFXMB
+        loop .u3
         mov  dx,11
         mov  cx,14
-@@u4:   call SFXMB
-        loop @@u4
+.u4:   call SFXMB
+        loop .u4
         pop  es
         ret
 
@@ -1021,56 +1021,56 @@ UNLOAD: push es
 ; The world grew two more ways to miss: the concrete has EDGES now (44 m
 ; either side of the centreline), and it points somewhere (land more
 ; than ~10 degrees across it and the gear goes sideways).
-TOUCH:  mov  word ptr [h6],HGEAR
-        mov  word ptr [roll],0  ; the wheels level the wings
-        cmp  byte ptr [gear],0  ; no legs? the belly grinds
-        jne  @@t1
-        mov  byte ptr [state],6
-        mov  word ptr [cardp],offset MBELLY
+TOUCH:  mov  word [h6],HGEAR
+        mov  word [roll],0  ; the wheels level the wings
+        cmp  byte [gear],0  ; no legs? the belly grinds
+        jne  .t1
+        mov  byte [state],6
+        mov  word [cardp],MBELLY
         ret
-@@t1:   cmp  word ptr [vs64],256 ; over 4 m/s down: broken
-        jle  @@t2
-        mov  byte ptr [state],6
-        mov  word ptr [cardp],offset MSLAM
+.t1:   cmp  word [vs64],256 ; over 4 m/s down: broken
+        jle  .t2
+        mov  byte [state],6
+        mov  word [cardp],MSLAM
         ret
-@@t2:   mov  ax,[posm]          ; on the concrete at all? (the SUB wraps
+.t2:   mov  ax,[posm]          ; on the concrete at all? (the SUB wraps
         sub  ax,THRESH          ; with the world)
         xor  dx,dx
         mov  cx,RWGAP
         div  cx
         cmp  dx,RWLEN
-        jbe  @@t2a
-        jmp  @@grs
-@@t2a:  mov  ax,[px]            ; between the edge lines?
+        jbe  .t2a
+        jmp  .grs
+.t2a:  mov  ax,[px]            ; between the edge lines?
         or   ax,ax
-        jns  @@t2b
+        jns  .t2b
         neg  ax
-@@t2b:  cmp  ax,44
-        ja   @@grs
+.t2b:  cmp  ax,44
+        ja   .grs
         mov  ax,[hdg]           ; and pointing DOWN the slab?
         cmp  ax,128
-        jbe  @@t2c
+        jbe  .t2c
         neg  ax                 ; fold the circle: 255 -> 1
         and  ax,255
-@@t2c:  cmp  ax,8
-        jbe  @@t4
-@@grs:  mov  byte ptr [state],6
-        mov  word ptr [cardp],offset MGRASS
+.t2c:  cmp  ax,8
+        jbe  .t4
+.grs:  mov  byte [state],6
+        mov  word [cardp],MGRASS
         ret
-@@t4:   mov  ax,[vs64]          ; a fair touch: the kiss, loud as the
+.t4:   mov  ax,[vs64]          ; a fair touch: the kiss, loud as the
         cmp  ax,36              ; sink it arrived with
-        jge  @@t5
+        jge  .t5
         mov  ax,36
-@@t5:   xor  dx,dx
+.t5:   xor  dx,dx
         mov  cx,3
         div  cx
         cmp  ax,70
-        jle  @@t6
+        jle  .t6
         mov  ax,70
-@@t6:   mov  [bamp],ax
+.t6:   mov  [bamp],ax
         call KNOCK
-        mov  byte ptr [air],0
-        mov  word ptr [vs64],0
+        mov  byte [air],0
+        mov  word [vs64],0
         ret
 
 ; ---- SETTC: program the DSP sample rate from [curtc] -----------------------
@@ -1094,42 +1094,42 @@ RENDER: push es
         mov  ax,[bufseg]
         mov  es,ax
         ; ---- the gentle sway (a PARKED jet stands still) ----
-        inc  word ptr [swph1]
+        inc  word [swph1]
         mov  ax,[swph1]
         call TRI
         mov  cl,4
         sar  ax,cl              ; -1..+1 rows
-        cmp  byte ptr [air],0
-        jne  @@sw1
-        cmp  word ptr [v16],320 ; below ~20 m/s on the wheels: rock
-        jae  @@sw1              ; nothing
+        cmp  byte [air],0
+        jne  .sw1
+        cmp  word [v16],320 ; below ~20 m/s on the wheels: rock
+        jae  .sw1              ; nothing
         xor  ax,ax
-@@sw1:
-IF CALIB
+.sw1:
+if CALIB
         xor  ax,ax              ; the calibration bench does not sway
-ENDIF
+end if
         add  ax,[hrow]
         cmp  ax,-700            ; the horizon is allowed clean off the
-        jge  @@h1               ; glass: straight up is all sky, and
+        jge  .h1               ; glass: straight up is all sky, and
         mov  ax,-700            ; that is the truth of it
-@@h1:   cmp  ax,900
-        jle  @@h2
+.h1:   cmp  ax,900
+        jle  .h2
         mov  ax,900
-@@h2:   mov  [hcur],ax
-        inc  word ptr [swph2]
+.h2:   mov  [hcur],ax
+        inc  word [swph2]
         mov  ax,[swph2]
         call TRI
         mov  cl,5
         sar  ax,cl
-        cmp  byte ptr [air],0   ; parked: no lateral drift either
-        jne  @@sw2
-        cmp  word ptr [v16],320
-        jae  @@sw2
+        cmp  byte [air],0   ; parked: no lateral drift either
+        jne  .sw2
+        cmp  word [v16],320
+        jae  .sw2
         xor  ax,ax
-@@sw2:
-IF CALIB
+.sw2:
+if CALIB
         xor  ax,ax
-ENDIF
+end if
         add  ax,160
         mov  [cx0],ax
         ; ---- the bank: one pair of numbers rules the whole frame ----
@@ -1165,21 +1165,21 @@ ENDIF
         add  ax,64
         call TSIN
         mov  [cosr],ax
-        mov  word ptr [pmrow],-9999
+        mov  word [pmrow],-9999
         call LEVELQ             ; who fills the spans this frame
-        mov  byte ptr [wdith],0
-        jnz  @@lvl
-        mov  byte ptr [wdith],1
-@@lvl:
+        mov  byte [wdith],0
+        jnz  .lvl
+        mov  byte [wdith],1
+.lvl:
         call BGND               ; sky and grass, split by the horizon line
         call WCLOUD             ; the sky's own weather, wherever it is
         call TERR               ; the hills next: a cloud behind a ridge
         call SLAB               ; is painted over, as it should be
-@@grd:  mov  ax,[h6]            ; HUD altitude: height above the gear...
+.grd:  mov  ax,[h6]            ; HUD altitude: height above the gear...
         sub  ax,HGEAR           ; (h6 can top 32767: stay unsigned)
-        jnc  @@ha
+        jnc  .ha
         xor  ax,ax
-@@ha:   mov  cl,2
+.ha:   mov  cl,2
         shr  ax,cl              ; 1/64 m -> 1/16 m
         mov  cx,[hgnd]          ; ...plus the ground under it: the tape
         mov  bx,cx              ; reads ASL now, because 500 m over a
@@ -1189,44 +1189,44 @@ ENDIF
         mov  [alt16],ax
         call HUD
         ; ---- the config lights: what is hanging in the wind ----
-        cmp  byte ptr [state],0
-        je   @@nap
-        mov  byte ptr [tcol],21
-        cmp  byte ptr [gear],0
-        je   @@lg1
-        mov  si,offset LGEAR
+        cmp  byte [state],0
+        je   .nap
+        mov  byte [tcol],21
+        cmp  byte [gear],0
+        je   .lg1
+        mov  si,LGEAR
         mov  ax,188
         mov  bx,4
         call TXT
-@@lg1:  cmp  byte ptr [flaps],0
-        je   @@lg2
-        mov  si,offset LFLAP
+.lg1:  cmp  byte [flaps],0
+        je   .lg2
+        mov  si,LFLAP
         mov  ax,188
         mov  bx,48
         call TXT
-@@lg2:  cmp  byte ptr [brk],0
-        je   @@lg3
-        mov  si,offset LBRK
+.lg2:  cmp  byte [brk],0
+        je   .lg3
+        mov  si,LBRK
         mov  ax,188
         mov  bx,92
         call TXT
-@@lg3:  cmp  byte ptr [abon],0  ; the burner announces itself in amber
-        je   @@lg3a
-        mov  byte ptr [tcol],5
-        mov  si,offset LAB
+.lg3:  cmp  byte [abon],0  ; the burner announces itself in amber
+        je   .lg3a
+        mov  byte [tcol],5
+        mov  si,LAB
         mov  ax,188
         mov  bx,240
         call TXT
-        mov  byte ptr [tcol],21
-@@lg3a: cmp  byte ptr [amode],0 ; and so does the unseen pilot
-        je   @@lg3b
-        mov  byte ptr [tcol],5
-        mov  si,offset LAUTO
+        mov  byte [tcol],21
+.lg3a: cmp  byte [amode],0 ; and so does the unseen pilot
+        je   .lg3b
+        mov  byte [tcol],5
+        mov  si,LAUTO
         mov  ax,188
         mov  bx,268
         call TXT
-        mov  byte ptr [tcol],21
-@@lg3b: ; ---- the manual's Control Stick Indicator, at last ----
+        mov  byte [tcol],21
+.lg3b: ; ---- the manual's Control Stick Indicator, at last ----
         ; the box shows the HANDS: sideways = the aileron key held,
         ; up-down = the elevator's alpha; in AUTO the amber dash is
         ; the commanded path - "куда меня несёт" now has an answer
@@ -1235,49 +1235,49 @@ ENDIF
         add  ax,296
         mov  di,ax
         mov  cx,22
-@@cs1:  mov  byte ptr es:[di],23
-        mov  byte ptr es:[di+22*320],23
+.cs1:  mov  byte [es:di],23
+        mov  byte [es:di+22*320],23
         inc  di
-        loop @@cs1
+        loop .cs1
         mov  ax,164
         call ROWAD
         add  ax,296
         mov  di,ax
         mov  cx,22
-@@cs2:  mov  byte ptr es:[di],23
-        mov  byte ptr es:[di+21],23
+.cs2:  mov  byte [es:di],23
+        mov  byte [es:di+21],23
         add  di,320
-        loop @@cs2
+        loop .cs2
         xor  bx,bx              ; x: which aileron key is down
-        cmp  byte ptr [KEYS+4Bh],0
-        je   @@cs3
+        cmp  byte [KEYS+4Bh],0
+        je   .cs3
         mov  bx,-7
-@@cs3:  cmp  byte ptr [KEYS+4Dh],0
-        je   @@cs4
+.cs3:  cmp  byte [KEYS+4Dh],0
+        je   .cs4
         mov  bx,7
-@@cs4:  add  bx,306
+.cs4:  add  bx,306
         mov  ax,[alpha8]        ; y: the stick fore-aft, pull = down
         sub  ax,1408
         mov  cx,300
         cwd
         idiv cx
         cmp  ax,-9
-        jge  @@cs5
+        jge  .cs5
         mov  ax,-9
-@@cs5:  cmp  ax,9
-        jle  @@cs6
+.cs5:  cmp  ax,9
+        jle  .cs6
         mov  ax,9
-@@cs6:  add  ax,175
+.cs6:  add  ax,175
         call ROWAD
         add  ax,bx
         mov  di,ax
-        mov  byte ptr es:[di-1],15
-        mov  byte ptr es:[di],15
-        mov  byte ptr es:[di+1],15
-        mov  byte ptr es:[di-320],15
-        mov  byte ptr es:[di+320],15
-        cmp  byte ptr [amode],0
-        je   @@cs9
+        mov  byte [es:di-1],15
+        mov  byte [es:di],15
+        mov  byte [es:di+1],15
+        mov  byte [es:di-320],15
+        mov  byte [es:di+320],15
+        cmp  byte [amode],0
+        je   .cs9
         mov  ax,[gtgt]          ; the pilot automatic's wish, in amber
         add  ax,ax
         add  ax,[gtgt]
@@ -1287,185 +1287,185 @@ ENDIF
         call ROWAD
         add  ax,306
         mov  di,ax
-        mov  byte ptr es:[di-3],5
-        mov  byte ptr es:[di-2],5
-        mov  byte ptr es:[di+2],5
-        mov  byte ptr es:[di+3],5
-@@cs9: cmp  byte ptr [air],0   ; the wing is on the edge of quitting
-        je   @@nap
+        mov  byte [es:di-3],5
+        mov  byte [es:di-2],5
+        mov  byte [es:di+2],5
+        mov  byte [es:di+3],5
+.cs9: cmp  byte [air],0   ; the wing is on the edge of quitting
+        je   .nap
         mov  ax,[kmh]
         cmp  ax,[vstl]
-        jae  @@nap
-        mov  byte ptr [tcol],22
-        mov  si,offset LSTALL
+        jae  .nap
+        mov  byte [tcol],22
+        mov  si,LSTALL
         mov  ax,188
         mov  bx,136
         call TXT
-@@nap:  ; ---- the cards ----
-        cmp  byte ptr [state],0
-        jne  @@c1
-        mov  byte ptr [tcol],5
-        mov  si,offset MTITLE
+.nap:  ; ---- the cards ----
+        cmp  byte [state],0
+        jne  .c1
+        mov  byte [tcol],5
+        mov  si,MTITLE
         mov  ax,180
         mov  bx,36
         call TXT
-        jmp  @@cdone
-@@c1:   cmp  byte ptr [state],6
-        jne  @@cdone
-        mov  byte ptr [tcol],5
+        jmp  .cdone
+.c1:   cmp  byte [state],6
+        jne  .cdone
+        mov  byte [tcol],5
         mov  si,[cardp]
         mov  ax,180
         mov  bx,44
         call TXT
-@@cdone:
+.cdone:
         pop  es
         ret
 
 ; ---- LEVELQ: ZF=0 (jnz) when the wings are level AND the world upright ----
 ; Eight units of sine is about two degrees - inside that the split
 ; below is a rounding error and the old fast path is honest.
-LEVELQ: cmp  word ptr [cosr],0
-        jle  @@no
+LEVELQ: cmp  word [cosr],0
+        jle  .no
         mov  ax,[sinr]
         or   ax,ax
-        jge  @@a
+        jge  .a
         neg  ax
-@@a:    cmp  ax,8
-        jae  @@no
+.a:    cmp  ax,8
+        jae  .no
         mov  ax,1
         or   ax,ax              ; ZF=0: level
         ret
-@@no:   xor  ax,ax              ; ZF=1: banked
+.no:   xor  ax,ax              ; ZF=1: banked
         ret
 
 ; ---- BGND: sky and grass, split by the horizon LINE ------------------------
 ; One span each side of the line per row, shaded by the PERPENDICULAR
 ; distance to it - so the haze and the grass ramps rotate with the
 ; world instead of with the screen.
-BGND:   mov  word ptr [mrow],0
-        mov  word ptr [rowb],0
-@@mr:   mov  ax,[mrow]
+BGND:   mov  word [mrow],0
+        mov  word [rowb],0
+.mr:   mov  ax,[mrow]
         sub  ax,[hcur]
-        imul word ptr [cosr]
+        imul word [cosr]
         mov  bx,256
         idiv bx
         mov  [fmv],ax           ; f at the pivot column of this row
         mov  bx,[sinr]
         or   bx,bx
-        jge  @@ab
+        jge  .ab
         neg  bx
-@@ab:   cmp  bx,8               ; level: the row is all one thing
-        jae  @@split
-        mov  word ptr [spa],0
-        mov  word ptr [spl],320
+.ab:   cmp  bx,8               ; level: the row is all one thing
+        jae  .split
+        mov  word [spa],0
+        mov  word [spanl],320
         mov  al,0
-        cmp  word ptr [fmv],0
-        jl   @@ws
+        cmp  word [fmv],0
+        jl   .ws
         mov  al,1
-@@ws:   mov  [sptype],al
+.ws:   mov  [sptype],al
         call FSP
-        jmp  @@nr
-@@split:mov  ax,[fmv]           ; the line crosses this row at
+        jmp  .nr
+.split:mov  ax,[fmv]           ; the line crosses this row at
         mov  cx,256             ; x = cx0 + f*256/sin r
         imul cx
-        idiv word ptr [sinr]
+        idiv word [sinr]
         add  ax,[cx0]
         mov  bx,ax
         or   bx,bx
-        jge  @@x1
+        jge  .x1
         xor  bx,bx
-@@x1:   cmp  bx,320
-        jle  @@x2
+.x1:   cmp  bx,320
+        jle  .x2
         mov  bx,320
-@@x2:   cmp  word ptr [sinr],0
-        jl   @@neg
-        mov  word ptr [spa],0   ; sin>0: f falls as x grows - ground left
-        mov  [spl],bx
-        mov  byte ptr [sptype],1
+.x2:   cmp  word [sinr],0
+        jl   .neg
+        mov  word [spa],0   ; sin>0: f falls as x grows - ground left
+        mov  [spanl],bx
+        mov  byte [sptype],1
         push bx
         call FSP
         pop  bx
         mov  [spa],bx
         mov  ax,320
         sub  ax,bx
-        mov  [spl],ax
-        mov  byte ptr [sptype],0
+        mov  [spanl],ax
+        mov  byte [sptype],0
         call FSP
-        jmp  @@nr
-@@neg:  mov  word ptr [spa],0   ; sin<0: sky on the left instead
-        mov  [spl],bx
-        mov  byte ptr [sptype],0
+        jmp  .nr
+.neg:  mov  word [spa],0   ; sin<0: sky on the left instead
+        mov  [spanl],bx
+        mov  byte [sptype],0
         push bx
         call FSP
         pop  bx
         mov  [spa],bx
         mov  ax,320
         sub  ax,bx
-        mov  [spl],ax
-        mov  byte ptr [sptype],1
+        mov  [spanl],ax
+        mov  byte [sptype],1
         call FSP
-@@nr:   add  word ptr [rowb],320
-        inc  word ptr [mrow]
-        cmp  word ptr [mrow],200
-        jb   @@mr
+.nr:   add  word [rowb],320
+        inc  word [mrow]
+        cmp  word [mrow],200
+        jb   .mr
         ret
 
-; ---- FSP: fill span [spa..spa+spl) of row [mrow], sky or ground ------------
+; ---- FSP: fill span [spa..spa+spanl) of row [mrow], sky or ground ------------
 ; One shade per span, taken at its centre - the retro compromise, and
 ; the same one FLIGHT.ASM's airshow flies with.
-FSP:    cmp  word ptr [spl],0
-        jle  @@fr
-        mov  ax,[spl]
+FSP:    cmp  word [spanl],0
+        jle  .fr
+        mov  ax,[spanl]
         shr  ax,1
         add  ax,[spa]
         sub  ax,[cx0]
-        imul word ptr [sinr]
+        imul word [sinr]
         mov  bx,256
         idiv bx
         neg  ax                 ; f = fmv - (x-cx0)*sin/256
         add  ax,[fmv]
         or   ax,ax
-        jge  @@f1
+        jge  .f1
         neg  ax
-@@f1:   cmp  ax,199
-        jbe  @@f2
+.f1:   cmp  ax,199
+        jbe  .f2
         mov  ax,199
-@@f2:   mov  bx,ax
-        cmp  byte ptr [sptype],0
-        jne  @@fg
-        mov  word ptr [texp],offset TSKY
+.f2:   mov  bx,ax
+        cmp  byte [sptype],0
+        jne  .fg
+        mov  word [texp],TSKY
         mov  al,[SBASE+bx]      ; the sky ramp, by height above the line
         mov  [pbase],al
         mov  al,[SFRAC+bx]
         mov  [pfrac],al
-        jmp  @@ff
-@@fg:   mov  ax,bx              ; the floor: SOLID bands by distance.
+        jmp  .ff
+.fg:   mov  ax,bx              ; the floor: SOLID bands by distance.
         mov  cl,5               ; The dither has left the land - its
         shr  ax,cl              ; per-tick remixing was the shimmer the
         cmp  ax,3               ; pilot kept squinting at - and the sky
-        jbe  @@fb               ; keeps its grain, which was always the
+        jbe  .fb               ; keeps its grain, which was always the
         mov  ax,3               ; pretty half
-@@fb:   add  al,24
+.fb:   add  al,24
         mov  di,[rowb]
         add  di,[spa]
-        mov  cx,[spl]
-        jcxz @@fr
+        mov  cx,[spanl]
+        jcxz .fr
         rep  stosb
         ret
-@@ff:   mov  di,[rowb]
+.ff:   mov  di,[rowb]
         add  di,[spa]
-        mov  cx,[spl]
-        cmp  byte ptr [wdith],0
-        je   @@fast
+        mov  cx,[spanl]
+        cmp  byte [wdith],0
+        je   .fast
         mov  ax,[mrow]          ; banked: the slow, honest grain
         mov  bx,[spa]
         call WSTART
         call DFILLW
         ret
-@@fast: mov  ax,[mrow]
+.fast: mov  ax,[mrow]
         call MKPATT
         call DFILL
-@@fr:   ret
+.fr:   ret
 
 ; ---- CLSEG: a span drawn ALONG the horizon, not along a screen row -------
 ; The clouds live at a height above the horizon and stretch sideways
@@ -1478,13 +1478,13 @@ FSP:    cmp  word ptr [spl],0
 ; span fills use. A pixel that lands off the glass is skipped, not
 ; clipped: the segments are short and the test is two compares.
 CLSEG:  or   cx,cx
-        jle  @@z
+        jle  .z
         push bp
         push cx                 ; CL is needed for the shifts below
         mov  [cxv],ax           ; the screen walk: integers plus an 8.8
         mov  [cyv],dx           ; error each, so nothing overflows at
-        mov  word ptr [cxe],0   ; x = 300 the way a packed 8.8 would
-        mov  word ptr [cye],0
+        mov  word [cxe],0   ; x = 300 the way a packed 8.8 would
+        mov  word [cye],0
         mov  cl,8
         mov  ax,[cosr]
         mov  bx,ax
@@ -1512,16 +1512,16 @@ CLSEG:  or   cx,cx
         mov  [ctrow],bx
         xor  bx,bx              ; bx = the walk's column counter
         pop  cx
-@@p:    mov  ax,[cxv]
+.p:    mov  ax,[cxv]
         or   ax,ax
-        jl   @@nx
+        jl   .nx
         cmp  ax,319
-        jg   @@nx
+        jg   .nx
         mov  dx,[cyv]
         or   dx,dx
-        jl   @@nx
+        jl   .nx
         cmp  dx,199
-        jg   @@nx
+        jg   .nx
         mov  di,[crb]
         add  di,ax
         mov  ax,bx
@@ -1531,42 +1531,42 @@ CLSEG:  or   cx,cx
         mov  ah,[BNOISE+si]
         mov  al,[pbase]
         cmp  [pfrac],ah
-        jbe  @@p1
+        jbe  .p1
         inc  al
-@@p1:   mov  es:[di],al
+.p1:   mov  [es:di],al
         mov  si,[cdup]          ; and a twin one pixel ACROSS the line:
         or   si,si              ; neighbouring segments sit 1 px apart
-        jz   @@nx               ; perpendicular, and a rotated lattice
+        jz   .nx               ; perpendicular, and a rotated lattice
         cmp  si,320             ; drops pixels between them - this is
-        je   @@d1               ; what closes the gaps
-        cmp  word ptr [cxv],319
-        jge  @@nx
-@@d1:   add  si,di
-        mov  es:[si],al
-@@nx:   inc  bx
+        je   .d1               ; what closes the gaps
+        cmp  word [cxv],319
+        jge  .nx
+.d1:   add  si,di
+        mov  [es:si],al
+.nx:   inc  bx
         mov  ax,[dxi]
         add  [cxv],ax
         mov  ax,[dxf]
         add  [cxe],ax
-        jnc  @@y
-        inc  word ptr [cxv]
-@@y:    mov  ax,[dyi]
+        jnc  .y
+        inc  word [cxv]
+.y:    mov  ax,[dyi]
         or   ax,ax
-        jz   @@y1
+        jz   .y1
         add  [cyv],ax
         mov  dx,320
         cmp  ax,0
-        jg   @@y0
+        jg   .y0
         neg  dx
-@@y0:   add  [crb],dx
-@@y1:   mov  ax,[dyf]
+.y0:   add  [crb],dx
+.y1:   mov  ax,[dyf]
         add  [cye],ax
-        jnc  @@y2
-        inc  word ptr [cyv]
-        add  word ptr [crb],320
-@@y2:   loop @@p
+        jnc  .y2
+        inc  word [cyv]
+        add  word [crb],320
+.y2:   loop .p
         pop  bp
-@@z:    ret
+.z:    ret
 
 ; ---- WCLOUD: the weather lives in the WORLD now ---------------------------
 ; Sixteen clouds stand on the torus at random spots, heights and sizes,
@@ -1575,23 +1575,23 @@ CLSEG:  or   cx,cx
 ; is drawn as horizon-parallel rows through ROTPT + CLSEG, so banks and
 ; the top of a loop cost nothing. Far to near, and the terrain pass
 ; afterwards buries whatever hides behind a ridge.
-WCLOUD: mov  word ptr [texp],offset TSKY
+WCLOUD: mov  word [texp],TSKY
         mov  ax,[sinr]          ; the twin-pixel direction, once
         or   ax,ax
-        jge  @@s1
+        jge  .s1
         neg  ax
-@@s1:   mov  bx,[cosr]
+.s1:   mov  bx,[cosr]
         or   bx,bx
-        jge  @@s2
+        jge  .s2
         neg  bx
-@@s2:   mov  word ptr [cdup],320
+.s2:   mov  word [cdup],320
         cmp  ax,bx
-        jle  @@s3
-        mov  word ptr [cdup],1
-@@s3:   ; ---- cull and collect ----
+        jle  .s3
+        mov  word [cdup],1
+.s3:   ; ---- cull and collect ----
         xor  si,si              ; instance index
-        mov  word ptr [qcn],0
-@@cull: mov  ax,si
+        mov  word [qcn],0
+.cull: mov  ax,si
         add  ax,ax
         mov  di,ax
         mov  ax,[CLX+di]
@@ -1605,20 +1605,20 @@ WCLOUD: mov  word ptr [texp],offset TSKY
         pop  si
         mov  ax,[pd]
         cmp  ax,250
-        jl   @@next
+        jl   .next
         cmp  ax,11500
-        jg   @@next
+        jg   .next
         mov  bx,[pu]
         or   bx,bx
-        jns  @@c1
+        jns  .c1
         neg  bx
-@@c1:   mov  cx,ax
+.c1:   mov  cx,ax
         add  cx,cx
         cmp  bx,cx              ; more than two widths off the bow
-        jg   @@next
+        jg   .next
         mov  bx,[qcn]
         cmp  bx,20              ; the visible list has walls
-        jae  @@next
+        jae  .next
         add  bx,bx
         mov  [VLD+bx],ax        ; keep its distance...
         mov  ax,[pu]
@@ -1626,41 +1626,41 @@ WCLOUD: mov  word ptr [texp],offset TSKY
         shr  bx,1
         mov  ax,si
         mov  [VLI+bx],al       ; ...and who it is
-        inc  word ptr [qcn]
-@@next: inc  si
+        inc  word [qcn]
+.next: inc  si
         cmp  si,96
-        jb   @@cull
+        jb   .cull
         ; ---- draw, farthest first ----
-@@pick: mov  word ptr [qcb],-1
+.pick: mov  word [qcb],-1
         mov  bx,-1
         xor  si,si
-@@fmax: cmp  si,[qcn]
-        jae  @@fdn
+.fmax: cmp  si,[qcn]
+        jae  .fdn
         mov  di,si
         add  di,di
         mov  ax,[VLD+di]
         cmp  ax,bx
-        jle  @@fnx
+        jle  .fnx
         mov  bx,ax
         mov  [qcb],si
-@@fnx:  inc  si
-        jmp  @@fmax
-@@fdn:  cmp  word ptr [qcb],-1
-        je   @@done
+.fnx:  inc  si
+        jmp  .fmax
+.fdn:  cmp  word [qcb],-1
+        je   .done
         mov  si,[qcb]
         add  si,si
         mov  ax,[VLD+si]
         mov  [qcd],ax           ; this cloud's d
         mov  ax,[VLU+si]
         mov  [qcu],ax           ; and u
-        mov  word ptr [VLD+si],-1
+        mov  word [VLD+si],-1
         shr  si,1
         mov  bl,[VLI+si]
         xor  bh,bh
         mov  [qci],bx
         call CDRAW
-        jmp  @@pick
-@@done: ret
+        jmp  .pick
+.done: ret
 
 ; ---- CDRAW: one cloud, rows of CLSEG under the shape tables ---------------
 CDRAW:  mov  bx,[qci]
@@ -1669,7 +1669,7 @@ CDRAW:  mov  bx,[qci]
         mov  ax,[qcu]           ; t of the centre: 220*u/d
         mov  cx,220
         imul cx
-        idiv word ptr [qcd]
+        idiv word [qcd]
         mov  [qct],ax
         mov  ax,[h6]
         mov  cl,6
@@ -1678,61 +1678,61 @@ CDRAW:  mov  bx,[qci]
         sub  ax,[CLH+di]        ; minus the cloud's base
         mov  cx,220
         imul cx
-        idiv word ptr [qcd]
+        idiv word [qcd]
         mov  [qcf],ax           ; f of the cloud base
         cmp  ax,-950
-        jl   @@out
+        jl   .out
         cmp  ax,1000
-        jg   @@out
+        jg   .out
         mov  ax,[CLM+di]        ; scale: 352*size/d, 8.8 of table cols
         mov  cx,352
         imul cx
-        idiv word ptr [qcd]
+        idiv word [qcd]
         cmp  ax,8
-        jge  @@sc1
+        jge  .sc1
         mov  ax,8
-@@sc1:  cmp  ax,640
-        jle  @@sc2
+.sc1:  cmp  ax,640
+        jle  .sc2
         mov  ax,640
-@@sc2:  mov  [qcs],ax
+.sc2:  mov  [qcs],ax
         mov  bx,ax              ; rows on screen: 64*scale/512 (clouds
         mov  cl,3               ; squat: half as tall as wide)
         shr  bx,cl
         cmp  bx,2
-        jge  @@h1
+        jge  .h1
         mov  bx,2
-@@h1:   cmp  bx,80
-        jle  @@h2
+.h1:   cmp  bx,80
+        jle  .h2
         mov  bx,80
-@@h2:   mov  [qch],bx
+.h2:   mov  [qch],bx
         mov  ax,16384           ; source step per screen row, 8.8
         cwd
         idiv bx
         mov  [qcp],ax
-        mov  word ptr [qcr],0   ; the source walker
-        mov  word ptr [qcw],0   ; the screen row walker
+        mov  word [qcr],0   ; the source walker
+        mov  word [qcw],0   ; the screen row walker
         mov  ax,[qci]
         mov  cl,6
         shl  ax,cl              ; shape base = shape*64 (shape = index&3
         and  ax,255             ; folds sixteen clouds onto four coats)
         mov  [qcb],ax
-@@row:  mov  ax,[qcr]
+.row:  mov  ax,[qcr]
         mov  al,ah
         xor  ah,ah              ; source row 0..63
         add  ax,[qcb]
         mov  si,ax
         mov  al,[CSHW+si]
         or   al,al
-        jz   @@nr
+        jz   .nr
         xor  ah,ah
         mov  cx,[qcs]
         imul cx
         mov  al,ah              ; width in px: W*scale/256
         mov  ah,dl
         or   ax,ax
-        jnz  @@w1
+        jnz  .w1
         mov  ax,1
-@@w1:   mov  [qcv],ax
+.w1:   mov  [qcv],ax
         mov  al,[CSHS+si]
         xor  ah,ah
         sub  ax,70              ; the silhouette's own centre
@@ -1752,9 +1752,9 @@ CDRAW:  mov  bx,[qci]
         imul cx
         add  ax,40
         cmp  ax,511
-        jbe  @@sh1
+        jbe  .sh1
         mov  ax,511
-@@sh1:  mov  [pfrac],al
+.sh1:  mov  [pfrac],al
         mov  al,ah
         add  al,10
         mov  [pbase],al
@@ -1763,35 +1763,35 @@ CDRAW:  mov  bx,[qci]
         call ROTPT
         mov  cx,[qcv]
         call CLSEG
-@@nr:   mov  ax,[qcp]
+.nr:   mov  ax,[qcp]
         add  [qcr],ax
-        inc  word ptr [qcw]
+        inc  word [qcw]
         mov  ax,[qcw]
         cmp  ax,[qch]
-        jl   @@row
-@@out:  ret
+        jl   .row
+.out:  ret
 
 ; ---- WCAM: world delta (wdx2 east, wdz2 north) -> pu, pd through hdg ------
 ; The one rotation everything shares: the terrain lattice, the slab,
 ; the paint. d = dz*cos + dx*sin, u = dx*cos - dz*sin, 32-bit inside,
 ; middle bytes out.
 WCAM:   mov  ax,[wdz2]
-        imul word ptr [hc2]
+        imul word [hc2]
         mov  bx,ax
         mov  cx,dx
         mov  ax,[wdx2]
-        imul word ptr [hs2]
+        imul word [hs2]
         add  bx,ax
         adc  cx,dx
         mov  al,bh
         mov  ah,cl
         mov  [pd],ax
         mov  ax,[wdx2]
-        imul word ptr [hc2]
+        imul word [hc2]
         mov  bx,ax
         mov  cx,dx
         mov  ax,[wdz2]
-        imul word ptr [hs2]
+        imul word [hs2]
         sub  bx,ax
         sbb  cx,dx
         mov  al,bh
@@ -1823,16 +1823,16 @@ SLAB1:  mov  ax,[rwz]
         sub  ax,[posm]          ; signed and wrapped: the near maths
         mov  [dthr],ax
         cmp  ax,4500
-        jg   @@out
+        jg   .out
         cmp  ax,-3000
-        jl   @@out
+        jl   .out
         mov  ax,-44             ; near-left corner, world
         sub  ax,[px]
         mov  [wdx2],ax
         mov  ax,[dthr]
         mov  [wdz2],ax
         call WCAM
-        mov  word ptr [ph],0
+        mov  word [ph],0
         call PROJH
         mov  [qx0],ax
         mov  [qy0],dx
@@ -1842,7 +1842,7 @@ SLAB1:  mov  ax,[rwz]
         mov  ax,[dthr]
         mov  [wdz2],ax
         call WCAM
-        mov  word ptr [ph],0
+        mov  word [ph],0
         call PROJH
         mov  [qx1],ax
         mov  [qy1],dx
@@ -1853,7 +1853,7 @@ SLAB1:  mov  ax,[rwz]
         add  ax,RWLEN
         mov  [wdz2],ax
         call WCAM
-        mov  word ptr [ph],0
+        mov  word [ph],0
         call PROJH
         mov  [qx2],ax
         mov  [qy2],dx
@@ -1864,21 +1864,21 @@ SLAB1:  mov  ax,[rwz]
         add  ax,RWLEN
         mov  [wdz2],ax
         call WCAM
-        mov  word ptr [ph],0
+        mov  word [ph],0
         call PROJH
         mov  [qx3],ax
         mov  [qy3],dx
-        mov  byte ptr [qmode],0 ; concrete, shaded by distance
-        mov  word ptr [qn],4    ; the slab never meets the knife
+        mov  byte [qmode],0 ; concrete, shaded by distance
+        mov  word [qn],4    ; the slab never meets the knife
         call POLY4
         call STRIPES
-@@out:  ret
+.out:  ret
 ; ---- STRIPES: the centreline, one painted band at a time ------------------
 ; Bands of the WORLD now: each is a 2 m wide quad standing on the slab,
 ; rotated and projected like everything else. Far bands round to zero
 ; width and vanish - paint fades with distance, as paint does.
-STRIPES:mov  word ptr [sn],0
-@@s:    mov  ax,[sn]
+STRIPES:mov  word [sn],0
+.s:    mov  ax,[sn]
         mov  cx,61
         imul cx
         add  ax,[dthr]
@@ -1886,17 +1886,17 @@ STRIPES:mov  word ptr [sn],0
         add  ax,37
         mov  [sd1],ax
         cmp  ax,60              ; behind us once BOTH ends are
-        jl   @@nx
+        jl   .nx
         mov  ax,[sd0]
         cmp  ax,4400
-        jg   @@done
+        jg   .done
         mov  ax,-1              ; near-left
         sub  ax,[px]
         mov  [wdx2],ax
         mov  ax,[sd0]
         mov  [wdz2],ax
         call WCAM
-        mov  word ptr [ph],0
+        mov  word [ph],0
         call PROJH
         mov  [qx0],ax
         mov  [qy0],dx
@@ -1906,7 +1906,7 @@ STRIPES:mov  word ptr [sn],0
         mov  ax,[sd0]
         mov  [wdz2],ax
         call WCAM
-        mov  word ptr [ph],0
+        mov  word [ph],0
         call PROJH
         mov  [qx1],ax
         mov  [qy1],dx
@@ -1916,7 +1916,7 @@ STRIPES:mov  word ptr [sn],0
         mov  ax,[sd1]
         mov  [wdz2],ax
         call WCAM
-        mov  word ptr [ph],0
+        mov  word [ph],0
         call PROJH
         mov  [qx2],ax
         mov  [qy2],dx
@@ -1926,18 +1926,18 @@ STRIPES:mov  word ptr [sn],0
         mov  ax,[sd1]
         mov  [wdz2],ax
         call WCAM
-        mov  word ptr [ph],0
+        mov  word [ph],0
         call PROJH
         mov  [qx3],ax
         mov  [qy3],dx
-        mov  byte ptr [qmode],1
-        mov  byte ptr [qcol],3
-        mov  word ptr [qn],4
+        mov  byte [qmode],1
+        mov  byte [qcol],3
+        mov  word [qn],4
         call POLY4
-@@nx:   inc  word ptr [sn]
-        cmp  word ptr [sn],40
-        jb   @@s
-@@done: ret
+.nx:   inc  word [sn]
+        cmp  word [sn],40
+        jb   .s
+.done: ret
 ; ---- HBIL: the ground under world point (BX = x, DX = z), metres ASL ------
 ; Bilinear over the node torus, so the field is CONTINUOUS: the jet,
 ; the mesh and the landing judgment all stand on the same smooth
@@ -1991,19 +1991,19 @@ HBIL:   push si
         mov  [wh11],ax
         mov  ax,[wh10]          ; lerp the near edge...
         sub  ax,[wh00]
-        imul word ptr [wfx]
+        imul word [wfx]
         mov  al,ah
         mov  ah,dl
         add  ax,[wh00]
         mov  si,ax
         mov  ax,[wh11]          ; ...the far edge...
         sub  ax,[wh01]
-        imul word ptr [wfx]
+        imul word [wfx]
         mov  al,ah
         mov  ah,dl
         add  ax,[wh01]
         sub  ax,si              ; ...and between them
-        imul word ptr [wfz]
+        imul word [wfz]
         mov  al,ah
         mov  ah,dl
         add  ax,si
@@ -2014,23 +2014,23 @@ HBIL:   push si
 ROTPT:  push bx
         push si
         mov  si,ax              ; si = t
-        imul word ptr [cosr]
+        imul word [cosr]
         mov  cx,256
         idiv cx
         mov  di,ax              ; t*cos
         mov  ax,bx
-        imul word ptr [sinr]
+        imul word [sinr]
         mov  cx,256
         idiv cx
         sub  di,ax              ; x = cx0 + (t*cos - f*sin)/256
         add  di,[cx0]
         mov  ax,si
-        imul word ptr [sinr]
+        imul word [sinr]
         mov  cx,256
         idiv cx
         mov  si,ax              ; t*sin
         mov  ax,bx
-        imul word ptr [cosr]
+        imul word [cosr]
         mov  cx,256
         idiv cx
         add  ax,si              ; y = hcur + (t*sin + f*cos)/256
@@ -2048,9 +2048,9 @@ ROTPT:  push bx
 ; (or |dh| = 4d) the answer is a clamped +-1500 and no divide at all.
 PROJH:  mov  ax,[pd]
         cmp  ax,NEARD           ; the slab still rides this clamp, and
-        jge  @@d1               ; it must reach as deep as the terrain's
+        jge  .d1               ; it must reach as deep as the terrain's
         mov  ax,NEARD           ; knife or the concrete stops short of
-@@d1:   mov  [pd],ax            ; the glass while the ground goes on
+.d1:   mov  [pd],ax            ; the glass while the ground goes on
         mov  ax,[h6]
         mov  cl,6
         shr  ax,cl
@@ -2060,32 +2060,32 @@ PROJH:  mov  ax,[pd]
                                 ; AGL camera sank INTO the island -
                                 ; the picture "fine, then it breaks"
         or   ax,ax
-        jns  @@a1
+        jns  .a1
         neg  ax
-@@a1:   mov  [pah],ax
+.a1:   mov  [pah],ax
         mov  ax,[pu]
         or   ax,ax
-        jns  @@a2
+        jns  .a2
         neg  ax
-@@a2:   cmp  ax,[pah]
-        jae  @@a3
+.a2:   cmp  ax,[pah]
+        jae  .a3
         mov  ax,[pah]
-@@a3:   mov  [pam],ax           ; the taller of |u|, |hd|
+.a3:   mov  [pam],ax           ; the taller of |u|, |hd|
         mov  cl,3
         shr  ax,cl
         cmp  ax,[pd]
-        jae  @@far              ; past 8d the quotients burst words
+        jae  .far              ; past 8d the quotients burst words
         mov  ax,[pu]
         mov  cx,220
         imul cx
-        idiv word ptr [pd]
+        idiv word [pd]
         mov  [ptv],ax
         mov  ax,[phd]
         mov  cx,220
         imul cx
-        idiv word ptr [pd]
-        jmp  @@rot
-@@far:  mov  ax,[pu]            ; the box projection: the vertex slides
+        idiv word [pd]
+        jmp  .rot
+.far:  mov  ax,[pu]            ; the box projection: the vertex slides
         mov  cx,1500            ; OUT ALONG ITS OWN RAY to the 1500
         imul cx                 ; boundary, direction intact - the old
         mov  cx,[pam]           ; corner-clamp bent it sideways and the
@@ -2096,7 +2096,7 @@ PROJH:  mov  ax,[pd]
         imul cx
         mov  cx,[pam]
         idiv cx
-@@rot:  mov  bx,ax
+.rot:  mov  bx,ax
         mov  ax,[ptv]
         call ROTPT
         ret
@@ -2139,9 +2139,9 @@ TERRPREP:
         shr  ax,cl
         mov  [tnz],ax
         xor  si,si
-        mov  word ptr [tta],-NR
-@@a:    mov  word ptr [ttb],-NR
-@@b:    mov  ax,[tta]
+        mov  word [tta],-NR
+.a:    mov  word [ttb],-NR
+.b:    mov  ax,[tta]
         mov  cl,10
         shl  ax,cl
         sub  ax,[tfx]
@@ -2166,12 +2166,12 @@ TERRPREP:
         call WORLDH2
         mov  [THT+si],ax
         add  si,2
-        inc  word ptr [ttb]
-        cmp  word ptr [ttb],NR
-        jle  @@b
-        inc  word ptr [tta]
-        cmp  word ptr [tta],NR
-        jle  @@a
+        inc  word [ttb]
+        cmp  word [ttb],NR
+        jle  .b
+        inc  word [tta]
+        cmp  word [tta],NR
+        jle  .a
         ret
 
 ; ---- NCLIP: cut the quad IU/ID/IH[0..3] on the plane d = 48 ---------------
@@ -2180,9 +2180,9 @@ TERRPREP:
 ; Out: QU/QD/QH[0..qn-1], qn = 0..5. This is what ended the squares
 ; blinking out at the bottom of a banked window: a quad the camera has
 ; half-passed keeps its visible half.
-NCLIP:  mov  word ptr [qn],0
-        mov  word ptr [ncv],0
-@@e:    mov  bx,[ncv]
+NCLIP:  mov  word [qn],0
+        mov  word [ncv],0
+.e:    mov  bx,[ncv]
         inc  bx
         and  bx,3
         mov  [ncj],bx           ; j = the edge's far end
@@ -2192,7 +2192,7 @@ NCLIP:  mov  word ptr [qn],0
         add  si,si
         mov  ax,[ID+bx]
         cmp  ax,[ncd]
-        jl   @@ain
+        jl   .ain
         push bx                 ; A is in front: A joins the polygon
         push si
         mov  di,[qn]
@@ -2203,20 +2203,20 @@ NCLIP:  mov  word ptr [qn],0
         mov  [QD+di],cx
         mov  cx,[IH+bx]
         mov  [QH+di],cx
-        inc  word ptr [qn]
+        inc  word [qn]
         pop  si
         pop  bx
-@@ain:  mov  ax,[ID+bx]
+.ain:  mov  ax,[ID+bx]
         cmp  ax,[ncd]
-        jl   @@bhalf
+        jl   .bhalf
         mov  cx,[ID+si]         ; A front: crossing only if B behind
         cmp  cx,[ncd]
-        jge  @@next
-        jmp  @@cross
-@@bhalf:mov  cx,[ID+si]         ; A behind: crossing only if B in front
+        jge  .next
+        jmp  .cross
+.bhalf:mov  cx,[ID+si]         ; A behind: crossing only if B in front
         cmp  cx,[ncd]
-        jl   @@next
-@@cross:mov  ax,[ncd]           ; t = (knife - dA) * 256 / (dB - dA)
+        jl   .next
+.cross:mov  ax,[ncd]           ; t = (knife - dA) * 256 / (dB - dA)
         sub  ax,[ID+bx]
         mov  cx,256
         imul cx
@@ -2226,7 +2226,7 @@ NCLIP:  mov  word ptr [qn],0
         mov  [wtmp2],ax         ; t, 0..256
         mov  ax,[IU+si]
         sub  ax,[IU+bx]
-        imul word ptr [wtmp2]
+        imul word [wtmp2]
         mov  al,ah
         mov  ah,dl
         add  ax,[IU+bx]
@@ -2237,15 +2237,15 @@ NCLIP:  mov  word ptr [qn],0
         mov  [QD+di],cx
         mov  ax,[IH+si]
         sub  ax,[IH+bx]
-        imul word ptr [wtmp2]
+        imul word [wtmp2]
         mov  al,ah
         mov  ah,dl
         add  ax,[IH+bx]
         mov  [QH+di],ax
-        inc  word ptr [qn]
-@@next: inc  word ptr [ncv]
-        cmp  word ptr [ncv],4
-        jl   @@e
+        inc  word [qn]
+.next: inc  word [ncv]
+        cmp  word [ncv],4
+        jl   .e
         ret
 
 ; ---- TERR: the island around the camera, painter's order from TORD --------
@@ -2255,10 +2255,10 @@ NCLIP:  mov  word ptr [qn],0
 ; cached corners through PROJH and one solid colour off the height
 ; ramp: banked, inverted, or pointed anywhere at all.
 TERR:   call TERRPREP
-        mov  word ptr [tqi],0
-@@q:    mov  bx,[tqi]
+        mov  word [tqi],0
+.q:    mov  bx,[tqi]
         cmp  bx,576
-        jae  @@done
+        jae  .done
         add  bx,bx
         mov  al,[TORD+bx]
         cbw
@@ -2302,56 +2302,56 @@ TERR:   call TERRPREP
         mov  bx,ax
         mov  cx,[ID+2]
         cmp  cx,ax
-        jge  @@x1
+        jge  .x1
         mov  ax,cx
-@@x1:   cmp  cx,bx
-        jle  @@x2
+.x1:   cmp  cx,bx
+        jle  .x2
         mov  bx,cx
-@@x2:   mov  cx,[ID+4]
+.x2:   mov  cx,[ID+4]
         cmp  cx,ax
-        jge  @@x3
+        jge  .x3
         mov  ax,cx
-@@x3:   cmp  cx,bx
-        jle  @@x4
+.x3:   cmp  cx,bx
+        jle  .x4
         mov  bx,cx
-@@x4:   mov  cx,[ID+6]
+.x4:   mov  cx,[ID+6]
         cmp  cx,ax
-        jge  @@x5
+        jge  .x5
         mov  ax,cx
-@@x5:   cmp  cx,bx
-        jle  @@x6
+.x5:   cmp  cx,bx
+        jle  .x6
         mov  bx,cx
-@@x6:   mov  [tqd],ax           ; the near distance, kept for the haze
+.x6:   mov  [tqd],ax           ; the near distance, kept for the haze
         push ax
         push bx
-        mov  word ptr [ncd],NEARD ; ---- the FLOATING knife ----
+        mov  word [ncd],NEARD ; ---- the FLOATING knife ----
         xor  si,si              ; the plane sits at max(8, |dh|/8) for
-@@hm:   mov  ax,[thcam]         ; THIS quad's own corners, so every
+.hm:   mov  ax,[thcam]         ; THIS quad's own corners, so every
         sub  ax,[IH+si]         ; vertex that survives the cut divides
-        jns  @@hm1              ; EXACTLY - one projection per polygon.
+        jns  .hm1              ; EXACTLY - one projection per polygon.
         neg  ax                 ; Mixed exact-and-boxed corners buckled
-@@hm1:  mov  cl,3               ; the quad into a bowtie, and its hull
+.hm1:  mov  cl,3               ; the quad into a bowtie, and its hull
         shr  ax,cl              ; fill was the triangle bleeding into
         inc  ax                 ; the neighbour square
         cmp  ax,[ncd]
-        jle  @@hm2
+        jle  .hm2
         mov  [ncd],ax
-@@hm2:  add  si,2
+.hm2:  add  si,2
         cmp  si,8
-        jb   @@hm
+        jb   .hm
         pop  bx
         pop  ax
         cmp  bx,[ncd]           ; every corner behind the knife: gone
-        jl   @@skip
+        jl   .skip
         cmp  ax,12500           ; every corner past the haze: gone
-        jg   @@skip
+        jg   .skip
         cmp  ax,[ncd]
-        jge  @@whole            ; all in front: no knife needed
+        jge  .whole            ; all in front: no knife needed
         call NCLIP              ; the knife: keep the visible half
-        cmp  word ptr [qn],3    ; (a sliver of nothing is nothing)
-        jl   @@skip
-        jmp  @@proj
-@@whole:mov  word ptr [qn],4    ; untouched quads ride through whole
+        cmp  word [qn],3    ; (a sliver of nothing is nothing)
+        jl   .skip
+        jmp  .proj
+.whole:mov  word [qn],4    ; untouched quads ride through whole
         mov  ax,[IU+0]
         mov  [QU+0],ax
         mov  ax,[ID+0]
@@ -2376,8 +2376,8 @@ TERR:   call TERRPREP
         mov  [QD+6],ax
         mov  ax,[IH+6]
         mov  [QH+6],ax
-@@proj: mov  word ptr [ncv],0   ; ---- project every corner we kept ----
-@@pj:   mov  bx,[ncv]
+.proj: mov  word [ncv],0   ; ---- project every corner we kept ----
+.pj:   mov  bx,[ncv]
         add  bx,bx
         mov  ax,[QU+bx]
         mov  [pu],ax
@@ -2393,11 +2393,11 @@ TERR:   call TERRPREP
         add  bx,bx              ; the qx/qy pairs stride by four
         mov  [qx0+bx],ax
         mov  [qy0+bx],dx
-        inc  word ptr [ncv]
+        inc  word [ncv]
         mov  ax,[ncv]
         cmp  ax,[qn]
-        jl   @@pj
-IF CALIB
+        jl   .pj
+if CALIB
         mov  ax,[tca]           ; the checker: colour = f(world node),
         add  ax,[tnx]           ; nothing else - a 4x4 palette of
         and  ax,3               ; sixteen distinct coats repeating
@@ -2409,24 +2409,24 @@ IF CALIB
         add  ax,cx
         mov  bx,ax
         mov  bl,[CTAB+bx]
-ELSE
+else
         mov  ax,[THT+si]        ; ---- colour IS altitude, as before ----
         add  ax,[THT+si+2*NSIDE]
         add  ax,[THT+si+2*NSIDE+2]
         add  ax,[THT+si+2]
         mov  cl,2
         shr  ax,cl
-        jnz  @@land
+        jnz  .land
         mov  bl,29
-        jmp  @@have
-@@land: mov  bx,ax
+        jmp  .have
+.land: mov  bx,ax
         add  ax,ax
         add  ax,bx
         mov  bl,ah
         cmp  bl,12
-        jbe  @@rmp
+        jbe  .rmp
         mov  bl,12
-@@rmp:  add  bl,32
+.rmp:  add  bl,32
         ; ---- the sun lives in the EAST: slopes facing it take a
         ; lighter coat, slopes turned away a darker one - and the flat
         ; look the pilot complained of becomes hills with two sides
@@ -2439,43 +2439,43 @@ ELSE
         cwd
         idiv cx
         cmp  ax,2
-        jle  @@sh1
+        jle  .sh1
         mov  ax,2
-@@sh1:  cmp  ax,-2
-        jge  @@sh2
+.sh1:  cmp  ax,-2
+        jge  .sh2
         mov  ax,-2
-@@sh2:  pop  bx
+.sh2:  pop  bx
         add  bl,al
         cmp  bl,32              ; stay on the ramp
-        jae  @@sh3
+        jae  .sh3
         mov  bl,32
-@@sh3:  cmp  bl,44
-        jbe  @@have
+.sh3:  cmp  bl,44
+        jbe  .have
         mov  bl,44
-@@have:
-ENDIF
+.have:
+end if
         mov  [qcol],bl
-        mov  byte ptr [qmode],1 ; ---- the haze, three bands deep ----
-        mov  byte ptr [qedge],0
+        mov  byte [qmode],1 ; ---- the haze, three bands deep ----
+        mov  byte [qedge],0
         cmp  bl,29              ; water is water: no mesh on the sea -
-        je   @@hz0              ; its grid dots read as static
+        je   .hz0              ; its grid dots read as static
         mov  ax,[tqd]
         cmp  ax,2000            ; the grid only on ground CLOSE enough
-        jg   @@hz0              ; to want scale from it
-        mov  byte ptr [qedge],1
-@@hz0:  mov  ax,[tqd]           ; near: its own colour; middle: half
+        jg   .hz0              ; to want scale from it
+        mov  byte [qedge],1
+.hz0:  mov  ax,[tqd]           ; near: its own colour; middle: half
         cmp  ax,7000            ; dissolved into grey-green fog; far:
-        jle  @@hzn              ; gone into it - and the 12.5 km cull
+        jle  .hzn              ; gone into it - and the 12.5 km cull
         cmp  ax,10200           ; pops inside the fog, unseen
-        jle  @@hzm
-        mov  byte ptr [qcol],45
-        jmp  @@hzn
-@@hzm:  mov  byte ptr [qmode],3
-@@hzn:  call POLY4
-        mov  byte ptr [qedge],0
-@@skip: inc  word ptr [tqi]
-        jmp  @@q
-@@done: ret
+        jle  .hzm
+        mov  byte [qcol],45
+        jmp  .hzn
+.hzm:  mov  byte [qmode],3
+.hzn:  call POLY4
+        mov  byte [qedge],0
+.skip: inc  word [tqi]
+        jmp  .q
+.done: ret
 ; ---- POLY4: fill the convex quad (qx0,qy0)..(qx3,qy3) --------------------
 ; Per row: intersect all four edges, keep the outermost pair. Slow and
 ; obvious on purpose - a wrong slab is worse than a cheap one, and this
@@ -2484,44 +2484,44 @@ ENDIF
 POLY4:  mov  ax,[qy0]           ; ymin / ymax over the four corners
         mov  bx,ax
         cmp  ax,[qy1]
-        jle  @@n1
+        jle  .n1
         mov  ax,[qy1]
-@@n1:   cmp  ax,[qy2]
-        jle  @@n1a
+.n1:   cmp  ax,[qy2]
+        jle  .n1a
         mov  ax,[qy2]
-@@n1a:  cmp  ax,[qy3]
-        jle  @@n2
+.n1a:  cmp  ax,[qy3]
+        jle  .n2
         mov  ax,[qy3]
-@@n2:   cmp  bx,[qy1]
-        jge  @@n3
+.n2:   cmp  bx,[qy1]
+        jge  .n3
         mov  bx,[qy1]
-@@n3:   cmp  bx,[qy2]
-        jge  @@n3a
+.n3:   cmp  bx,[qy2]
+        jge  .n3a
         mov  bx,[qy2]
-@@n3a:  cmp  bx,[qy3]
-        jge  @@n4
+.n3a:  cmp  bx,[qy3]
+        jge  .n4
         mov  bx,[qy3]
-@@n4:   cmp  word ptr [qn],5    ; the clip's fifth corner votes too
-        jl   @@n4a
+.n4:   cmp  word [qn],5    ; the clip's fifth corner votes too
+        jl   .n4a
         cmp  ax,[qy4]
-        jle  @@n4b
+        jle  .n4b
         mov  ax,[qy4]
-@@n4b:  cmp  bx,[qy4]
-        jge  @@n4a
+.n4b:  cmp  bx,[qy4]
+        jge  .n4a
         mov  bx,[qy4]
-@@n4a:  or   ax,ax
-        jge  @@n5
+.n4a:  or   ax,ax
+        jge  .n5
         xor  ax,ax
-@@n5:   cmp  bx,199
-        jle  @@n6
+.n5:   cmp  bx,199
+        jle  .n6
         mov  bx,199
-@@n6:   mov  [tyv],ax
+.n6:   mov  [tyv],ax
         mov  [tye],bx
-@@row:  mov  ax,[tyv]
+.row:  mov  ax,[tyv]
         cmp  ax,[tye]
-        jg   @@done
-        mov  word ptr [txl],32767
-        mov  word ptr [txr],-32768
+        jg   .done
+        mov  word [txl],32767
+        mov  word [txr],-32768
         mov  ax,[qx0]           ; edge 0-1
         mov  bx,[qy0]
         mov  cx,[qx1]
@@ -2537,15 +2537,15 @@ POLY4:  mov  ax,[qy0]           ; ymin / ymax over the four corners
         mov  cx,[qx3]
         mov  dx,[qy3]
         call EDGEX
-        cmp  word ptr [qn],5
-        je   @@e5
+        cmp  word [qn],5
+        je   .e5
         mov  ax,[qx3]           ; edge 3-0, the plain quad's last
         mov  bx,[qy3]
         mov  cx,[qx0]
         mov  dx,[qy0]
         call EDGEX
-        jmp  @@ecl
-@@e5:   mov  ax,[qx3]           ; the clipped pentagon closes in two
+        jmp  .ecl
+.e5:   mov  ax,[qx3]           ; the clipped pentagon closes in two
         mov  bx,[qy3]
         mov  cx,[qx4]
         mov  dx,[qy4]
@@ -2555,50 +2555,50 @@ POLY4:  mov  ax,[qy0]           ; ymin / ymax over the four corners
         mov  cx,[qx0]
         mov  dx,[qy0]
         call EDGEX
-@@ecl:
+.ecl:
         mov  ax,[txl]
         cmp  ax,[txr]
-        jg   @@nx
+        jg   .nx
         or   ax,ax              ; clip the span to the screen
-        jge  @@c1
+        jge  .c1
         xor  ax,ax
-@@c1:   mov  [txl],ax
+.c1:   mov  [txl],ax
         mov  ax,[txr]
         cmp  ax,319
-        jle  @@c2
+        jle  .c2
         mov  ax,319
-@@c2:   mov  [txr],ax
+.c2:   mov  [txr],ax
         mov  ax,[txl]
         cmp  ax,[txr]
-        jg   @@nx
-        cmp  byte ptr [qmode],1
-        je   @@flat
-        cmp  byte ptr [qmode],3
-        je   @@half
+        jg   .nx
+        cmp  byte [qmode],1
+        je   .flat
+        cmp  byte [qmode],3
+        je   .half
         ; ---- the shade: f at the span centre, SOLO's concrete ramp ----
         mov  ax,[txr]
         add  ax,[txl]
         sar  ax,1
         sub  ax,[cx0]
-        imul word ptr [sinr]
+        imul word [sinr]
         mov  bx,256
         idiv bx
         mov  si,ax
         mov  ax,[tyv]
         sub  ax,[hcur]
-        imul word ptr [cosr]
+        imul word [cosr]
         mov  bx,256
         idiv bx
         sub  ax,si              ; f = ((y-hcur)cos - (x-cx0)sin)/256
         or   ax,ax
-        jg   @@f1
+        jg   .f1
         mov  ax,1
-@@f1:   mov  cl,3
+.f1:   mov  cl,3
         shl  ax,cl
         cmp  ax,1023
-        jbe  @@f2
+        jbe  .f2
         mov  ax,1023
-@@f2:   mov  bx,ax
+.f2:   mov  bx,ax
         mov  al,bh
         add  al,16
         mov  [pbase],al
@@ -2619,12 +2619,12 @@ POLY4:  mov  ax,[qy0]           ; ymin / ymax over the four corners
         call DFILLW
         pop  cx
         pop  di
-        mov  byte ptr es:[di],4 ; the edge lines, both sides
+        mov  byte [es:di],4 ; the edge lines, both sides
         add  di,cx
         dec  di
-        mov  byte ptr es:[di],4
-        jmp  @@nx
-@@half: mov  ax,[tyv]           ; the middle distance: every other
+        mov  byte [es:di],4
+        jmp  .nx
+.half: mov  ax,[tyv]           ; the middle distance: every other
         call ROWAD              ; blue-noise pixel yields to the horizon
         mov  di,ax              ; haze - depth for the price of a
         add  di,[txl]           ; threshold test
@@ -2637,7 +2637,7 @@ POLY4:  mov  ax,[qy0]           ; ymin / ymax over the four corners
         mov  cl,4
         shl  bx,cl              ; the tile row, screen-anchored
         mov  si,[txl]
-@@hp:   mov  ax,si
+.hp:   mov  ax,si
         and  ax,15
         add  ax,bx
         push si
@@ -2645,16 +2645,16 @@ POLY4:  mov  ax,[qy0]           ; ymin / ymax over the four corners
         mov  al,[BNOISE+si]
         pop  si
         cmp  al,128
-        jb   @@h10
+        jb   .h10
         mov  al,[qcol]
-        jmp  @@h11
-@@h10:  mov  al,45              ; the fog's own grey-green
-@@h11:  mov  es:[di],al
+        jmp  .h11
+.h10:  mov  al,45              ; the fog's own grey-green
+.h11:  mov  [es:di],al
         inc  di
         inc  si
-        loop @@hp
-        jmp  @@nx
-@@flat: mov  ax,[tyv]           ; paint: one colour...
+        loop .hp
+        jmp  .nx
+.flat: mov  ax,[tyv]           ; paint: one colour...
         call ROWAD
         mov  di,ax
         add  di,[txl]
@@ -2667,27 +2667,27 @@ POLY4:  mov  ax,[qy0]           ; ymin / ymax over the four corners
         rep  stosb
         pop  cx
         pop  di
-        cmp  byte ptr [qedge],0 ; ...and OWL FLY's grid on the near
-        je   @@nx               ; ground: a dark stroke down each side
-        mov  byte ptr es:[di],0 ; of the quad, the scale the eye needs
+        cmp  byte [qedge],0 ; ...and OWL FLY's grid on the near
+        je   .nx               ; ground: a dark stroke down each side
+        mov  byte [es:di],0 ; of the quad, the scale the eye needs
         add  di,cx              ; when a kilometre of hillside fills
         dec  di                 ; the glass at seventy metres
-        mov  byte ptr es:[di],0
-@@nx:   inc  word ptr [tyv]
-        jmp  @@row
-@@done: ret
+        mov  byte [es:di],0
+.nx:   inc  word [tyv]
+        jmp  .row
+.done: ret
 
 ; ---- EDGEX: where edge (AX,BX)-(CX,DX) crosses row [tyv] -> txl/txr -------
 EDGEX:  cmp  bx,dx
-        je   @@out              ; horizontal edges cross nothing
-        jl   @@ord
+        je   .out              ; horizontal edges cross nothing
+        jl   .ord
         xchg ax,cx              ; make BX the top
         xchg bx,dx
-@@ord:  mov  si,[tyv]
+.ord:  mov  si,[tyv]
         cmp  si,bx
-        jl   @@out
+        jl   .out
         cmp  si,dx
-        jge  @@out
+        jge  .out
         sub  si,bx              ; x = x0 + (y-y0)*(x1-x0)/(y1-y0)
         sub  dx,bx
         mov  [edy],dx           ; IMUL eats DX: the divisor must hide
@@ -2695,15 +2695,15 @@ EDGEX:  cmp  bx,dx
         mov  [ex0],ax
         mov  ax,si
         imul cx
-        idiv word ptr [edy]
+        idiv word [edy]
         add  ax,[ex0]
         cmp  ax,[txl]
-        jge  @@e1
+        jge  .e1
         mov  [txl],ax
-@@e1:   cmp  ax,[txr]
-        jle  @@out
+.e1:   cmp  ax,[txr]
+        jle  .out
         mov  [txr],ax
-@@out:  ret
+.out:  ret
 
 ; ---- TSINF: AX angle in 8.8 units -> AX = sin*256, lerped between units ----
 ; The render turned in whole units - 1.4 degree snaps, one every few
@@ -2746,16 +2746,16 @@ TSIN:   push bx
         mov  bx,dx
         and  bx,63
         test dl,64              ; quarters 2 and 4 mirror the index
-        jz   @@u
+        jz   .u
         mov  ax,64
         sub  ax,bx
         mov  bx,ax
-@@u:    add  bx,bx
+.u:    add  bx,bx
         mov  ax,[SINT+bx]
         test dl,128             ; the bottom half is negative
-        jz   @@p
+        jz   .p
         neg  ax
-@@p:    pop  dx
+.p:    pop  dx
         pop  bx
         ret
 
@@ -2771,68 +2771,68 @@ HUD:    call LADR               ; the ladder goes down FIRST: everything
         mov  [kmh],ax
         mov  ax,[kmh]
         sub  ax,120             ; the tape spans +-120 km/h now: rows
-        jns  @@s0               ; 40..160, near the full height of the
+        jns  .s0               ; 40..160, near the full height of the
         xor  ax,ax              ; glass, the way the manual draws it
-@@s0:   add  ax,19
+.s0:   add  ax,19
         xor  dx,dx
         mov  cx,20
         div  cx
         mul  cx
         mov  [tm],ax
-@@sl:   mov  ax,[tm]
+.sl:   mov  ax,[tm]
         mov  bx,[kmh]
         add  bx,120
         cmp  ax,bx
-        jg   @@sdone
+        jg   .sdone
         mov  bx,[kmh]
         sub  bx,ax
         sar  bx,1
         add  bx,100
         mov  [ty],bx
         cmp  bx,40
-        jl   @@snext
+        jl   .snext
         cmp  bx,160
-        jg   @@snext
+        jg   .snext
         mov  ax,[tm]
         xor  dx,dx
         mov  cx,100
         div  cx
         or   dx,dx
-        jnz  @@smin
+        jnz  .smin
         mov  ax,[ty]
         call ROWAD
         add  ax,24
         mov  di,ax
         mov  cx,9
-@@st1:  mov  byte ptr es:[di],15
+.st1:  mov  byte [es:di],15
         inc  di
-        loop @@st1
+        loop .st1
         mov  ax,[tm]
         call NUM
-        mov  si,offset NBUF+2
+        mov  si,NBUF+2
         mov  ax,[ty]
         sub  ax,2
         mov  bx,8
         call FDR
-        jmp  @@snext
-@@smin: mov  ax,[ty]
+        jmp  .snext
+.smin: mov  ax,[ty]
         call ROWAD
         add  ax,28
         mov  di,ax
         mov  cx,5
-@@st2:  mov  byte ptr es:[di],15
+.st2:  mov  byte [es:di],15
         inc  di
-        loop @@st2
-@@snext:add  word ptr [tm],20
-        jmp  @@sl
-@@sdone:mov  di,100*320+34
+        loop .st2
+.snext:add  word [tm],20
+        jmp  .sl
+.sdone:mov  di,100*320+34
         mov  cx,8
-@@sd:   mov  byte ptr es:[di],15
+.sd:   mov  byte [es:di],15
         inc  di
-        loop @@sd
+        loop .sd
         mov  ax,[kmh]
         call NUM
-        mov  si,offset NBUF+2
+        mov  si,NBUF+2
         mov  ax,97
         mov  bx,44
         call FDR
@@ -2843,76 +2843,76 @@ HUD:    call LADR               ; the ladder goes down FIRST: everything
         sar  bx,1
         add  bx,100
         cmp  bx,41
-        jl   @@nls
+        jl   .nls
         cmp  bx,159
-        jg   @@nls
+        jg   .nls
         mov  ax,bx
         call ROWAD
         add  ax,22
         mov  di,ax
         mov  cx,6
-@@ls2:  mov  byte ptr es:[di],21
+.ls2:  mov  byte [es:di],21
         inc  di
-        loop @@ls2
-@@nls:  ; the manual's Stall Speed Indicator: the wing quits below this
+        loop .ls2
+.nls:  ; the manual's Stall Speed Indicator: the wing quits below this
         ; tick, and everything under it on the tape is red. FLAPS move
         ; it down 15 km/h - that is what they are FOR.
         mov  ax,VSTLC
-        cmp  byte ptr [flaps],0
-        je   @@ss0
+        cmp  byte [flaps],0
+        je   .ss0
         mov  ax,VSTLF
-@@ss0:  mov  [vstl],ax
-        cmp  byte ptr [air],0   ; parked and rolling you are ALWAYS below
-        je   @@nst              ; it: the band would just paint the tape
+.ss0:  mov  [vstl],ax
+        cmp  byte [air],0   ; parked and rolling you are ALWAYS below
+        je   .nst              ; it: the band would just paint the tape
         mov  bx,[kmh]
         sub  bx,ax
         sar  bx,1
         add  bx,100
         cmp  bx,160
-        jg   @@nst              ; the whole band is below the glass
+        jg   .nst              ; the whole band is below the glass
         cmp  bx,41
-        jge  @@ss1
+        jge  .ss1
         mov  bx,41              ; ...or the whole tape is in the red
-@@ss1:  mov  ax,bx
+.ss1:  mov  ax,bx
         call ROWAD
         add  ax,22
         mov  di,ax
         mov  cx,6
-@@ss2:  mov  byte ptr es:[di],22
+.ss2:  mov  byte [es:di],22
         inc  di
-        loop @@ss2
+        loop .ss2
         mov  ax,bx
-@@ss3:  add  ax,2               ; the band, every other row
+.ss3:  add  ax,2               ; the band, every other row
         cmp  ax,160
-        jg   @@nst
+        jg   .nst
         push ax
         call ROWAD
         add  ax,22
         mov  di,ax
-        mov  byte ptr es:[di],22
-        mov  byte ptr es:[di+1],22
+        mov  byte [es:di],22
+        mov  byte [es:di+1],22
         pop  ax
-        jmp  @@ss3
-@@nst:  ; altitude tape, right
+        jmp  .ss3
+.nst:  ; altitude tape, right
         mov  ax,[alt16]
         mov  cl,4
         shr  ax,cl
         mov  [alm],ax
         mov  ax,[alm]
         sub  ax,600             ; +-600 m over the same 120 rows
-        jns  @@a0
+        jns  .a0
         xor  ax,ax
-@@a0:   add  ax,99
+.a0:   add  ax,99
         xor  dx,dx
         mov  cx,100
         div  cx
         mul  cx
         mov  [tm],ax
-@@al:   mov  ax,[tm]
+.al:   mov  ax,[tm]
         mov  bx,[alm]
         add  bx,600
         cmp  ax,bx
-        jg   @@adone
+        jg   .adone
         mov  bx,[alm]
         sub  bx,ax
         mov  ax,bx
@@ -2922,9 +2922,9 @@ HUD:    call LADR               ; the ladder goes down FIRST: everything
         add  ax,100
         mov  [ty],ax
         cmp  ax,40
-        jl   @@anext
+        jl   .anext
         cmp  ax,160
-        jg   @@anext
+        jg   .anext
         mov  ax,[tm]
         xor  dx,dx
         mov  cx,100
@@ -2933,62 +2933,62 @@ HUD:    call LADR               ; the ladder goes down FIRST: everything
         mov  cx,5
         div  cx
         or   dx,dx
-        jnz  @@amin
+        jnz  .amin
         mov  ax,[ty]
         call ROWAD
         add  ax,287
         mov  di,ax
         mov  cx,9
-@@at1:  mov  byte ptr es:[di],15
+.at1:  mov  byte [es:di],15
         inc  di
-        loop @@at1
+        loop .at1
         mov  ax,[tm]
         cmp  ax,1000
-        jae  @@kfmt
+        jae  .kfmt
         call NUM
-        mov  si,offset NBUF+2
-        jmp  @@ldr
-@@kfmt: xor  dx,dx
+        mov  si,NBUF+2
+        jmp  .ldr
+.kfmt: xor  dx,dx
         mov  cx,1000
         div  cx
         add  al,'0'
         mov  [ABUF],al
-        mov  byte ptr [ABUF+1],'K'
+        mov  byte [ABUF+1],'K'
         mov  ax,dx
         xor  dx,dx
         mov  cx,100
         div  cx
         or   al,al
-        jz   @@k0
+        jz   .k0
         add  al,'0'
         mov  [ABUF+2],al
-        mov  byte ptr [ABUF+3],0
-        jmp  @@k1
-@@k0:   mov  byte ptr [ABUF+2],0
-@@k1:   mov  si,offset ABUF
-@@ldr:  mov  ax,[ty]
+        mov  byte [ABUF+3],0
+        jmp  .k1
+.k0:   mov  byte [ABUF+2],0
+.k1:   mov  si,ABUF
+.ldr:  mov  ax,[ty]
         sub  ax,2
         mov  bx,298
         call FDR
-        jmp  @@anext
-@@amin: mov  ax,[ty]
+        jmp  .anext
+.amin: mov  ax,[ty]
         call ROWAD
         add  ax,287
         mov  di,ax
         mov  cx,5
-@@at2:  mov  byte ptr es:[di],15
+.at2:  mov  byte [es:di],15
         inc  di
-        loop @@at2
-@@anext:add  word ptr [tm],100
-        jmp  @@al
-@@adone:mov  di,100*320+276
+        loop .at2
+.anext:add  word [tm],100
+        jmp  .al
+.adone:mov  di,100*320+276
         mov  cx,8
-@@ad:   mov  byte ptr es:[di],15
+.ad:   mov  byte [es:di],15
         inc  di
-        loop @@ad
+        loop .ad
         mov  ax,[alm]
         call NUM
-        mov  si,offset NBUF+1
+        mov  si,NBUF+1
         mov  ax,97
         mov  bx,258
         call FDR
@@ -2998,40 +2998,40 @@ HUD:    call LADR               ; the ladder goes down FIRST: everything
         sar  bx,cl              ; caret sat on the stop through every
         add  bx,100             ; climb; +-15 m/s is the honest range
         cmp  bx,42
-        jge  @@v1
+        jge  .v1
         mov  bx,42
-@@v1:   cmp  bx,158
-        jle  @@v2
+.v1:   cmp  bx,158
+        jle  .v2
         mov  bx,158
-@@v2:   mov  ax,bx
+.v2:   mov  ax,bx
         call ROWAD
         add  ax,285
         mov  di,ax              ; the manual's caret: a triangle whose
-        mov  byte ptr es:[di],21          ; tip touches the tape
-        mov  byte ptr es:[di+1],21
-        mov  byte ptr es:[di+2],21
-        mov  byte ptr es:[di-320],21
-        mov  byte ptr es:[di-320+1],21
-        mov  byte ptr es:[di+320],21
-        mov  byte ptr es:[di+320+1],21
-        mov  byte ptr es:[di-640],21
-        mov  byte ptr es:[di+640],21
+        mov  byte [es:di],21          ; tip touches the tape
+        mov  byte [es:di+1],21
+        mov  byte [es:di+2],21
+        mov  byte [es:di-320],21
+        mov  byte [es:di-320+1],21
+        mov  byte [es:di+320],21
+        mov  byte [es:di+320+1],21
+        mov  byte [es:di-640],21
+        mov  byte [es:di+640],21
         ; ---- the heading tape, finally telling the truth ----
         ; 3 px per unit, +-26 units of window; a dot every 4 units, a
         ; bar every 8, and the label every 32 - the 45-degree points,
         ; which a 256-unit circle hits exactly. The cyan mark is the
         ; RUNWAY AXIS: put it under the caret and the concrete is
         ; somewhere off the nose.
-        mov  word ptr [tm],-26
-@@ct:   mov  ax,[tm]
+        mov  word [tm],-26
+.ct:   mov  ax,[tm]
         cmp  ax,26
-        jg   @@ctd
+        jg   .ctd
         mov  ax,[dhdg]
         add  ax,[tm]
         and  ax,255
         mov  [ty],ax            ; the unit under this column
         test ax,3
-        jnz  @@ctn
+        jnz  .ctn
         mov  ax,[tm]
         add  ax,ax
         add  ax,[tm]
@@ -3039,32 +3039,32 @@ HUD:    call LADR               ; the ladder goes down FIRST: everything
         mov  di,ax              ; x = 160 + 3*offset
         mov  ax,[ty]
         test ax,31
-        jz   @@big
+        jz   .big
         test ax,7
-        jz   @@bar
+        jz   .bar
         mov  ax,12              ; the lone dot between bars
         call ROWAD
         add  ax,di
         mov  di,ax
-        mov  byte ptr es:[di],15
-        jmp  @@ctn
-@@bar:  mov  ax,11
+        mov  byte [es:di],15
+        jmp  .ctn
+.bar:  mov  ax,11
         call ROWAD
         add  ax,di
         mov  di,ax
-        mov  byte ptr es:[di],15
-        mov  byte ptr es:[di+320],15
-        mov  byte ptr es:[di+640],15
-        jmp  @@ctn
-@@big:  push di
+        mov  byte [es:di],15
+        mov  byte [es:di+320],15
+        mov  byte [es:di+640],15
+        jmp  .ctn
+.big:  push di
         mov  ax,9
         call ROWAD
         add  ax,di
         mov  di,ax
         mov  cx,7
-@@ct1:  mov  byte ptr es:[di],15
+.ct1:  mov  byte [es:di],15
         add  di,320
-        loop @@ct1
+        loop .ct1
         pop  di
         mov  ax,[ty]            ; the label: unit/32 names the point
         mov  cl,5
@@ -3076,18 +3076,18 @@ HUD:    call LADR               ; the ladder goes down FIRST: everything
         sub  bx,5               ; window keeps it on the glass
         mov  ax,2
         call FDR
-@@ctn:  inc  word ptr [tm]
-        jmp  @@ct
-@@ctd:  mov  ax,[dhdg]          ; the runway axis rides the tape in cyan
+.ctn:  inc  word [tm]
+        jmp  .ct
+.ctd:  mov  ax,[dhdg]          ; the runway axis rides the tape in cyan
         neg  ax
         and  ax,255
         cmp  ax,128
-        jbe  @@cw1
+        jbe  .cw1
         sub  ax,256
-@@cw1:  cmp  ax,-26
-        jl   @@ncy
+.cw1:  cmp  ax,-26
+        jl   .ncy
         cmp  ax,26
-        jg   @@ncy
+        jg   .ncy
         mov  bx,ax
         add  ax,ax
         add  ax,bx
@@ -3097,15 +3097,15 @@ HUD:    call LADR               ; the ladder goes down FIRST: everything
         call ROWAD
         add  ax,di
         mov  di,ax
-        mov  byte ptr es:[di-1],21
-        mov  byte ptr es:[di],21
-        mov  byte ptr es:[di+1],21
-        mov  byte ptr es:[di+320-1],21
-        mov  byte ptr es:[di+320],21
-        mov  byte ptr es:[di+320+1],21
-@@ncy:  mov  byte ptr es:[17*320+160],15
-        mov  byte ptr es:[18*320+159],15
-        mov  byte ptr es:[18*320+161],15
+        mov  byte [es:di-1],21
+        mov  byte [es:di],21
+        mov  byte [es:di+1],21
+        mov  byte [es:di+320-1],21
+        mov  byte [es:di+320],21
+        mov  byte [es:di+320+1],21
+.ncy:  mov  byte [es:17*320+160],15
+        mov  byte [es:18*320+159],15
+        mov  byte [es:18*320+161],15
         ; the DME grew a second leg: how far to the slab, counting the
         ; sideways miles too (max + min/2, the honest octagon)
         mov  ax,[posm]
@@ -3117,16 +3117,16 @@ HUD:    call LADR               ; the ladder goes down FIRST: everything
         sub  ax,dx              ; metres ahead to the NEXT threshold
         mov  bx,[px]
         cmp  bx,8000h
-        jb   @@px1
+        jb   .px1
         neg  bx                 ; |east of the line|
-@@px1:  cmp  ax,bx              ; ax = max, bx = min
-        jae  @@oc1
+.px1:  cmp  ax,bx              ; ax = max, bx = min
+        jae  .oc1
         xchg ax,bx
-@@oc1:  shr  bx,1
+.oc1:  shr  bx,1
         add  ax,bx
-        jnc  @@oc2
+        jnc  .oc2
         mov  ax,0FFFFh
-@@oc2:  xor  dx,dx
+.oc2:  xor  dx,dx
         mov  cx,1000
         div  cx
         mov  bx,ax              ; bx = km
@@ -3141,65 +3141,65 @@ HUD:    call LADR               ; the ladder goes down FIRST: everything
         mov  cx,10
         div  cx
         or   al,al
-        jz   @@r2
+        jz   .r2
         add  al,'0'
         mov  [RBUF],al
-        jmp  @@r3
-@@r2:   mov  byte ptr [RBUF],' '
-@@r3:   add  dl,'0'
+        jmp  .r3
+.r2:   mov  byte [RBUF],' '
+.r3:   add  dl,'0'
         mov  [RBUF+1],dl
-        mov  byte ptr [fcol],21
-        mov  si,offset RBUF
+        mov  byte [fcol],21
+        mov  si,RBUF
         mov  ax,24
         mov  bx,148
         call FDR
-        mov  byte ptr [fcol],15
+        mov  byte [fcol],15
         ; ---- the surveyor's corner: north, east, thrust - the exact
         ; words, right of the compass, for the day the picture breaks
         ; and the hunt needs coordinates instead of adjectives
         mov  ax,[posm]
         call NUM
-        mov  si,offset NBUF
+        mov  si,NBUF
         mov  ax,1
         mov  bx,244
         call FDR
         mov  ax,[px]
         call NUM
-        mov  si,offset NBUF
+        mov  si,NBUF
         mov  ax,8
         mov  bx,244
         call FDR
         mov  ax,[T4]
         call NUM
-        mov  si,offset NBUF
+        mov  si,NBUF
         mov  ax,15
         mov  bx,244
         call FDR
         ; waterline
         mov  di,100*320+150
         mov  cx,7
-@@wl1:  mov  byte ptr es:[di],15
+.wl1:  mov  byte [es:di],15
         inc  di
-        loop @@wl1
+        loop .wl1
         mov  di,100*320+164
         mov  cx,7
-@@wl2:  mov  byte ptr es:[di],15
+.wl2:  mov  byte [es:di],15
         inc  di
-        loop @@wl2
-        mov  byte ptr es:[101*320+159],15
-        mov  byte ptr es:[101*320+161],15
-        mov  byte ptr es:[102*320+160],15
+        loop .wl2
+        mov  byte [es:101*320+159],15
+        mov  byte [es:101*320+161],15
+        mov  byte [es:102*320+160],15
         call FPIND
         ; ---- the AoA staple, left of the datum: live in the bracket ----
         mov  di,90*320+140
         mov  cx,21
-@@ao1:  mov  byte ptr es:[di],15
+.ao1:  mov  byte [es:di],15
         add  di,320
-        loop @@ao1
-        mov  byte ptr es:[90*320+138],15
-        mov  byte ptr es:[90*320+139],15
-        mov  byte ptr es:[110*320+138],15
-        mov  byte ptr es:[110*320+139],15
+        loop .ao1
+        mov  byte [es:90*320+138],15
+        mov  byte [es:90*320+139],15
+        mov  byte [es:110*320+138],15
+        mov  byte [es:110*320+139],15
         mov  ax,[alpha8]        ; the caret is YOUR alpha, 13 centred;
         sub  ax,3328            ; drift above the bracket and the wing
         cwd                     ; is about to give up
@@ -3208,19 +3208,19 @@ HUD:    call LADR               ; the ladder goes down FIRST: everything
         neg  ax
         add  ax,100
         cmp  ax,88
-        jge  @@ao2
+        jge  .ao2
         mov  ax,88
-@@ao2:  cmp  ax,112
-        jle  @@ao3
+.ao2:  cmp  ax,112
+        jle  .ao3
         mov  ax,112
-@@ao3:  call ROWAD
+.ao3:  call ROWAD
         add  ax,136
         mov  di,ax
-        mov  byte ptr es:[di],21
-        mov  byte ptr es:[di+1],21
-        mov  byte ptr es:[di+2],21
-        mov  byte ptr es:[di+1-320],21
-        mov  byte ptr es:[di+1+320],21
+        mov  byte [es:di],21
+        mov  byte [es:di+1],21
+        mov  byte [es:di+2],21
+        mov  byte [es:di+1-320],21
+        mov  byte [es:di+1+320],21
         ; ---- the G readout over the speed tape (the manual's corner) ----
         mov  ax,[lgv]           ; n = L/mg, straight from the physics
         mov  cx,10
@@ -3232,12 +3232,12 @@ HUD:    call LADR               ; the ladder goes down FIRST: everything
         div  cx
         add  al,'0'
         mov  [ABUF],al
-        mov  byte ptr [ABUF+1],'.'
+        mov  byte [ABUF+1],'.'
         add  dl,'0'
         mov  [ABUF+2],dl
-        mov  byte ptr [ABUF+3],'G'
-        mov  byte ptr [ABUF+4],0
-        mov  si,offset ABUF
+        mov  byte [ABUF+3],'G'
+        mov  byte [ABUF+4],0
+        mov  si,ABUF
         mov  ax,24
         mov  bx,6
         call FDR
@@ -3250,19 +3250,19 @@ HUD:    call LADR               ; the ladder goes down FIRST: everything
 ; Solid above, dotted below - the instant which-way-is-the-earth cue.
 ; A gap in the middle is left for the datum, the FPI and the staple.
 ; Caller has ES = the back buffer.
-LADR:   cmp  byte ptr [air],0   ; on the wheels there is nothing to read
-        je   @@done
+LADR:   cmp  byte [air],0   ; on the wheels there is nothing to read
+        je   .done
         mov  ax,100             ; the pilot's old rule, back in force:
         sub  ax,[hcur]          ; while the REAL horizon crosses the
-        imul word ptr [cosr]    ; window, the ladder stays OUT of it -
+        imul word [cosr]    ; window, the ladder stays OUT of it -
         mov  cx,256             ; the rails light up only when sky and
         idiv cx                 ; ground have both walked off the glass
         mov  [lfc],ax           ; and these lines are all the pilot has
         or   ax,ax
-        jns  @@fc1
+        jns  .fc1
         neg  ax
-@@fc1:  cmp  ax,92              ; 110 was FLIGHT's number at 8 px/deg;
-        jle  @@done             ; at the world scale it left a two-
+.fc1:  cmp  ax,92              ; 110 was FLIGHT's number at 8 px/deg;
+        jle  .done             ; at the world scale it left a two-
                                 ; degree band with neither horizon nor
                                 ; rails - the all-green screen with
                                 ; nothing to read. 92 lights the rungs
@@ -3278,12 +3278,12 @@ LADR:   cmp  byte ptr [air],0   ; on the wheels there is nothing to read
         mov  [lp],ax
         add  ax,15
         mov  [lke],ax
-@@l:    cmp  word ptr [lp],0
-        je   @@next             ; zero belongs to the world, not to us
-        cmp  word ptr [lp],-90  ; past the poles the numbers stop
-        jl   @@next             ; meaning pitch
-        cmp  word ptr [lp],90
-        jg   @@next
+.l:    cmp  word [lp],0
+        je   .next             ; zero belongs to the world, not to us
+        cmp  word [lp],-90  ; past the poles the numbers stop
+        jl   .next             ; meaning pitch
+        cmp  word [lp],90
+        jg   .next
         mov  ax,[lp]            ; f = -P*27/5: 5.4 px per degree, the
         mov  cx,27              ; WORLD focal length - the ladder must
         imul cx                 ; measure the same sky the horizon and
@@ -3296,9 +3296,9 @@ LADR:   cmp  byte ptr [air],0   ; on the wheels there is nothing to read
         mov  [lcx],ax           ; ...rotated onto the banked screen
         mov  [lcy],dx
         cmp  dx,-60
-        jl   @@next             ; the whole line is off the glass
+        jl   .next             ; the whole line is off the glass
         cmp  dx,260
-        jg   @@next
+        jg   .next
         mov  ax,[cosr]          ; walk out along the HORIZON direction,
         mov  cx,-60             ; 8.8, starting 60 px to one side
         imul cx
@@ -3307,50 +3307,50 @@ LADR:   cmp  byte ptr [air],0   ; on the wheels there is nothing to read
         mov  cx,-60
         imul cx
         mov  [ly8],ax
-        mov  word ptr [li],0
-@@pt:   mov  ax,[li]            ; 0..119: the centre gap is 44..76
+        mov  word [li],0
+.pt:   mov  ax,[li]            ; 0..119: the centre gap is 44..76
         cmp  ax,44
-        jb   @@vis
+        jb   .vis
         cmp  ax,76
-        jb   @@skip
-@@vis:  cmp  word ptr [lp],0    ; below the horizon: dotted
-        jg   @@draw
-        test word ptr [li],1
-        jnz  @@skip
-@@draw: mov  ax,[lx8]
+        jb   .skip
+.vis:  cmp  word [lp],0    ; below the horizon: dotted
+        jg   .draw
+        test word [li],1
+        jnz  .skip
+.draw: mov  ax,[lx8]
         mov  cl,8
         sar  ax,cl
         add  ax,[lcx]
-        js   @@skip
+        js   .skip
         cmp  ax,319
-        jg   @@skip
+        jg   .skip
         mov  [lpx],ax
         mov  ax,[ly8]
         mov  cl,8
         sar  ax,cl
         add  ax,[lcy]
-        js   @@skip
+        js   .skip
         cmp  ax,199
-        jg   @@skip
+        jg   .skip
         call ROWAD
         add  ax,[lpx]
         mov  di,ax
-        mov  byte ptr es:[di],23
-@@skip: mov  ax,[cosr]          ; one pixel further along the line
+        mov  byte [es:di],23
+.skip: mov  ax,[cosr]          ; one pixel further along the line
         add  [lx8],ax
         mov  ax,[sinr]
         add  [ly8],ax
-        inc  word ptr [li]
-        cmp  word ptr [li],120
-        jb   @@pt
+        inc  word [li]
+        cmp  word [li],120
+        jb   .pt
         mov  ax,[lp]            ; the label, at the line's left end
         or   ax,ax
-        jg   @@l5
+        jg   .l5
         neg  ax
-        mov  byte ptr [LBUF],'-'
-        jmp  @@l6
-@@l5:   mov  byte ptr [LBUF],' '
-@@l6:   xor  dx,dx
+        mov  byte [LBUF],'-'
+        jmp  .l6
+.l5:   mov  byte [LBUF],' '
+.l6:   xor  dx,dx
         mov  cx,10
         div  cx
         add  al,'0'
@@ -3363,9 +3363,9 @@ LADR:   cmp  byte ptr [air],0   ; on the wheels there is nothing to read
         mov  cl,8               ; turn their numbers either
         sar  ax,cl
         add  ax,[lcx]
-        js   @@nolb
+        js   .nolb
         cmp  ax,300
-        jg   @@nolb
+        jg   .nolb
         mov  bx,ax
         mov  ax,[sinr]
         mov  cx,-76
@@ -3374,57 +3374,57 @@ LADR:   cmp  byte ptr [air],0   ; on the wheels there is nothing to read
         sar  ax,cl
         add  ax,[lcy]
         sub  ax,2
-        js   @@nolb
+        js   .nolb
         cmp  ax,193
-        jg   @@nolb
-        mov  byte ptr [fcol],23
-        mov  si,offset LBUF
+        jg   .nolb
+        mov  byte [fcol],23
+        mov  si,LBUF
         call FDR
-        mov  byte ptr [fcol],15
-@@nolb:
-@@next: add  word ptr [lp],5
+        mov  byte [fcol],15
+.nolb:
+.next: add  word [lp],5
         mov  ax,[lp]
         cmp  ax,[lke]
-        jle  @@l
-@@done: ret
+        jle  .l
+.done: ret
 
 ; ---- FPIND: the Flight Path Indicator - where the jet is REALLY going ------
 ; The circle sits gamma below the horizon, so it marks the spot the
 ; nose is merely pointing NEAR. On final you fly the CIRCLE onto the
 ; threshold; the gap up to the datum is the angle of attack, and the
 ; manual says that gap is normal.
-FPIND:  cmp  byte ptr [air],0
-        je   @@done
+FPIND:  cmp  byte [air],0
+        je   .done
         mov  bx,[fpr]           ; it marks a place in the WORLD, so it
         cmp  bx,-56             ; rides the bank like the ladder does
-        jge  @@c1
+        jge  .c1
         mov  bx,-56
-@@c1:   cmp  bx,56
-        jle  @@c2
+.c1:   cmp  bx,56
+        jle  .c2
         mov  bx,56
-@@c2:   xor  ax,ax
+.c2:   xor  ax,ax
         call ROTPT
         cmp  ax,8
-        jge  @@x1
+        jge  .x1
         mov  ax,8
-@@x1:   cmp  ax,311
-        jle  @@x2
+.x1:   cmp  ax,311
+        jle  .x2
         mov  ax,311
-@@x2:   mov  si,ax
+.x2:   mov  si,ax
         mov  ax,dx
         cmp  ax,44
-        jge  @@f1
+        jge  .f1
         mov  ax,44
-@@f1:   cmp  ax,156
-        jle  @@f2
+.f1:   cmp  ax,156
+        jle  .f2
         mov  ax,156
-@@f2:   call ROWAD
+.f2:   call ROWAD
         add  ax,si
         mov  di,ax
-        mov  si,offset FPIT
-@@f3:   lodsb
+        mov  si,FPIT
+.f3:   lodsb
         cmp  al,80h
-        je   @@done
+        je   .done
         cbw
         mov  bx,ax              ; dx, signed
         lodsb
@@ -3433,9 +3433,9 @@ FPIND:  cmp  byte ptr [air],0
         imul cx                 ; dy * 320
         add  bx,ax
         add  bx,di
-        mov  byte ptr es:[bx],15
-        jmp  @@f3
-@@done: ret
+        mov  byte [es:bx],15
+        jmp  .f3
+.done: ret
 
 ; the circle, its wings and the stem, as (dx,dy) pairs
 FPIT    db  -1,-3,  0,-3,  1,-3
@@ -3468,82 +3468,82 @@ FDR:    push dx
         call ROWAD
         add  ax,bx
         mov  di,ax
-@@c:    lodsb
+.c:    lodsb
         or   al,al
-        jz   @@done
+        jz   .done
         cmp  al,' '
-        jne  @@g
+        jne  .g
         add  di,4
-        jmp  @@c
-@@g:    cmp  al,'K'
-        jne  @@dot
+        jmp  .c
+.g:    cmp  al,'K'
+        jne  .dot
         mov  al,10
-        jmp  @@i
-@@dot:  cmp  al,'.'
-        jne  @@gee
+        jmp  .i
+.dot:  cmp  al,'.'
+        jne  .gee
         mov  al,11
-        jmp  @@i
-@@gee:  cmp  al,'G'
-        jne  @@mns
+        jmp  .i
+.gee:  cmp  al,'G'
+        jne  .mns
         mov  al,12
-        jmp  @@i
-@@mns:  cmp  al,'-'             ; the ladder's minus
-        jne  @@emm
+        jmp  .i
+.mns:  cmp  al,'-'             ; the ladder's minus
+        jne  .emm
         mov  al,13
-        jmp  @@i
-@@emm:  cmp  al,'M'             ; the range's kilo-METRES
-        jne  @@d
+        jmp  .i
+.emm:  cmp  al,'M'             ; the range's kilo-METRES
+        jne  .d
         mov  al,14
-        jmp  @@i
-@@d:    sub  al,'0'
-@@i:    xor  ah,ah
+        jmp  .i
+.d:    sub  al,'0'
+.i:    xor  ah,ah
         add  ax,ax
         mov  bx,ax
         add  ax,ax
         add  bx,ax
         push si
         push di
-        mov  si,offset HFONT
+        mov  si,HFONT
         add  si,bx
         mov  cx,6
-@@r:    lodsb
+.r:    lodsb
         mov  ah,al
         mov  al,[fcol]          ; white, or dim for the ladder, or cyan
         push cx
         mov  cx,3
-@@p:    shl  ah,1
-        jnc  @@n
-        mov  es:[di],al
-@@n:    inc  di
-        loop @@p
+.p:    shl  ah,1
+        jnc  .n
+        mov  [es:di],al
+.n:    inc  di
+        loop .p
         add  di,320-3
         pop  cx
-        loop @@r
+        loop .r
         pop  di
         pop  si
         add  di,4
-        jmp  @@c
-@@done: pop  dx
+        jmp  .c
+.done: pop  dx
         ret
 
 ; ---- NUM: AX -> right-aligned decimal in NBUF (5 chars) --------------------
 NUM:    push bx
         push cx
         push dx
-        mov  bx,offset NBUF
+        mov  bx,NBUF
         mov  cx,5
-@@z:    mov  byte ptr [bx],' '
+.z:    mov  byte [bx],' '
         inc  bx
-        loop @@z
-        mov  bx,offset NBUF+4
-@@d:    xor  dx,dx
+        loop .z
+        mov  bx,NBUF+4
+.d:    xor  dx,dx
         mov  cx,10
         div  cx
         add  dl,'0'
         mov  [bx],dl
         dec  bx
         or   ax,ax
-        jnz  @@d
+        jnz  .d
         pop  dx
         pop  cx
         pop  bx
@@ -3552,11 +3552,11 @@ NUM:    push bx
 ; ---- TRI: AX phase -> a triangle wave, -16..+16 ----------------------------
 TRI:    and  ax,63
         cmp  ax,32
-        jb   @@a
+        jb   .a
         neg  ax
         add  ax,48
         ret
-@@a:    sub  ax,16
+.a:    sub  ax,16
         ret
 
 ; ---- MKPATT: bake the 4-pixel dither pattern for one screen row ------------
@@ -3566,11 +3566,11 @@ MKPATT: push bx
         push si
         push di
         cmp  ax,[pmrow]         ; the row's tile anchor, cached: three
-        jne  @@cut              ; spans in a row ask for the same one -
+        jne  .cut              ; spans in a row ask for the same one -
         mov  si,[texp]          ; unless one of them is sky and the
         cmp  si,[pmtex]         ; next is ground, which is a different
-        je   @@have             ; table entirely
-@@cut:  mov  [pmrow],ax
+        je   .have             ; table entirely
+.cut:  mov  [pmrow],ax
         mov  si,[texp]
         mov  [pmtex],si
         sub  ax,[hcur]          ; wings level, the world frame IS the
@@ -3584,23 +3584,23 @@ MKPATT: push bx
         neg  ax
         and  ax,15
         mov  [pt0],ax
-@@have: mov  ax,[pt0]
+.have: mov  ax,[pt0]
         mov  [pti],ax
         xor  bx,bx
-@@m:    mov  ax,[pti]
+.m:    mov  ax,[pti]
         and  ax,15
         add  ax,[pf0]
         mov  si,ax
         mov  ah,[BNOISE+si]
         mov  al,[pbase]
         cmp  [pfrac],ah
-        jbe  @@m1
+        jbe  .m1
         inc  al
-@@m1:   mov  [PATT+bx],al
-        inc  word ptr [pti]
+.m1:   mov  [PATT+bx],al
+        inc  word [pti]
         inc  bx
         cmp  bx,16
-        jb   @@m
+        jb   .m
         pop  di
         pop  si
         pop  dx
@@ -3617,7 +3617,7 @@ MKPATT: push bx
 ; (cos, -sin). The wrap at 65536 is harmless - 1024 divides it, and all
 ; we ever read are bits 8..9.
 ;  in: ES:DI dest, CX count, wt8/wf8 the span start, pbase/pfrac shade
-DFILLW: jcxz @@z
+DFILLW: jcxz .z
         push bx
         push dx
         push si
@@ -3625,7 +3625,7 @@ DFILLW: jcxz @@z
         mov  bx,[wt8]
         mov  dx,[wf8]
         mov  bp,[texp]          ; sky stands still, ground streams: the
-@@p:    mov  al,dh              ; only difference is which table says
+.p:    mov  al,dh              ; only difference is which table says
         xor  ah,ah              ; what tile row this distance is on
         mov  si,ax
         mov  al,[bp+si]
@@ -3637,17 +3637,17 @@ DFILLW: jcxz @@z
         mov  ah,[BNOISE+si]
         mov  al,[pbase]
         cmp  [pfrac],ah
-        jbe  @@l1
+        jbe  .l1
         inc  al
-@@l1:   stosb
+.l1:   stosb
         add  bx,[cosr]          ; one pixel east in the WORLD frame
         sub  dx,[sinr]
-        loop @@p
+        loop .p
         pop  bp
         pop  si
         pop  dx
         pop  bx
-@@z:    ret
+.z:    ret
 
 ; ---- WSTART: world coords of (BX = x, AX = y) into wt8/wf8, 8.8 ----------
 WSTART: push cx
@@ -3657,17 +3657,17 @@ WSTART: push cx
         mov  si,ax              ; si = dy
         sub  bx,[cx0]           ; bx = dx
         mov  ax,bx
-        imul word ptr [cosr]
+        imul word [cosr]
         mov  cx,ax
         mov  ax,si
-        imul word ptr [sinr]
+        imul word [sinr]
         add  ax,cx
         mov  [wt8],ax           ; t*256 = dx*cos + dy*sin
         mov  ax,si
-        imul word ptr [cosr]
+        imul word [cosr]
         mov  cx,ax
         mov  ax,bx
-        imul word ptr [sinr]
+        imul word [sinr]
         sub  cx,ax
         mov  [wf8],cx           ; f*256 = dy*cos - dx*sin
         pop  si
@@ -3676,89 +3676,89 @@ WSTART: push cx
         ret
 
 ; ---- DFILL: fill CX pixels at ES:DI with PATT, phased by screen x ----------
-DFILL:  jcxz @@z                ; CX=0 must mean zero, not 65536
+DFILL:  jcxz .z                ; CX=0 must mean zero, not 65536
         push bx
         mov  bx,di
         and  bx,15              ; the tile is 16 wide now, and 320 is
-@@f:    mov  al,[PATT+bx]       ; still a multiple of it
+.f:    mov  al,[PATT+bx]       ; still a multiple of it
         stosb
         inc  bx
         and  bx,15
-        loop @@f
+        loop .f
         pop  bx
-@@z:    ret
+.z:    ret
 
 ; ---- BAKE: sky ramp + clouds (the ground needs no tables here) -------------
 BAKE:   xor  si,si              ; sky ramp by height above the horizon
-@@sk:   mov  ax,si
+.sk:   mov  ax,si
         add  ax,ax
         add  ax,ax
         add  ax,si
         cmp  ah,4
-        jb   @@s2
+        jb   .s2
         mov  dl,6
         xor  al,al
-        jmp  @@s3
-@@s2:   or   al,al
-        jnz  @@s4
+        jmp  .s3
+.s2:   or   al,al
+        jnz  .s4
         mov  dl,10
         sub  dl,ah
-        jmp  @@s3
-@@s4:   mov  dl,9
+        jmp  .s3
+.s4:   mov  dl,9
         sub  dl,ah
         neg  al
-@@s3:   mov  [SBASE+si],dl
+.s3:   mov  [SBASE+si],dl
         mov  [SFRAC+si],al
         inc  si
         cmp  si,200
-        jb   @@sk
+        jb   .sk
         ; ---- four cloud coats, cut fresh every launch: the same
         ; random walk the old glued-on pair wore, now a wardrobe ----
         xor  bp,bp              ; bp = shape base in the tables
-@@sh:   xor  bx,bx              ; the width walk
+.sh:   xor  bx,bx              ; the width walk
         mov  dx,55              ; the start walk begins near centre
         xor  si,si
-@@cw:   call RND16
+.cw:   call RND16
         mov  al,ah
         xor  ah,ah
         and  ax,7
         sub  ax,2               ; drift +3/-2: clouds like to grow
         add  bx,ax
         cmp  si,40
-        jb   @@w1
+        jb   .w1
         sub  bx,3               ; ...and taper at the top
-@@w1:   or   bx,bx
-        jns  @@w2
+.w1:   or   bx,bx
+        jns  .w2
         xor  bx,bx
-@@w2:   cmp  bx,105
-        jle  @@w3
+.w2:   cmp  bx,105
+        jle  .w3
         mov  bx,105
-@@w3:   call RND16
+.w3:   call RND16
         mov  al,ah
         xor  ah,ah
         and  ax,3
         dec  ax
         add  dx,ax
         cmp  dx,15
-        jge  @@w4
+        jge  .w4
         mov  dx,15
-@@w4:   cmp  dx,110
-        jle  @@w5
+.w4:   cmp  dx,110
+        jle  .w5
         mov  dx,110
-@@w5:   mov  di,bp
+.w5:   mov  di,bp
         add  di,si
         mov  [CSHW+di],bl
         mov  [CSHS+di],dl
         inc  si
         cmp  si,64
-        jb   @@cw
+        jb   .cw
         add  bp,64
         cmp  bp,256
-        jb   @@sh
+        jb   .sh
         ; ---- and NINETY-SIX of them, scattered over the whole torus:
         ; sixteen made a sky so big the eye called it empty ----
         xor  si,si
-@@ci:   call RND16
+.ci:   call RND16
         mov  [CLX+si],ax        ; anywhere at all: the world wraps
         call RND16
         mov  [CLZ+si],ax
@@ -3772,7 +3772,7 @@ BAKE:   xor  si,si              ; sky ramp by height above the horizon
         mov  [CLM+si],ax        ; size 500..1523 m: cumulus are BIG
         add  si,2
         cmp  si,192
-        jb   @@ci
+        jb   .ci
         ret
 
 ; ---- GENBED: the tuned turbine + warm-up + splice + pristine copy ----------
@@ -3783,12 +3783,12 @@ GENBED: push es
         xor  di,di
         xor  si,si
         xor  bp,bp
-        mov  word ptr [bm1],0
-        mov  word ptr [bm2],0
-        mov  word ptr [bm3],0
-        mov  word ptr [bm4],0
-        mov  word ptr [praw],0
-@@g:    call RND16
+        mov  word [bm1],0
+        mov  word [bm2],0
+        mov  word [bm3],0
+        mov  word [bm4],0
+        mov  word [praw],0
+.g:    call RND16
         mov  al,ah
         xor  ah,ah
         and  ax,31
@@ -3817,12 +3817,12 @@ GENBED: push es
         sar  dx,1
         sar  dx,1
         cmp  dx,38
-        jle  @@r1
+        jle  .r1
         mov  dx,38
-@@r1:   cmp  dx,-38
-        jge  @@r2
+.r1:   cmp  dx,-38
+        jge  .r2
         mov  dx,-38
-@@r2:   mov  ax,bx
+.r2:   mov  ax,bx
         sar  ax,1
         add  bp,ax
         mov  ax,bp
@@ -3830,39 +3830,39 @@ GENBED: push es
         sar  ax,cl
         sub  bp,ax
         cmp  bp,16
-        jle  @@w1
+        jle  .w1
         mov  bp,16
-@@w1:   cmp  bp,-16
-        jge  @@w2
+.w1:   cmp  bp,-16
+        jge  .w2
         mov  bp,-16
-@@w2:   add  dx,bp
+.w2:   add  dx,bp
         cmp  si,3
-        jae  @@g2
+        jae  .g2
         add  dx,2
-        jmp  @@g3
-@@g2:   sub  dx,2
-@@g3:   mov  ax,dx
+        jmp  .g3
+.g2:   sub  dx,2
+.g3:   mov  ax,dx
         add  ax,[praw]
         sar  ax,1
         mov  [praw],dx
         add  ax,128
-        cmp  word ptr [warmc],0
-        je   @@st
-        dec  word ptr [warmc]
-        jmp  @@wh
-@@st:   stosb
-@@wh:   inc  si
+        cmp  word [warmc],0
+        je   .st
+        dec  word [warmc]
+        jmp  .wh
+.st:   stosb
+.wh:   inc  si
         cmp  si,6
-        jb   @@g4
+        jb   .g4
         xor  si,si
-@@g4:   cmp  di,SNDN
-        jb   @@g
+.g4:   cmp  di,SNDN
+        jb   .g
         xor  si,si
-@@xf:   mov  di,si
+.xf:   mov  di,si
         add  di,SNDN-512
-        mov  al,es:[di]
+        mov  al,[es:di]
         mov  [xtt],al
-        mov  al,es:[si]
+        mov  al,[es:si]
         sub  al,[xtt]
         cbw
         mov  bx,si
@@ -3872,10 +3872,10 @@ GENBED: push es
         mov  cl,6
         sar  ax,cl
         add  al,[xtt]
-        mov  es:[di],al
+        mov  [es:di],al
         inc  si
         cmp  si,512
-        jb   @@xf
+        jb   .xf
         push ds
         mov  ax,es
         mov  ds,ax
@@ -3895,9 +3895,9 @@ HEAL:   call SFXRAW
         sub  cx,[sbrst]
         and  cx,SNDN-1
         cmp  cx,4096
-        jbe  @@h1
+        jbe  .h1
         mov  cx,4096
-@@h1:   jcxz @@hr
+.h1:   jcxz .hr
         mov  di,[sbrst]
         mov  ax,di
         add  ax,cx
@@ -3909,14 +3909,14 @@ HEAL:   call SFXRAW
         mov  ds,ax
         mov  es,ax
         cld
-@@hc:   mov  si,di
+.hc:   mov  si,di
         add  si,SNDN
         movsb
         and  di,SNDN-1
-        loop @@hc
+        loop .hc
         pop  es
         pop  ds
-@@hr:   ret
+.hr:   ret
 
 ; ---- TXT: ASCIIZ at SI -> back buffer at (BX,AX), colour [tcol] ------------
 TXT:    push es
@@ -3929,9 +3929,9 @@ TXT:    push es
         mul  cx
         add  ax,bx
         mov  di,ax
-@@ch:   lodsb
+.ch:   lodsb
         or   al,al
-        jz   @@fin
+        jz   .fin
         push si
         xor  ah,ah
         mov  cl,3
@@ -3943,43 +3943,43 @@ TXT:    push es
         mov  ds,ax
         mov  cx,8
         push di
-@@rw:   lodsb
+.rw:   lodsb
         mov  ah,al
         push cx
         mov  cx,8
-@@px:   shl  ah,1
-        jnc  @@np
-        mov  al,cs:[tcol]
-        mov  es:[di],al
-@@np:   inc  di
-        loop @@px
+.px:   shl  ah,1
+        jnc  .np
+        mov  al,[cs:tcol]
+        mov  [es:di],al
+.np:   inc  di
+        loop .px
         add  di,320-8
         pop  cx
-        loop @@rw
+        loop .rw
         pop  di
         pop  ds
         pop  si
         add  di,8
-        jmp  @@ch
-@@fin:  pop  dx
+        jmp  .ch
+.fin:  pop  dx
         pop  es
         ret
 
 ; ---- wait for the vertical retrace edge ------------------------------------
 WAITVR: mov  dx,3DAh
-@@w1:   in   al,dx
+.w1:   in   al,dx
         test al,8
-        jnz  @@w1
-@@w2:   in   al,dx
+        jnz  .w1
+.w2:   in   al,dx
         test al,8
-        jz   @@w2
+        jz   .w2
         ret
 
 ; ---- the DAC entries -------------------------------------------------------
-SETPAL: mov  si,offset PAL
-@@p:    lodsb
+SETPAL: mov  si,PAL
+.p:    lodsb
         cmp  al,255
-        je   @@fin
+        je   .fin
         mov  dx,3C8h
         out  dx,al
         inc  dx
@@ -3989,8 +3989,8 @@ SETPAL: mov  si,offset PAL
         out  dx,al
         lodsb
         out  dx,al
-        jmp  @@p
-@@fin:  ret
+        jmp  .p
+.fin:  ret
 PAL     db   3, 58,58,58        ; the painted stripe
         db   4, 46,46,44        ; edge lines
         db   5, 63,42,10        ; amber cards
@@ -4160,7 +4160,7 @@ cosr    dw 256
 mrow    dw 0                    ; background walker: screen row
 fmv     dw 0                    ; f at the pivot column of that row
 spa     dw 0                    ; span start / length / sky-or-ground
-spl     dw 0
+spanl     dw 0
 sptype  db 0
 pu      dw 0                    ; PROJW: metres left/right of the centre
 pd      dw 0                    ; ...and metres ahead
@@ -4341,7 +4341,7 @@ BNOISE  db 13,128,250,153,173,238,52,165,61,194,38,122,157,113,246,66
 HMAP    db 4096 dup(0)          ; the island: 64x64 node heights, toroidal
 ; the painter's order: all 576 terrain quads, farthest first, sorted by
 ; TRUE distance at build time (a PowerShell one-liner, not a boot loop)
-TORD    label byte
+label TORD byte
         db -12,11,11,11,11,-12,-12,-12,10,11,-12,10,11,-11,11,10
         db 10,-12,-11,11,-11,-12,-12,-11,11,-10,-12,9,-12,-10,9,-12
         db 11,9,-10,11,-10,-12,9,11,-11,-11,10,-11,10,10,-11,10
@@ -4443,13 +4443,11 @@ qcr     dw 0
 qcw     dw 0
 qcv     dw 0                    ; this row's width, px
 
-        INCLUDE N_DEBUG.INC
-        INCLUDE ..\..\..\ENGINE\E_MATH.INC
-        INCLUDE ..\..\..\ENGINE\E_TERR.INC
-        INCLUDE ..\..\..\ENGINE\E_SND.INC
+        include 'N_DEBUG.INC'
+        include '..\..\..\ENGINE\E_MATH.INC'
+        include '..\..\..\ENGINE\E_TERR.INC'
+        include '..\..\..\ENGINE\E_SND.INC'
 
-CODE    ENDS
-        END START
 
 
 

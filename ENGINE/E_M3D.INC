@@ -10,17 +10,17 @@
 ;     heading,pitch,roll                 - attitude angles (256 = circle)
 ;     hsin,hcos,rsin,rcos,psin,pcos     dw - SETTRIG outputs
 ;     pofs,horiz,swayx,swayy            dw - horizon shift / view float
-;     wdx,wdz,rcx,rcz                   dw - ROTXZ in/out
+;     wdx,wdz,rc_x,rc_z                   dw - ROTXZ in/out
 ;     ptmp,rddx,rddy,rsxo               dw - projection scratch
 ; ============================================================================
 CLAMPAX:
         cmp  ax,4000
-        jle  @@a1
+        jle  .a1
         mov  ax,4000
-@@a1:   cmp  ax,-4000
-        jge  @@a2
+.a1:   cmp  ax,-4000
+        jge  .a2
         mov  ax,-4000
-@@a2:   ret
+.a2:   ret
 
 ; ============================================================================
 ;  SINQ  in: AX=angle (any, wrapped to 0..255 = full circle)
@@ -34,11 +34,11 @@ SINQ:   and  ax,255             ; wrap to one circle
         shr  bx,cl              ; bx = quadrant 0..3  (angle/64)
         and  ax,63              ; ax = idx within quadrant 0..63
         cmp  bx,0
-        je   @@q0
+        je   .q0
         cmp  bx,1
-        je   @@q1
+        je   .q1
         cmp  bx,2
-        je   @@q2
+        je   .q2
         ; q3: -SINT[64-idx]
         mov  bx,64
         sub  bx,ax
@@ -47,17 +47,17 @@ SINQ:   and  ax,255             ; wrap to one circle
         mov  ax,[SINT+si]
         neg  ax
         ret
-@@q0:   add  ax,ax
+.q0:   add  ax,ax
         mov  si,ax
         mov  ax,[SINT+si]
         ret
-@@q1:   mov  bx,64              ; SINT[64-idx]
+.q1:   mov  bx,64              ; SINT[64-idx]
         sub  bx,ax
         add  bx,bx
         mov  si,bx
         mov  ax,[SINT+si]
         ret
-@@q2:   add  ax,ax              ; -SINT[idx]
+.q2:   add  ax,ax              ; -SINT[idx]
         mov  si,ax
         mov  ax,[SINT+si]
         neg  ax
@@ -93,51 +93,51 @@ SETTRIG:
         ; background horizon shift: pofs = psin*FOCAL/pcos (clamped tangent)
         mov  ax,[pcos]
         cmp  ax,48
-        jl   @@pbig             ; looking almost straight up/down
+        jl   .pbig             ; looking almost straight up/down
         mov  ax,[psin]
         mov  bx,FOCAL
         imul bx
-        idiv word ptr [pcos]
-        jmp  @@pset
-@@pbig: mov  ax,2600            ; push the horizon far off screen
-        cmp  word ptr [psin],0
-        jge  @@pset
+        idiv word [pcos]
+        jmp  .pset
+.pbig: mov  ax,2600            ; push the horizon far off screen
+        cmp  word [psin],0
+        jge  .pset
         neg  ax
-@@pset: add  ax,[swayy]         ; sky bands ride the view float too
+.pset: add  ax,[swayy]         ; sky bands ride the view float too
         mov  [pofs],ax
         ret
 
 ; ============================================================================
-;  ROTXZ  yaw-rotate world-relative (wdx,wdz) -> camera-space (rcx,rcz)
-;   in:  wdx,wdz (mem)   out: rcx,rcz (mem)   clobbers AX,BX,DX
-;   rcx = (wdx*hcos - wdz*hsin)/256 ;  rcz = (wdx*hsin + wdz*hcos)/256
+;  ROTXZ  yaw-rotate world-relative (wdx,wdz) -> camera-space (rc_x,rc_z)
+;   in:  wdx,wdz (mem)   out: rc_x,rc_z (mem)   clobbers AX,BX,DX
+;   rc_x = (wdx*hcos - wdz*hsin)/256 ;  rc_z = (wdx*hsin + wdz*hcos)/256
 ;   Each term: imul (->DX:AX) then idiv 256. Inputs are small view offsets
 ;   so |product| < ~500k (fits DX:AX) and |quotient| < ~3000 (fits 16-bit).
 ; ============================================================================
 ROTXZ:  mov  ax,[wdx]
-        imul word ptr [hcos]    ; DX:AX = wdx*cos*256
+        imul word [hcos]    ; DX:AX = wdx*cos*256
         mov  bx,256
         idiv bx                 ; AX = wdx*cos   (the *256 cancels)
-        mov  [rcx],ax
+        mov  [rc_x],ax
         mov  ax,[wdz]
-        imul word ptr [hsin]
+        imul word [hsin]
         mov  bx,256
         idiv bx
-        mov  bx,[rcx]
+        mov  bx,[rc_x]
         sub  bx,ax
-        mov  [rcx],bx
+        mov  [rc_x],bx
         mov  ax,[wdx]
-        imul word ptr [hsin]
+        imul word [hsin]
         mov  bx,256
         idiv bx
-        mov  [rcz],ax
+        mov  [rc_z],ax
         mov  ax,[wdz]
-        imul word ptr [hcos]
+        imul word [hcos]
         mov  bx,256
         idiv bx
-        mov  bx,[rcz]
+        mov  bx,[rc_z]
         add  bx,ax
-        mov  [rcz],bx
+        mov  [rc_z],bx
         ret
 
 ; ============================================================================
@@ -153,12 +153,12 @@ APPLYROLL:
         mov  [rddy],dx
         ; sx = 160 + (rddx*rcos - rddy*rsin)/256
         mov  ax,[rddx]
-        imul word ptr [rcos]
+        imul word [rcos]
         mov  bx,256
         idiv bx
         mov  si,ax
         mov  ax,[rddy]
-        imul word ptr [rsin]
+        imul word [rsin]
         mov  bx,256
         idiv bx
         mov  bx,si
@@ -167,12 +167,12 @@ APPLYROLL:
         mov  [rsxo],bx
         ; sy = 100 + (rddx*rsin + rddy*rcos)/256
         mov  ax,[rddx]
-        imul word ptr [rsin]
+        imul word [rsin]
         mov  bx,256
         idiv bx
         mov  si,ax
         mov  ax,[rddy]
-        imul word ptr [rcos]
+        imul word [rcos]
         mov  bx,256
         idiv bx
         mov  bx,si
@@ -196,56 +196,56 @@ PROJPT: push dx                 ; save ry
         ; rz=256 even the worst |rx| cannot overflow. BOTH constants
         ; scale with FOCAL - do not hardcode them again.
         cmp  cx,256
-        jge  @@sxok
+        jge  .sxok
         mov  bx,ax
         or   bx,bx
-        jns  @@g1
+        jns  .g1
         neg  bx                 ; bx = |rx|
-@@g1:   push ax
+.g1:   push ax
         mov  ax,cx
         mov  dx,32767/FOCAL     ; safe |rx|/rz ratio for this lens
         mul  dx                 ; ax = rz*(32767/FOCAL), rz<256 fits 16-bit
         cmp  bx,ax
         pop  ax
-        jbe  @@sxok             ; |rx| <= rz*204 -> divide is safe
+        jbe  .sxok             ; |rx| <= rz*204 -> divide is safe
         mov  bx,4000            ; would overflow: clamp offscreen, keep sign
         or   ax,ax
-        jns  @@g2
+        jns  .g2
         neg  bx
-@@g2:   mov  ax,bx
-        jmp  @@sxadd
-@@sxok: mov  bx,FOCAL
+.g2:   mov  ax,bx
+        jmp  .sxadd
+.sxok: mov  bx,FOCAL
         imul bx                 ; DX:AX = rx*FOCAL
         idiv cx                 ; AX = rx*FOCAL/rz
-@@sxadd:
+.sxadd:
         add  ax,160             ; sx_raw (screen centre x = 160)
         add  ax,[swayx]         ; view float
         call CLAMPAX            ; clamp BEFORE roll so APPLYROLL can't overflow
         mov  [ptmp],ax
         pop  ax                 ; ry
         cmp  cx,256             ; same overflow guard as rx: pitched vertices
-        jge  @@syok             ; can be far above/below at small rz
+        jge  .syok             ; can be far above/below at small rz
         mov  bx,ax
         or   bx,bx
-        jns  @@g3
+        jns  .g3
         neg  bx
-@@g3:   push ax
+.g3:   push ax
         mov  ax,cx
         mov  dx,32767/FOCAL
         mul  dx
         cmp  bx,ax
         pop  ax
-        jbe  @@syok
+        jbe  .syok
         mov  bx,4000
         or   ax,ax
-        jns  @@g4
+        jns  .g4
         neg  bx
-@@g4:   mov  ax,bx
-        jmp  @@syadd
-@@syok: mov  bx,FOCAL
+.g4:   mov  ax,bx
+        jmp  .syadd
+.syok: mov  bx,FOCAL
         imul bx
         idiv cx
-@@syadd:
+.syadd:
         mov  bx,[horiz]
         add  bx,[swayy]         ; view float
         sub  bx,ax              ; sy_raw = horiz - ry*FOCAL/rz

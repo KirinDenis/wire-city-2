@@ -36,7 +36,7 @@ swayx   dw 0                    ; sway: this tick's X shift (screen px)
 swayy   dw 0                    ; sway: this tick's Y shift (screen px)
 
 ; ---- AI traffic: low-poly jets (see PLANES.INC) ----------------------------
-NPLANE  equ 40                  ; 20 v 20 (slot 0 never flies: that seat
+NPLANE  = 40                  ; 20 v 20 (slot 0 never flies: that seat
                                 ; is the player's - green team = you + 19)
 pax     dw NPLANE dup(0)        ; world position
 pay     dw NPLANE dup(0)
@@ -79,7 +79,7 @@ MFACE   db 0,1,2,0, 24          ; body top (sun-lit white)
         db 7,6,9,7, 0           ; wing R
         db 10,11,12,10, 25      ; tail fin
         db 1,2,4,3, 94          ; engine nozzle: palette-cycled fire
-NFACE   equ 8
+NFACE   = 8
 GLOWT   db 63,52,12             ; nozzle DAC cycle: yellow
         db 63,34, 6             ; orange
         db 56,14, 4             ; red
@@ -214,7 +214,7 @@ pdz     dw 0
 pidx    dw 0                    ; draw loop: plane offset
 pfc     dw 0                    ; draw loop: face counter
 tpi     dw 0                    ; draw loop: trail point counter
-TLN     equ 12                  ; contrail points per plane
+TLN     = 12                  ; contrail points per plane
 ; TLX/TLY/TLZ live in BSS now (see CITY.ASM): spawn-generated, and the
 ; segment budget is too tight to ship 3.8K of zeroes in the image
 tlh     dw 0                    ; shared ring head (byte offset, step 2)
@@ -242,7 +242,7 @@ MSGFRD  db 'FRIEND',0
 WEDG    db 0,1, 0,2, 0,3, 0,4, 1,2, 3,4, 1,3, 2,4
         db 7,5, 5,8, 8,7, 7,6, 6,9, 9,7
         db 10,11, 11,12, 12,10
-NWEDG   equ 17
+NWEDG   = 17
 ; ---- missiles and wrecks ----------------------------------------------------
 pst     db NPLANE dup(0)        ; plane state: 0 = flying, else respawn timer
 pammo   db 4                    ; player missiles on the rails
@@ -262,7 +262,7 @@ mstgt   dw 0FFFFh               ; homing target (plane offset)
 mlife   dw 0                    ; ticks to self-destruct
 wnext   dw 0                    ; wreck pool: next slot byte offset
 ; ---- AI missile pool (the war fights itself) --------------------------------
-NAMSL   equ 4
+NAMSL   = 4
 amact   db NAMSL dup(0)         ; slot in flight?
 amx     dw NAMSL dup(0)         ; position
 amy     dw NAMSL dup(0)
@@ -367,7 +367,7 @@ gunreg  dw 0                    ; belt regen timer
 guntik  db 0                    ; tracers on screen while > 0
 hitfx   dw 0FFFFh               ; plane flashing from a cannon hit
 hitft   dw 0                    ; ...and for how many ticks
-NTRC    equ 16                  ; tracer rounds in the pool
+NTRC    = 16                  ; tracer rounds in the pool
 trcact  db NTRC dup(0)          ; round in flight?
 tcx     dw NTRC dup(0)          ; position
 tcy     dw NTRC dup(0)
@@ -420,8 +420,8 @@ dsac    dw 0                    ; DS: accumulator
 ; minimap moved out to the far scratch segment [scrseg] to free 4K of BSS.
 
 ; ---- 3D terrain mesh state (one node = 4 cells = 1024 world units) ---------
-NR      equ 20                  ; terrain draw radius in nodes around camera
-NSIDE   equ 41                  ; cached node grid side (2*NR+1)
+NR      = 20                  ; terrain draw radius in nodes around camera
+NSIDE   = 41                  ; cached node grid side (2*NR+1)
 tnx     dw 0                    ; camera node x = (camx+BIAS)>>10
 tnz     dw 0                    ; camera node z
 tidx    dw 0                    ; index into TORD
@@ -894,8 +894,8 @@ rsin    dw 0                    ; sin(roll)*256
 rcos    dw 0                    ; cos(roll)*256
 wdx     dw 0
 wdz     dw 0
-rcx     dw 0
-rcz     dw 0
+rc_x     dw 0
+rc_z     dw 0
 rddx    dw 0
 rddy    dw 0
 rsxo    dw 0
@@ -986,7 +986,7 @@ HCOL    db 8
 ;            8 HUD       9 sky band    10 ground     11 field/ground band
 ;            12 haze     13 mountains  14 water      15 forest
 ;            16 wall E/W (shade)       17 roof
-NPALC   equ 98                  ; 31 game + 63 cockpit + glow + 2 IFF + amber
+NPALC   = 98                  ; 31 game + 63 cockpit + glow + 2 IFF + amber
 PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db 30,32,36          ;1  far stroke (fades to haze)
         db 22,24,28          ;2  mid stroke
@@ -1018,7 +1018,7 @@ PALDAY  db 36,37,40          ;0  wall N/S (light grey)
         db 14,26,12          ;28 dark far ground at the horizon
         db 10,10,12          ;29 cockpit panel (dark)
         db 20,20,23          ;30 cockpit panel trim
-        include PALPNL.INC   ; 31..93 photo cockpit (generated)
+        include 'PALPNL.INC'   ; 31..93 photo cockpit (generated)
         db 63,34, 6          ;94 engine glow (GAMELOOP cycles this DAC slot)
         db 16,63,16          ;95 IFF friendly (bright green)
         db 63,63, 8          ;96 IFF hostile (bright yellow)
@@ -1055,13 +1055,13 @@ PALNITE db  2, 3, 9          ;0  wall N/S (dark body)
         db  2, 4,10          ;28 dark far ground at the horizon
         db  6, 6, 8          ;29 cockpit panel (dark)
         db 12,12,15          ;30 cockpit panel trim
-        include PALPNL.INC   ; 31..93 photo cockpit (same lamps at night)
+        include 'PALPNL.INC'   ; 31..93 photo cockpit (same lamps at night)
         db 63,34, 6          ;94 engine glow (GAMELOOP cycles this DAC slot)
         db 16,63,16          ;95 IFF friendly (bright green)
         db 63,63, 8          ;96 IFF hostile (bright yellow)
         db 44,30, 4          ;97 UI amber (dimmed for the night)
 
-STARN   equ 16                  ; stars as DIRECTIONS: azimuth, elevation
+STARN   = 16                  ; stars as DIRECTIONS: azimuth, elevation
 STARTAB dw 10,18, 35,40, 60,12, 85,55, 110,30, 135,60, 160,22, 185,45
         dw 210,15, 235,58, 5,35, 50,28, 75,56, 100,10, 200,50, 150,38
 

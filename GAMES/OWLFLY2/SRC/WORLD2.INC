@@ -68,7 +68,7 @@ FACETOPC:
 ;   always looks identical: no per-frame flicker, no storage).
 ; ============================================================================
 HBLD:   call ISROAD             ; THE STREET GRID GOES FIRST, and it is
-        jc   @@road             ; decided by the BLOCK - see ROADOKF in
+        jc   .road             ; decided by the BLOCK - see ROADOKF in
                                 ; TOWN.INC. The per-cell zoning below must
                                 ; not get a vote on it: it reads a height
                                 ; node every four cells, and one node
@@ -78,7 +78,7 @@ HBLD:   call ISROAD             ; THE STREET GRID GOES FIRST, and it is
         mov  bx,[gj]            ; plains, sea, foothills and mountains are
         call GETZONE            ; all painted by the terrain mesh, and a
         or   ax,ax              ; building has to stand where it stands
-        jnz  @@st
+        jnz  .st
         ; ---- ONE BUILDING TO EVERY 2x2 CELLS. A 256-unit plot beside a
         ; 512-unit avenue is what made the city look microscopic: the road
         ; was twice the width of the thing it served. Widening the building
@@ -89,25 +89,25 @@ HBLD:   call ISROAD             ; THE STREET GRID GOES FIRST, and it is
         mov  ax,[gi]
         or   ax,[gj]
         test ax,1
-        jnz  @@st
+        jnz  .st
         call CELLHASH          ; ax = hash of (gi,gj)
         mov  bx,ax
         and  bx,31              ; hash 7/8/9 of 32 -> flat terrain patches
         cmp  bx,7
-        je   @@forest
+        je   .forest
         cmp  bx,8
-        je   @@water
+        je   .water
         cmp  bx,9
-        je   @@field
+        je   .field
         ; --- superblock clustering: only ~3/16 of 8x8 blocks are built up.
         ; Structures stay grouped (a built block keeps full density) but the
         ; groups themselves are rare - SimCity-style districts on open land.
         push ax                 ; keep the cell hash
-        call FAR PTR BLKINFF    ; the block byte: clustering nibble in 0..3,
+        call TOWNSEG:BLKINFF   ; the block byte: clustering nibble in 0..3,
         mov  [sbh],ax           ; district in 4..5 - where SBHASH put them
         and  ax,15
         cmp  ax,3
-        jae  @@unbuilt          ; empty block: open ground (patches still apply)
+        jae  .unbuilt          ; empty block: open ground (patches still apply)
         pop  ax
         ; ---- district: the BLOCK sets the flavour, the CELL gets a say.
         ; 0/3 residential, 1 downtown, 2 industry. A pure district is what
@@ -126,7 +126,7 @@ HBLD:   call ISROAD             ; THE STREET GRID GOES FIRST, and it is
         mov  bx,ax
         and  bx,7
         cmp  bx,5
-        jb   @@dok
+        jb   .dok
         mov  bx,ax
         mov  cl,3
         shr  bx,cl
@@ -135,7 +135,7 @@ HBLD:   call ISROAD             ; THE STREET GRID GOES FIRST, and it is
         add  bx,[bdist]
         and  bx,3
         mov  [bdist],bx
-@@dok:  pop  ax
+.dok:  pop  ax
         ; base footprint from the cell hash
         mov  bx,ax              ; footprint, on the 2x2 plot: half size
         and  bx,31              ; 168..230, so the building is 336..460
@@ -160,48 +160,48 @@ HBLD:   call ISROAD             ; THE STREET GRID GOES FIRST, and it is
         and  bx,7
         mov  si,[bdist]
         cmp  si,1
-        je   @@com
+        je   .com
         cmp  si,2
-        je   @@ind
+        je   .ind
         ; --- residential: low boxes, an occasional tower ---
-        mov  word ptr [btype],0
+        mov  word [btype],0
         cmp  bx,6
-        jb   @@rh
-        mov  word ptr [btype],2 ; tower
-@@rh:   mov  bx,ax
+        jb   .rh
+        mov  word [btype],2 ; tower
+.rh:   mov  bx,ax
         and  bx,63
         add  bx,bx              ; height 120..246 - twice the old, or the
         add  bx,120             ; doubled footprint reads as a paving slab
         mov  [bhgt2],bx
-        jmp  @@bdone
-@@com:  ; --- commercial downtown: tall mixed skyline ---
-        mov  word ptr [btype],0
+        jmp  .bdone
+.com:  ; --- commercial downtown: tall mixed skyline ---
+        mov  word [btype],0
         cmp  bx,3
-        jb   @@ch               ; 0..2 tall box
+        jb   .ch               ; 0..2 tall box
         cmp  bx,5
-        jb   @@ctw              ; 3..4 tower
+        jb   .ctw              ; 3..4 tower
         cmp  bx,7
-        jb   @@csp              ; 5..6 spire
-        mov  word ptr [btype],3 ; 7 arch
-        jmp  @@ch
-@@ctw:  mov  word ptr [btype],2
-        jmp  @@ch
-@@csp:  mov  word ptr [btype],1
-@@ch:   ; downtown height: towers cluster toward the block centre.
+        jb   .csp              ; 5..6 spire
+        mov  word [btype],3 ; 7 arch
+        jmp  .ch
+.ctw:  mov  word [btype],2
+        jmp  .ch
+.csp:  mov  word [btype],1
+.ch:   ; downtown height: towers cluster toward the block centre.
         ; dist = |gi&7 - 4| + |gj&7 - 4| (0..8); centre -> +288 bonus.
         push ax
         mov  bx,[gi]
         and  bx,7
         sub  bx,4
-        jns  @@a1
+        jns  .a1
         neg  bx
-@@a1:   mov  si,bx              ; |gi&7 - 4|
+.a1:   mov  si,bx              ; |gi&7 - 4|
         mov  bx,[gj]
         and  bx,7
         sub  bx,4
-        jns  @@a2
+        jns  .a2
         neg  bx
-@@a2:   add  si,bx              ; manhattan dist to superblock centre, 0..8
+.a2:   add  si,bx              ; manhattan dist to superblock centre, 0..8
         mov  ax,8
         sub  ax,si
         mov  bx,60              ; the plot doubled, so the skyline follows -
@@ -214,25 +214,25 @@ HBLD:   call ISROAD             ; THE STREET GRID GOES FIRST, and it is
         add  bx,100
         add  bx,si              ; height 100..706 (respawn clears all)
         mov  [bhgt2],bx
-        jmp  @@bdone
-@@ind:  ; --- industrial: smoking factories and low sheds (always grey) ---
-        mov  word ptr [bschm],0
-        mov  word ptr [btype],4
+        jmp  .bdone
+.ind:  ; --- industrial: smoking factories and low sheds (always grey) ---
+        mov  word [bschm],0
+        mov  word [btype],4
         cmp  bx,5
-        jb   @@ih               ; 0..4 factory with chimney
-        mov  word ptr [btype],0 ; 5..7 plain shed
-@@ih:   mov  bx,ax
+        jb   .ih               ; 0..4 factory with chimney
+        mov  word [btype],0 ; 5..7 plain shed
+.ih:   mov  bx,ax
         and  bx,31
         add  bx,bx
         add  bx,100             ; low industry: 100..162
         mov  [bhgt2],bx
-@@bdone:
-        mov  word ptr [bstreet],0
+.bdone:
+        mov  word [bstreet],0
         ret
-@@st:   mov  word ptr [bstreet],1
+.st:   mov  word [bstreet],1
         ret
-@@road: call FAR PTR ROADOKF    ; ...but only where a block this strip
-        jnc  @@st               ; touches is BUILT UP. Only ~3/16 of blocks
+.road: call TOWNSEG:ROADOKF   ; ...but only where a block this strip
+        jnc  .st               ; touches is BUILT UP. Only ~3/16 of blocks
                                 ; are, so without that test the island wears
                                 ; a full road grid over empty countryside -
                                 ; and asking about the STRIP rather than the
@@ -240,28 +240,28 @@ HBLD:   call ISROAD             ; THE STREET GRID GOES FIRST, and it is
                                 ; round the outside of a district. Same
                                 ; table, same single source of truth, as the
                                 ; one that decides the buildings above.
-        mov  word ptr [bstreet],3 ; a CITY street: tarmac and traffic.
+        mov  word [bstreet],3 ; a CITY street: tarmac and traffic.
         ret                       ; Distinct from 1, which also means
                                   ; "plains / sea / mountain, the terrain
                                   ; mesh paints it" - and you cannot drive
                                   ; a bus across those. Everything that
                                   ; tests bstreet for 0 (is there a
                                   ; building?) is unaffected.
-@@unbuilt:
+.unbuilt:
         pop  ax                 ; discard the kept cell hash
-        jmp  @@st
-@@forest:
-        mov  byte ptr [bcol],15
-        jmp  @@patch
-@@water:
-        mov  byte ptr [bcol],14
-        jmp  @@patch
-@@field:
-        mov  byte ptr [bcol],11
-@@patch:                        ; flat ground patch fills most of the cell
-        mov  word ptr [bhw],116
-        mov  word ptr [bhd],116
-        mov  word ptr [bstreet],2
+        jmp  .st
+.forest:
+        mov  byte [bcol],15
+        jmp  .patch
+.water:
+        mov  byte [bcol],14
+        jmp  .patch
+.field:
+        mov  byte [bcol],11
+.patch:                        ; flat ground patch fills most of the cell
+        mov  word [bhw],116
+        mov  word [bhd],116
+        mov  word [bstreet],2
         ret
 
 ; ============================================================================
@@ -279,14 +279,14 @@ HBLD:   call ISROAD             ; THE STREET GRID GOES FIRST, and it is
 ISROAD: mov  ax,[gi]
         and  ax,7
         cmp  ax,2
-        jl   @@yes
+        jl   .yes
         mov  ax,[gj]
         and  ax,7
         cmp  ax,2
-        jl   @@yes
+        jl   .yes
         clc
         ret
-@@yes:  stc
+.yes:  stc
         ret
 
 ; DHASH - a SECOND, independent hash of the cell. The first one's bits are

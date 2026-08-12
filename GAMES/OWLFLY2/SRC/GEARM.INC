@@ -6,7 +6,7 @@
 ; guard beside the include in SYM.INC checks this table against them.
 ; Fitted geometry: strut 4 units and one unit wide, wheel radius 1,
 ; legs at x 0/-4/+3 and z 7/-6/-6, all hung off the belly at y=-1.
-GEARVT  label word
+label GEARVT word
         ; step 0: swung 90 degrees off vertical
         dw    0,   0,   0
         dw    1,   0,   0
@@ -109,7 +109,7 @@ GEARVT  label word
         dw    1,  -3,   0
         dw    1,  -5,   0
         dw    0,  -5,   0
-GEARFC  label byte              ; v0,v1,v2,v3,colour
+label GEARFC byte   ; v0,v1,v2,v3,colour
         db   0,  1,  2,  3,  16
         db   4,  5,  6,  7,  16
         db   8,  9, 10, 11,   3

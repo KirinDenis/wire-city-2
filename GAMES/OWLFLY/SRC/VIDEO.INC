@@ -8,19 +8,19 @@ SETPAL: mov  dx,3C8h            ; in: SI -> palette table (NPALC colours)
         mov  dx,3C9h
         mov  cx,NPALC*3
         cld                     ; lodsb must walk forward
-@@pl:   lodsb
+.pl:   lodsb
         out  dx,al
-        loop @@pl
+        loop .pl
         ret
 
 ; pick the palette that matches [daymode] and load it
 APPLYPAL:
-        cmp  byte ptr [daymode],0
-        je   @@nit
-        mov  si,offset PALDAY
-        jmp  @@go
-@@nit:  mov  si,offset PALNITE
-@@go:   call SETPAL
+        cmp  byte [daymode],0
+        je   .nit
+        mov  si,PALDAY
+        jmp  .go
+.nit:  mov  si,PALNITE
+.go:   call SETPAL
         ret
 
 ; ============================================================================
@@ -35,39 +35,39 @@ APPLYPAL:
 ; overlap by 2 v-units so rounding never leaves seams; pitch (pofs) and
 ; roll (BGCORN) move the whole stack as one.
 CLEARBUF:
-        mov  byte ptr [COLOR],7 ; deep upper sky
-        mov  word ptr [bgv0],-3000
-        mov  word ptr [bgv1],-58
+        mov  byte [COLOR],7 ; deep upper sky
+        mov  word [bgv0],-3000
+        mov  word [bgv1],-58
         call BGBAND
-        mov  byte ptr [COLOR],26 ; sky step 2
-        mov  word ptr [bgv0],-60
-        mov  word ptr [bgv1],-32
+        mov  byte [COLOR],26 ; sky step 2
+        mov  word [bgv0],-60
+        mov  word [bgv1],-32
         call BGBAND
-        mov  byte ptr [COLOR],9 ; sky step 3
-        mov  word ptr [bgv0],-34
-        mov  word ptr [bgv1],-14
+        mov  byte [COLOR],9 ; sky step 3
+        mov  word [bgv0],-34
+        mov  word [bgv1],-14
         call BGBAND
-        mov  byte ptr [COLOR],27 ; sky step 4, brightest blue
-        mov  word ptr [bgv0],-16
-        mov  word ptr [bgv1],-4
+        mov  byte [COLOR],27 ; sky step 4, brightest blue
+        mov  word [bgv0],-16
+        mov  word [bgv1],-4
         call BGBAND
-        mov  byte ptr [COLOR],12 ; white haze on the horizon line
-        mov  word ptr [bgv0],-6
-        mov  word ptr [bgv1],2
+        mov  byte [COLOR],12 ; white haze on the horizon line
+        mov  word [bgv0],-6
+        mov  word [bgv1],2
         call BGBAND
-        mov  byte ptr [COLOR],28 ; far ground reads DARK against the haze
-        mov  word ptr [bgv0],0
-        mov  word ptr [bgv1],16
+        mov  byte [COLOR],28 ; far ground reads DARK against the haze
+        mov  word [bgv0],0
+        mov  word [bgv1],16
         call BGBAND
-        mov  byte ptr [COLOR],10 ; normal ground
-        mov  word ptr [bgv0],14
-        mov  word ptr [bgv1],3000
+        mov  byte [COLOR],10 ; normal ground
+        mov  word [bgv0],14
+        mov  word [bgv1],3000
         call BGBAND
         ret
 
 ; one background band: a parallelogram spanning u=-600..600 along the horizon
 ; direction, v=[bgv0..bgv1] across it, rotated by roll about (160,horiz).
-BGBAND: mov  word ptr [NPOLY],4
+BGBAND: mov  word [NPOLY],4
         mov  ax,[pofs]          ; pitch slides the whole band stack
         add  [bgv0],ax
         add  [bgv1],ax
@@ -94,24 +94,24 @@ BGBAND: mov  word ptr [NPOLY],4
 BGCORN: mov  [bgu],ax
         mov  [bgv],bx
         mov  ax,[bgu]
-        imul word ptr [rcos]
+        imul word [rcos]
         mov  cx,256
         idiv cx
         mov  bx,ax
         mov  ax,[bgv]
-        imul word ptr [rsin]
+        imul word [rsin]
         mov  cx,256
         idiv cx
         sub  bx,ax
         add  bx,160
         mov  [PX+si],bx
         mov  ax,[bgu]
-        imul word ptr [rsin]
+        imul word [rsin]
         mov  cx,256
         idiv cx
         mov  bx,ax
         mov  ax,[bgv]
-        imul word ptr [rcos]
+        imul word [rcos]
         mov  cx,256
         idiv cx
         add  bx,ax
@@ -138,10 +138,10 @@ BLIT:   push ds
 ;  WAIT FOR VERTICAL RETRACE (sync)
 ; ============================================================================
 WAITV:  mov  dx,3DAh
-@@w1:   in   al,dx
+.w1:   in   al,dx
         test al,8
-        jnz  @@w1
-@@w2:   in   al,dx
+        jnz  .w1
+.w2:   in   al,dx
         test al,8
-        jz   @@w2
+        jz   .w2
         ret

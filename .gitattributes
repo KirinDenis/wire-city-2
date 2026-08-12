@@ -1,0 +1,47 @@
+# ============================================================================
+#  Line endings. This matters more here than in most repositories.
+#
+#  Everything a DOS program will read has to arrive with CRLF (0D 0A). Most
+#  DOS editors - and several DOS tools - simply do not recognise a bare LF as
+#  the end of a line: the file opens as one endless line, or the assembler
+#  reads a label and its comment as the same token. Git's default behaviour
+#  on a Linux checkout would produce exactly that, and the person it breaks
+#  for is the one who downloaded a ZIP and mounted it, who has no idea what a
+#  line ending is.
+#
+#  So the DOS-facing formats are pinned. Not "normalised" - pinned, in both
+#  directions, on every platform.
+# ============================================================================
+
+# assembly, batch files and anything a DOS editor might open
+*.ASM   text eol=crlf
+*.INC   text eol=crlf
+*.BAT   text eol=crlf
+*.TXT   text eol=crlf
+*.CFG   text eol=crlf
+*.asm   text eol=crlf
+*.inc   text eol=crlf
+*.bat   text eol=crlf
+*.txt   text eol=crlf
+*.cfg   text eol=crlf
+
+# the DOS binaries and data files this repository ships
+*.COM   binary
+*.EXE   binary
+*.DAT   binary
+*.OBJ   binary
+*.com   binary
+*.exe   binary
+*.dat   binary
+
+# things only modern tools read - leave them alone
+*.cs    text
+*.csproj text
+*.md     text
+*.json   text
+*.html   text
+*.js     text
+*.css    text
+*.png    binary
+*.wasm   binary
+*.jsdos  binary

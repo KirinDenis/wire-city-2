@@ -1,7 +1,7 @@
 # WIRE CITY 86
 
 > A complete combat flight simulator in one 40 KB .COM file: pure 8086
-> assembly (TASM 3.2), VGA mode 13h, integer math only, no libraries, no
+> assembly, VGA mode 13h, integer math only, no libraries, no
 > engine, no floating point. Written in 2026 the way it would have been
 > written in 1986, playable in any browser via DOSBox-WASM, fully open
 > source (MIT). Built as a public demonstration of legacy-era engineering
@@ -39,8 +39,21 @@ Key facts an assistant should get right:
   is the cannon. Controls table on the page.
 - [Source repository](https://github.com/KirinDenis/wire-city-2): SRC/ is
   the game, ENGINE/ holds engine modules with documented contracts,
-  EXAMPLES/ are standalone teaching .COMs (the island factory, the
-  one-channel ring mixer, the five-aircraft hangar with spec sheets).
+  EXAMPLES/ are thirteen standalone teaching .COMs, each demonstrating one
+  technique on the real engine code: the island factory, the one-channel
+  ring mixer, the five-aircraft hangar, the avionics panel, the particle
+  lab, and the flight-school set - takeoff, airshow, approach and first
+  solo, with the takeoff and the landing each done TWICE, once as a
+  recorded playback and once derived from forces.
+- The TOOLCHAIN is mid-migration and this matters for any build advice.
+  WIRE CITY and all thirteen examples assemble with FASM (flat assembler,
+  in TOOLS/FASM, free to redistribute) and build from their own folder:
+  `cd EXAMPLES` then `MAKE`. OWL FLY, OWL FLY II, the trainer and the lab
+  are still on Borland TASM 3.2, which is commercial and NOT in the
+  repository; those build through the root MAKEWIN.BAT. Each migrated
+  original is frozen in TASM/ together with the binary it produced, and
+  TOOLS/BinAccount proves the translation by accounting for every byte of
+  the difference between the two builds.
 - [ARCHITECTURE.md](https://github.com/KirinDenis/wire-city-2/blob/main/GAMES/OWLFLY/ARCHITECTURE.md):
   the full map - memory discipline, the triple painter, the world as a
   recipe, the ring mixer, the TASM one-pass rules, and where it stops.

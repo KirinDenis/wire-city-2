@@ -25,17 +25,17 @@ SBINIT: mov  dx,226h            ; DSP reset pulse
         xor  al,al
         out  dx,al
         mov  cx,4000            ; wait for the 0AAh hello
-@@rst:  mov  dx,22Eh
+.rst:  mov  dx,22Eh
         in   al,dx
         test al,80h
-        jz   @@nx
+        jz   .nx
         mov  dx,22Ah
         in   al,dx
         cmp  al,0AAh
-        je   @@got
-@@nx:   loop @@rst
+        je   .got
+.nx:   loop .rst
         ret                     ; no Blaster: silence, the game runs on
-@@got:
+.got:
         ; ---- a 64K-aligned segment right after CS+3000h: the physical
         ; address is a multiple of 65536, so the 32K loop can never
         ; cross a DMA page boundary
@@ -44,10 +44,10 @@ SBINIT: mov  dx,226h            ; DSP reset pulse
         and  ax,0F000h
         mov  [sndseg],ax
         ; ---- load ENGINE.RAW into it ----
-        mov  dx,offset ENGFN
+        mov  dx,ENGFN
         mov  ax,3D00h
         int  21h
-        jc   @@ret              ; no sample: stay silent
+        jc   .ret              ; no sample: stay silent
         mov  bx,ax
         push ds
         mov  ax,[sndseg]
@@ -71,7 +71,7 @@ SBINIT: mov  dx,226h            ; DSP reset pulse
         rep  movsw
         pop  es
         pop  ds
-        mov  byte ptr [sbok],1
+        mov  byte [sbok],1
         ; ---- 8237 DMA channel 1: auto-init, read from memory ----
         mov  al,05h
         out  0Ah,al             ; mask channel 1
@@ -113,7 +113,7 @@ SBINIT: mov  dx,226h            ; DSP reset pulse
         call SBWR               ; high byte (already in AH)
         mov  ah,1Ch             ; 8-bit PCM, auto-init, forever
         call SBWR
-@@ret:  ret
+.ret:  ret
 
 
 ; ============================================================================
@@ -138,9 +138,9 @@ SNDHEAL:push cx
         sub  cx,[sbrst]
         and  cx,SNDN-1
         cmp  cx,4096            ; cap a burst after a long stall
-        jbe  @@n1
+        jbe  .n1
         mov  cx,4096
-@@n1:   jcxz @@done
+.n1:   jcxz .done
         mov  di,[sbrst]
         mov  ax,di
         add  ax,cx
@@ -153,29 +153,29 @@ SNDHEAL:push cx
         mov  ds,ax
         mov  es,ax
         cld
-@@cp:   cmp  bl,2
-        jne  @@sil
+.cp:   cmp  bl,2
+        jne  .sil
         mov  si,di
         add  si,SNDN            ; the clean loop lives in the top half
         movsb
-        jmp  @@nx
-@@sil:  mov  al,80h             ; engine muted: heal to flat silence
+        jmp  .nx
+.sil:  mov  al,80h             ; engine muted: heal to flat silence
         stosb
-@@nx:   and  di,SNDN-1
-        loop @@cp
+.nx:   and  di,SNDN-1
+        loop .cp
         pop  es
         pop  ds
-@@done: pop  di
+.done: pop  di
         pop  si
         pop  dx
         pop  cx
         ret
 
 ; ---- SFXPOP: the cannon - a deep thump, almost a clap ---------------------
-SFXPOP: cmp  byte ptr [sbok],0
-        je   @@r
-        cmp  byte ptr [sndmod],0
-        je   @@r
+SFXPOP: cmp  byte [sbok],0
+        je   .r
+        cmp  byte [sndmod],0
+        je   .r
         push bx
         push cx
         push dx
@@ -189,38 +189,38 @@ SFXPOP: cmp  byte ptr [sbok],0
         and  di,SNDN-1
         mov  bx,84              ; a dying deep square, ~125 Hz
         xor  si,si
-@@half: mov  cx,44
+.half: mov  cx,44
         mov  dx,bx
         test si,1
-        jz   @@go
+        jz   .go
         neg  dx
-@@go:   call SFXMB
-        loop @@go
+.go:   call SFXMB
+        loop .go
         inc  si
         sub  bx,15
-        jg   @@half
+        jg   .half
         mov  cx,160             ; and a short breath of smoke
-@@nz:   push cx
+.nz:   push cx
         call RND16
         pop  cx
         and  ax,31
         sub  ax,15
         mov  dx,ax
         call SFXMB
-        loop @@nz
+        loop .nz
         pop  es
         pop  di
         pop  si
         pop  dx
         pop  cx
         pop  bx
-@@r:    ret
+.r:    ret
 
 ; ---- SFXHISS: the missile leaves the rail - a sharp fading hiss -----------
-SFXHISS:cmp  byte ptr [sbok],0
-        je   @@r
-        cmp  byte ptr [sndmod],0
-        je   @@r
+SFXHISS:cmp  byte [sbok],0
+        je   .r
+        cmp  byte [sndmod],0
+        je   .r
         push bx
         push cx
         push dx
@@ -232,14 +232,14 @@ SFXHISS:cmp  byte ptr [sbok],0
         call SFXRAW
         lea  di,[bx+700]
         and  di,SNDN-1
-        mov  word ptr [sfa16],70*256
-        mov  word ptr [sfdec],6
+        mov  word [sfa16],70*256
+        mov  word [sfdec],6
         mov  cx,3000
-@@s:    push cx
+.s:    push cx
         call RND16
         and  ax,255
         sub  ax,128
-        mov  cl,byte ptr [sfa16+1]
+        mov  cl,byte [sfa16+1]
         xor  ch,ch
         imul cx                 ; noise scaled by the fading amplitude
         mov  cl,7
@@ -248,22 +248,22 @@ SFXHISS:cmp  byte ptr [sbok],0
         call SFXMB
         mov  ax,[sfa16]
         sub  ax,[sfdec]
-        jns  @@s1
+        jns  .s1
         xor  ax,ax
-@@s1:   mov  [sfa16],ax
+.s1:   mov  [sfa16],ax
         pop  cx
-        loop @@s
+        loop .s
         pop  es
         pop  di
         pop  si
         pop  dx
         pop  cx
         pop  bx
-@@r:    ret
+.r:    ret
 
 ; ---- SFXBOOM: an explosion. AH = loudness, CX = length in samples ---------
-SFXBOOM:cmp  byte ptr [sbok],0
-        je   @@r
+SFXBOOM:cmp  byte [sbok],0
+        je   .r
         push bx
         push cx
         push dx
@@ -271,17 +271,17 @@ SFXBOOM:cmp  byte ptr [sbok],0
         push di
         push es
         mov  al,ah
-        mov  byte ptr [sfa16],0
-        mov  byte ptr [sfa16+1],al
+        mov  byte [sfa16],0
+        mov  byte [sfa16+1],al
         push cx
         mov  bx,cx
         mov  ax,[sfa16]
         xor  dx,dx
         div  bx                 ; amplitude decay per sample
         or   ax,ax
-        jnz  @@d1
+        jnz  .d1
         inc  ax
-@@d1:   mov  [sfdec],ax
+.d1:   mov  [sfdec],ax
         pop  cx
         mov  ax,[sndseg]
         mov  es,ax
@@ -289,42 +289,42 @@ SFXBOOM:cmp  byte ptr [sbok],0
         lea  di,[bx+700]
         and  di,SNDN-1
         xor  si,si              ; the rumble: a random walk...
-@@b:    push cx
+.b:    push cx
         call RND16
         and  ax,63
         sub  ax,31
         add  si,ax
-        mov  cl,byte ptr [sfa16+1]
+        mov  cl,byte [sfa16+1]
         xor  ch,ch
         cmp  si,cx              ; ...fenced by the fading loudness
-        jle  @@b1
+        jle  .b1
         mov  si,cx
-@@b1:   neg  cx
+.b1:   neg  cx
         cmp  si,cx
-        jge  @@b2
+        jge  .b2
         mov  si,cx
-@@b2:   mov  dx,si
+.b2:   mov  dx,si
         call SFXMB
         mov  ax,[sfa16]
         sub  ax,[sfdec]
-        jns  @@b3
+        jns  .b3
         xor  ax,ax
-@@b3:   mov  [sfa16],ax
+.b3:   mov  [sfa16],ax
         pop  cx
-        loop @@b
+        loop .b
         pop  es
         pop  di
         pop  si
         pop  dx
         pop  cx
         pop  bx
-@@r:    ret
+.r:    ret
 
 ; ---- SFXBM2: an explosion at world (DX,BX) - loudness falls with range ----
-SFXBM2: cmp  byte ptr [sbok],0
-        je   @@r
-        cmp  byte ptr [sndmod],0
-        je   @@r
+SFXBM2: cmp  byte [sbok],0
+        je   .r
+        cmp  byte [sndmod],0
+        je   .r
         push ax
         push bx
         push cx
@@ -333,37 +333,37 @@ SFXBM2: cmp  byte ptr [sbok],0
         push di
         mov  ax,dx
         sub  ax,[camx]
-        jns  @@a1
+        jns  .a1
         neg  ax
-@@a1:   mov  cl,6
+.a1:   mov  cl,6
         shr  ax,cl
         mov  si,ax
         mov  ax,bx
         sub  ax,[camz]
-        jns  @@a2
+        jns  .a2
         neg  ax
-@@a2:   shr  ax,cl
+.a2:   shr  ax,cl
         add  si,ax              ; manhattan range / 64
         mov  ax,92
         sub  ax,si
         cmp  ax,14
-        jl   @@done             ; too far off to hear
+        jl   .done             ; too far off to hear
         mov  ah,al
         mov  cx,5500
         call SFXBOOM
-@@done: pop  di
+.done: pop  di
         pop  si
         pop  dx
         pop  cx
         pop  bx
         pop  ax
-@@r:    ret
+.r:    ret
 
 ; ---- SFXBEEP: a caution note. BL = half period in samples ------------------
-SFXBEEP:cmp  byte ptr [sbok],0
-        je   @@r
-        cmp  byte ptr [sndmod],0
-        je   @@r
+SFXBEEP:cmp  byte [sbok],0
+        je   .r
+        cmp  byte [sndmod],0
+        je   .r
         push bx
         push cx
         push dx
@@ -382,80 +382,80 @@ SFXBEEP:cmp  byte ptr [sbok],0
         mov  cx,480             ; ~45 ms
         mov  dx,38
         mov  bx,si
-@@bp:   call SFXMB
+.bp:   call SFXMB
         dec  bx
-        jnz  @@b2
+        jnz  .b2
         neg  dx                 ; the square flips
         mov  bx,si
-@@b2:   loop @@bp
+.b2:   loop .bp
         pop  es
         pop  di
         pop  si
         pop  dx
         pop  cx
         pop  bx
-@@r:    ret
+.r:    ret
 
 ; ---- SNDBEEP: the caution lamps sing, each its own note (tick-side) -------
 ; one lamp per 16-tick slot, so at worst it is a slow round-robin choir:
 ; STALL urgent and high, FUEL mid, TERRAIN a low horn, LOCK a top blip
-SNDBEEP:cmp  byte ptr [sbok],0
-        je   @@r
-        cmp  byte ptr [sndmod],0
-        je   @@r
+SNDBEEP:cmp  byte [sbok],0
+        je   .r
+        cmp  byte [sndmod],0
+        je   .r
         mov  ax,[lasttk]
         cmp  ax,[lastbp]
-        je   @@r
+        je   .r
         mov  bx,ax
         and  bx,15
         or   bx,bx
-        jnz  @@f
+        jnz  .f
         mov  ax,[vel]           ; slot 0: STALL
         cmp  ax,VSTALL
-        jge  @@r
+        jge  .r
         mov  bl,7
-        jmp  @@go
-@@f:    cmp  bx,4               ; slot 4: FUEL
-        jne  @@t
-        cmp  word ptr [fuel],1200
-        jge  @@r
+        jmp  .go
+.f:    cmp  bx,4               ; slot 4: FUEL
+        jne  .t
+        cmp  word [fuel],1200
+        jge  .r
         mov  bl,12
-        jmp  @@go
-@@t:    cmp  bx,8               ; slot 8: TERRAIN
-        jne  @@l
+        jmp  .go
+.t:    cmp  bx,8               ; slot 8: TERRAIN
+        jne  .l
         mov  ax,[camy]
         sub  ax,[lgnd]
         cmp  ax,150
-        jge  @@r
+        jge  .r
         mov  bl,20
-        jmp  @@go
-@@l:    cmp  bx,12              ; slot 12: LOCK
-        jne  @@r
-        cmp  word ptr [locki],0FFFFh
-        je   @@r
+        jmp  .go
+.l:    cmp  bx,12              ; slot 12: LOCK
+        jne  .r
+        cmp  word [locki],0FFFFh
+        je   .r
         mov  bl,5
-@@go:   mov  ax,[lasttk]
+.go:   mov  ax,[lasttk]
         mov  [lastbp],ax
         call SFXBEEP
-@@r:    ret
+.r:    ret
 
 ; ---- SNDTOG: V key - all sounds -> effects only -> silence -> all ---------
 ; "effects only" flattens the engine bed in the ring at once (effects are
 ; still mixed in over silence); "silence" is the DSP speaker switch, the
 ; DMA loop keeps spinning underneath so any mode is one keypress away.
-SNDTOG: cmp  byte ptr [sbok],0
-        je   @@r
+SNDTOG: cmp  byte [sbok],0
+        je   .r
         mov  al,[sndmod]
         dec  al
-        jns  @@m1
+        jns  .m1
         mov  al,2
-@@m1:   mov  [sndmod],al
+.m1:   mov  [sndmod],al
         or   al,al
-        jnz  @@on
+        jnz  .on
         mov  ah,0D3h            ; mode 0: hardware speaker off
         call SBWR
         ret
-@@on:   mov  ah,0D1h            ; speaker back on
+.on:   mov  ah,0D1h            ; speaker back on
         call SBWR
         push cx
         push si
@@ -465,45 +465,45 @@ SNDTOG: cmp  byte ptr [sbok],0
         mov  es,bx
         xor  di,di
         cld
-        cmp  byte ptr [sndmod],2
-        je   @@cp
+        cmp  byte [sndmod],2
+        je   .cp
         mov  ax,8080h           ; effects only: flatten the engine bed now
         mov  cx,SNDN/2
         rep  stosw
-        jmp  @@fin
-@@cp:   push ds                 ; full sound: bring the engine back at once
+        jmp  .fin
+.cp:   push ds                 ; full sound: bring the engine back at once
         mov  ds,bx
         mov  si,SNDN
         mov  cx,SNDN/2
         rep  movsw
         pop  ds
-@@fin:  pop  es
+.fin:  pop  es
         pop  di
         pop  si
         pop  cx
-@@r:    ret
+.r:    ret
 
 ; ---- SNDENG: once per frame - one knob, the pitch --------------------------
-SNDENG: cmp  byte ptr [sbok],0
-        je   @@r
+SNDENG: cmp  byte [sbok],0
+        je   .r
         call SNDHEAL            ; erase spent effects behind the beam
-        cmp  byte ptr [dying],0
-        je   @@live
+        cmp  byte [dying],0
+        je   .live
         mov  bx,[dytick]        ; the fall: wind down to a slow groan
         mov  cl,1
         shr  bx,cl
         mov  ax,150
         sub  ax,bx
         cmp  ax,60
-        jge  @@wr
+        jge  .wr
         mov  ax,60
-        jmp  @@wr
-@@live: mov  ax,[throt]         ; spool: TC 120..184 = 7.3..13.9 kHz
+        jmp  .wr
+.live: mov  ax,[throt]         ; spool: TC 120..184 = 7.3..13.9 kHz
         add  ax,120             ; (the sample's native pitch ~ 2/3 throttle)
-        cmp  byte ptr [abon],0
-        je   @@mn1
+        cmp  byte [abon],0
+        je   .mn1
         add  ax,10              ; the burner leans on the pitch
-@@mn1:  mov  bx,[mlvl]          ; manoeuvre loading: the airflow works the
+.mn1:  mov  bx,[mlvl]          ; manoeuvre loading: the airflow works the
         mov  cl,3               ; intake - the note sags under g...
         shr  bx,cl
         sub  ax,bx
@@ -512,25 +512,25 @@ SNDENG: cmp  byte ptr [sbok],0
         add  ax,ax
         and  ax,7
         sub  ax,4
-        imul word ptr [mlvl]
+        imul word [mlvl]
         mov  bx,64
         cwd
         idiv bx
         mov  bx,ax
         pop  ax
         add  ax,bx
-@@wr:   cmp  ax,[sbtc]
-        je   @@r
+.wr:   cmp  ax,[sbtc]
+        je   .r
         mov  [sbtc],ax
         mov  ah,40h
         call SBWR
-        mov  ah,byte ptr [sbtc]
+        mov  ah,byte [sbtc]
         call SBWR
-@@r:    ret
+.r:    ret
 
 ; ---- SBOFF: silence and put the hardware back (called from QUIT) ----------
-SBOFF:  cmp  byte ptr [sbok],0
-        je   @@r
+SBOFF:  cmp  byte [sbok],0
+        je   .r
         mov  ah,0D3h            ; speaker off
         call SBWR
         mov  dx,226h            ; reset stops the DMA loop
@@ -546,4 +546,4 @@ SBOFF:  cmp  byte ptr [sbok],0
         and  ah,80h
         or   al,ah
         out  21h,al
-@@r:    ret
+.r:    ret

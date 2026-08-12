@@ -81,29 +81,52 @@ across rounds.
 ## Repository layout
 
 ```
-SRC/            all sources: CITY.ASM + the .INC modules (8086 / TASM)
-ENGINE/         engine modules with documented contracts (shared with EXAMPLES)
-EXAMPLES/       standalone teaching .COMs: island factory, ring mixer, hangar
-INSTALL/        the playable build: CITY.COM + CITY.DAT
-res/            cockpit artwork (BMP + PSD) and mkpanel.py (art -> resources)
-docs/           the browser version (GitHub Pages serves this folder)
-MAKE.BAT        full build from Windows: art converter + headless DOSBox
-BUILD.BAT       assemble + link inside DOSBox (SRC -> INSTALL)
+SRC/            all sources: CITY.ASM + the .INC modules (8086, FASM)
+INSTALL/        the playable build: FLYOWL.COM + CITY.DAT + ENGINE.RAW
+res/            cockpit artwork (BMP + PSD) and the converters that bake it
+MAKE.BAT        assemble it, inside DOS
+RUN.BAT         play it, inside DOS
+MAKEWIN.BAT     the same build, driven from Windows
+RUNWIN.BAT      play it from Windows
+CONVERT.BAT     rebake the artwork - only needed if you change it
 PUBLISH.BAT     repack docs/city.jsdos, bump the cache version, push
 LICENSE         MIT (game code). The emulator (DOSBox / js-dos) is GPL.
 ```
 
+The engine modules this shares with the rest of the repository are in
+`../../ENGINE`, and the teaching machines that take them apart one at a time
+are in `../../EXAMPLES`.
+
+
 ## Build
 
-**From Windows (recommended):** `MAKE.BAT` — runs `res\mkpanel.py` (Python +
-Pillow; converts the cockpit BMPs into `SRC\PANELIMG.INC` / `SRC\PALPNL.INC`),
-then assembles everything headlessly in DOSBox and installs
-`INSTALL\CITY.COM` + `INSTALL\CITY.DAT`. Check `BUILD.LOG`.
+Everything you need is in this repository. Mount it in DOSBox and, in this
+folder:
 
-**Inside DOSBox:** needs TASM + TLINK on the path (e.g. Borland at
-`c:\bp\bin`), then `BUILD.BAT`. Note `TLINK /t` (lowercase t) produces a
-**COM**, not an EXE. If it runs sluggishly, raise the emulator speed
-(`cycles=max` or Ctrl+F12).
+```
+MAKE            assemble  ->  INSTALL\FLYOWL.COM and INSTALL\CITY.DAT
+RUN             fly it
+```
+
+`MAKE` assembles twice, and only the second is a program. `SRC/RESDAT.ASM` is
+the cockpit artwork, the palette and the font laid out as bytes: it assembles
+to a plain blob shipped as `CITY.DAT`, which the game loads at startup.
+Keeping it out of the game's own image is what leaves room in the 64K segment
+for the game.
+
+The assembler is [flat assembler](https://flatassembler.net/) in `TOOLS/FASM`,
+free to use and to pass on, and there is no linker step. From Windows,
+`MAKEWIN` and `RUNWIN` drive the same build through DOSBox without your
+opening it by hand, and `MAKEWIN CHECK` accounts for every byte of the
+difference against the Turbo Assembler build frozen in
+[`TASM/OWLFLY`](../../TASM/OWLFLY).
+
+The cockpit artwork is baked by `CONVERT.BAT`, on Windows. Its output is
+committed, so the build above does not need it to have run - only a change to
+the artwork does.
+
+If it runs sluggishly, raise the emulator speed (`cycles=max` or Ctrl+F12).
+
 
 ## Play in the browser
 

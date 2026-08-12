@@ -10,12 +10,12 @@ CAMERA: mov  ax,[hdg]
         add  ax,[aoa]           ; ...from inside the ATTITUDE
         add  ax,[hp]
         mov  [pitch],ax
-        mov  ax,[rol]
+        mov  ax,[rll]
         mov  [roll],ax
-        cmp  word ptr [view],0
-        jne  @@fp
-        mov  word ptr [roll],0
-        mov  word ptr [pitch],-8
+        cmp  word [view],0
+        jne  .fp
+        mov  word [roll],0
+        mov  word [pitch],-8
         mov  ax,[hdg]           ; the chase camera eases after the
         mov  ah,al              ;  nose: 8.8 angle, signed 16-bit
         xor  al,al              ;  wrap = free mod-256 arithmetic
@@ -23,7 +23,7 @@ CAMERA: mov  ax,[hdg]
         mov  cl,4
         sar  ax,cl
         add  [chdgf],ax
-        mov  al,byte ptr [chdgf+1]
+        mov  al,byte [chdgf+1]
         xor  ah,ah
         mov  [heading],ax
         push ax
@@ -49,7 +49,7 @@ CAMERA: mov  ax,[hdg]
         add  ax,58
         mov  [camy],ax
         ret
-@@fp:   mov  ax,[apx]
+.fp:   mov  ax,[apx]
         mov  [camx],ax
         mov  ax,[apz]
         mov  [camz],ax
@@ -67,12 +67,12 @@ BACKDROP:
         mov  ax,[horiz]
         add  ax,[pofs]
         cmp  ax,4
-        jge  @@b1
+        jge  .b1
         mov  ax,4
-@@b1:   cmp  ax,196
-        jle  @@b2
+.b1:   cmp  ax,196
+        jle  .b2
         mov  ax,196
-@@b2:   mov  [hrow],ax
+.b2:   mov  [hrow],ax
         mov  bx,320
         mul  bx                 ; DX:AX = hrow*320 (fits)
         mov  cx,ax
@@ -137,9 +137,9 @@ PUTV:   push di
         mov  [wdz],ax
         call ROTXZ
         pop  di
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [IX+di],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [IZ+di],ax
         mov  ax,[vwy]
         sub  ax,[camy]
@@ -150,10 +150,10 @@ PUTV:   push di
 ;  WORLD - pavement, markings, buildings, the radar
 ; ============================================================================
 WORLD:  call GRID
-        mov  si,offset GTAB     ; the flat world is a table of rects
-@@g:    lodsw
+        mov  si,GTAB     ; the flat world is a table of rects
+.g:    lodsw
         cmp  ax,32767
-        je   @@gdone
+        je   .gdone
         mov  [qx0],ax
         lodsw
         mov  [qz0],ax
@@ -166,13 +166,13 @@ WORLD:  call GRID
         push si
         call GQUAD
         pop  si
-        jmp  @@g
-@@gdone:
+        jmp  .g
+.gdone:
         ; ---- hangars: back wall, sides, roof (open toward the apron) ----
-        mov  si,offset HTAB
-@@h:    lodsw
+        mov  si,HTAB
+.h:    lodsw
         cmp  ax,32767
-        je   @@hdone
+        je   .hdone
         mov  [hx0],ax
         lodsw
         mov  [hz0],ax
@@ -185,8 +185,8 @@ WORLD:  call GRID
         push si
         call HBOX
         pop  si
-        jmp  @@h
-@@hdone:
+        jmp  .h
+.hdone:
         call RADAR
         ret
 
@@ -194,15 +194,15 @@ WORLD:  call GRID
 ; world-aligned 1-px lines around the camera (they rotate with the view):
 ; each edge runs NEARCLIP -> PROJPT -> CLIPLINE -> LINE, the exact
 ; pipeline the wireframe city used on this same flat ground
-GPITCH  equ 256
-GRAD    equ 7
+GPITCH  = 256
+GRAD    = 7
 GRID:   ; ---- the ground, TWO STATIC SCALES: fine 512 cells around the
         ; camera, coarse 2048 cells out to 14336 - both anchored to
         ; the world, so NOTHING ever re-scales with altitude (the old
         ; tier switch jolted the whole scene mid-climb: frames 54-55
         ; of the first user recording, gpi 1024 -> 2048).
-        mov  word ptr [gext],14336
-        mov  word ptr [gpit],512
+        mov  word [gext],14336
+        mov  word [gpit],512
         mov  ax,[camx]          ; the fine board: 8x8 of 512
         and  ax,0FE00h
         sub  ax,2048
@@ -219,30 +219,30 @@ GRID:   ; ---- the ground, TWO STATIC SCALES: fine 512 cells around the
         and  ax,0F800h
         sub  ax,14336
         mov  [gsz],ax
-        mov  word ptr [gj],0
+        mov  word [gj],0
         mov  ax,[gsz]
         mov  [gwz],ax
-@@orow: mov  word ptr [gi],0
+.orow: mov  word [gi],0
         mov  ax,[gsx]
         mov  [gwx],ax
-@@ocel: mov  ax,[gwx]           ; fully under the fine board? skip
+.ocel: mov  ax,[gwx]           ; fully under the fine board? skip
         cmp  ax,[inx0]
-        jl   @@odrw
+        jl   .odrw
         add  ax,2048
         mov  bx,[inx0]
         add  bx,4096
         cmp  ax,bx
-        jg   @@odrw
+        jg   .odrw
         mov  ax,[gwz]
         cmp  ax,[inz0]
-        jl   @@odrw
+        jl   .odrw
         add  ax,2048
         mov  bx,[inz0]
         add  bx,4096
         cmp  ax,bx
-        jg   @@odrw
-        jmp  @@onxt
-@@odrw: mov  ax,[gwx]
+        jg   .odrw
+        jmp  .onxt
+.odrw: mov  ax,[gwx]
         mov  [qx0],ax
         add  ax,2048
         mov  [qx1],ax
@@ -258,30 +258,30 @@ GRID:   ; ---- the ground, TWO STATIC SCALES: fine 512 cells around the
         sar  ax,cl
         add  ax,bx
         test ax,1
-        jz   @@oca
-        mov  byte ptr [COLOR],24
-        jmp  @@ocq
-@@oca:  mov  byte ptr [COLOR],10
-@@ocq:  call GQUAD
-@@onxt: mov  ax,[gwx]
+        jz   .oca
+        mov  byte [COLOR],24
+        jmp  .ocq
+.oca:  mov  byte [COLOR],10
+.ocq:  call GQUAD
+.onxt: mov  ax,[gwx]
         add  ax,2048
         mov  [gwx],ax
-        inc  word ptr [gi]
-        cmp  word ptr [gi],14
-        jl   @@ocel
+        inc  word [gi]
+        cmp  word [gi],14
+        jl   .ocel
         mov  ax,[gwz]
         add  ax,2048
         mov  [gwz],ax
-        inc  word ptr [gj]
-        cmp  word ptr [gj],14
-        jl   @@orow
-        mov  word ptr [gj],0    ; the fine board paints over
+        inc  word [gj]
+        cmp  word [gj],14
+        jl   .orow
+        mov  word [gj],0    ; the fine board paints over
         mov  ax,[inz0]
         mov  [gwz],ax
-@@irow: mov  word ptr [gi],0
+.irow: mov  word [gi],0
         mov  ax,[inx0]
         mov  [gwx],ax
-@@icel: mov  ax,[gwx]
+.icel: mov  ax,[gwx]
         mov  [qx0],ax
         add  ax,512
         mov  [qx1],ax
@@ -297,23 +297,23 @@ GRID:   ; ---- the ground, TWO STATIC SCALES: fine 512 cells around the
         sar  ax,cl
         add  ax,bx
         test ax,1
-        jz   @@ica
-        mov  byte ptr [COLOR],24
-        jmp  @@icq
-@@ica:  mov  byte ptr [COLOR],10
-@@icq:  call GQUAD
+        jz   .ica
+        mov  byte [COLOR],24
+        jmp  .icq
+.ica:  mov  byte [COLOR],10
+.icq:  call GQUAD
         mov  ax,[gwx]
         add  ax,512
         mov  [gwx],ax
-        inc  word ptr [gi]
-        cmp  word ptr [gi],8
-        jl   @@icel
+        inc  word [gi]
+        cmp  word [gi],8
+        jl   .icel
         mov  ax,[gwz]
         add  ax,512
         mov  [gwz],ax
-        inc  word ptr [gj]
-        cmp  word ptr [gj],8
-        jl   @@irow
+        inc  word [gj]
+        cmp  word [gj],8
+        jl   .irow
         ret
 gi      dw 0
 gj      dw 0
@@ -328,22 +328,22 @@ inz0    dw 0
 ; Painted OVER the world, so the grid emerges out of it.
 HAZE:   mov  ax,[camy]
         or   ax,ax
-        jle  @@no
+        jle  .no
         mov  bx,FOCAL
         imul bx
-        idiv word ptr [gext]
+        idiv word [gext]
         or   ax,ax
-        jz   @@no
+        jz   .no
         cmp  ax,90
-        jle  @@k1
+        jle  .k1
         mov  ax,90
-@@k1:   mov  bx,198             ; keep the band on the screen
+.k1:   mov  bx,198             ; keep the band on the screen
         sub  bx,[hrow]
-        jle  @@no
+        jle  .no
         cmp  ax,bx
-        jle  @@k2
+        jle  .k2
         mov  ax,bx
-@@k2:   mov  [hzk],ax
+.k2:   mov  [hzk],ax
         mov  ax,[hrow]
         add  ax,2               ; the dark horizon edge stays visible
         mov  bx,320
@@ -357,7 +357,7 @@ HAZE:   mov  ax,[camy]
         mov  es,ax
         mov  ax,0707h
         rep  stosw
-@@no:   ret
+.no:   ret
 hzk     dw 0
 
 ; ---- DRAWEDGE3D + NEARCLIP + PROJ2: verbatim from OWL FLY M3D.INC ----------
@@ -366,44 +366,44 @@ hzk     dw 0
 ; its two endpoints the same way or the grid lives at its own angle
 ; (found by measuring a debug-harness screenshot).
 PITCHE: mov  ax,[y0]
-        imul word ptr [pcos]
+        imul word [pcos]
         mov  bx,256
         idiv bx
         mov  cx,ax
         mov  ax,[z0]
-        imul word ptr [psin]
+        imul word [psin]
         mov  bx,256
         idiv bx
         sub  cx,ax              ; y0' = (y*pcos - z*psin)/256
         mov  ax,[y0]
-        imul word ptr [psin]
+        imul word [psin]
         mov  bx,256
         idiv bx
         mov  di,ax
         mov  ax,[z0]
-        imul word ptr [pcos]
+        imul word [pcos]
         mov  bx,256
         idiv bx
         add  ax,di              ; z0' = (y*psin + z*pcos)/256
         mov  [z0],ax
         mov  [y0],cx
         mov  ax,[y1]
-        imul word ptr [pcos]
+        imul word [pcos]
         mov  bx,256
         idiv bx
         mov  cx,ax
         mov  ax,[z1]
-        imul word ptr [psin]
+        imul word [psin]
         mov  bx,256
         idiv bx
         sub  cx,ax
         mov  ax,[y1]
-        imul word ptr [psin]
+        imul word [psin]
         mov  bx,256
         idiv bx
         mov  di,ax
         mov  ax,[z1]
-        imul word ptr [pcos]
+        imul word [pcos]
         mov  bx,256
         idiv bx
         add  ax,di
@@ -414,32 +414,32 @@ PITCHE: mov  ax,[y0]
 DRAWEDGE3D:
         call PITCHE
         call NEARCLIP
-        jc   @@skip
+        jc   .skip
         call PROJ2
         call CLIPLINE
-        jc   @@skip
+        jc   .skip
         call LINE
-@@skip: ret
+.skip: ret
 
 NEARCLIP:
         mov  ax,[z0]
         cmp  ax,NEARZ
-        jge  @@p0in
+        jge  .p0in
         mov  bx,[z1]
         cmp  bx,NEARZ
-        jl   @@rej
+        jl   .rej
         call CLIPP0
         clc
         ret
-@@p0in: mov  bx,[z1]
+.p0in: mov  bx,[z1]
         cmp  bx,NEARZ
-        jge  @@both
+        jge  .both
         call CLIPP1
         clc
         ret
-@@both: clc
+.both: clc
         ret
-@@rej:  stc
+.rej:  stc
         ret
 
 CLIPP0: mov  bx,[z1]
@@ -450,17 +450,17 @@ CLIPP0: mov  bx,[z1]
         mov  [tden],bx
         mov  ax,[x1]
         sub  ax,[x0]
-        imul word ptr [tnum]
-        idiv word ptr [tden]
+        imul word [tnum]
+        idiv word [tden]
         add  ax,[x0]
         mov  [x0],ax
         mov  ax,[y1]
         sub  ax,[y0]
-        imul word ptr [tnum]
-        idiv word ptr [tden]
+        imul word [tnum]
+        idiv word [tden]
         add  ax,[y0]
         mov  [y0],ax
-        mov  word ptr [z0],NEARZ
+        mov  word [z0],NEARZ
         ret
 
 CLIPP1: mov  bx,[z0]
@@ -471,17 +471,17 @@ CLIPP1: mov  bx,[z0]
         mov  [tden],bx
         mov  ax,[x0]
         sub  ax,[x1]
-        imul word ptr [tnum]
-        idiv word ptr [tden]
+        imul word [tnum]
+        idiv word [tden]
         add  ax,[x1]
         mov  [x1],ax
         mov  ax,[y0]
         sub  ax,[y1]
-        imul word ptr [tnum]
-        idiv word ptr [tden]
+        imul word [tnum]
+        idiv word [tden]
         add  ax,[y1]
         mov  [y1],ax
-        mov  word ptr [z1],NEARZ
+        mov  word [z1],NEARZ
         ret
 
 PROJ2:  mov  ax,[x0]
@@ -515,7 +515,7 @@ z1      dw 0
 
 ; ---- HBOX: hangar/tower box hx0..hx1, hz0..hz1, height hh ------------------
 ; walls colour 16, roof 17; the +z face is left open (the door)
-HBOX:   mov  byte ptr [COLOR],16
+HBOX:   mov  byte [COLOR],16
         ; back wall (z = hz0)
         mov  ax,[hx0]
         mov  dx,[hz0]
@@ -527,7 +527,7 @@ HBOX:   mov  byte ptr [COLOR],16
         call PUTV1
         mov  ax,[hx1]
         mov  dx,[hz0]
-        push word ptr [vwy]
+        push word [vwy]
         mov  ax,[hh]
         mov  [vwy],ax
         mov  ax,[hx1]
@@ -536,10 +536,10 @@ HBOX:   mov  byte ptr [COLOR],16
         mov  ax,[hx0]
         mov  dx,[hz0]
         call PUTV3
-        pop  word ptr [vwy]
+        pop  word [vwy]
         call FACEFILL
         ; left wall (x = hx0)
-        mov  byte ptr [COLOR],18
+        mov  byte [COLOR],18
         xor  ax,ax
         mov  [vwy],ax
         mov  ax,[hx0]
@@ -576,7 +576,7 @@ HBOX:   mov  byte ptr [COLOR],16
         call PUTV3
         call FACEFILL
         ; roof
-        mov  byte ptr [COLOR],17
+        mov  byte [COLOR],17
         mov  ax,[hh]
         mov  [vwy],ax
         mov  ax,[hx0]
@@ -595,24 +595,24 @@ HBOX:   mov  byte ptr [COLOR],16
         ret
 
 ; ---- RADAR: the Blender-built station: static tower, spinning dish -------
-RADAR:  mov  word ptr [mbuf],offset RBBUF
-        mov  word ptr [mox],-700
-        mov  word ptr [moy],0
-        mov  word ptr [moz],-300
-        mov  word ptr [myaw],0
+RADAR:  mov  word [mbuf],RBBUF
+        mov  word [mox],-700
+        mov  word [moy],0
+        mov  word [moz],-300
+        mov  word [myaw],0
         call MDRAW
-        mov  word ptr [mbuf],offset RDBUF
-        mov  word ptr [moy],0   ; the mast height is baked in the mesh
+        mov  word [mbuf],RDBUF
+        mov  word [moy],0   ; the mast height is baked in the mesh
         mov  ax,[spin]
         add  ax,ax
         and  ax,255
         mov  [myaw],ax
         call MDRAW
-        mov  word ptr [mbuf],offset TWBUF
-        mov  word ptr [mox],600 ; the control tower, clear of the hangars
-        mov  word ptr [moy],0
-        mov  word ptr [moz],-520
-        mov  word ptr [myaw],0
+        mov  word [mbuf],TWBUF
+        mov  word [mox],600 ; the control tower, clear of the hangars
+        mov  word [moy],0
+        mov  word [moz],-520
+        mov  word [myaw],0
         call MDRAW
         ret
 

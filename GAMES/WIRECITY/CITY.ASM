@@ -3,9 +3,24 @@
 ;  VGA mode 13h (320x200x256), 8086 only, integer math,
 ;  wireframe graphics, near-Z clipping + screen line clipping.
 ;
-;  Build with TASM (in DOSBox):
-;       TASM CITY.ASM
-;       TLINK /T CITY.OBJ          ->  CITY.COM
+;  Build it, in DOSBox, from this folder:
+;       MAKE                       ->  CITY.COM
+;
+;  That runs the assembler in TOOLS\FASM - flat assembler, which is in this
+;  repository and free to use. There is no linker step: FASM writes the COM
+;  file directly. Nothing has to be bought or installed.
+;
+;  This source was translated from the Turbo Assembler version, which is kept
+;  unchanged in TASM\WIRECITY. The two builds differ by 312 bytes and not one
+;  instruction, and all 312 are NOP: TASM is one-pass, so it reserves room for
+;  a near jump and pads the leftovers it can no longer take back. FASM makes
+;  three passes and needs none.
+;
+;  That is checked, not assumed - TOOLS\BinAccount decodes both builds and
+;  walks them instruction by instruction, and it has to be able to name every
+;  byte of the difference. It is what caught the ten 386 jumps this file used
+;  to assemble to: FASM has no .8086 directive, so the restriction was lost in
+;  translation until E_8086.INC put it back.
 ;
 ;  Controls:    arrows  - left/right/up/down (maneuver)
 ;               ESC     - quit
@@ -21,8 +36,8 @@
 ;  Render pipeline for every world vertex:
 ;     world (wx,wz)
 ;       -> camera-relative   : dx=wx-camx, dz=wz-camz
-;       -> ROTXZ (yaw)        : (rcx,rcz)  rotate by heading
-;       -> NEARCLIP           : clip polygon/edge to camera-space rcz >= NEARZ
+;       -> ROTXZ (yaw)        : (rc_x,rc_z)  rotate by heading
+;       -> NEARCLIP           : clip polygon/edge to camera-space rc_z >= NEARZ
 ;       -> PROJPT (perspective): sx=160+rx*FOCAL/rz, sy=100-ry*FOCAL/rz
 ;       -> APPLYROLL (bank)    : rotate (sx,sy) about screen centre (160,100)
 ;       -> CLIPLINE / SCANPOLY : 2D clip to 320x200, then draw
@@ -49,37 +64,38 @@
 ;  DEAD CODE (assembled but never called) is tagged "DEAD" in its banner.
 ; ----------------------------------------------------------------------------
 
-        .8086
-        LOCALS
-        JUMPS                   ; auto-extend out-of-range conditional jumps
                                 ;   (emits jcc short + jmp near; pure 8086)
 
 ; ---- world constants -------------------------------------------------------
-FOCAL   equ 160                 ; projection focal length
-CELL    equ 256                 ; grid pitch (doc only; code uses shl/shr 8 and 128)
-BIAS    equ 8192                ; world->cell bias (keeps cell math unsigned)
-RAD     equ 5                   ; building render radius (cells)
-MAXD2   equ RAD*RAD*2           ; max squared cell distance (painter buckets)
-GR      equ 6                   ; ground-grid radius (cells)
-NEARZ   equ 40                  ; near clip plane
-FARZ    equ 2400                ; far clip distance
-SPEEDV  equ 12                  ; forward speed (per frame)
-STEPY   equ 5                   ; altitude step
-TURNV   equ 2                   ; heading change per frame (of 256 = full turn)
-BANKMAX equ 30                  ; max bank/roll angle (of 256)
-BANKSTP equ 3                   ; bank approach/decay per frame
+FOCAL   = 160                 ; projection focal length
+CELL    = 256                 ; grid pitch (doc only; code uses shl/shr 8 and 128)
+BIAS    = 8192                ; world->cell bias (keeps cell math unsigned)
+RAD     = 5                   ; building render radius (cells)
+MAXD2   = RAD*RAD*2           ; max squared cell distance (painter buckets)
+GR      = 6                   ; ground-grid radius (cells)
+NEARZ   = 40                  ; near clip plane
+FARZ    = 2400                ; far clip distance
+SPEEDV  = 12                  ; forward speed (per frame)
+STEPY   = 5                   ; altitude step
+TURNV   = 2                   ; heading change per frame (of 256 = full turn)
+BANKMAX = 30                  ; max bank/roll angle (of 256)
+BANKSTP = 3                   ; bank approach/decay per frame
 
 ; ---- keyboard scan codes ---------------------------------------------------
-SC_ESC  equ 01h
-SC_UP   equ 48h
-SC_DN   equ 50h
-SC_LF   equ 4Bh
-SC_RT   equ 4Dh
-SC_SP   equ 39h
+SC_ESC  = 01h
+SC_UP   = 48h
+SC_DN   = 50h
+SC_LF   = 4Bh
+SC_RT   = 4Dh
+SC_SP   = 39h
 
-CODE    SEGMENT
-        ASSUME  CS:CODE, DS:CODE, ES:CODE, SS:CODE
-        ORG 100h
+format binary as 'com'
+        org 100h
+
+; Conditional jumps stay inside the 8086 instruction set. FASM has no
+; directive for that and will reach for the 386 long form the moment a target
+; is out of short range - see the file itself.
+        include '..\..\ENGINE\E_8086.INC'
 
 START:  jmp  MAIN
 
@@ -128,8 +144,8 @@ rsin    dw 0                    ; sin(roll)*256
 rcos    dw 0                    ; cos(roll)*256
 wdx     dw 0
 wdz     dw 0
-rcx     dw 0
-rcz     dw 0
+rc_x     dw 0
+rc_z     dw 0
 rddx    dw 0
 rddy    dw 0
 rsxo    dw 0
@@ -138,7 +154,7 @@ camgi   dw 0
 camgj   dw 0
 gi      dw 0
 gj      dw 0
-di      dw 0
+di_dead      dw 0
 dj      dw 0
 ring    dw 0
 bstreet dw 0
@@ -226,7 +242,7 @@ PAL     db  2, 3, 9          ;0  background
         db  4, 6,16          ;10 ground
         db 40,30,63          ;11 (spare) violet
 
-STARN   equ 16                  ; star coords as words (X can exceed 255)
+STARN   = 16                  ; star coords as words (X can exceed 255)
 STARTAB dw 20,18, 60,30, 110,12, 150,40, 200,22, 250,15, 300,35, 40,52
         dw 90,60, 175,55, 230,48, 285,58, 130,70, 70,8, 260,70, 310,28
 
@@ -252,14 +268,14 @@ KBINT:  push ax
         and  al,7Fh
         mov  bl,al
         xor  bh,bh
-        mov  di,offset KEYS
+        mov  di,KEYS
         add  di,bx
         test ah,80h
-        jnz  @@brk
-        mov  byte ptr [di],1
-        jmp  @@eoi
-@@brk:  mov  byte ptr [di],0
-@@eoi:  mov  al,20h
+        jnz  .brk
+        mov  byte [di],1
+        jmp  .eoi
+.brk:  mov  byte [di],0
+.eoi:  mov  al,20h
         out  20h,al
         pop  ds
         pop  di
@@ -281,7 +297,7 @@ MAIN:
         int  21h
         mov  [oldoff],bx
         mov  [oldseg],es
-        mov  dx,offset KBINT
+        mov  dx,KBINT
         mov  ax,2509h
         int  21h                ; DS=CS already -> vector to CS:KBINT
 
@@ -290,11 +306,11 @@ MAIN:
         int  10h
         call SETPAL
 
-        mov  word ptr [camx],0
-        mov  word ptr [camy],120
-        mov  word ptr [camz],0
-        mov  word ptr [heading],0
-        mov  word ptr [roll],0
+        mov  word [camx],0
+        mov  word [camy],120
+        mov  word [camz],0
+        mov  word [heading],0
+        mov  word [roll],0
 
 GAMELOOP:
         call SETTRIG            ; heading/roll -> sin/cos for this frame
@@ -308,7 +324,7 @@ GAMELOOP:
         call INPUT
         call COLLIDE
         call WAITV
-        cmp  byte ptr [KEYS+SC_ESC],0
+        cmp  byte [KEYS+SC_ESC],0
         je   GAMELOOP
 
 QUIT:
@@ -331,11 +347,11 @@ SETPAL: mov  dx,3C8h
         xor  al,al
         out  dx,al
         mov  dx,3C9h
-        mov  si,offset PAL
+        mov  si,PAL
         mov  cx,12*3
-@@pl:   lodsb
+.pl:   lodsb
         out  dx,al
-        loop @@pl
+        loop .pl
         ret
 
 ; ============================================================================
@@ -370,12 +386,12 @@ BLIT:   push ds
 ;  WAIT FOR VERTICAL RETRACE (sync)
 ; ============================================================================
 WAITV:  mov  dx,3DAh
-@@w1:   in   al,dx
+.w1:   in   al,dx
         test al,8
-        jnz  @@w1
-@@w2:   in   al,dx
+        jnz  .w1
+.w2:   in   al,dx
         test al,8
-        jz   @@w2
+        jz   .w2
         ret
 
 ; ============================================================================
@@ -398,10 +414,10 @@ RENDER: ; camera cell (needed by GRID and BUILDINGS)
         ret
 
 ; ----- stars (sky background; horizon is the sky/ground colour split) -------
-STARS:  mov  byte ptr [COLOR],8
-        mov  si,offset STARTAB
+STARS:  mov  byte [COLOR],8
+        mov  si,STARTAB
         mov  cx,STARN
-@@s:    push cx
+.s:    push cx
         mov  ax,[si]            ; star X (word)
         mov  [tmpsx],ax
         mov  ax,[si+2]          ; star Y (word)
@@ -411,17 +427,17 @@ STARS:  mov  byte ptr [COLOR],8
         call PUTPIXEL
         pop  cx
         add  si,4
-        loop @@s
+        loop .s
         ret
 
 ; ----- ground grid ----------------------------------------------------------
 ; ----- ground grid: world-aligned lines around the camera (rotate with view)
-GRID:   mov  byte ptr [COLOR],6
+GRID:   mov  byte [COLOR],6
         ; lines parallel to world-Z (fixed X = gi)
         mov  ax,[camgi]
         sub  ax,GR
         mov  [gi],ax
-@@gx:   mov  ax,[gi]            ; worldX = gi*256 - BIAS
+.gx:   mov  ax,[gi]            ; worldX = gi*256 - BIAS
         mov  cl,8
         shl  ax,cl
         sub  ax,BIAS
@@ -438,9 +454,9 @@ GRID:   mov  byte ptr [COLOR],6
         sub  ax,[camz]
         mov  [wdz],ax
         call ROTXZ
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [x0],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [z0],ax
         ; endpoint B (worldX, Zmax)
         mov  ax,[wcx]
@@ -454,9 +470,9 @@ GRID:   mov  byte ptr [COLOR],6
         sub  ax,[camz]
         mov  [wdz],ax
         call ROTXZ
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [x1],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [z1],ax
         mov  ax,[camy]
         neg  ax
@@ -469,12 +485,12 @@ GRID:   mov  byte ptr [COLOR],6
         mov  bx,[camgi]
         add  bx,GR
         cmp  ax,bx
-        jle  @@gx
+        jle  .gx
         ; lines parallel to world-X (fixed Z = gj)
         mov  ax,[camgj]
         sub  ax,GR
         mov  [gj],ax
-@@gz:   mov  ax,[gj]
+.gz:   mov  ax,[gj]
         mov  cl,8
         shl  ax,cl
         sub  ax,BIAS
@@ -489,9 +505,9 @@ GRID:   mov  byte ptr [COLOR],6
         sub  ax,[camx]
         mov  [wdx],ax
         call ROTXZ
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [x0],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [z0],ax
         ; endpoint B (Xmax, worldZ)
         mov  ax,[camgi]
@@ -502,9 +518,9 @@ GRID:   mov  byte ptr [COLOR],6
         sub  ax,[camx]
         mov  [wdx],ax
         call ROTXZ
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [x1],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [z1],ax
         mov  ax,[camy]
         neg  ax
@@ -517,7 +533,7 @@ GRID:   mov  byte ptr [COLOR],6
         mov  bx,[camgj]
         add  bx,GR
         cmp  ax,bx
-        jle  @@gz
+        jle  .gz
         ret
 
 ; ----- buildings: grid of cells around camera, drawn in far->near rings ------
@@ -538,11 +554,11 @@ BUILDINGS:
         mov  cl,8
         shr  ax,cl
         mov  [camgj],ax
-        mov  word ptr [ring],MAXD2
-@@d2:   mov  word ptr [di],-RAD
-@@iloop:
-        mov  word ptr [dj],-RAD
-@@jloop:
+        mov  word [ring],MAXD2
+.d2:   mov  word [di],-RAD
+.iloop:
+        mov  word [dj],-RAD
+.jloop:
         mov  ax,[di]            ; di*di + dj*dj
         imul ax
         mov  bx,ax
@@ -550,23 +566,23 @@ BUILDINGS:
         imul ax
         add  ax,bx
         cmp  ax,[ring]
-        jne  @@jnext
+        jne  .jnext
         call RENDERCELL         ; this cell is in the current distance bucket
-@@jnext:
+.jnext:
         mov  ax,[dj]
         inc  ax
         mov  [dj],ax
         cmp  ax,RAD
-        jle  @@jloop
+        jle  .jloop
         mov  ax,[di]
         inc  ax
         mov  [di],ax
         cmp  ax,RAD
-        jle  @@iloop
-        dec  word ptr [ring]
+        jle  .iloop
+        dec  word [ring]
         mov  ax,[ring]
         cmp  ax,0
-        jge  @@d2
+        jge  .d2
         ret
 
 ; ----- render one city cell (di,dj relative to camera cell) -----------------
@@ -585,7 +601,7 @@ RENDERCELL:
         call HBLD
         mov  ax,[bstreet]
         test ax,ax
-        jnz  @@ret              ; empty street cell -> nothing to draw
+        jnz  .ret              ; empty street cell -> nothing to draw
         ; cell centre world coords:  gi*256 + 128 - BIAS   (shl = *CELL)
         mov  ax,[gi]
         mov  cl,8
@@ -613,8 +629,8 @@ RENDERCELL:
         add  ax,[bhd]
         mov  [bwz1],ax
         ; rotate the 4 footprint corners; track min/max rz
-        mov  word ptr [minrz],32767
-        mov  word ptr [maxrz],-32768
+        mov  word [minrz],32767
+        mov  word [maxrz],-32768
         ; corner 0 = (bwx0,bwz0)
         mov  ax,[bwx0]
         sub  ax,[camx]
@@ -623,11 +639,11 @@ RENDERCELL:
         sub  ax,[camz]
         mov  [wdz],ax
         call ROTXZ
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [FRX],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [FRZ],ax
-        call @@trk
+        call .trk
         ; corner 1 = (bwx1,bwz0)
         mov  ax,[bwx1]
         sub  ax,[camx]
@@ -636,11 +652,11 @@ RENDERCELL:
         sub  ax,[camz]
         mov  [wdz],ax
         call ROTXZ
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [FRX+2],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [FRZ+2],ax
-        call @@trk
+        call .trk
         ; corner 2 = (bwx1,bwz1)
         mov  ax,[bwx1]
         sub  ax,[camx]
@@ -649,11 +665,11 @@ RENDERCELL:
         sub  ax,[camz]
         mov  [wdz],ax
         call ROTXZ
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [FRX+4],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [FRZ+4],ax
-        call @@trk
+        call .trk
         ; corner 3 = (bwx0,bwz1)
         mov  ax,[bwx0]
         sub  ax,[camx]
@@ -662,18 +678,18 @@ RENDERCELL:
         sub  ax,[camz]
         mov  [wdz],ax
         call ROTXZ
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [FRX+6],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [FRZ+6],ax
-        call @@trk
+        call .trk
         ; cull
         mov  ax,[maxrz]
         cmp  ax,NEARZ
-        jl   @@ret              ; entirely behind
+        jl   .ret              ; entirely behind
         mov  ax,[minrz]
         cmp  ax,FARZ
-        jg   @@ret              ; entirely too far
+        jg   .ret              ; entirely too far
         ; heights (camera-relative Y)
         mov  ax,[camy]
         neg  ax
@@ -683,151 +699,151 @@ RENDERCELL:
         mov  [bry1],ax
 
         ; ---- FILL visible faces (body color) ----
-        mov  byte ptr [COLOR],0
+        mov  byte [COLOR],0
         mov  ax,[camy]          ; roof, if above
         cmp  ax,[bhgt2]
-        jle  @@nf0
+        jle  .nf0
         call FACETOPC
         call FACEFILL
-@@nf0:  call VISFILL
+.nf0:  call VISFILL
         ; ---- stroke color by distance ----
         mov  ax,[minrz]
         cmp  ax,500
-        jg   @@nn
-        mov  byte ptr [COLOR],3
-        jmp  @@cc
-@@nn:   cmp  ax,1200
-        jg   @@ff
-        mov  byte ptr [COLOR],2
-        jmp  @@cc
-@@ff:   mov  byte ptr [COLOR],1
-@@cc:
+        jg   .nn
+        mov  byte [COLOR],3
+        jmp  .cc
+.nn:   cmp  ax,1200
+        jg   .ff
+        mov  byte [COLOR],2
+        jmp  .cc
+.ff:   mov  byte [COLOR],1
+.cc:
         ; ---- STROKE visible faces ----
         mov  ax,[camy]
         cmp  ax,[bhgt2]
-        jle  @@ns0
+        jle  .ns0
         call FACETOPC
         call FACESTROKE
-@@ns0:  call VISSTROKE
-@@ret:  ret
-@@trk:  mov  ax,[rcz]           ; update minrz/maxrz with rcz
+.ns0:  call VISSTROKE
+.ret:  ret
+.trk:  mov  ax,[rc_z]           ; update minrz/maxrz with rc_z
         cmp  ax,[minrz]
-        jge  @@t1
+        jge  .t1
         mov  [minrz],ax
-@@t1:   cmp  ax,[maxrz]
-        jle  @@t2
+.t1:   cmp  ax,[maxrz]
+        jle  .t2
         mov  [maxrz],ax
-@@t2:   ret
+.t2:   ret
 
 ; iterate visible vertical faces, calling FACEV+FACEFILL for each
 VISFILL:
         ; west  (camx < bwx0): corners 3,0
         mov  ax,[camx]
         cmp  ax,[bwx0]
-        jge  @@e
-        mov  word ptr [fa],3
-        mov  word ptr [fb],0
+        jge  .e
+        mov  word [fa],3
+        mov  word [fb],0
         call FACEV
         call FACEFILL
-@@e:    mov  ax,[camx]          ; east (camx > bwx1): 1,2
+.e:    mov  ax,[camx]          ; east (camx > bwx1): 1,2
         cmp  ax,[bwx1]
-        jle  @@s
-        mov  word ptr [fa],1
-        mov  word ptr [fb],2
+        jle  .s
+        mov  word [fa],1
+        mov  word [fb],2
         call FACEV
         call FACEFILL
-@@s:    mov  ax,[camz]          ; south (camz < bwz0): 0,1
+.s:    mov  ax,[camz]          ; south (camz < bwz0): 0,1
         cmp  ax,[bwz0]
-        jge  @@n
-        mov  word ptr [fa],0
-        mov  word ptr [fb],1
+        jge  .n
+        mov  word [fa],0
+        mov  word [fb],1
         call FACEV
         call FACEFILL
-@@n:    mov  ax,[camz]          ; north (camz > bwz1): 2,3
+.n:    mov  ax,[camz]          ; north (camz > bwz1): 2,3
         cmp  ax,[bwz1]
-        jle  @@d
-        mov  word ptr [fa],2
-        mov  word ptr [fb],3
+        jle  .d
+        mov  word [fa],2
+        mov  word [fb],3
         call FACEV
         call FACEFILL
-@@d:    ret
+.d:    ret
 
 ; iterate visible vertical faces, stroking + windows on near ones
 VISSTROKE:
         mov  ax,[camx]
         cmp  ax,[bwx0]
-        jge  @@e
-        mov  word ptr [fa],3
-        mov  word ptr [fb],0
+        jge  .e
+        mov  word [fa],3
+        mov  word [fb],0
         call FACEV
         call FACESTROKE
         call WINMAYBE
-@@e:    mov  ax,[camx]
+.e:    mov  ax,[camx]
         cmp  ax,[bwx1]
-        jle  @@s
-        mov  word ptr [fa],1
-        mov  word ptr [fb],2
+        jle  .s
+        mov  word [fa],1
+        mov  word [fb],2
         call FACEV
         call FACESTROKE
         call WINMAYBE
-@@s:    mov  ax,[camz]
+.s:    mov  ax,[camz]
         cmp  ax,[bwz0]
-        jge  @@n
-        mov  word ptr [fa],0
-        mov  word ptr [fb],1
+        jge  .n
+        mov  word [fa],0
+        mov  word [fb],1
         call FACEV
         call FACESTROKE
         call WINMAYBE
-@@n:    mov  ax,[camz]
+.n:    mov  ax,[camz]
         cmp  ax,[bwz1]
-        jle  @@d
-        mov  word ptr [fa],2
-        mov  word ptr [fb],3
+        jle  .d
+        mov  word [fa],2
+        mov  word [fb],3
         call FACEV
         call FACESTROKE
         call WINMAYBE
-@@d:    ret
+.d:    ret
 
 ; windows only on near faces
 WINMAYBE:
         mov  ax,[minrz]
         cmp  ax,900
-        jg   @@x
+        jg   .x
         call WINFACE
-@@x:    ret
+.x:    ret
 
 ; ============================================================================
 ;  DRAW A 3D EDGE: near clip -> project -> line clip -> draw
 ; ============================================================================
 DRAWEDGE3D:
         call NEARCLIP
-        jc   @@skip
+        jc   .skip
         call PROJ2
         call CLIPLINE
-        jc   @@skip
+        jc   .skip
         call LINE
-@@skip: ret
+.skip: ret
 
 ; ----- near Z-plane clipping ------------------------------------------------
 NEARCLIP:
         mov  ax,[z0]
         cmp  ax,NEARZ
-        jge  @@p0in
+        jge  .p0in
         mov  bx,[z1]
         cmp  bx,NEARZ
-        jl   @@rej
+        jl   .rej
         call CLIPP0
         clc
         ret
-@@p0in: mov  bx,[z1]
+.p0in: mov  bx,[z1]
         cmp  bx,NEARZ
-        jge  @@both
+        jge  .both
         call CLIPP1
         clc
         ret
-@@both: clc
+.both: clc
         ret
-@@rej:  stc
+.rej:  stc
         ret
 
 CLIPP0: mov  bx,[z1]
@@ -838,17 +854,17 @@ CLIPP0: mov  bx,[z1]
         mov  [tden],bx
         mov  ax,[x1]
         sub  ax,[x0]
-        imul word ptr [tnum]
-        idiv word ptr [tden]
+        imul word [tnum]
+        idiv word [tden]
         add  ax,[x0]
         mov  [x0],ax
         mov  ax,[y1]
         sub  ax,[y0]
-        imul word ptr [tnum]
-        idiv word ptr [tden]
+        imul word [tnum]
+        idiv word [tden]
         add  ax,[y0]
         mov  [y0],ax
-        mov  word ptr [z0],NEARZ
+        mov  word [z0],NEARZ
         ret
 
 CLIPP1: mov  bx,[z0]
@@ -859,17 +875,17 @@ CLIPP1: mov  bx,[z0]
         mov  [tden],bx
         mov  ax,[x0]
         sub  ax,[x1]
-        imul word ptr [tnum]
-        idiv word ptr [tden]
+        imul word [tnum]
+        idiv word [tden]
         add  ax,[x1]
         mov  [x1],ax
         mov  ax,[y0]
         sub  ax,[y1]
-        imul word ptr [tnum]
-        idiv word ptr [tden]
+        imul word [tnum]
+        idiv word [tden]
         add  ax,[y1]
         mov  [y1],ax
-        mov  word ptr [z1],NEARZ
+        mov  word [z1],NEARZ
         ret
 
 ; ----- project both points --------------------------------------------------
@@ -889,12 +905,12 @@ PROJ2:  mov  ax,[x0]
 
 CLAMPAX:
         cmp  ax,4000
-        jle  @@a1
+        jle  .a1
         mov  ax,4000
-@@a1:   cmp  ax,-4000
-        jge  @@a2
+.a1:   cmp  ax,-4000
+        jge  .a2
         mov  ax,-4000
-@@a2:   ret
+.a2:   ret
 
 ; ============================================================================
 ;  SINQ  in: AX=angle (any, wrapped to 0..255 = full circle)
@@ -908,11 +924,11 @@ SINQ:   and  ax,255             ; wrap to one circle
         shr  bx,cl              ; bx = quadrant 0..3  (angle/64)
         and  ax,63              ; ax = idx within quadrant 0..63
         cmp  bx,0
-        je   @@q0
+        je   .q0
         cmp  bx,1
-        je   @@q1
+        je   .q1
         cmp  bx,2
-        je   @@q2
+        je   .q2
         ; q3: -SINT[64-idx]
         mov  bx,64
         sub  bx,ax
@@ -921,17 +937,17 @@ SINQ:   and  ax,255             ; wrap to one circle
         mov  ax,[SINT+si]
         neg  ax
         ret
-@@q0:   add  ax,ax
+.q0:   add  ax,ax
         mov  si,ax
         mov  ax,[SINT+si]
         ret
-@@q1:   mov  bx,64              ; SINT[64-idx]
+.q1:   mov  bx,64              ; SINT[64-idx]
         sub  bx,ax
         add  bx,bx
         mov  si,bx
         mov  ax,[SINT+si]
         ret
-@@q2:   add  ax,ax              ; -SINT[idx]
+.q2:   add  ax,ax              ; -SINT[idx]
         mov  si,ax
         mov  ax,[SINT+si]
         neg  ax
@@ -960,36 +976,36 @@ SETTRIG:
         ret
 
 ; ============================================================================
-;  ROTXZ  yaw-rotate world-relative (wdx,wdz) -> camera-space (rcx,rcz)
-;   in:  wdx,wdz (mem)   out: rcx,rcz (mem)   clobbers AX,BX,DX
-;   rcx = (wdx*hcos - wdz*hsin)/256 ;  rcz = (wdx*hsin + wdz*hcos)/256
+;  ROTXZ  yaw-rotate world-relative (wdx,wdz) -> camera-space (rc_x,rc_z)
+;   in:  wdx,wdz (mem)   out: rc_x,rc_z (mem)   clobbers AX,BX,DX
+;   rc_x = (wdx*hcos - wdz*hsin)/256 ;  rc_z = (wdx*hsin + wdz*hcos)/256
 ;   Each term: imul (->DX:AX) then idiv 256. Inputs are small view offsets
 ;   so |product| < ~500k (fits DX:AX) and |quotient| < ~3000 (fits 16-bit).
 ; ============================================================================
 ROTXZ:  mov  ax,[wdx]
-        imul word ptr [hcos]    ; DX:AX = wdx*cos*256
+        imul word [hcos]    ; DX:AX = wdx*cos*256
         mov  bx,256
         idiv bx                 ; AX = wdx*cos   (the *256 cancels)
-        mov  [rcx],ax
+        mov  [rc_x],ax
         mov  ax,[wdz]
-        imul word ptr [hsin]
+        imul word [hsin]
         mov  bx,256
         idiv bx
-        mov  bx,[rcx]
+        mov  bx,[rc_x]
         sub  bx,ax
-        mov  [rcx],bx
+        mov  [rc_x],bx
         mov  ax,[wdx]
-        imul word ptr [hsin]
+        imul word [hsin]
         mov  bx,256
         idiv bx
-        mov  [rcz],ax
+        mov  [rc_z],ax
         mov  ax,[wdz]
-        imul word ptr [hcos]
+        imul word [hcos]
         mov  bx,256
         idiv bx
-        mov  bx,[rcz]
+        mov  bx,[rc_z]
         add  bx,ax
-        mov  [rcz],bx
+        mov  [rc_z],bx
         ret
 
 ; ============================================================================
@@ -1005,12 +1021,12 @@ APPLYROLL:
         mov  [rddy],dx
         ; sx = 160 + (rddx*rcos - rddy*rsin)/256
         mov  ax,[rddx]
-        imul word ptr [rcos]
+        imul word [rcos]
         mov  bx,256
         idiv bx
         mov  si,ax
         mov  ax,[rddy]
-        imul word ptr [rsin]
+        imul word [rsin]
         mov  bx,256
         idiv bx
         mov  bx,si
@@ -1019,12 +1035,12 @@ APPLYROLL:
         mov  [rsxo],bx
         ; sy = 100 + (rddx*rsin + rddy*rcos)/256
         mov  ax,[rddx]
-        imul word ptr [rsin]
+        imul word [rsin]
         mov  bx,256
         idiv bx
         mov  si,ax
         mov  ax,[rddy]
-        imul word ptr [rcos]
+        imul word [rcos]
         mov  bx,256
         idiv bx
         mov  bx,si
@@ -1131,10 +1147,10 @@ FACETOPC:
 ; ============================================================================
 HBLD:   mov  ax,[gi]
         and  ax,3
-        jz   @@st              ; gi on an avenue -> street
+        jz   .st              ; gi on an avenue -> street
         mov  ax,[gj]
         and  ax,3
-        jz   @@st              ; gj on an avenue -> street
+        jz   .st              ; gj on an avenue -> street
         mov  ax,[gi]           ; hash = mix(gi*1973 + gj*9277)
         mov  bx,1973
         imul bx
@@ -1162,9 +1178,9 @@ HBLD:   mov  ax,[gi]
         mov  ax,dx
         add  ax,60              ; height 60..409 (respawn at 420 still clears it)
         mov  [bhgt2],ax
-        mov  word ptr [bstreet],0
+        mov  word [bstreet],0
         ret
-@@st:   mov  word ptr [bstreet],1
+.st:   mov  word [bstreet],1
         ret
 
 ; ============================================================================
@@ -1175,19 +1191,19 @@ WINFACE:
         ; require all 4 corners in front of near plane
         mov  ax,[IZ]
         cmp  ax,NEARZ
-        jl   @@ret
+        jl   .ret
         mov  ax,[IZ+2]
         cmp  ax,NEARZ
-        jl   @@ret
+        jl   .ret
         mov  ax,[IZ+4]
         cmp  ax,NEARZ
-        jl   @@ret
+        jl   .ret
         mov  ax,[IZ+6]
         cmp  ax,NEARZ
-        jl   @@ret
+        jl   .ret
         ; project 4 corners -> wqx/wqy
-        mov  word ptr [pk],0
-@@pj:   mov  si,[pk]
+        mov  word [pk],0
+.pj:   mov  si,[pk]
         add  si,si
         mov  ax,[IX+si]
         mov  dx,[IY+si]
@@ -1197,14 +1213,14 @@ WINFACE:
         add  si,si
         mov  [wqx+si],ax
         mov  [wqy+si],dx
-        inc  word ptr [pk]
+        inc  word [pk]
         mov  ax,[pk]
         cmp  ax,4
-        jl   @@pj
+        jl   .pj
         ; grid 3 cols x 5 rows, bilinear in screen space; each window = 3x3 px
-        mov  byte ptr [wr],0
-@@rl:   mov  byte ptr [wc],0
-@@cl:
+        mov  byte [wr],0
+.rl:   mov  byte [wc],0
+.cl:
         ; u = (2*wc+1)/6  -> work with numerator wfu over 6
         mov  al,[wc]
         cbw
@@ -1220,14 +1236,14 @@ WINFACE:
         ; top point = wq1 + (wq2-wq1)*u/6
         mov  ax,[wqx+4]
         sub  ax,[wqx+2]
-        imul word ptr [wfu]
+        imul word [wfu]
         mov  bx,6
         idiv bx
         add  ax,[wqx+2]
         mov  [sx0],ax           ; reuse sx0/sy0 = top
         mov  ax,[wqy+4]
         sub  ax,[wqy+2]
-        imul word ptr [wfu]
+        imul word [wfu]
         mov  bx,6
         idiv bx
         add  ax,[wqy+2]
@@ -1235,14 +1251,14 @@ WINFACE:
         ; bottom point = wq0 + (wq3-wq0)*u/6
         mov  ax,[wqx+6]
         sub  ax,[wqx]
-        imul word ptr [wfu]
+        imul word [wfu]
         mov  bx,6
         idiv bx
         add  ax,[wqx]
         mov  [sx1],ax           ; reuse sx1/sy1 = bottom
         mov  ax,[wqy+6]
         sub  ax,[wqy]
-        imul word ptr [wfu]
+        imul word [wfu]
         mov  bx,6
         idiv bx
         add  ax,[wqy]
@@ -1250,14 +1266,14 @@ WINFACE:
         ; px = top + (bottom-top)*v/8
         mov  ax,[sx1]
         sub  ax,[sx0]
-        imul word ptr [wfv]
+        imul word [wfv]
         mov  bx,10
         idiv bx
         add  ax,[sx0]
         mov  [wpx],ax
         mov  ax,[sy1]
         sub  ax,[sy0]
-        imul word ptr [wfv]
+        imul word [wfv]
         mov  bx,10
         idiv bx
         add  ax,[sy0]
@@ -1265,38 +1281,38 @@ WINFACE:
         ; bounds
         mov  ax,[wpx]
         cmp  ax,2
-        jl   @@wn
+        jl   .wn
         cmp  ax,317
-        jg   @@wn
+        jg   .wn
         mov  ax,[wpy]
         cmp  ax,2
-        jl   @@wn
+        jl   .wn
         cmp  ax,197
-        jg   @@wn
+        jg   .wn
         call WLIT2
-        jz   @@wn
-        mov  byte ptr [wbj],0       ; draw a 3x3 window block (bigger windows)
-@@wby:  mov  byte ptr [wbi],0
-@@wbx:  mov  al,[wbi]
+        jz   .wn
+        mov  byte [wbj],0       ; draw a 3x3 window block (bigger windows)
+.wby:  mov  byte [wbi],0
+.wbx:  mov  al,[wbi]
         cbw
         add  ax,[wpx]
         mov  bl,[wbj]
         xor  bh,bh
         add  bx,[wpy]
         call PUTPIXEL
-        inc  byte ptr [wbi]
-        cmp  byte ptr [wbi],3
-        jl   @@wbx
-        inc  byte ptr [wbj]
-        cmp  byte ptr [wbj],3
-        jl   @@wby
-@@wn:   inc  byte ptr [wc]
-        cmp  byte ptr [wc],3
-        jl   @@cl
-        inc  byte ptr [wr]
-        cmp  byte ptr [wr],5
-        jl   @@rl
-@@ret:  ret
+        inc  byte [wbi]
+        cmp  byte [wbi],3
+        jl   .wbx
+        inc  byte [wbj]
+        cmp  byte [wbj],3
+        jl   .wby
+.wn:   inc  byte [wc]
+        cmp  byte [wc],3
+        jl   .cl
+        inc  byte [wr]
+        cmp  byte [wr],5
+        jl   .rl
+.ret:  ret
 
 ; lit? hash from gi,gj,fa,wr,wc -> ZF=1 not lit else COLOR set
 WLIT2:  mov  ax,[gi]
@@ -1334,16 +1350,16 @@ WLIT2:  mov  ax,[gi]
         mov  bx,ax
         and  bx,7
         cmp  bx,3
-        jl   @@lit
+        jl   .lit
         xor  al,al
         ret
-@@lit:  mov  bx,ax
+.lit:  mov  bx,ax
         and  bx,31
-        jnz  @@cy
-        mov  byte ptr [COLOR],5
-        jmp  @@d
-@@cy:   mov  byte ptr [COLOR],4
-@@d:    mov  al,1
+        jnz  .cy
+        mov  byte [COLOR],5
+        jmp  .d
+.cy:   mov  byte [COLOR],4
+.d:    mov  al,1
         or   al,al
         ret
 
@@ -1355,43 +1371,43 @@ WLIT2:  mov  ax,[gi]
 ;  building you fly past get sliced cleanly instead of popping out of view.
 ; ============================================================================
 CLIPNEAR:
-        mov  word ptr [oc],0
-        mov  word ptr [ci],0
-@@cl:   mov  ax,[ci]
+        mov  word [oc],0
+        mov  word [ci],0
+.cl:   mov  ax,[ci]
         add  ax,2
         cmp  ax,8
-        jl   @@nw
+        jl   .nw
         xor  ax,ax
-@@nw:   mov  [ni],ax
+.nw:   mov  [ni],ax
         ; curIn -> dl, nextIn -> dh
         mov  si,[ci]
         mov  ax,[IZ+si]
         mov  dl,0
         cmp  ax,NEARZ
-        jl   @@a
+        jl   .a
         mov  dl,1
-@@a:    mov  si,[ni]
+.a:    mov  si,[ni]
         mov  ax,[IZ+si]
         mov  dh,0
         cmp  ax,NEARZ
-        jl   @@b
+        jl   .b
         mov  dh,1
-@@b:    test dl,dl
-        jz   @@nocur
+.b:    test dl,dl
+        jz   .nocur
         mov  si,[ci]
         call APPENDV
-@@nocur:
+.nocur:
         cmp  dl,dh
-        je   @@nois
+        je   .nois
         call APPENDISECT
-@@nois:
+.nois:
         mov  ax,[ci]
         add  ax,2
         cmp  ax,8
-        jge  @@end
+        jge  .end
         mov  [ci],ax
-        jmp  @@cl
-@@end:  mov  ax,[oc]
+        jmp  .cl
+.end:  mov  ax,[oc]
         mov  [NPOLY],ax
         ret
 
@@ -1405,7 +1421,7 @@ APPENDV:
         mov  [OY+di],ax
         mov  ax,[IZ+si]
         mov  [OZ+di],ax
-        inc  word ptr [oc]
+        inc  word [oc]
         ret
 
 ; append intersection of edge ci->ni with plane Z=NEARZ
@@ -1420,14 +1436,14 @@ APPENDISECT:
         mov  [tden],ax          ; den = z1 - z0  (nonzero)
         mov  ax,[IX+di]
         sub  ax,[IX+si]
-        imul word ptr [tnum]
-        idiv word ptr [tden]
+        imul word [tnum]
+        idiv word [tden]
         add  ax,[IX+si]
         push ax                 ; ox
         mov  ax,[IY+di]
         sub  ax,[IY+si]
-        imul word ptr [tnum]
-        idiv word ptr [tden]
+        imul word [tnum]
+        idiv word [tden]
         add  ax,[IY+si]
         push ax                 ; oy
         mov  di,[oc]
@@ -1436,14 +1452,14 @@ APPENDISECT:
         mov  [OY+di],ax
         pop  ax
         mov  [OX+di],ax
-        mov  word ptr [OZ+di],NEARZ
-        inc  word ptr [oc]
+        mov  word [OZ+di],NEARZ
+        inc  word [oc]
         ret
 
 ; project OX/OY/OZ[0..NPOLY-1] -> PX/PY
 PROJPOLY:
-        mov  word ptr [pk],0
-@@p:    mov  si,[pk]
+        mov  word [pk],0
+.p:    mov  si,[pk]
         add  si,si
         mov  ax,[OX+si]
         mov  dx,[OY+si]
@@ -1453,10 +1469,10 @@ PROJPOLY:
         add  si,si
         mov  [PX+si],ax
         mov  [PY+si],dx
-        inc  word ptr [pk]
+        inc  word [pk]
         mov  ax,[pk]
         cmp  ax,[NPOLY]
-        jl   @@p
+        jl   .p
         ret
 
 ; ============================================================================
@@ -1473,51 +1489,51 @@ SCANPOLY:
         mov  cx,[NPOLY]
         dec  cx
         mov  si,2
-@@mm:   mov  ax,[PY+si]
+.mm:   mov  ax,[PY+si]
         cmp  ax,[pminy]
-        jge  @@mm1
+        jge  .mm1
         mov  [pminy],ax
-@@mm1:  cmp  ax,[pmaxy]
-        jle  @@mm2
+.mm1:  cmp  ax,[pmaxy]
+        jle  .mm2
         mov  [pmaxy],ax
-@@mm2:  add  si,2
-        loop @@mm
+.mm2:  add  si,2
+        loop .mm
         mov  ax,[pminy]
         cmp  ax,0
-        jge  @@y0
+        jge  .y0
         xor  ax,ax
-@@y0:   mov  [scy],ax
+.y0:   mov  [scy],ax
         mov  ax,[pmaxy]
         cmp  ax,199
-        jle  @@y1
+        jle  .y1
         mov  ax,199
-@@y1:   mov  [scymax],ax
+.y1:   mov  [scymax],ax
         mov  ax,[scy]
         cmp  ax,[scymax]
-        jg   @@done
-@@yloop:
-        mov  word ptr [scxl],32767
-        mov  word ptr [scxr],-32768
+        jg   .done
+.yloop:
+        mov  word [scxl],32767
+        mov  word [scxr],-32768
         mov  cx,[NPOLY]
         xor  si,si
-@@eloop:
+.eloop:
         mov  di,si
         add  di,2
         mov  ax,[NPOLY]
         add  ax,ax
         cmp  di,ax
-        jl   @@nw2
+        jl   .nw2
         xor  di,di
-@@nw2:  mov  ax,[PY+si]
+.nw2:  mov  ax,[PY+si]
         mov  bx,[PY+di]
         cmp  ax,bx
-        jle  @@io
+        jle  .io
         xchg ax,bx
-@@io:   mov  dx,[scy]
+.io:   mov  dx,[scy]
         cmp  dx,ax
-        jl   @@enext
+        jl   .enext
         cmp  dx,bx
-        jge  @@enext
+        jge  .enext
         mov  ax,[PX+di]
         sub  ax,[PX+si]
         mov  bx,[scy]
@@ -1528,29 +1544,29 @@ SCANPOLY:
         idiv bx
         add  ax,[PX+si]
         cmp  ax,[scxl]
-        jge  @@nxl
+        jge  .nxl
         mov  [scxl],ax
-@@nxl:  cmp  ax,[scxr]
-        jle  @@enext
+.nxl:  cmp  ax,[scxr]
+        jle  .enext
         mov  [scxr],ax
-@@enext:
+.enext:
         add  si,2
-        loop @@eloop
+        loop .eloop
         mov  ax,[scxl]
         cmp  ax,[scxr]
-        jg   @@nextY
+        jg   .nextY
         cmp  ax,0
-        jge  @@fxl
+        jge  .fxl
         xor  ax,ax
-@@fxl:  mov  [scxl],ax
+.fxl:  mov  [scxl],ax
         mov  ax,[scxr]
         cmp  ax,319
-        jle  @@fxr
+        jle  .fxr
         mov  ax,319
-@@fxr:  mov  [scxr],ax
+.fxr:  mov  [scxr],ax
         mov  ax,[scxl]
         cmp  ax,[scxr]
-        jg   @@nextY
+        jg   .nextY
         mov  di,[scy]
         mov  cl,8
         shl  di,cl
@@ -1564,20 +1580,20 @@ SCANPOLY:
         inc  cx
         mov  al,[COLOR]
         rep  stosb
-@@nextY:
+.nextY:
         mov  ax,[scy]
         inc  ax
         mov  [scy],ax
         cmp  ax,[scymax]
-        jle  @@yloop
-@@done: ret
+        jle  .yloop
+.done: ret
 
 ; ============================================================================
 ;  STROKEPOLY: outline polygon PX/PY[0..NPOLY-1] with COLOR  (ES=bufseg)
 ; ============================================================================
 STROKEPOLY:
-        mov  word ptr [pk],0
-@@s:    mov  si,[pk]
+        mov  word [pk],0
+.s:    mov  si,[pk]
         add  si,si
         mov  ax,[PX+si]
         mov  [sx0],ax
@@ -1586,21 +1602,21 @@ STROKEPOLY:
         mov  ax,[pk]
         inc  ax
         cmp  ax,[NPOLY]
-        jl   @@nj
+        jl   .nj
         xor  ax,ax
-@@nj:   add  ax,ax
+.nj:   add  ax,ax
         mov  si,ax
         mov  ax,[PX+si]
         mov  [sx1],ax
         mov  ax,[PY+si]
         mov  [sy1],ax
         call CLIPLINE
-        jc   @@sk
+        jc   .sk
         call LINE
-@@sk:   inc  word ptr [pk]
+.sk:   inc  word [pk]
         mov  ax,[pk]
         cmp  ax,[NPOLY]
-        jl   @@s
+        jl   .s
         ret
 
 ; ============================================================================
@@ -1610,19 +1626,19 @@ FACEFILL:
         call CLIPNEAR
         mov  ax,[NPOLY]
         cmp  ax,3
-        jl   @@x
+        jl   .x
         call PROJPOLY
         call SCANPOLY
-@@x:    ret
+.x:    ret
 
 FACESTROKE:
         call CLIPNEAR
         mov  ax,[NPOLY]
         cmp  ax,2
-        jl   @@x
+        jl   .x
         call PROJPOLY
         call STROKEPOLY
-@@x:    ret
+.x:    ret
 
 ; ============================================================================
 ;  SCREEN LINE CLIPPING (Cohen-Sutherland), rect 0..319 x 0..199
@@ -1632,20 +1648,20 @@ OUTCODE:                        ; in: AX=x, BX=y -> AL=code
         push cx
         xor  cl,cl
         cmp  ax,0
-        jge  @@c1
+        jge  .c1
         or   cl,1
-        jmp  @@c2
-@@c1:   cmp  ax,319
-        jle  @@c2
+        jmp  .c2
+.c1:   cmp  ax,319
+        jle  .c2
         or   cl,2
-@@c2:   cmp  bx,0
-        jge  @@c3
+.c2:   cmp  bx,0
+        jge  .c3
         or   cl,8
-        jmp  @@c4
-@@c3:   cmp  bx,199
-        jle  @@c4
+        jmp  .c4
+.c3:   cmp  bx,199
+        jle  .c4
         or   cl,4
-@@c4:   mov  al,cl
+.c4:   mov  al,cl
         pop  cx
         ret
 
@@ -1658,21 +1674,21 @@ CLIPLINE:
         mov  bx,[sy1]
         call OUTCODE
         mov  [oc1],al
-@@iter: mov  al,[oc0]
+.iter: mov  al,[oc0]
         or   al,[oc1]
-        jnz  @@nacc
+        jnz  .nacc
         clc
         ret
-@@nacc: mov  al,[oc0]
+.nacc: mov  al,[oc0]
         and  al,[oc1]
-        jz   @@clip
+        jz   .clip
         stc
         ret
-@@clip: mov  al,[oc0]
+.clip: mov  al,[oc0]
         test al,al
-        jnz  @@use0
+        jnz  .use0
         mov  al,[oc1]
-@@use0: mov  [ocsel],al
+.use0: mov  [ocsel],al
         mov  ax,[sx1]
         sub  ax,[sx0]
         mov  [cdx],ax
@@ -1681,50 +1697,50 @@ CLIPLINE:
         mov  [cdy],ax
         mov  al,[ocsel]
         test al,8
-        jnz  @@top
+        jnz  .top
         test al,4
-        jnz  @@bot
+        jnz  .bot
         test al,2
-        jnz  @@right
+        jnz  .right
         ; LEFT: x=0
         mov  ax,[sx0]
         neg  ax
-        imul word ptr [cdy]
-        idiv word ptr [cdx]
+        imul word [cdy]
+        idiv word [cdx]
         add  ax,[sy0]
         mov  [ny],ax
-        mov  word ptr [nx],0
-        jmp  @@apply
-@@right:                        ; x=319
+        mov  word [nx],0
+        jmp  .apply
+.right:                        ; x=319
         mov  ax,319
         sub  ax,[sx0]
-        imul word ptr [cdy]
-        idiv word ptr [cdx]
+        imul word [cdy]
+        idiv word [cdx]
         add  ax,[sy0]
         mov  [ny],ax
-        mov  word ptr [nx],319
-        jmp  @@apply
-@@top:                          ; y=0
+        mov  word [nx],319
+        jmp  .apply
+.top:                          ; y=0
         mov  ax,[sy0]
         neg  ax
-        imul word ptr [cdx]
-        idiv word ptr [cdy]
+        imul word [cdx]
+        idiv word [cdy]
         add  ax,[sx0]
         mov  [nx],ax
-        mov  word ptr [ny],0
-        jmp  @@apply
-@@bot:                          ; y=199
+        mov  word [ny],0
+        jmp  .apply
+.bot:                          ; y=199
         mov  ax,199
         sub  ax,[sy0]
-        imul word ptr [cdx]
-        idiv word ptr [cdy]
+        imul word [cdx]
+        idiv word [cdy]
         add  ax,[sx0]
         mov  [nx],ax
-        mov  word ptr [ny],199
-@@apply:
+        mov  word [ny],199
+.apply:
         mov  al,[oc0]
         test al,al
-        jz   @@setp1
+        jz   .setp1
         mov  ax,[nx]
         mov  [sx0],ax
         mov  ax,[ny]
@@ -1733,8 +1749,8 @@ CLIPLINE:
         mov  bx,[sy0]
         call OUTCODE
         mov  [oc0],al
-        jmp  @@iter
-@@setp1:
+        jmp  .iter
+.setp1:
         mov  ax,[nx]
         mov  [sx1],ax
         mov  ax,[ny]
@@ -1743,7 +1759,7 @@ CLIPLINE:
         mov  bx,[sy1]
         call OUTCODE
         mov  [oc1],al
-        jmp  @@iter
+        jmp  .iter
 
 ; ============================================================================
 ;  LINE (Bresenham)   in: sx0,sy0,sx1,sy1, COLOR   ; ES=bufseg
@@ -1751,18 +1767,18 @@ CLIPLINE:
 LINE:
         mov  ax,[sx1]
         sub  ax,[sx0]
-        mov  word ptr [lsx],1
-        jns  @@dxp
+        mov  word [lsx],1
+        jns  .dxp
         neg  ax
-        mov  word ptr [lsx],-1
-@@dxp:  mov  [ldx],ax
+        mov  word [lsx],-1
+.dxp:  mov  [ldx],ax
         mov  ax,[sy1]
         sub  ax,[sy0]
-        mov  word ptr [lsy],1
-        jns  @@dyp
+        mov  word [lsy],1
+        jns  .dyp
         neg  ax
-        mov  word ptr [lsy],-1
-@@dyp:  neg  ax
+        mov  word [lsy],-1
+.dyp:  neg  ax
         mov  [ldy],ax
         mov  ax,[ldx]
         add  ax,[ldy]
@@ -1771,37 +1787,37 @@ LINE:
         mov  [lx],ax
         mov  ax,[sy0]
         mov  [ly],ax
-@@loop:
+.loop:
         mov  ax,[lx]
         mov  bx,[ly]
         call PUTPIXEL
         mov  ax,[lx]
         cmp  ax,[sx1]
-        jne  @@cont
+        jne  .cont
         mov  ax,[ly]
         cmp  ax,[sy1]
-        jne  @@cont
+        jne  .cont
         ret
-@@cont: mov  ax,[lerr]
+.cont: mov  ax,[lerr]
         add  ax,ax
         mov  bx,ax              ; e2
         cmp  bx,[ldy]
-        jl   @@sx
+        jl   .sx
         mov  ax,[lerr]
         add  ax,[ldy]
         mov  [lerr],ax
         mov  ax,[lx]
         add  ax,[lsx]
         mov  [lx],ax
-@@sx:   cmp  bx,[ldx]
-        jg   @@sy
+.sx:   cmp  bx,[ldx]
+        jg   .sy
         mov  ax,[lerr]
         add  ax,[ldx]
         mov  [lerr],ax
         mov  ax,[ly]
         add  ax,[lsy]
         mov  [ly],ax
-@@sy:   jmp  @@loop
+.sy:   jmp  .loop
 
 ; ============================================================================
 ;  PUTPIXEL  in: AX=x, BX=y, COLOR   ; ES=bufseg   (preserves registers)
@@ -1821,7 +1837,7 @@ PUTPIXEL:
         add  di,dx
         add  di,ax              ; +x
         mov  dl,[COLOR]
-        mov  es:[di],dl
+        mov  [es:di],dl
         pop  di
         pop  dx
         pop  cx
@@ -1832,21 +1848,21 @@ PUTPIXEL:
 ; ============================================================================
 ;  CROSSHAIR in screen center  ; ES=bufseg
 ; ============================================================================
-CROSS:  mov  byte ptr [COLOR],8
-        mov  word ptr [sx0],150
-        mov  word ptr [sy0],100
-        mov  word ptr [sx1],157
-        mov  word ptr [sy1],100
+CROSS:  mov  byte [COLOR],8
+        mov  word [sx0],150
+        mov  word [sy0],100
+        mov  word [sx1],157
+        mov  word [sy1],100
         call LINE
-        mov  word ptr [sx0],163
-        mov  word ptr [sy0],100
-        mov  word ptr [sx1],170
-        mov  word ptr [sy1],100
+        mov  word [sx0],163
+        mov  word [sy0],100
+        mov  word [sx1],170
+        mov  word [sy1],100
         call LINE
-        mov  word ptr [sx0],160
-        mov  word ptr [sy0],92
-        mov  word ptr [sx1],160
-        mov  word ptr [sy1],98
+        mov  word [sx0],160
+        mov  word [sy0],92
+        mov  word [sx1],160
+        mov  word [sy1],98
         call LINE
         ret
 
@@ -1854,74 +1870,74 @@ CROSS:  mov  byte ptr [COLOR],8
 ;  INPUT  (via KEYS table) -> update camera
 ; ============================================================================
 ; turn (yaw) + bank (roll) + climb + auto-advance along heading
-INPUT:  mov  word ptr [tmpi],0  ; tmpi = turn direction (-1/0/+1)
-        cmp  byte ptr [KEYS+SC_LF],0
-        je   @@nl
+INPUT:  mov  word [tmpi],0  ; tmpi = turn direction (-1/0/+1)
+        cmp  byte [KEYS+SC_LF],0
+        je   .nl
         mov  ax,[heading]       ; turn left
         sub  ax,TURNV
         and  ax,255
         mov  [heading],ax
-        mov  word ptr [tmpi],-1
-@@nl:   cmp  byte ptr [KEYS+SC_RT],0
-        je   @@nr
+        mov  word [tmpi],-1
+.nl:   cmp  byte [KEYS+SC_RT],0
+        je   .nr
         mov  ax,[heading]       ; turn right
         add  ax,TURNV
         and  ax,255
         mov  [heading],ax
-        mov  word ptr [tmpi],1
-@@nr:   ; bank toward target (roll follows turn, decays to 0)
+        mov  word [tmpi],1
+.nr:   ; bank toward target (roll follows turn, decays to 0)
         mov  ax,[tmpi]
         test ax,ax
-        jz   @@decay
-        jg   @@bankr
+        jz   .decay
+        jg   .bankr
         ; bank left: roll -> -BANKMAX
         mov  ax,[roll]
         sub  ax,BANKSTP
         cmp  ax,-BANKMAX
-        jge  @@bset
+        jge  .bset
         mov  ax,-BANKMAX
-        jmp  @@bset
-@@bankr:
+        jmp  .bset
+.bankr:
         mov  ax,[roll]
         add  ax,BANKSTP
         cmp  ax,BANKMAX
-        jle  @@bset
+        jle  .bset
         mov  ax,BANKMAX
-        jmp  @@bset
-@@decay:
+        jmp  .bset
+.decay:
         mov  ax,[roll]          ; return roll toward 0
         test ax,ax
-        jz   @@bset
-        jg   @@dpos
+        jz   .bset
+        jg   .dpos
         add  ax,BANKSTP
         cmp  ax,0
-        jle  @@bset
+        jle  .bset
         xor  ax,ax
-        jmp  @@bset
-@@dpos: sub  ax,BANKSTP
+        jmp  .bset
+.dpos: sub  ax,BANKSTP
         cmp  ax,0
-        jge  @@bset
+        jge  .bset
         xor  ax,ax
-@@bset: mov  [roll],ax
+.bset: mov  [roll],ax
         ; climb / descend
-        cmp  byte ptr [KEYS+SC_UP],0
-        je   @@nu
+        cmp  byte [KEYS+SC_UP],0
+        je   .nu
         mov  ax,[camy]
         add  ax,STEPY
         mov  [camy],ax
-@@nu:   cmp  byte ptr [KEYS+SC_DN],0
-        je   @@nd
+.nu:   cmp  byte [KEYS+SC_DN],0
+        je   .nd
         mov  ax,[camy]
         sub  ax,STEPY
         mov  [camy],ax
-@@nd:   mov  ax,[camy]          ; clamp camy [24,420]
+.nd:   mov  ax,[camy]          ; clamp camy [24,420]
         cmp  ax,24
-        jge  @@y1
+        jge  .y1
         mov  ax,24
-@@y1:   cmp  ax,420
-        jle  @@y2
+.y1:   cmp  ax,420
+        jle  .y2
         mov  ax,420
-@@y2:   mov  [camy],ax
+.y2:   mov  [camy],ax
         ; advance along heading. Forward world vector = (hsin,hcos)/256, so
         ; camx += SPEED*hsin/256 ; camz += SPEED*hcos/256 (fixed-point: the
         ; *256 in hsin/hcos is removed by the idiv 256). |step| <= SPEED.
@@ -1956,7 +1972,7 @@ COLLIDE:
         call HBLD
         mov  ax,[bstreet]
         test ax,ax
-        jnz  @@nocol            ; street -> no building here
+        jnz  .nocol            ; street -> no building here
         ; cell center
         mov  ax,[gi]
         mov  cl,8
@@ -1974,24 +1990,24 @@ COLLIDE:
         mov  ax,[camx]
         sub  ax,[wcx]
         cmp  ax,0
-        jge  @@a1
+        jge  .a1
         neg  ax
-@@a1:   cmp  ax,[bhw]
-        jge  @@nocol
+.a1:   cmp  ax,[bhw]
+        jge  .nocol
         ; |camz-cz| < bhd ?
         mov  ax,[camz]
         sub  ax,[wcz]
         cmp  ax,0
-        jge  @@a2
+        jge  .a2
         neg  ax
-@@a2:   cmp  ax,[bhd]
-        jge  @@nocol
+.a2:   cmp  ax,[bhd]
+        jge  .nocol
         ; below roof?
         mov  ax,[camy]
         cmp  ax,[bhgt2]
-        jge  @@nocol            ; above roof -> safe
+        jge  .nocol            ; above roof -> safe
         call CRASHHANDLE
-@@nocol:
+.nocol:
         ret
 
 CRASHHANDLE:
@@ -2003,46 +2019,46 @@ CRASHHANDLE:
         mov  cx,32000
         rep  stosw
         ; messages (white text)
-        mov  byte ptr [HCOL],8
+        mov  byte [HCOL],8
         mov  ah,02h
         mov  bh,0
         mov  dh,11
         mov  dl,13
         int  10h
-        mov  si,offset MSGCRASH
+        mov  si,MSGCRASH
         call PRSTR
         mov  ah,02h
         mov  bh,0
         mov  dh,13
         mov  dl,12
         int  10h
-        mov  si,offset MSGREST
+        mov  si,MSGREST
         call PRSTR
-@@w1:   cmp  byte ptr [KEYS+SC_SP],0
-        je   @@w1
-        mov  word ptr [camy],420   ; respawn ABOVE the city (max bldg height 355)
-        mov  word ptr [roll],0     ; so we don't reappear inside the same tower
-@@w2:   cmp  byte ptr [KEYS+SC_SP],0
-        jne  @@w2
+.w1:   cmp  byte [KEYS+SC_SP],0
+        je   .w1
+        mov  word [camy],420   ; respawn ABOVE the city (max bldg height 355)
+        mov  word [roll],0     ; so we don't reappear inside the same tower
+.w2:   cmp  byte [KEYS+SC_SP],0
+        jne  .w2
         ret
 
 ; ============================================================================
 ;  HUD (BIOS text overlay on top of the frame)
 ; ============================================================================
-HUD:    mov  byte ptr [HCOL],8
+HUD:    mov  byte [HCOL],8
         mov  ah,02h
         mov  bh,0
         mov  dh,0
         mov  dl,0
         int  10h
-        mov  si,offset MSGTITLE
+        mov  si,MSGTITLE
         call PRSTR
         mov  ah,02h
         mov  bh,0
         mov  dh,0
         mov  dl,28
         int  10h
-        mov  si,offset MSGALT
+        mov  si,MSGALT
         call PRSTR
         mov  ax,[camy]
         call PRNUM
@@ -2051,20 +2067,20 @@ HUD:    mov  byte ptr [HCOL],8
         mov  dh,24
         mov  dl,0
         int  10h
-        mov  si,offset MSGHDG
+        mov  si,MSGHDG
         call PRSTR
         mov  ax,[heading]
         call PRNUM
-        mov  si,offset MSGHELP
+        mov  si,MSGHELP
         call PRSTR
         ret
 
 PRSTR:  lodsb
         test al,al
-        jz   @@e
+        jz   .e
         call PRCH
         jmp  PRSTR
-@@e:    ret
+.e:    ret
 
 PRCH:   mov  ah,0Eh
         mov  bl,[HCOL]
@@ -2074,17 +2090,17 @@ PRCH:   mov  ah,0Eh
 
 PRNUM:  mov  cx,0
         mov  bx,10
-@@d:    xor  dx,dx
+.d:    xor  dx,dx
         div  bx
         push dx
         inc  cx
         test ax,ax
-        jnz  @@d
-@@p:    pop  dx
+        jnz  .d
+.p:    pop  dx
         add  dl,'0'
         mov  al,dl
         call PRCH
-        loop @@p
+        loop .p
         ret
 
 ; ============================================================================
@@ -2092,5 +2108,3 @@ PRNUM:  mov  cx,0
 ; ============================================================================
 KEYS    db 128 dup(0)
 
-CODE    ENDS
-        END START

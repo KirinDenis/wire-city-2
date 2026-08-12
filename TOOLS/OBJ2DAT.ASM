@@ -29,63 +29,63 @@
 ;  and the game maps slots onto free DAC registers at load time.
 ;  PALnn material names still mean absolute palette indices, no trailer.
 ; ============================================================================
-BUFSZ   equ 512
-MAXV    equ 255
-MAXF    equ 300
+BUFSZ   = 512
+MAXV    = 255
+MAXF    = 300
 
-        .8086
-        LOCALS
-        JUMPS
-CODE    SEGMENT
-        ASSUME cs:CODE, ds:CODE, es:CODE, ss:CODE
-        ORG  100h
+format binary as 'com'
+        org 100h
+
+        ; .8086 in the TASM source. FASM has no such directive - without this
+        ; include it silently uses 386 jumps when a target is out of range.
+        include '..\ENGINE\E_8086.INC'
 
 START:  cld
         call PARSECMD
-        mov  dx,offset INFILE
+        mov  dx,INFILE
         mov  ax,3D00h           ; open input, read only
         int  21h
-        jc   @@eop
+        jc   .eop
         mov  [infh],ax
         jmp  MAINLP
-@@eop:  mov  dx,offset EOPEN
+.eop:  mov  dx,EOPEN
         jmp  FAIL
 
 ; ==================== the line loop: v / f / usemtl ========================
-MAINLP: cmp  byte ptr [feof],0
+MAINLP: cmp  byte [feof],0
         jne  DONE
         call GETTOK
         jc   DONE
         cmp  cx,1
-        jne  @@try6
+        jne  .try6
         mov  al,[TOKBUF]
         cmp  al,'v'
         je   DOVERT
         cmp  al,'f'
         je   DOFACE
-        jmp  @@skip
-@@try6: cmp  cx,6
-        jne  @@skip
-        mov  si,offset TOKBUF
-        mov  di,offset SUSEM
+        jmp  .skip
+.try6: cmp  cx,6
+        jne  .skip
+        mov  si,TOKBUF
+        mov  di,SUSEM
         mov  cx,6
         repe cmpsb
         je   DOMTL
-        mov  si,offset TOKBUF
-        mov  di,offset SMTLL
+        mov  si,TOKBUF
+        mov  di,SMTLL
         mov  cx,6
         repe cmpsb
-        jne  @@skip
+        jne  .skip
         call DOMTLIB
-@@skip: call SKIPLN
+.skip: call SKIPLN
         jmp  MAINLP
 
 ; ---- v x y z ---------------------------------------------------------------
-DOVERT: cmp  word ptr [nv],MAXV
-        jb   @@room
-        mov  dx,offset EMANY
+DOVERT: cmp  word [nv],MAXV
+        jb   .room
+        mov  dx,EMANY
         jmp  FAIL
-@@room: call PARSEF
+.room: call PARSEF
         mov  [tvx],ax
         call PARSEF
         mov  [tvy],ax
@@ -103,28 +103,28 @@ DOVERT: cmp  word ptr [nv],MAXV
         mov  [VTAB+bx+2],ax
         mov  ax,[tvz]
         mov  [VTAB+bx+4],ax
-        inc  word ptr [nv]
+        inc  word [nv]
         call SKIPLN
         jmp  MAINLP
 
 ; ---- f a b c [d]  (each may be a/b/c groups - the tail is skipped) ---------
-DOFACE: cmp  word ptr [nf],MAXF
-        jb   @@room
-        mov  dx,offset EMANYF
+DOFACE: cmp  word [nf],MAXF
+        jb   .room
+        mov  dx,EMANYF
         jmp  FAIL
-@@room: mov  word ptr [fcnt],0
-@@corn: call SKIPSP
-        jc   @@fin
+.room: mov  word [fcnt],0
+.corn: call SKIPSP
+        jc   .fin
         cmp  al,13
-        je   @@fin
+        je   .fin
         cmp  al,10
-        je   @@fin
+        je   .fin
         cmp  al,'0'
-        jb   @@bad
+        jb   .bad
         cmp  al,'9'
-        ja   @@bad
+        ja   .bad
         xor  bx,bx              ; the corner index, decimal
-@@dig:  sub  al,'0'
+.dig:  sub  al,'0'
         xor  ah,ah
         mov  di,ax
         mov  ax,bx
@@ -133,31 +133,31 @@ DOFACE: cmp  word ptr [nf],MAXF
         add  ax,di
         mov  bx,ax
         call GETCH
-        jc   @@store
+        jc   .store
         cmp  al,'0'
-        jb   @@tail
+        jb   .tail
         cmp  al,'9'
-        ja   @@tail
-        jmp  @@dig
-@@tail: cmp  al,' '             ; swallow /vt/vn until a separator
-        je   @@store
+        ja   .tail
+        jmp  .dig
+.tail: cmp  al,' '             ; swallow /vt/vn until a separator
+        je   .store
         cmp  al,9
-        je   @@store
+        je   .store
         cmp  al,13
-        je   @@eol
+        je   .eol
         cmp  al,10
-        je   @@eol
+        je   .eol
         call GETCH
-        jc   @@store
-        jmp  @@tail
-@@eol:  mov  [pback],al
-@@store:
+        jc   .store
+        jmp  .tail
+.eol:  mov  [pback],al
+.store:
         dec  bx                 ; OBJ is 1-based; 0 wraps and fails the test
         cmp  bx,[nv]
-        jae  @@bad
+        jae  .bad
         mov  ax,[fcnt]
         cmp  ax,4
-        jae  @@bad              ; a fifth corner: not our polygon
+        jae  .bad              ; a fifth corner: not our polygon
         mov  di,[nf]
         mov  ax,di
         add  di,di
@@ -166,64 +166,64 @@ DOFACE: cmp  word ptr [nf],MAXF
         add  di,[fcnt]
         mov  ax,bx
         mov  [FTAB+di],al
-        inc  word ptr [fcnt]
-        jmp  @@corn
-@@fin:  cmp  word ptr [fcnt],3
-        jb   @@bad
+        inc  word [fcnt]
+        jmp  .corn
+.fin:  cmp  word [fcnt],3
+        jb   .bad
         mov  di,[nf]
         mov  ax,di
         add  di,di
         add  di,di
         add  di,ax              ; *5
-        cmp  word ptr [fcnt],3
-        jne  @@quad
+        cmp  word [fcnt],3
+        jne  .quad
         mov  al,[FTAB+di+2]     ; triangle = quad, last corner doubled
         mov  [FTAB+di+3],al
-@@quad: mov  al,[curcol]
+.quad: mov  al,[curcol]
         mov  [FTAB+di+4],al
-        inc  word ptr [nf]
+        inc  word [nf]
         jmp  MAINLP
-@@bad:  mov  dx,offset EFACE
+.bad:  mov  dx,EFACE
         jmp  FAIL
 
 ; ---- usemtl: PALnn = absolute index, an MTL name = 80h + palette slot ------
 DOMTL:  call SKIPSP
-        jc   @@dml
-        mov  di,offset TOKB2
+        jc   .dml
+        mov  di,TOKB2
         xor  cx,cx
-@@ac:   cmp  cx,15
-        jae  @@nx
+.ac:   cmp  cx,15
+        jae  .nx
         mov  [di],al
         inc  di
         inc  cx
-@@nx:   call GETCH
-        jc   @@fin
+.nx:   call GETCH
+        jc   .fin
         cmp  al,' '
-        je   @@tm
+        je   .tm
         cmp  al,9
-        je   @@tm
+        je   .tm
         cmp  al,13
-        je   @@tm
+        je   .tm
         cmp  al,10
-        je   @@tm
-        jmp  @@ac
-@@tm:   mov  [pback],al
-@@fin:  mov  byte ptr [di],0
-        cmp  byte ptr [TOKB2],'P'
-        jne  @@srch
-        cmp  byte ptr [TOKB2+1],'A'
-        jne  @@srch
-        cmp  byte ptr [TOKB2+2],'L'
-        jne  @@srch
+        je   .tm
+        jmp  .ac
+.tm:   mov  [pback],al
+.fin:  mov  byte [di],0
+        cmp  byte [TOKB2],'P'
+        jne  .srch
+        cmp  byte [TOKB2+1],'A'
+        jne  .srch
+        cmp  byte [TOKB2+2],'L'
+        jne  .srch
         xor  bx,bx
-        mov  si,offset TOKB2+3
-@@dig:  lodsb
+        mov  si,TOKB2+3
+.dig:  lodsb
         or   al,al
-        jz   @@setp
+        jz   .setp
         cmp  al,'0'
-        jb   @@setp
+        jb   .setp
         cmp  al,'9'
-        ja   @@setp
+        ja   .setp
         sub  al,'0'
         xor  ah,ah
         push ax
@@ -233,71 +233,71 @@ DOMTL:  call SKIPSP
         mov  bx,ax
         pop  ax
         add  bx,ax
-        jmp  @@dig
-@@setp: cmp  bx,127
-        ja   @@dfl
+        jmp  .dig
+.setp: cmp  bx,127
+        ja   .dfl
         mov  ax,bx
         mov  [curcol],al
-        jmp  @@dml
-@@srch: xor  bx,bx              ; look the name up in the MTL table
-@@s1:   cmp  bx,[nmtl]
-        jae  @@dfl
+        jmp  .dml
+.srch: xor  bx,bx              ; look the name up in the MTL table
+.s1:   cmp  bx,[nmtl]
+        jae  .dfl
         mov  ax,bx
         mov  cl,4
         shl  ax,cl
-        mov  si,offset MTLN
+        mov  si,MTLN
         add  si,ax
-        mov  di,offset TOKB2
-@@s2:   mov  al,[si]
+        mov  di,TOKB2
+.s2:   mov  al,[si]
         cmp  al,[di]
-        jne  @@s3
+        jne  .s3
         or   al,al
-        jz   @@hit
+        jz   .hit
         inc  si
         inc  di
-        jmp  @@s2
-@@s3:   inc  bx
-        jmp  @@s1
-@@hit:  mov  ax,bx
+        jmp  .s2
+.s3:   inc  bx
+        jmp  .s1
+.hit:  mov  ax,bx
         or   al,80h
         mov  [curcol],al
-        jmp  @@dml
-@@dfl:  mov  byte ptr [curcol],20
-@@dml:  call SKIPLN
+        jmp  .dml
+.dfl:  mov  byte [curcol],20
+.dml:  call SKIPLN
         jmp  MAINLP
 
 ; ---- mtllib: parse the palette out of the material library -----------------
 DOMTLIB:
-        mov  si,offset INFILE   ; the MTL sits next to the OBJ
-        mov  di,offset MTLF
+        mov  si,INFILE   ; the MTL sits next to the OBJ
+        mov  di,MTLF
         mov  bx,di
-@@cp:   lodsb
+.cp:   lodsb
         or   al,al
-        jz   @@cpd
+        jz   .cpd
         mov  [di],al
         inc  di
         cmp  al,'\'
-        jne  @@cp
+        jne  .cp
         mov  bx,di
-        jmp  @@cp
-@@cpd:  mov  di,bx
+        jmp  .cp
+.cpd:  mov  di,bx
         call SKIPSP
-        jc   @@out
-@@nc:   mov  [di],al
+        jc   .out
+.nc:   mov  [di],al
         inc  di
         call GETCH
-        jc   @@nz
+        jc   .nz
         cmp  al,' '
-        je   @@nz
+        je   .nz
         cmp  al,9
-        je   @@nz
+        je   .nz
         cmp  al,13
-        je   @@nz0
+        je   .nz0
         cmp  al,10
-        je   @@nz0
-        jmp  @@nc
-@@nz0:  mov  [pback],al
-@@nz:   mov  byte ptr [di],0
+        je   .nz0
+        jmp  .nc
+.nz0:  mov  [pback],al
+.nz:   mov  byte [di],0
         mov  ax,[infh]          ; park the OBJ stream: remember the
         mov  [sinfh],ax         ; FILE position (the buffer will hold
         mov  bx,ax              ; MTL bytes) and seek back later
@@ -315,71 +315,71 @@ DOMTLIB:
         mov  [spback],al
         mov  al,[feof]
         mov  [sfeof],al
-        mov  byte ptr [pback],0
-        mov  byte ptr [feof],0
+        mov  byte [pback],0
+        mov  byte [feof],0
         xor  ax,ax
         mov  [blen],ax
         mov  [bpos],ax
-        mov  dx,offset MTLF
+        mov  dx,MTLF
         mov  ax,3D00h
         int  21h
-        jc   @@rst
+        jc   .rst
         mov  [infh],ax
         mov  ax,[scale]         ; Kd floats are 0..1: scale by 63
         mov  [sscale],ax
-        mov  word ptr [scale],63
-@@mt:   cmp  byte ptr [feof],0
-        jne  @@mfin
+        mov  word [scale],63
+.mt:   cmp  byte [feof],0
+        jne  .mfin
         call GETTOK
-        jc   @@mfin
+        jc   .mfin
         cmp  cx,6
-        jne  @@kd
-        mov  si,offset TOKBUF
-        mov  di,offset SNEWM
+        jne  .kd
+        mov  si,TOKBUF
+        mov  di,SNEWM
         mov  cx,6
         repe cmpsb
-        jne  @@skl
-        cmp  word ptr [nmtl],16
-        jae  @@skl
+        jne  .skl
+        cmp  word [nmtl],16
+        jae  .skl
         call SKIPSP
-        jc   @@mfin
+        jc   .mfin
         push ax
         mov  ax,[nmtl]
         mov  cl,4
         shl  ax,cl
-        mov  di,offset MTLN
+        mov  di,MTLN
         add  di,ax
         pop  ax
         mov  cx,15
-@@n1:   mov  [di],al
+.n1:   mov  [di],al
         inc  di
         call GETCH
-        jc   @@n2
+        jc   .n2
         cmp  al,' '
-        je   @@n2
+        je   .n2
         cmp  al,9
-        je   @@n2
+        je   .n2
         cmp  al,13
-        je   @@n3
+        je   .n3
         cmp  al,10
-        je   @@n3
-        loop @@n1
-@@n3:   mov  [pback],al
-@@n2:   mov  byte ptr [di],0
-        inc  word ptr [nmtl]
-        jmp  @@skl
-@@kd:   cmp  cx,2
-        jne  @@skl
-        cmp  word ptr [TOKBUF],644Bh    ; 'K','d'
-        jne  @@skl
+        je   .n3
+        loop .n1
+.n3:   mov  [pback],al
+.n2:   mov  byte [di],0
+        inc  word [nmtl]
+        jmp  .skl
+.kd:   cmp  cx,2
+        jne  .skl
+        cmp  word [TOKBUF],644Bh    ; 'K','d'
+        jne  .skl
         mov  ax,[nmtl]
         or   ax,ax
-        jz   @@skl
+        jz   .skl
         dec  ax
         mov  bx,ax
         add  bx,ax
         add  bx,ax
-        add  bx,offset MRGB
+        add  bx,MRGB
         push bx
         call PARSEF
         call CLAMP63
@@ -395,14 +395,14 @@ DOMTLIB:
         call CLAMP63
         pop  bx
         mov  [bx+2],al
-@@skl:  call SKIPLN
-        jmp  @@mt
-@@mfin: mov  bx,[infh]
+.skl:  call SKIPLN
+        jmp  .mt
+.mfin: mov  bx,[infh]
         mov  ah,3Eh
         int  21h
         mov  ax,[sscale]
         mov  [scale],ax
-@@rst:  mov  ax,[sinfh]
+.rst:  mov  ax,[sinfh]
         mov  [infh],ax
         mov  bx,ax
         mov  dx,[sblen]         ; pos.lo
@@ -416,19 +416,19 @@ DOMTLIB:
         mov  [pback],al
         mov  al,[sfeof]
         mov  [feof],al
-@@out:  ret
+.out:  ret
 
 CLAMP63:
         or   ax,ax
-        jns  @@c1
+        jns  .c1
         xor  ax,ax
-@@c1:   cmp  ax,63
-        jle  @@c2
+.c1:   cmp  ax,63
+        jle  .c2
         mov  ax,63
-@@c2:   ret
+.c2:   ret
 
 ; =================== write the DAT and report =============================
-DONE:   mov  dx,offset OUTFILE
+DONE:   mov  dx,OUTFILE
         xor  cx,cx
         mov  ah,3Ch             ; create output
         int  21h
@@ -440,47 +440,47 @@ DONE:   mov  dx,offset OUTFILE
         mov  [HDRNF],ax
         mov  bx,[outfh]
         mov  cx,6
-        mov  dx,offset HDRMAG
+        mov  dx,HDRMAG
         call WRITE
         mov  ax,[nv]
         mov  cx,6
         mul  cx
         mov  cx,ax
-        mov  dx,offset VTAB
+        mov  dx,VTAB
         call WRITE
         mov  ax,[nf]
         mov  cx,5
         mul  cx
         mov  cx,ax
-        mov  dx,offset FTAB
+        mov  dx,FTAB
         call WRITE
         mov  ax,[nmtl]
         or   ax,ax
-        jz   @@npal
-        mov  byte ptr [PHDR],'P'
+        jz   .npal
+        mov  byte [PHDR],'P'
         mov  [PHDR+1],al
         mov  cx,2
-        mov  dx,offset PHDR
+        mov  dx,PHDR
         call WRITE
         mov  ax,[nmtl]
         mov  cx,ax
         add  cx,ax
         add  cx,ax
-        mov  dx,offset MRGB
+        mov  dx,MRGB
         call WRITE
-@@npal: mov  ah,3Eh
+.npal: mov  ah,3Eh
         int  21h
-        mov  dx,offset RPT1
+        mov  dx,RPT1
         mov  ah,9
         int  21h
         mov  ax,[nv]
         call PDEC
-        mov  dx,offset RPT2
+        mov  dx,RPT2
         mov  ah,9
         int  21h
         mov  ax,[nf]
         call PDEC
-        mov  dx,offset RPT3
+        mov  dx,RPT3
         mov  ah,9
         int  21h
         mov  ax,4C00h
@@ -492,7 +492,7 @@ WRITE:  mov  ah,40h             ; write CX bytes at DX, die on short write
         cmp  ax,cx
         jne  WFAIL
         ret
-WFAIL:  mov  dx,offset EWRITE
+WFAIL:  mov  dx,EWRITE
 FAIL:   mov  ah,9
         int  21h
         mov  ax,4C01h
@@ -502,60 +502,60 @@ FAIL:   mov  ah,9
 ; GETCH - next byte in AL, honouring one pushed-back char; CF=1 at EOF
 GETCH:  mov  al,[pback]
         or   al,al
-        jz   @@rd
-        mov  byte ptr [pback],0
+        jz   .rd
+        mov  byte [pback],0
         clc
         ret
-@@rd:   push bx
+.rd:   push bx
         mov  bx,[bpos]
         cmp  bx,[blen]
-        jb   @@have
+        jb   .have
         push cx
         push dx
         mov  ah,3Fh
         mov  bx,[infh]
         mov  cx,BUFSZ
-        mov  dx,offset FBUF
+        mov  dx,FBUF
         int  21h
         pop  dx
         pop  cx
-        jc   @@eof
+        jc   .eof
         or   ax,ax
-        jz   @@eof
+        jz   .eof
         mov  [blen],ax
         xor  bx,bx
-@@have: mov  al,[FBUF+bx]
+.have: mov  al,[FBUF+bx]
         inc  bx
         mov  [bpos],bx
         pop  bx
         clc
         ret
-@@eof:  mov  byte ptr [feof],1
+.eof:  mov  byte [feof],1
         pop  bx
         stc
         ret
 
 ; SKIPSP - skip blanks, first other char in AL; CF=1 at EOF
 SKIPSP: call GETCH
-        jc   @@out
+        jc   .out
         cmp  al,' '
         je   SKIPSP
         cmp  al,9
         je   SKIPSP
         clc
-@@out:  ret
+.out:  ret
 
 ; SKIPLN - consume up to and including the next LF
 SKIPLN: call GETCH
-        jc   @@out
+        jc   .out
         cmp  al,10
         jne  SKIPLN
-@@out:  ret
+.out:  ret
 
 ; GETTOK - next token at a line start into TOKBUF (CX = length, CF = EOF);
 ; the terminating char is pushed back
 GETTOK: call GETCH
-        jc   @@eof
+        jc   .eof
         cmp  al,' '
         je   GETTOK
         cmp  al,9
@@ -564,49 +564,49 @@ GETTOK: call GETCH
         je   GETTOK
         cmp  al,10
         je   GETTOK
-        mov  di,offset TOKBUF
+        mov  di,TOKBUF
         xor  cx,cx
-@@acc:  cmp  cx,15
-        jae  @@next
+.acc:  cmp  cx,15
+        jae  .next
         mov  [di],al
         inc  di
         inc  cx
-@@next: call GETCH
-        jc   @@fin
+.next: call GETCH
+        jc   .fin
         cmp  al,' '
-        je   @@term
+        je   .term
         cmp  al,9
-        je   @@term
+        je   .term
         cmp  al,13
-        je   @@term
+        je   .term
         cmp  al,10
-        je   @@term
-        jmp  @@acc
-@@term: mov  [pback],al
-@@fin:  mov  byte ptr [di],0
+        je   .term
+        jmp  .acc
+.term: mov  [pback],al
+.fin:  mov  byte [di],0
         clc
         ret
-@@eof:  stc
+.eof:  stc
         ret
 
 ; PARSEF - one signed decimal number, AX = round(value * scale).
 ; Fraction kept as numerator SI / denominator DI, 4 digits max, then
 ; scaled through a 32-bit intermediate: (frac*scale + den/2) / den.
 PARSEF: call SKIPSP
-        jc   @@zero
-        mov  byte ptr [fneg],0
+        jc   .zero
+        mov  byte [fneg],0
         cmp  al,'-'
-        jne  @@int0
-        mov  byte ptr [fneg],1
+        jne  .int0
+        mov  byte [fneg],1
         call GETCH
-        jc   @@zero
-@@int0: xor  bx,bx              ; integer part
+        jc   .zero
+.int0: xor  bx,bx              ; integer part
         xor  si,si              ; fraction numerator
         mov  di,1               ; fraction denominator
-@@idig: cmp  al,'0'
-        jb   @@iend
+.idig: cmp  al,'0'
+        jb   .iend
         cmp  al,'9'
-        ja   @@iend
+        ja   .iend
         sub  al,'0'
         xor  ah,ah
         push ax
@@ -617,18 +617,18 @@ PARSEF: call SKIPSP
         pop  ax
         add  bx,ax
         call GETCH
-        jc   @@calc
-        jmp  @@idig
-@@iend: cmp  al,'.'
-        jne  @@push
-@@fdig: call GETCH
-        jc   @@calc
+        jc   .calc
+        jmp  .idig
+.iend: cmp  al,'.'
+        jne  .push
+.fdig: call GETCH
+        jc   .calc
         cmp  al,'0'
-        jb   @@push
+        jb   .push
         cmp  al,'9'
-        ja   @@push
+        ja   .push
         cmp  di,10000
-        jae  @@fdig             ; digits past four: noise, ignored
+        jae  .fdig             ; digits past four: noise, ignored
         sub  al,'0'
         xor  ah,ah
         push ax
@@ -641,74 +641,74 @@ PARSEF: call SKIPSP
         mov  ax,di
         mul  cx
         mov  di,ax
-        jmp  @@fdig
-@@push: mov  [pback],al
-@@calc: mov  ax,bx
-        mul  word ptr [scale]
+        jmp  .fdig
+.push: mov  [pback],al
+.calc: mov  ax,bx
+        mul  word [scale]
         or   dx,dx
-        jnz  @@ovf
+        jnz  .ovf
         mov  cx,ax
         cmp  di,1
-        je   @@sign
+        je   .sign
         mov  ax,si
-        mul  word ptr [scale]
+        mul  word [scale]
         mov  bx,di
         shr  bx,1
         add  ax,bx              ; round half away from zero
         adc  dx,0
         div  di
         add  cx,ax
-@@sign: cmp  cx,32000
-        ja   @@ovf
+.sign: cmp  cx,32000
+        ja   .ovf
         mov  ax,cx
-        cmp  byte ptr [fneg],0
-        je   @@out
+        cmp  byte [fneg],0
+        je   .out
         neg  ax
-@@out:  ret
-@@zero: xor  ax,ax
+.out:  ret
+.zero: xor  ax,ax
         ret
-@@ovf:  mov  dx,offset EOVF
+.ovf:  mov  dx,EOVF
         jmp  FAIL
 
 ; PDEC - AX in decimal to the console
 PDEC:   xor  cx,cx
         mov  bx,10
-@@div:  xor  dx,dx
+.div:  xor  dx,dx
         div  bx
         push dx
         inc  cx
         or   ax,ax
-        jnz  @@div
-@@out:  pop  dx
+        jnz  .div
+.out:  pop  dx
         add  dl,'0'
         mov  ah,2
         int  21h
-        loop @@out
+        loop .out
         ret
 
 ; ==================== the command line =====================================
 PARSECMD:
         mov  si,81h
-        mov  di,offset INFILE
+        mov  di,INFILE
         call CPTOK
         or   cx,cx
-        jz   @@use
-        mov  di,offset OUTFILE
+        jz   .use
+        mov  di,OUTFILE
         call CPTOK
         or   cx,cx
-        jz   @@use
-@@sksp: lodsb                   ; optional third token: the scale
+        jz   .use
+.sksp: lodsb                   ; optional third token: the scale
         cmp  al,' '
-        je   @@sksp
+        je   .sksp
         cmp  al,9
-        je   @@sksp
+        je   .sksp
         cmp  al,13
-        je   @@dflt
+        je   .dflt
         xor  bx,bx
-@@dig:  cmp  al,'0'
-        jb   @@set
+.dig:  cmp  al,'0'
+        jb   .set
         cmp  al,'9'
-        ja   @@set
+        ja   .set
         sub  al,'0'
         xor  ah,ah
         push ax
@@ -719,41 +719,41 @@ PARSECMD:
         pop  ax
         add  bx,ax
         lodsb
-        jmp  @@dig
-@@set:  or   bx,bx
-        jz   @@use
+        jmp  .dig
+.set:  or   bx,bx
+        jz   .use
         cmp  bx,999
-        ja   @@use
+        ja   .use
         mov  [scale],bx
-@@dflt: ret
-@@use:  mov  dx,offset EUSAGE
+.dflt: ret
+.use:  mov  dx,EUSAGE
         jmp  FAIL
 
 ; CPTOK - copy one blank-delimited token from SI to DI, CX = length
 CPTOK:  xor  cx,cx
-@@skip: lodsb
+.skip: lodsb
         cmp  al,' '
-        je   @@skip
+        je   .skip
         cmp  al,9
-        je   @@skip
+        je   .skip
         cmp  al,13
-        je   @@none
-@@copy: mov  [di],al
+        je   .none
+.copy: mov  [di],al
         inc  di
         inc  cx
         lodsb
         cmp  al,' '
-        je   @@stop
+        je   .stop
         cmp  al,9
-        je   @@stop
+        je   .stop
         cmp  al,13
-        je   @@stop
-        jmp  @@copy
-@@stop: dec  si                 ; the terminator stays for the next token
-        mov  byte ptr [di],0
+        je   .stop
+        jmp  .copy
+.stop: dec  si                 ; the terminator stays for the next token
+        mov  byte [di],0
         ret
-@@none: dec  si
-        mov  byte ptr [di],0
+.none: dec  si
+        mov  byte [di],0
         ret
 
 ; ==================== state and tables =====================================
@@ -807,5 +807,3 @@ FBUF    db BUFSZ dup(0)
 VTAB    dw MAXV*3 dup(0)
 FTAB    db MAXF*5 dup(0)
 
-CODE    ENDS
-        END START

@@ -14,14 +14,14 @@ KBINT:  push ax
         and  al,7Fh
         mov  bl,al
         xor  bh,bh
-        mov  di,offset KEYS
+        mov  di,KEYS
         add  di,bx
         test ah,80h
-        jnz  @@brk
-        mov  byte ptr [di],1
-        jmp  @@eoi
-@@brk:  mov  byte ptr [di],0
-@@eoi:  mov  al,20h
+        jnz  .brk
+        mov  byte [di],1
+        jmp  .eoi
+.brk:  mov  byte [di],0
+.eoi:  mov  al,20h
         out  20h,al
         pop  ds
         pop  di

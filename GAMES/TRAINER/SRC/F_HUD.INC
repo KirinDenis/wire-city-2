@@ -4,16 +4,16 @@
 ; ============================================================================
 ;  HUDTXT - speeds, states, warnings, the crash banner
 ; ============================================================================
-HUDTXT: mov  byte ptr [tcol],9
-        mov  si,offset MSGH
+HUDTXT: mov  byte [tcol],9
+        mov  si,MSGH
         mov  ax,4
         mov  bx,8
         call TXT
-        mov  si,offset MSGH2
+        mov  si,MSGH2
         mov  ax,14
         mov  bx,4
         call TXT
-        mov  si,offset MSPD
+        mov  si,MSPD
         mov  ax,186
         mov  bx,8
         call TXT
@@ -21,7 +21,7 @@ HUDTXT: mov  byte ptr [tcol],9
         mov  bx,42
         mov  dx,186
         call TXTNUM
-        mov  si,offset MALT
+        mov  si,MALT
         mov  ax,186
         mov  bx,78
         call TXT
@@ -29,7 +29,7 @@ HUDTXT: mov  byte ptr [tcol],9
         mov  bx,112
         mov  dx,186
         call TXTNUM
-        mov  si,offset MTHR
+        mov  si,MTHR
         mov  ax,186
         mov  bx,150
         call TXT
@@ -37,7 +37,7 @@ HUDTXT: mov  byte ptr [tcol],9
         mov  bx,184
         mov  dx,186
         call TXTNUM
-        mov  si,offset MFLP
+        mov  si,MFLP
         mov  ax,186
         mov  bx,214
         call TXT
@@ -46,69 +46,69 @@ HUDTXT: mov  byte ptr [tcol],9
         mov  dx,186
         call TXTNUM
         ; gear / brakes flags
-        cmp  word ptr [gear],1
-        jne  @@g0
-        mov  si,offset MGDN
+        cmp  word [gear],1
+        jne  .g0
+        mov  si,MGDN
         mov  ax,186
         mov  bx,254
         call TXT
-@@g0:   cmp  word ptr [brk],0
-        je   @@b0
-        mov  byte ptr [tcol],2
-        mov  si,offset MBRK
+.g0:   cmp  word [brk],0
+        je   .b0
+        mov  byte [tcol],2
+        mov  si,MBRK
         mov  ax,186
         mov  bx,288
         call TXT
-@@b0:   ; wind readout
-        mov  byte ptr [tcol],9
-        mov  si,offset MWND
+.b0:   ; wind readout
+        mov  byte [tcol],9
+        mov  si,MWND
         mov  ax,176
         mov  bx,8
         call TXT
         mov  ax,[wind]
         or   ax,ax
-        jns  @@wp
+        jns  .wp
         neg  ax
-@@wp:   mov  bx,50
+.wp:   mov  bx,50
         mov  dx,176
         call TXTNUM
         ; ---- warnings blink mid-screen ----
         mov  ax,[ltick]
         test ax,4
-        jz   @@dead
-        mov  byte ptr [tcol],2
-        test word ptr [wrn],1
-        jz   @@x1
-        mov  si,offset MWST
+        jz   .dead
+        mov  byte [tcol],2
+        test word [wrn],1
+        jz   .x1
+        mov  si,MWST
         mov  ax,60
         mov  bx,136
         call TXT
-@@x1:   test word ptr [wrn],2
-        jz   @@x2
-        mov  si,offset MWGR
+.x1:   test word [wrn],2
+        jz   .x2
+        mov  si,MWGR
         mov  ax,72
         mov  bx,140
         call TXT
-@@x2:   test word ptr [wrn],4
-        jz   @@x3
-        mov  si,offset MWFA
+.x2:   test word [wrn],4
+        jz   .x3
+        mov  si,MWFA
         mov  ax,84
         mov  bx,124
         call TXT
-@@x3:   test word ptr [wrn],8
-        jz   @@dead
-        mov  si,offset MWOF
+.x3:   test word [wrn],8
+        jz   .dead
+        mov  si,MWOF
         mov  ax,96
         mov  bx,128
         call TXT
-@@dead: cmp  word ptr [dead],0
-        je   @@x
-        mov  byte ptr [tcol],2
-        mov  si,offset MCRS
+.dead: cmp  word [dead],0
+        je   .x
+        mov  byte [tcol],2
+        mov  si,MCRS
         mov  ax,90
         mov  bx,96
         call TXT
-@@x:    ret
+.x:    ret
 
 ; ---- the AVIO kit ----------------------------------------------------------
 ROW320: mov  bx,ax
@@ -122,16 +122,16 @@ ROW320: mov  bx,ax
 
 TXTNUM: push bx
         push dx
-        mov  di,offset NBUF+5
-        mov  byte ptr [di],0
+        mov  di,NBUF+5
+        mov  byte [di],0
         mov  cx,10
-@@d:    dec  di
+.d:    dec  di
         xor  dx,dx
         div  cx
         add  dl,'0'
         mov  [di],dl
         or   ax,ax
-        jnz  @@d
+        jnz  .d
         mov  si,di
         pop  ax
         pop  bx
@@ -149,9 +149,9 @@ TXT:    push es
         mul  cx
         add  ax,bx
         mov  di,ax
-@@ch:   lodsb
+.ch:   lodsb
         or   al,al
-        jz   @@done
+        jz   .done
         push si
         xor  ah,ah
         mov  cl,3
@@ -163,35 +163,35 @@ TXT:    push es
         mov  ds,ax
         mov  cx,8
         push di
-@@row:  lodsb
+.row:  lodsb
         mov  ah,al
         push cx
         mov  cx,8
-@@px:   shl  ah,1
-        jnc  @@np
-        mov  al,cs:[tcol]
-        mov  es:[di],al
-@@np:   inc  di
-        loop @@px
+.px:   shl  ah,1
+        jnc  .np
+        mov  al,[cs:tcol]
+        mov  [es:di],al
+.np:   inc  di
+        loop .px
         add  di,320-8
         pop  cx
-        loop @@row
+        loop .row
         pop  di
         pop  ds
         pop  si
         add  di,8
-        jmp  @@ch
-@@done: pop  dx
+        jmp  .ch
+.done: pop  dx
         pop  es
         ret
 
 WAITVR: mov  dx,3DAh
-@@w1:   in   al,dx
+.w1:   in   al,dx
         test al,8
-        jnz  @@w1
-@@w2:   in   al,dx
+        jnz  .w1
+.w2:   in   al,dx
         test al,8
-        jz   @@w2
+        jz   .w2
         ret
 
 ; ---- data ------------------------------------------------------------------

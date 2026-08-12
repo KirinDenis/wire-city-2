@@ -4,33 +4,33 @@
 ; ============================================================================
 DRAWEDGE3D:
         call NEARCLIP
-        jc   @@skip
+        jc   .skip
         call PROJ2
         call CLIPLINE
-        jc   @@skip
+        jc   .skip
         call LINE
-@@skip: ret
+.skip: ret
 
 ; ----- near Z-plane clipping ------------------------------------------------
 NEARCLIP:
         mov  ax,[z0]
         cmp  ax,NEARZ
-        jge  @@p0in
+        jge  .p0in
         mov  bx,[z1]
         cmp  bx,NEARZ
-        jl   @@rej
+        jl   .rej
         call CLIPP0
         clc
         ret
-@@p0in: mov  bx,[z1]
+.p0in: mov  bx,[z1]
         cmp  bx,NEARZ
-        jge  @@both
+        jge  .both
         call CLIPP1
         clc
         ret
-@@both: clc
+.both: clc
         ret
-@@rej:  stc
+.rej:  stc
         ret
 
 CLIPP0: mov  bx,[z1]
@@ -41,17 +41,17 @@ CLIPP0: mov  bx,[z1]
         mov  [tden],bx
         mov  ax,[x1]
         sub  ax,[x0]
-        imul word ptr [tnum]
-        idiv word ptr [tden]
+        imul word [tnum]
+        idiv word [tden]
         add  ax,[x0]
         mov  [x0],ax
         mov  ax,[y1]
         sub  ax,[y0]
-        imul word ptr [tnum]
-        idiv word ptr [tden]
+        imul word [tnum]
+        idiv word [tden]
         add  ax,[y0]
         mov  [y0],ax
-        mov  word ptr [z0],NEARZ
+        mov  word [z0],NEARZ
         ret
 
 CLIPP1: mov  bx,[z0]
@@ -62,17 +62,17 @@ CLIPP1: mov  bx,[z0]
         mov  [tden],bx
         mov  ax,[x0]
         sub  ax,[x1]
-        imul word ptr [tnum]
-        idiv word ptr [tden]
+        imul word [tnum]
+        idiv word [tden]
         add  ax,[x1]
         mov  [x1],ax
         mov  ax,[y0]
         sub  ax,[y1]
-        imul word ptr [tnum]
-        idiv word ptr [tden]
+        imul word [tnum]
+        idiv word [tden]
         add  ax,[y1]
         mov  [y1],ax
-        mov  word ptr [z1],NEARZ
+        mov  word [z1],NEARZ
         ret
 
 ; ----- project both points --------------------------------------------------

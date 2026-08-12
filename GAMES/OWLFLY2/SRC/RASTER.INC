@@ -12,23 +12,23 @@
 ; bank > 45 deg) a standby horizon appears where the real one is, clamped
 ; near the ring. Hidden in the cinema views. Uses the LERPED trig: called
 ; from inside RENDER, so it is as smooth as the world.
-CROSS:  cmp  byte ptr [chsview],0
-        jne  @@no
-        cmp  byte ptr [tgtcam],0
-        jne  @@no
-        cmp  byte ptr [dying],0
-        jne  @@no
-        cmp  byte ptr [mcact],0
-        jne  @@no
-        cmp  byte ptr [mslcam],0 ; armed: a little amber M on the glass
-        je   @@noarm
-        mov  byte ptr [COLOR],97
-        mov  word ptr [ftx],8
-        mov  word ptr [fty],14
-        mov  si,offset MSGM2
+CROSS:  cmp  byte [chsview],0
+        jne  .no
+        cmp  byte [tgtcam],0
+        jne  .no
+        cmp  byte [dying],0
+        jne  .no
+        cmp  byte [mcact],0
+        jne  .no
+        cmp  byte [mslcam],0 ; armed: a little amber M on the glass
+        je   .noarm
+        mov  byte [COLOR],97
+        mov  word [ftx],8
+        mov  word [fty],14
+        mov  si,MSGM2
         call FDRAW
-@@noarm:
-        mov  byte ptr [COLOR],8
+.noarm:
+        mov  byte [COLOR],8
         ; ---- levelled bar: two segments along (rcos,rsin) ----
         mov  ax,[rcos]
         mov  bx,4
@@ -67,9 +67,9 @@ CROSS:  cmp  byte ptr [chsview],0
         add  ax,[cty]
         mov  [sy1],ax
         call CLIPLINE
-        jc   @@l2
+        jc   .l2
         call LINE
-@@l2:   mov  ax,160             ; left wing
+.l2:   mov  ax,160             ; left wing
         sub  ax,[dsx]
         mov  [sx0],ax
         mov  ax,[horiz]
@@ -82,9 +82,9 @@ CROSS:  cmp  byte ptr [chsview],0
         sub  ax,[cty]
         mov  [sy1],ax
         call CLIPLINE
-        jc   @@l3
+        jc   .l3
         call LINE
-@@l3:   ; the sky tick: perp=(-rsin,rcos), the sky always sits at -perp
+.l3:   ; the sky tick: perp=(-rsin,rcos), the sky always sits at -perp
         mov  ax,[rsin]
         mov  bx,6
         imul bx
@@ -124,42 +124,42 @@ CROSS:  cmp  byte ptr [chsview],0
         add  ax,[cty]
         mov  [sy1],ax
         call CLIPLINE
-        jc   @@sb
+        jc   .sb
         call LINE
-@@sb:   ; ---- standby horizon: only when the real one left the glass ----
+.sb:   ; ---- standby horizon: only when the real one left the glass ----
         mov  ax,[pitch]
         or   ax,ax
-        jns  @@p1
+        jns  .p1
         neg  ax
-@@p1:   cmp  ax,16
-        jge  @@show
+.p1:   cmp  ax,16
+        jge  .show
         mov  ax,[roll]          ; bank = distance from wings-level
         cmp  ax,128
-        jbe  @@b1
+        jbe  .b1
         neg  ax
         add  ax,256
-@@b1:   cmp  ax,32
-        jl   @@no
-@@show: mov  ax,[pofs]          ; where the real horizon is, clamped in
+.b1:   cmp  ax,32
+        jl   .no
+.show: mov  ax,[pofs]          ; where the real horizon is, clamped in
         mov  bx,6
         cwd
         idiv bx
         cmp  ax,26
-        jle  @@c1
+        jle  .c1
         mov  ax,26
-@@c1:   cmp  ax,-26
-        jge  @@c2
+.c1:   cmp  ax,-26
+        jge  .c2
         mov  ax,-26
-@@c2:   mov  [dsac],ax
+.c2:   mov  [dsac],ax
         mov  ax,[rsin]          ; centre = (160,100) + perp*offset
-        imul word ptr [dsac]
+        imul word [dsac]
         mov  bx,256
         idiv bx
         neg  ax
         add  ax,160
         mov  [ctx],ax
         mov  ax,[rcos]
-        imul word ptr [dsac]
+        imul word [dsac]
         mov  bx,256
         idiv bx
         add  ax,[horiz]
@@ -189,6 +189,6 @@ CROSS:  cmp  byte ptr [chsview],0
         add  ax,[dsy]
         mov  [sy1],ax
         call CLIPLINE
-        jc   @@no
+        jc   .no
         call LINE
-@@no:   ret
+.no:   ret

@@ -97,7 +97,18 @@ bands for the same reason.
 
 ## Building and flying it
 
-    MAKE.BAT              (or: MAKE.BAT NEWTON from the repo root)
+Mount the repository in DOSBox and, in this folder:
+
+```
+MAKE            assemble  ->  NEWTON.COM
+RUN             fly it
+```
+
+The assembler is [flat assembler](https://flatassembler.net/) in `TOOLS/FASM`,
+in this repository and free to pass on. From Windows, `MAKEWIN` and `RUNWIN`
+drive the same build through DOSBox; `MAKEWIN CHECK` accounts for every byte
+of the difference against the Turbo Assembler build frozen in
+[`TASM/NEWTON`](../../TASM/NEWTON).
 
 Debugging is the same rig the rest of the project uses — the umbilical
 is `SRC\N_DEBUG.INC`, COM1 bridged to TCP:

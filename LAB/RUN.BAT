@@ -1,9 +1,22 @@
 @echo off
-REM RUN.BAT - the house lab in DOSBox. Build it first: MAKE LAB from the
-REM repo root. -noautoexec is not optional: without it DOSBox runs the
-REM machine's own autoexec (a file manager, on this one) and every -c
-REM below is buried under it.
-cd /d %~dp0..
-if exist LOCAL.BAT call .\LOCAL.BAT
-if "%DOSBOX%"=="" set DOSBOX=dosbox.exe
-"%DOSBOX%" -noautoexec -c "config -set cycles=30000" -c "mount c %CD%" -c "c:" -c "cd LAB" -c "HOUSE" -c "exit"
+REM ============================================================================
+REM RUN.BAT - the house lab, from inside DOS.
+REM
+REM   cd LAB
+REM   RUN
+REM
+REM One city block that holds still, and a camera to walk round it. The game's
+REM own cells and rasteriser, with nothing flying - which is what makes it the
+REM place to develop windows, textures and explosions.
+REM
+REM   ESC   quit
+REM ============================================================================
+if not exist HOUSE.COM goto missing
+HOUSE.COM
+goto end
+
+:missing
+echo.
+echo HOUSE.COM is not built. Type MAKE first.
+
+:end

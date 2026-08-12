@@ -15,7 +15,7 @@ PLANE3D:
         add  ax,64
         call SINQ
         mov  [mcos],ax
-        mov  ax,[rol]           ; ...roll...
+        mov  ax,[rll]           ; ...roll...
         and  ax,255
         push ax
         call SINQ
@@ -36,7 +36,7 @@ PLANE3D:
         mov  [pcs],ax
         xor  si,si
         xor  di,di
-@@tv:   mov  ax,[MDLVT+si]
+.tv:   mov  ax,[MDLVT+si]
         mov  [mx],ax
         mov  ax,[MDLVT+si+2]
         mov  [my],ax
@@ -52,10 +52,10 @@ PLANE3D:
         add  si,6
         add  di,2
         cmp  si,[mvend]
-        jb   @@tv
+        jb   .tv
         ; faces far -> near, then fill (world verts -> camera per corner)
         xor  si,si
-@@fd:   mov  bx,si
+.fd:   mov  bx,si
         add  bx,bx
         add  bx,bx
         add  bx,si
@@ -72,7 +72,7 @@ PLANE3D:
         mov  [wdz],ax
         call ROTXZ
         pop  si
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  bx,si
         add  bx,bx
         mov  [FCD+bx],ax
@@ -80,28 +80,28 @@ PLANE3D:
         mov  [FCO+bx],ax
         inc  si
         cmp  si,[mdlnf]
-        jb   @@fd
+        jb   .fd
         mov  cx,[nfm1]          ; bubble far -> near
-        jcxz @@nsrt
-@@bs:   push cx
+        jcxz .nsrt
+.bs:   push cx
         xor  si,si
-@@bi:   mov  bx,si
+.bi:   mov  bx,si
         add  bx,bx
         mov  ax,[FCD+bx]
         cmp  ax,[FCD+bx+2]
-        jge  @@ns
+        jge  .ns
         xchg ax,[FCD+bx+2]
         mov  [FCD+bx],ax
         mov  ax,[FCO+bx]
         xchg ax,[FCO+bx+2]
         mov  [FCO+bx],ax
-@@ns:   inc  si
+.ns:   inc  si
         cmp  si,[nfm1]
-        jb   @@bi
+        jb   .bi
         pop  cx
-        loop @@bs
-@@nsrt: mov  word ptr [pfc],0
-@@df:   mov  bx,[pfc]
+        loop .bs
+.nsrt: mov  word [pfc],0
+.df:   mov  bx,[pfc]
         add  bx,bx
         mov  ax,[FCO+bx]
         mov  bx,ax
@@ -112,7 +112,7 @@ PLANE3D:
         mov  al,[MDLFC+bx+4]
         mov  [COLOR],al
         xor  cx,cx
-@@dc:   pop  bx
+.dc:   pop  bx
         push bx
         mov  si,cx
         mov  al,[MDLFC+bx+si]
@@ -133,28 +133,28 @@ PLANE3D:
         pop  cx
         mov  di,cx
         add  di,di
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [IX+di],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [IZ+di],ax
         mov  ax,[t1]
         mov  [IY+di],ax
         inc  cx
         cmp  cx,4
-        jb   @@dc
+        jb   .dc
         pop  bx
         call FACEFILL
-        inc  word ptr [pfc]
+        inc  word [pfc]
         mov  ax,[pfc]
         cmp  ax,[mdlnf]
-        jb   @@df
+        jb   .df
         ; ---- the gear: three dark struts under the belly ----
-        cmp  word ptr [gear],1
-        jne  @@ng
-        mov  byte ptr [COLOR],16
-        mov  si,offset GSTRUT
+        cmp  word [gear],1
+        jne  .ng
+        mov  byte [COLOR],16
+        mov  si,GSTRUT
         mov  cx,3
-@@gs:   push cx
+.gs:   push cx
         push si
         lodsw
         mov  [gu],ax            ; strut u (left-right)
@@ -164,7 +164,7 @@ PLANE3D:
         ; matrix as the airframe - banked wings carry their wheels along
         mov  ax,[gu]
         mov  [mx],ax
-        mov  word ptr [my],-1
+        mov  word [my],-1
         mov  ax,[gv]
         mov  [mz],ax
         call MXFORM
@@ -176,7 +176,7 @@ PLANE3D:
         mov  ax,[gu]
         add  ax,2
         mov  [mx],ax
-        mov  word ptr [my],-1
+        mov  word [my],-1
         mov  ax,[gv]
         mov  [mz],ax
         call MXFORM
@@ -188,7 +188,7 @@ PLANE3D:
         mov  ax,[gu]
         add  ax,2
         mov  [mx],ax
-        mov  word ptr [my],-4
+        mov  word [my],-4
         mov  ax,[gv]
         mov  [mz],ax
         call MXFORM
@@ -199,7 +199,7 @@ PLANE3D:
         call PUTV2
         mov  ax,[gu]
         mov  [mx],ax
-        mov  word ptr [my],-4
+        mov  word [my],-4
         mov  ax,[gv]
         mov  [mz],ax
         call MXFORM
@@ -212,8 +212,8 @@ PLANE3D:
         pop  si
         add  si,4
         pop  cx
-        loop @@gs
-@@ng:   ret
+        loop .gs
+.ng:   ret
 
 GSTRUT  dw   0, 14              ; nose strut (u,v in MODEL units)
         dw  -6, -2              ; main left
@@ -224,22 +224,22 @@ GSTRUT  dw   0, 14              ; nose strut (u,v in MODEL units)
 ;  (sines set up by PLANE3D) plus the aircraft position -> [wx],[wy],[wz].
 ;  GH lifts the airframe onto its gear.
 ; ============================================================================
-GH      equ 4
+GH      = 4
 MXFORM: mov  ax,[mx]            ; roll about the fuselage axis
-        imul word ptr [rcs]
+        imul word [rcs]
         mov  cx,ax
         mov  ax,[my]
-        imul word ptr [rsn]
+        imul word [rsn]
         add  ax,cx
         cwd
         mov  bx,256
         idiv bx
         mov  [m1],ax            ; x'
         mov  ax,[my]
-        imul word ptr [rcs]
+        imul word [rcs]
         mov  cx,ax
         mov  ax,[mx]
-        imul word ptr [rsn]
+        imul word [rsn]
         sub  cx,ax
         mov  ax,cx
         cwd
@@ -247,20 +247,20 @@ MXFORM: mov  ax,[mx]            ; roll about the fuselage axis
         idiv bx
         mov  [m2],ax            ; y'
         mov  ax,[m2]            ; pitch about the wing axis
-        imul word ptr [pcs]
+        imul word [pcs]
         mov  cx,ax
         mov  ax,[mz]
-        imul word ptr [psn]
+        imul word [psn]
         add  ax,cx
         cwd
         mov  bx,256
         idiv bx
         mov  [m3],ax            ; y''
         mov  ax,[mz]
-        imul word ptr [pcs]
+        imul word [pcs]
         mov  cx,ax
         mov  ax,[m2]
-        imul word ptr [psn]
+        imul word [psn]
         sub  cx,ax
         mov  ax,cx
         cwd
@@ -268,10 +268,10 @@ MXFORM: mov  ax,[mx]            ; roll about the fuselage axis
         idiv bx
         mov  [m2],ax            ; z'
         mov  ax,[m1]            ; yaw into the world
-        imul word ptr [mcos]
+        imul word [mcos]
         mov  cx,ax
         mov  ax,[m2]
-        imul word ptr [msin]
+        imul word [msin]
         add  ax,cx
         cwd
         mov  bx,256
@@ -283,10 +283,10 @@ MXFORM: mov  ax,[mx]            ; roll about the fuselage axis
         add  ax,GH
         mov  [wy],ax
         mov  ax,[m1]
-        imul word ptr [msin]
+        imul word [msin]
         mov  cx,ax
         mov  ax,[m2]
-        imul word ptr [mcos]
+        imul word [mcos]
         sub  ax,cx
         cwd
         mov  bx,256
@@ -300,75 +300,75 @@ MXFORM: mov  ax,[mx]            ; roll about the fuselage axis
 ;  tables. Runs before the video mode switch so a missing file can speak.
 ;  Layout: 'M','D', dw nverts, dw nfaces, dw x,y,z each, db i0..i3,colour.
 ; ============================================================================
-MAXMV   equ 255
-MAXMF   equ 300
+MAXMV   = 255
+MAXMF   = 300
 LOADMDL:
-        mov  dx,offset MDLNAME
+        mov  dx,MDLNAME
         mov  ax,3D00h
         int  21h
-        jc   @@fail
+        jc   .fail
         mov  bx,ax
-        mov  dx,offset MHDR
+        mov  dx,MHDR
         mov  cx,6
         mov  ah,3Fh
         int  21h
-        jc   @@fail
+        jc   .fail
         cmp  ax,6
-        jne  @@fail
-        cmp  word ptr [MHDR],444Dh  ; 'M','D' little-endian
-        jne  @@fail
+        jne  .fail
+        cmp  word [MHDR],444Dh  ; 'M','D' little-endian
+        jne  .fail
         mov  ax,[mdlnv]
         or   ax,ax
-        jz   @@fail
+        jz   .fail
         cmp  ax,MAXMV
-        ja   @@fail
+        ja   .fail
         mov  cx,6
         mul  cx
         mov  [mvend],ax         ; the vertex loop limit, nv*6
         mov  cx,ax
-        mov  dx,offset MDLVT
+        mov  dx,MDLVT
         mov  ah,3Fh
         int  21h
-        jc   @@fail
+        jc   .fail
         cmp  ax,cx
-        jne  @@fail
+        jne  .fail
         mov  ax,[mdlnf]
         or   ax,ax
-        jz   @@fail
+        jz   .fail
         cmp  ax,MAXMF
-        ja   @@fail
+        ja   .fail
         dec  ax
         mov  [nfm1],ax
         mov  ax,[mdlnf]
         mov  cx,5
         mul  cx
         mov  cx,ax
-        mov  dx,offset MDLFC
+        mov  dx,MDLFC
         mov  ah,3Fh
         int  21h
-        jc   @@fail
+        jc   .fail
         cmp  ax,cx
-        jne  @@fail
+        jne  .fail
         mov  ah,3Eh
         int  21h
-        mov  dx,offset RBNAME   ; the radar: tower and dish
-        mov  di,offset RBBUF
+        mov  dx,RBNAME   ; the radar: tower and dish
+        mov  di,RBBUF
         call MLOAD
-        mov  dx,offset RDNAME
-        mov  di,offset RDBUF
+        mov  dx,RDNAME
+        mov  di,RDBUF
         call MLOAD
-        mov  dx,offset TWNAME
-        mov  di,offset TWBUF
+        mov  dx,TWNAME
+        mov  di,TWBUF
         call MLOAD
-        mov  dx,offset CKNAME
-        mov  di,offset CKBUF
+        mov  dx,CKNAME
+        mov  di,CKBUF
         call MLOAD
-        mov  dx,offset CNNAME
-        mov  di,offset CNBUF
+        mov  dx,CNNAME
+        mov  di,CNBUF
         call MLOAD
         call PNLLOAD
         ret
-@@fail: mov  dx,offset EMDL
+.fail: mov  dx,EMDL
         mov  ah,9
         int  21h
         mov  ax,4C01h
@@ -379,27 +379,27 @@ LOADMDL:
 ; ============================================================================
 MLOAD:  mov  ax,3D00h
         int  21h
-        jc   @@mf
+        jc   .mf
         mov  bx,ax
         mov  dx,di
         mov  cx,1400
         mov  ah,3Fh
         int  21h
-        jc   @@mf
+        jc   .mf
         mov  ah,3Eh
         int  21h
-        cmp  word ptr [di],444Dh
-        jne  @@mf
+        cmp  word [di],444Dh
+        jne  .mf
         mov  ax,[di+2]
         or   ax,ax
-        jz   @@mf
+        jz   .mf
         cmp  ax,120
-        ja   @@mf
+        ja   .mf
         mov  ax,[di+4]
         or   ax,ax
-        jz   @@mf
+        jz   .mf
         cmp  ax,150
-        ja   @@mf
+        ja   .mf
         mov  ax,[di+2]          ; palette trailer? base goes to buf[1]
         mov  bx,6
         mul  bx
@@ -410,14 +410,14 @@ MLOAD:  mov  ax,3D00h
         add  si,ax
         add  si,di
         add  si,6
-        cmp  byte ptr [si],'P'
-        jne  @@mnp
+        cmp  byte [si],'P'
+        jne  .mnp
         mov  al,[mpnext]
         mov  [di+1],al
         add  al,[si+1]
         mov  [mpnext],al
-@@mnp:  ret
-@@mf:   mov  dx,offset EMDL
+.mnp:  ret
+.mf:   mov  dx,EMDL
         mov  ah,9
         int  21h
         mov  ax,4C01h
@@ -427,15 +427,15 @@ MLOAD:  mov  ax,3D00h
 ;  MPALS - after the video mode is set: walk the model buffers and
 ;  program their palette trailers into the DAC at their bases
 ; ============================================================================
-MPALS:  mov  di,offset RBBUF
+MPALS:  mov  di,RBBUF
         call MPAL1
-        mov  di,offset RDBUF
+        mov  di,RDBUF
         call MPAL1
-        mov  di,offset TWBUF
+        mov  di,TWBUF
         call MPAL1
-        mov  di,offset CKBUF
+        mov  di,CKBUF
         call MPAL1
-        mov  di,offset CNBUF
+        mov  di,CNBUF
         call MPAL1
         call PNLPAL
         ret
@@ -449,14 +449,14 @@ MPAL1:  mov  ax,[di+2]
         add  si,ax
         add  si,di
         add  si,6
-        cmp  byte ptr [si],'P'
-        jne  @@no
+        cmp  byte [si],'P'
+        jne  .no
         mov  cl,[si+1]
         xor  ch,ch
-        jcxz @@no
+        jcxz .no
         mov  al,[di+1]          ; the base assigned at load
         add  si,2
-@@lp:   push ax
+.lp:   push ax
         mov  dx,3C8h
         out  dx,al
         inc  dx
@@ -469,8 +469,8 @@ MPAL1:  mov  ax,[di+2]
         pop  ax
         inc  al
         add  si,3
-        loop @@lp
-@@no:   ret
+        loop .lp
+.no:   ret
 
 ; ============================================================================
 ;  MDRAW - draw the DAT model in [mbuf] at [mox/moy/moz], spun [myaw].
@@ -506,7 +506,7 @@ MDRAW:  mov  bx,[mbuf]
         add  si,6
         xor  di,di
         mov  cx,[mnv]
-@@v:    push cx
+.v:    push cx
         lodsw
         mov  [mx],ax
         lodsw
@@ -515,10 +515,10 @@ MDRAW:  mov  bx,[mbuf]
         mov  [mz],ax
         push si
         mov  ax,[mx]
-        imul word ptr [mcos]
+        imul word [mcos]
         mov  cx,ax
         mov  ax,[mz]
-        imul word ptr [msin]
+        imul word [msin]
         add  ax,cx
         cwd
         mov  bx,256
@@ -529,10 +529,10 @@ MDRAW:  mov  bx,[mbuf]
         add  ax,[moy]
         mov  [PVY+di],ax
         mov  ax,[mx]
-        imul word ptr [msin]
+        imul word [msin]
         mov  cx,ax
         mov  ax,[mz]
-        imul word ptr [mcos]
+        imul word [mcos]
         sub  ax,cx
         cwd
         mov  bx,256
@@ -542,10 +542,10 @@ MDRAW:  mov  bx,[mbuf]
         pop  si
         add  di,2
         pop  cx
-        loop @@v
+        loop .v
 MDFACES:
         xor  si,si              ; face depths from corner 0
-@@fd:   mov  bx,si
+.fd:   mov  bx,si
         add  bx,bx
         add  bx,bx
         add  bx,si
@@ -563,7 +563,7 @@ MDFACES:
         mov  [wdz],ax
         call ROTXZ
         pop  si
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  bx,si
         add  bx,bx
         mov  [FCD+bx],ax
@@ -571,28 +571,28 @@ MDFACES:
         mov  [FCO+bx],ax
         inc  si
         cmp  si,[mnf]
-        jb   @@fd
+        jb   .fd
         mov  cx,[mnf1]          ; bubble far -> near
-        jcxz @@nos
-@@bs:   push cx
+        jcxz .nos
+.bs:   push cx
         xor  si,si
-@@bi:   mov  bx,si
+.bi:   mov  bx,si
         add  bx,bx
         mov  ax,[FCD+bx]
         cmp  ax,[FCD+bx+2]
-        jge  @@ns
+        jge  .ns
         xchg ax,[FCD+bx+2]
         mov  [FCD+bx],ax
         mov  ax,[FCO+bx]
         xchg ax,[FCO+bx+2]
         mov  [FCO+bx],ax
-@@ns:   inc  si
+.ns:   inc  si
         cmp  si,[mnf1]
-        jb   @@bi
+        jb   .bi
         pop  cx
-        loop @@bs
-@@nos:  mov  word ptr [pfc],0
-@@df:   mov  bx,[pfc]
+        loop .bs
+.nos:  mov  word [pfc],0
+.df:   mov  bx,[pfc]
         add  bx,bx
         mov  ax,[FCO+bx]
         mov  bx,ax
@@ -603,12 +603,12 @@ MDFACES:
         push bx
         mov  al,[bx+4]
         test al,80h             ; MTL colour: slot + the model's base
-        jz   @@cab
+        jz   .cab
         and  al,7Fh
         add  al,[mpb]
-@@cab:  mov  [COLOR],al
+.cab:  mov  [COLOR],al
         xor  cx,cx
-@@dc:   pop  bx
+.dc:   pop  bx
         push bx
         mov  si,cx
         add  si,bx
@@ -630,21 +630,21 @@ MDFACES:
         pop  cx
         mov  di,cx
         add  di,di
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [IX+di],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [IZ+di],ax
         mov  ax,[t1]
         mov  [IY+di],ax
         inc  cx
         cmp  cx,4
-        jb   @@dc
+        jb   .dc
         pop  bx
         call FACEFILL
-        inc  word ptr [pfc]
+        inc  word [pfc]
         mov  ax,[pfc]
         cmp  ax,[mnf]
-        jb   @@df
+        jb   .df
         ret
 
 ; ============================================================================
@@ -663,7 +663,7 @@ COCKPIT:
         add  ax,64
         call SINQ
         mov  [mcos],ax
-        mov  ax,[rol]
+        mov  ax,[rll]
         and  ax,255
         push ax
         call SINQ
@@ -682,19 +682,19 @@ COCKPIT:
         add  ax,64
         call SINQ
         mov  [pcs],ax
-        mov  word ptr [cpre],0
-        mov  word ptr [mbuf],offset CKBUF
+        mov  word [cpre],0
+        mov  word [mbuf],CKBUF
         call CKDRAW
         mov  ax,[cnp]
         mov  [cpre],ax
-        mov  word ptr [mbuf],offset CNBUF
+        mov  word [mbuf],CNBUF
         call CKDRAW
         ret
 
 ; CKDRAW - model pre-hinged by [cpre] about the X axis through
 ; (y=CHY, z=CHZ), then roll->pitch->yaw via MXFORM, placed at the eye
-CHY     equ 6
-CHZ     equ -42
+CHY     = 6
+CHZ     = -42
 CKDRAW: mov  bx,[mbuf]
         mov  al,[bx+1]
         mov  [mpb],al
@@ -725,7 +725,7 @@ CKDRAW: mov  bx,[mbuf]
         add  si,6
         xor  di,di
         mov  cx,[mnv]
-@@v:    push cx
+.v:    push cx
         lodsw
         mov  [mx],ax
         lodsw
@@ -734,8 +734,8 @@ CKDRAW: mov  bx,[mbuf]
         mov  [mz],ax
         push si
         push di
-        cmp  word ptr [cpre],0
-        je   @@nhg
+        cmp  word [cpre],0
+        je   .nhg
         mov  ax,[my]            ; swing about the hinge
         sub  ax,CHY
         mov  [m2],ax
@@ -743,10 +743,10 @@ CKDRAW: mov  bx,[mbuf]
         sub  ax,CHZ
         mov  [m1],ax
         mov  ax,[m2]
-        imul word ptr [ccs]
+        imul word [ccs]
         mov  cx,ax
         mov  ax,[m1]
-        imul word ptr [csn]
+        imul word [csn]
         add  ax,cx
         cwd
         mov  bx,256
@@ -754,10 +754,10 @@ CKDRAW: mov  bx,[mbuf]
         add  ax,CHY
         mov  [my],ax
         mov  ax,[m1]
-        imul word ptr [ccs]
+        imul word [ccs]
         mov  cx,ax
         mov  ax,[m2]
-        imul word ptr [csn]
+        imul word [csn]
         sub  cx,ax
         mov  ax,cx
         cwd
@@ -765,7 +765,7 @@ CKDRAW: mov  bx,[mbuf]
         idiv bx
         add  ax,CHZ
         mov  [mz],ax
-@@nhg:  call MXFORM             ; attitude + position (adds GH=4)
+.nhg:  call MXFORM             ; attitude + position (adds GH=4)
         pop  di
         mov  ax,[wx]
         mov  [PVX+di],ax
@@ -777,7 +777,7 @@ CKDRAW: mov  bx,[mbuf]
         pop  si
         add  di,2
         pop  cx
-        loop @@v
+        loop .v
         call MDFACES
         ret
 
@@ -791,10 +791,10 @@ PNLLOAD:
         mov  ax,cs
         add  ax,2000h           ; past the back buffer at CS+1000h
         mov  [pnlseg],ax
-        mov  dx,offset PNNAME
+        mov  dx,PNNAME
         mov  ax,3D00h
         int  21h
-        jc   @@no
+        jc   .no
         mov  bx,ax
         push ds
         mov  ds,[cs:pnlseg]
@@ -807,60 +807,60 @@ PNLLOAD:
         mov  ah,3Eh
         int  21h
         popf
-        jc   @@no
+        jc   .no
         push es
         mov  es,[pnlseg]
-        cmp  word ptr es:[0],4250h  ; 'P','B'
+        cmp  word [es:0],4250h  ; 'P','B'
         pop  es
-        jne  @@no
-        mov  byte ptr [pnlon],1
+        jne  .no
+        mov  byte [pnlon],1
         ret
-@@no:   mov  byte ptr [pnlon],0
+.no:   mov  byte [pnlon],0
         ret
 
-PNLPAL: cmp  byte ptr [pnlon],0
-        je   @@no
+PNLPAL: cmp  byte [pnlon],0
+        je   .no
         push es
         mov  es,[pnlseg]
-        mov  cl,es:[2]
+        mov  cl,[es:2]
         xor  ch,ch
-        jcxz @@pop
+        jcxz .pop
         mov  si,3
         mov  al,96
-@@lp:   push ax
+.lp:   push ax
         mov  dx,3C8h
         out  dx,al
         inc  dx
-        mov  al,es:[si]
+        mov  al,[es:si]
         out  dx,al
-        mov  al,es:[si+1]
+        mov  al,[es:si+1]
         out  dx,al
-        mov  al,es:[si+2]
+        mov  al,[es:si+2]
         out  dx,al
         pop  ax
         inc  al
         add  si,3
-        loop @@lp
-@@pop:  pop  es
-@@no:   ret
+        loop .lp
+.pop:  pop  es
+.no:   ret
 
 ; PNLDRW - blit the panel into the frame and draw the needles
-PNLDRW: cmp  byte ptr [pnlon],0
-        je   @@no
+PNLDRW: cmp  byte [pnlon],0
+        je   .no
         mov  ax,[hy]            ; only when the head is near centre
         cmp  ax,-12
-        jl   @@no
+        jl   .no
         cmp  ax,12
-        jg   @@no
+        jg   .no
         mov  ax,[hp]
         cmp  ax,10
-        jg   @@no
+        jg   .no
         push ds
         mov  ax,[bufseg]
         mov  es,ax
-        mov  si,cs:[pnlseg]
+        mov  si,[cs:pnlseg]
         mov  ds,si
-        mov  al,ds:[2]          ; npal -> pixel offset 3+npal*3
+        mov  al,[ds:2]          ; npal -> pixel offset 3+npal*3
         xor  ah,ah
         mov  si,ax
         add  si,si
@@ -871,12 +871,12 @@ PNLDRW: cmp  byte ptr [pnlon],0
         rep  movsw
         pop  ds
         ; ---- needles ----
-        mov  byte ptr [COLOR],14
+        mov  byte [COLOR],14
         mov  ax,[vel]           ; ASI: 0..800 over a 270-degree sweep
         cmp  ax,800
-        jle  @@a1
+        jle  .a1
         mov  ax,800
-@@a1:   mov  bx,192
+.a1:   mov  bx,192
         imul bx
         mov  bx,800
         idiv bx
@@ -890,9 +890,9 @@ PNLDRW: cmp  byte ptr [pnlon],0
         call NEEDLE
         mov  ax,[apy]           ; ALT: 0..3000 over the sweep
         cmp  ax,3000
-        jle  @@a2
+        jle  .a2
         mov  ax,3000
-@@a2:   mov  bx,192
+.a2:   mov  bx,192
         imul bx
         mov  bx,3000
         idiv bx
@@ -900,7 +900,7 @@ PNLDRW: cmp  byte ptr [pnlon],0
         mov  bx,260
         mov  cx,163
         call NEEDLE
-@@no:   ret
+.no:   ret
 
 ; NEEDLE - angle AX (256 = circle, 0 = up), centre BX,CX; 20 px long
 NEEDLE: mov  [sx0],bx
@@ -926,9 +926,9 @@ NEEDLE: mov  [sx0],bx
         sub  bx,ax
         mov  [sy1],bx
         call CLIPLINE
-        jc   @@no
+        jc   .no
         call LINE
-@@no:   ret
+.no:   ret
 
 pnlseg  dw 0
 pnlon   db 0

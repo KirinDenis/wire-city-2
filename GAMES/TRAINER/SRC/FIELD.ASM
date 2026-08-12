@@ -17,37 +17,37 @@
 ;        F flaps (0/1/2)   G gear   B brakes   Z/C rudder
 ;        V view (chase / first person)  R reset  ESC quit
 ; ============================================================================
-FOCAL   equ 220
-NEARZ   equ 40
+FOCAL   = 220
+NEARZ   = 40
 ; keyboard scancodes for the INT 9 key-state table (the OWLFLY scheme)
-SC_ESC  equ 01h
-SC_MIN  equ 0Ch
-SC_EQ   equ 0Dh
-SC_R    equ 13h
-SC_W    equ 11h
-SC_S    equ 1Fh
-SC_O    equ 18h
-SC_F    equ 21h
-SC_G    equ 22h
-SC_Z    equ 2Ch
-SC_C    equ 2Eh
-SC_V    equ 2Fh
-SC_B    equ 30h
-SC_LSH  equ 2Ah
-SC_RSH  equ 36h
-SC_UP   equ 48h
-SC_NPM  equ 4Ah
-SC_LF   equ 4Bh
-SC_RT   equ 4Dh
-SC_NPP  equ 4Eh
-SC_DN   equ 50h
+SC_ESC  = 01h
+SC_MIN  = 0Ch
+SC_EQ   = 0Dh
+SC_R    = 13h
+SC_W    = 11h
+SC_S    = 1Fh
+SC_O    = 18h
+SC_F    = 21h
+SC_G    = 22h
+SC_Z    = 2Ch
+SC_C    = 2Eh
+SC_V    = 2Fh
+SC_B    = 30h
+SC_LSH  = 2Ah
+SC_RSH  = 36h
+SC_UP   = 48h
+SC_NPM  = 4Ah
+SC_LF   = 4Bh
+SC_RT   = 4Dh
+SC_NPP  = 4Eh
+SC_DN   = 50h
 
-        .8086
-        LOCALS
-        JUMPS
-CODE    SEGMENT
-        ASSUME cs:CODE, ds:CODE, es:CODE, ss:CODE
-        ORG  100h
+format binary as 'com'
+        org 100h
+
+        ; .8086 in the TASM source. FASM has no such directive - without this
+        ; include it silently uses 386 jumps when a target is out of range.
+        include '..\..\..\ENGINE\E_8086.INC'
 
 START:  cld
         mov  ax,cs
@@ -59,24 +59,24 @@ START:  cld
         mov  [oldseg],es
         mov  ax,cs
         mov  es,ax
-        mov  dx,offset KBINT
+        mov  dx,KBINT
         mov  ax,2509h
         int  21h
         call DBGINIT            ; the debug umbilical, if anyone listens
         push es
         mov  ax,40h
         mov  es,ax
-        mov  ax,es:[6Ch]
+        mov  ax,[es:6Ch]
         pop  es
         or   ax,1
         mov  [rseed],ax
         call LOADMDL
         mov  ax,0013h
         int  10h
-        mov  si,offset PAL
-@@p:    lodsb
+        mov  si,PAL
+.p:    lodsb
         cmp  al,255
-        je   @@pd
+        je   .pd
         mov  dx,3C8h
         out  dx,al
         inc  dx
@@ -86,57 +86,57 @@ START:  cld
         out  dx,al
         lodsb
         out  dx,al
-        jmp  @@p
-@@pd:   call MPALS              ; model palettes ride in their DATs
+        jmp  .p
+.pd:   call MPALS              ; model palettes ride in their DATs
         call RESET
         push es
         mov  ax,40h
         mov  es,ax
-        mov  ax,es:[6Ch]
+        mov  ax,[es:6Ch]
         pop  es
         mov  [ltick],ax
 
 ; ============================ the frame ====================================
-@@frame:
+.frame:
         push es
         mov  ax,40h
         mov  es,ax
-        mov  ax,es:[6Ch]
+        mov  ax,[es:6Ch]
         pop  es
         mov  bx,ax
         sub  ax,[ltick]
         mov  [ltick],bx
         cmp  ax,4
-        jle  @@d1
+        jle  .d1
         mov  ax,4
-@@d1:   cmp  word ptr [dbgslow],0
-        je   @@d1a
+.d1:   cmp  word [dbgslow],0
+        je   .d1a
         mov  ax,1               ; flight-recorder slow-mo: 1 tick/frame
-@@d1a:  or   ax,ax
-        jz   @@pd2
+.d1a:  or   ax,ax
+        jz   .pd2
         add  [spin],ax          ; the radar dish turns on real time
-@@pl:   push ax
+.pl:   push ax
         call PHYS
         call DBGTICK
         pop  ax
         dec  ax
-        jnz  @@pl
-@@pd2:  call CAMERA
+        jnz  .pl
+.pd2:  call CAMERA
         call SETTRIG
         call BACKDROP
         call HAZE
         call WORLD
-        cmp  word ptr [view],0
-        jne  @@fpv
+        cmp  word [view],0
+        jne  .fpv
         call PLANE3D
-        jmp  @@nv0
-@@fpv:  ; call COCKPIT - PARKED with the panel (user's call: the whole
+        jmp  .nv0
+.fpv:  ; call COCKPIT - PARKED with the panel (user's call: the whole
         ; cockpit reads as alien to the modern eye); the models still
         ; load and head-look still works - restore this call to revive
         ; call PNLDRW - the bitmap panel is PARKED (user's call: right
         ; for 1986, foreign to the modern eye); flip this back on and
         ; ship PANEL1.RAW in the bundle to revive it
-@@nv0:  call HUDTXT
+.nv0:  call HUDTXT
         call WAITVR
         push ds
         mov  ax,0A000h
@@ -147,19 +147,19 @@ START:  cld
         mov  cx,32000
         rep  movsw
         pop  ds
-        cmp  word ptr [dbgslow],0
-        je   @@nsl
+        cmp  word [dbgslow],0
+        je   .nsl
         mov  cx,[dbgslow]
-@@slw:  push cx
+.slw:  push cx
         call WAITVR
         pop  cx
-        loop @@slw
-@@nsl:
+        loop .slw
+.nsl:
         call KEYSED             ; edge toggles: F G B V R
-        cmp  byte ptr [KEYS+SC_ESC],0
-        jne  @@quit
-        jmp  @@frame
-@@quit: mov  dx,[oldoff]        ; give INT 9 back to the BIOS
+        cmp  byte [KEYS+SC_ESC],0
+        jne  .quit
+        jmp  .frame
+.quit: mov  dx,[oldoff]        ; give INT 9 back to the BIOS
         push ds
         mov  ds,[oldseg]
         mov  ax,2509h
@@ -184,14 +184,14 @@ KBINT:  push ax
         and  al,7Fh
         mov  bl,al
         xor  bh,bh
-        mov  di,offset KEYS
+        mov  di,KEYS
         add  di,bx
         test ah,80h
-        jnz  @@brk
-        mov  byte ptr [di],1
-        jmp  @@eoi
-@@brk:  mov  byte ptr [di],0
-@@eoi:  mov  al,20h
+        jnz  .brk
+        mov  byte [di],1
+        jmp  .eoi
+.brk:  mov  byte [di],0
+.eoi:  mov  al,20h
         out  20h,al
         pop  ds
         pop  di
@@ -202,57 +202,57 @@ KBINT:  push ax
 ; KEYSED - once per frame: keys that TOGGLE fire on the press edge
 KEYSED: mov  al,[KEYS+SC_F]
         cmp  al,[lF]
-        je   @@g
+        je   .g
         mov  [lF],al
         or   al,al
-        jz   @@g
-        inc  word ptr [flap]
-        cmp  word ptr [flap],2
-        jle  @@g
-        mov  word ptr [flap],0
-@@g:    mov  al,[KEYS+SC_G]
+        jz   .g
+        inc  word [flap]
+        cmp  word [flap],2
+        jle  .g
+        mov  word [flap],0
+.g:    mov  al,[KEYS+SC_G]
         cmp  al,[lG]
-        je   @@b
+        je   .b
         mov  [lG],al
         or   al,al
-        jz   @@b
-        xor  word ptr [gear],1
-@@b:    mov  al,[KEYS+SC_B]
+        jz   .b
+        xor  word [gear],1
+.b:    mov  al,[KEYS+SC_B]
         cmp  al,[lB]
-        je   @@v
+        je   .v
         mov  [lB],al
         or   al,al
-        jz   @@v
-        xor  word ptr [brk],1
-@@v:    mov  al,[KEYS+SC_V]
+        jz   .v
+        xor  word [brk],1
+.v:    mov  al,[KEYS+SC_V]
         cmp  al,[lV]
-        je   @@o
+        je   .o
         mov  [lV],al
         or   al,al
-        jz   @@o
-        xor  word ptr [view],1
-@@o:    mov  al,[KEYS+SC_O]
+        jz   .o
+        xor  word [view],1
+.o:    mov  al,[KEYS+SC_O]
         cmp  al,[lO]
-        je   @@r
+        je   .r
         mov  [lO],al
         or   al,al
-        jz   @@r
-        xor  word ptr [cnpt],1
-@@r:    mov  al,[KEYS+SC_R]
+        jz   .r
+        xor  word [cnpt],1
+.r:    mov  al,[KEYS+SC_R]
         cmp  al,[lR]
-        je   @@out
+        je   .out
         mov  [lR],al
         or   al,al
-        jz   @@out
+        jz   .out
         call RESET
-@@out:  ret
+.out:  ret
 
 
-        INCLUDE F_PHYS.INC
-        INCLUDE F_WORLD.INC
-        INCLUDE F_PLANE.INC
-        INCLUDE F_HUD.INC
-        INCLUDE F_DEBUG.INC
+        include 'F_PHYS.INC'
+        include 'F_WORLD.INC'
+        include 'F_PLANE.INC'
+        include 'F_HUD.INC'
+        include 'F_DEBUG.INC'
 
 ; ---- state ------------------------------------------------------------------
 rseed   dw 1
@@ -264,7 +264,7 @@ apy      dw 0
 apz      dw 0
 hdg     dw 64
 pit     dw 0
-rol     dw 0
+rll     dw 0
 vel     dw 0
 vsp     dw 0
 thr     dw 0
@@ -348,8 +348,8 @@ camy    dw 0
 camz    dw 0
 wdx     dw 0
 wdz     dw 0
-rcx     dw 0
-rcz     dw 0
+rc_x     dw 0
+rc_z     dw 0
 rddx    dw 0
 rddy    dw 0
 rsxo    dw 0
@@ -394,15 +394,13 @@ sy0     dw 0
 sx1     dw 0
 sy1     dw 0
 COLOR   db 0
-POKETAB dw apx,apy,apz,hdg,pit,rol,vel,thr,chdgf,wind,dbgslow
+POKETAB dw apx,apy,apz,hdg,pit,rll,vel,thr,chdgf,wind,dbgslow
 SINT    dw 0,6,13,19,25,31,38,44,50,56,62,68,74,80,86,92,98,104,109,115
         dw 121,126,132,137,142,147,153,157,162,167,172,177,181,185,190,194
         dw 198,202,206,209,213,216,220,223,226,229,231,234,237,239,241,243
         dw 245,247,248,250,251,252,253,254,255,255,256,256,256
 
-        INCLUDE ..\..\..\ENGINE\E_MATH.INC
-        INCLUDE ..\..\..\ENGINE\E_M3D.INC
-        INCLUDE ..\..\..\ENGINE\E_RAST.INC
+        include '..\..\..\ENGINE\E_MATH.INC'
+        include '..\..\..\ENGINE\E_M3D.INC'
+        include '..\..\..\ENGINE\E_RAST.INC'
 
-CODE    ENDS
-        END START

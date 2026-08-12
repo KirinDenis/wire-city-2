@@ -4,13 +4,13 @@
 ; room and this routine had no callers left. IF 0 hands the whole thing to
 ; the assembler's wastebasket - every line survives here, none of them ship.
 ; ----- ground grid: world-aligned lines around the camera (rotate with view)
-IF 0
-GRID:   mov  byte ptr [COLOR],6
+if 0
+GRID:   mov  byte [COLOR],6
         ; lines parallel to world-Z (fixed X = gi)
         mov  ax,[camgi]
         sub  ax,GR
         mov  [gi],ax
-@@gx:   mov  ax,[gi]            ; worldX = gi*256 - BIAS
+.gx:   mov  ax,[gi]            ; worldX = gi*256 - BIAS
         mov  cl,8
         shl  ax,cl
         sub  ax,BIAS
@@ -27,9 +27,9 @@ GRID:   mov  byte ptr [COLOR],6
         sub  ax,[camz]
         mov  [wdz],ax
         call ROTXZ
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [x0],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [z0],ax
         ; endpoint B (worldX, Zmax)
         mov  ax,[wcx]
@@ -43,9 +43,9 @@ GRID:   mov  byte ptr [COLOR],6
         sub  ax,[camz]
         mov  [wdz],ax
         call ROTXZ
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [x1],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [z1],ax
         mov  ax,[camy]
         neg  ax
@@ -58,12 +58,12 @@ GRID:   mov  byte ptr [COLOR],6
         mov  bx,[camgi]
         add  bx,GR
         cmp  ax,bx
-        jle  @@gx
+        jle  .gx
         ; lines parallel to world-X (fixed Z = gj)
         mov  ax,[camgj]
         sub  ax,GR
         mov  [gj],ax
-@@gz:   mov  ax,[gj]
+.gz:   mov  ax,[gj]
         mov  cl,8
         shl  ax,cl
         sub  ax,BIAS
@@ -78,9 +78,9 @@ GRID:   mov  byte ptr [COLOR],6
         sub  ax,[camx]
         mov  [wdx],ax
         call ROTXZ
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [x0],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [z0],ax
         ; endpoint B (Xmax, worldZ)
         mov  ax,[camgi]
@@ -91,9 +91,9 @@ GRID:   mov  byte ptr [COLOR],6
         sub  ax,[camx]
         mov  [wdx],ax
         call ROTXZ
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [x1],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [z1],ax
         mov  ax,[camy]
         neg  ax
@@ -106,9 +106,9 @@ GRID:   mov  byte ptr [COLOR],6
         mov  bx,[camgj]
         add  bx,GR
         cmp  ax,bx
-        jle  @@gz
+        jle  .gz
         ret
-ENDIF
+end if
 ; ----- buildings: one linear far->near walk of the BORD order table ---------
 ;  2401 cells to radius 24; empty cells drop out of RENDERCELL quickly, and
 ;  the clustered city keeps the populated count low. Real buildings all the
@@ -124,8 +124,8 @@ BUILDINGS:
         mov  cl,8
         shr  ax,cl
         mov  [camgj],ax
-        mov  word ptr [ring],0  ; reuse [ring] as the BORD index
-@@bl:   mov  si,[ring]
+        mov  word [ring],0  ; reuse [ring] as the BORD index
+.bl:   mov  si,[ring]
         add  si,si
         mov  al,[BORD+si]       ; di (signed)
         cbw
@@ -134,9 +134,9 @@ BUILDINGS:
         cbw
         mov  [cdj],ax
         call RENDERCELL
-        inc  word ptr [ring]
-        cmp  word ptr [ring],2401
-        jl   @@bl
+        inc  word [ring]
+        cmp  word [ring],2401
+        jl   .bl
         ret
 
 ; ============================================================================
@@ -146,7 +146,7 @@ BUILDINGS:
 ; ============================================================================
 DRAWBOX:
         call ROTCUL
-        jc   @@r
+        jc   .r
         mov  ax,[gbase]
         add  ax,[boxb]
         sub  ax,[camy]
@@ -160,30 +160,30 @@ DRAWBOX:
         mov  ax,[gbase]
         add  ax,[boxt]
         cmp  [camy],ax
-        jle  @@nf
+        jle  .nf
         call FACETOPC
         call FACEFILL
-@@nf:   call VISFILL
+.nf:   call VISFILL
         mov  ax,[minrz]         ; stroke colour by distance
         cmp  ax,500
-        jg   @@nn
+        jg   .nn
         mov  al,3
-        jmp  @@cc
-@@nn:   cmp  ax,1200
-        jg   @@ff
+        jmp  .cc
+.nn:   cmp  ax,1200
+        jg   .ff
         mov  al,2
-        jmp  @@cc
-@@ff:   mov  al,1
-@@cc:   mov  [COLOR],al
+        jmp  .cc
+.ff:   mov  al,1
+.cc:   mov  [COLOR],al
         mov  [scol],al          ; VISSTROKE restores this per face
         mov  ax,[gbase]
         add  ax,[boxt]
         cmp  [camy],ax
-        jle  @@ns
+        jle  .ns
         call FACETOPC
         call FACESTROKE
-@@ns:   call VISSTROKE
-@@r:    ret
+.ns:   call VISSTROKE
+.r:    ret
 
 ; ============================================================================
 ;  PUFFBOX - one soft smoke cube: haze colour, no outline, no windows.
@@ -191,7 +191,7 @@ DRAWBOX:
 ; ============================================================================
 PUFFBOX:
         call ROTCUL
-        jc   @@r
+        jc   .r
         mov  ax,[gbase]
         add  ax,[boxb]
         sub  ax,[camy]
@@ -200,15 +200,15 @@ PUFFBOX:
         add  ax,[boxt]
         sub  ax,[camy]
         mov  [bry1],ax
-        mov  byte ptr [COLOR],12 ; horizon-haze grey reads as smoke
+        mov  byte [COLOR],12 ; horizon-haze grey reads as smoke
         mov  ax,[gbase]
         add  ax,[boxt]
         cmp  [camy],ax
-        jle  @@nf
+        jle  .nf
         call FACETOPC
         call FACEFILL
-@@nf:   call MEGAFILL           ; flat fill that keeps the smoke colour
-@@r:    ret
+.nf:   call MEGAFILL           ; flat fill that keeps the smoke colour
+.r:    ret
 
 ; ----- render one city cell (cdi,cdj relative to camera cell) ---------------
 ;  Looks up the building for cell (camgi+cdi, camgj+cdj), rotates its 4
@@ -226,17 +226,17 @@ RENDERCELL:
         call HBLD
         mov  ax,[bstreet]
         cmp  ax,1
-        je   @@ret              ; not city: the terrain mesh paints it
+        je   .ret              ; not city: the terrain mesh paints it
         cmp  ax,3
-        jne  @@notroad
+        jne  .notroad
         call ROADCELL           ; a city street: tarmac, then whatever is
-        jmp  @@ret              ; driving on it
-@@notroad:
-        mov  byte ptr [roofc],17
+        jmp  .ret              ; driving on it
+.notroad:
+        mov  byte [roofc],17
         call BCHK
-        jz   @@stands
-        jmp  @@ret              ; a ruin: rubble and smoke, no walls
-@@stands:
+        jz   .stands
+        jmp  .ret              ; a ruin: rubble and smoke, no walls
+.stands:
         ; cell centre world coords:  gi*256 + 128 - BIAS   (shl = *CELL)
         ; ...but a BUILDING owns the 2x2 plot whose corner this cell is, so
         ; its centre is another 128 out on both axes. The flat patches
@@ -245,22 +245,22 @@ RENDERCELL:
         mov  cl,8
         shl  ax,cl
         add  ax,128
-        cmp  word ptr [bstreet],0
-        jne  @@c1
+        cmp  word [bstreet],0
+        jne  .c1
         add  ax,128
-@@c1:   sub  ax,BIAS
+.c1:   sub  ax,BIAS
         mov  [wcx],ax
         mov  ax,[gj]
         mov  cl,8
         shl  ax,cl
         add  ax,128
-        cmp  word ptr [bstreet],0
-        jne  @@c2
+        cmp  word [bstreet],0
+        jne  .c2
         add  ax,128
-@@c2:   sub  ax,BIAS
+.c2:   sub  ax,BIAS
         mov  [wcz],ax
         call ROTCUL             ; bounds -> rotate corners -> cull
-        jc   @@ret
+        jc   .ret
         ; ground height under this cell (terrain-aware)
         mov  ax,[gi]
         mov  bx,[gj]
@@ -270,7 +270,7 @@ RENDERCELL:
         ; flat terrain patch (forest/water/field)? fill it on the local ground
         mov  ax,[bstreet]
         cmp  ax,2
-        jne  @@solid
+        jne  .solid
         mov  ax,[gbase]
         add  ax,2               ; a hair above the terrain quad (paint order)
         sub  ax,[camy]
@@ -279,8 +279,8 @@ RENDERCELL:
         mov  [COLOR],al
         call FACETOPC
         call FACEFILL
-        jmp  @@ret
-@@solid:
+        jmp  .ret
+.solid:
         ; pick this building's wall colours from its scheme (SimCity mix)
         mov  bx,[bschm]
         add  bx,bx
@@ -295,39 +295,39 @@ RENDERCELL:
         mov  [pwcz],ax
         mov  ax,[btype]
         cmp  ax,1
-        je   @@bspire
+        je   .bspire
         cmp  ax,2
-        je   @@btower
+        je   .btower
         cmp  ax,3
-        je   @@barch
+        je   .barch
         cmp  ax,4
-        je   @@bfact
-        mov  word ptr [boxb],0  ; type 0: plain box
+        je   .bfact
+        mov  word [boxb],0  ; type 0: plain box
         mov  ax,[bhgt2]
         mov  [boxt],ax
         call DRAWBOX
-        jmp  @@ret
+        jmp  .ret
         ; ---- the composites doubled with the plot, 2026-08-03: a spire
         ; sized for a 256 cell is a needle on a 512 one.
-@@bspire:                       ; slim tall block + antenna spike
-        mov  word ptr [bhw],112
-        mov  word ptr [bhd],112
-        mov  word ptr [boxb],0
+.bspire:                       ; slim tall block + antenna spike
+        mov  word [bhw],112
+        mov  word [bhd],112
+        mov  word [boxb],0
         mov  ax,[bhgt2]
         add  ax,120             ; spires read taller than plain boxes
         mov  [boxt],ax
         call DRAWBOX
-        mov  word ptr [bhw],28
-        mov  word ptr [bhd],28
+        mov  word [bhw],28
+        mov  word [bhd],28
         mov  ax,[bhgt2]
         add  ax,120
         mov  [boxb],ax
         add  ax,180
         mov  [boxt],ax
         call DRAWBOX
-        jmp  @@ret
-@@btower:                       ; telescoping tower: wide base, narrow top
-        mov  word ptr [boxb],0
+        jmp  .ret
+.btower:                       ; telescoping tower: wide base, narrow top
+        mov  word [boxb],0
         mov  ax,[bhgt2]
         shr  ax,1
         mov  [boxt],ax
@@ -343,16 +343,16 @@ RENDERCELL:
         mov  ax,[bhgt2]
         mov  [boxt],ax
         call DRAWBOX
-        jmp  @@ret
-@@barch:                        ; gate building: two legs + lintel on top
+        jmp  .ret
+.barch:                        ; gate building: two legs + lintel on top
         mov  ax,[bhgt2]
         cmp  ax,480
-        jle  @@ba1
+        jle  .ba1
         mov  ax,480
-@@ba1:  mov  [boxt],ax          ; leg height
-        mov  word ptr [bhw],68
-        mov  word ptr [bhd],160
-        mov  word ptr [boxb],0
+.ba1:  mov  [boxt],ax          ; leg height
+        mov  word [bhw],68
+        mov  word [bhd],160
+        mov  word [boxb],0
         mov  ax,[pwcx]
         sub  ax,152
         mov  [wcx],ax
@@ -363,7 +363,7 @@ RENDERCELL:
         call DRAWBOX
         mov  ax,[pwcx]          ; lintel spans both legs
         mov  [wcx],ax
-        mov  word ptr [bhw],220
+        mov  word [bhw],220
         mov  bx,[boxt]
         mov  ax,bx
         sub  ax,88
@@ -372,34 +372,34 @@ RENDERCELL:
         add  ax,12
         mov  [boxt],ax
         call DRAWBOX
-        jmp  @@ret
-@@bfact:                        ; factory: low hall + chimney + smoke loop
-        mov  word ptr [boxb],0
+        jmp  .ret
+.bfact:                        ; factory: low hall + chimney + smoke loop
+        mov  word [boxb],0
         mov  ax,[bhgt2]
         mov  [boxt],ax          ; hall (industrial heights are low)
         call DRAWBOX
-        mov  word ptr [bhw],26
-        mov  word ptr [bhd],26
+        mov  word [bhw],26
+        mov  word [bhd],26
         mov  ax,[pwcx]
         add  ax,128
         mov  [wcx],ax
         mov  ax,[pwcz]
         add  ax,80
         mov  [wcz],ax
-        mov  word ptr [boxb],0
-        mov  word ptr [boxt],360
+        mov  word [boxb],0
+        mov  word [boxt],360
         call DRAWBOX            ; chimney
         ; SimCity-style smoke: 3 puffs rise on a loop and dissolve. Phase is
         ; driven by the BIOS tick, so the animation speed is real-time.
-        mov  word ptr [puffk],0
-@@pf:   mov  si,[puffk]
+        mov  word [puffk],0
+.pf:   mov  si,[puffk]
         add  si,si
         mov  ax,[lasttk]
         add  ax,ax              ; climb 2 units per tick
         add  ax,[PUFO+si]       ; per-puff phase offset
         and  ax,63              ; age 0..63
         cmp  ax,50
-        ja   @@pnx              ; old puff has dissolved
+        ja   .pnx              ; old puff has dissolved
         mov  bx,ax
         mov  cl,1
         shr  bx,cl
@@ -412,10 +412,10 @@ RENDERCELL:
         add  ax,20
         mov  [boxt],ax
         call PUFFBOX
-@@pnx:  inc  word ptr [puffk]
-        cmp  word ptr [puffk],3
-        jl   @@pf
-@@ret:  ret
+.pnx:  inc  word [puffk]
+        cmp  word [puffk],3
+        jl   .pf
+.ret:  ret
 
 ; ============================================================================
 ;  ROADCELL - one city street cell: the tarmac, then the traffic on it.
@@ -432,75 +432,75 @@ RENDERCELL:
 ROADCELL:
         mov  ax,[cdi]           ; ---- the cheap cull FIRST. Everything below
         or   ax,ax              ; costs four rotations and a big fill, and
-        jns  @@d1               ; there are a thousand street cells in the
+        jns  .d1               ; there are a thousand street cells in the
         neg  ax                 ; walk. Chebyshev on the cell offsets: no
-@@d1:   mov  bx,ax              ; multiply, no projection, just two compares.
+.d1:   mov  bx,ax              ; multiply, no projection, just two compares.
         mov  ax,[cdj]
         or   ax,ax
-        jns  @@d2
+        jns  .d2
         neg  ax
-@@d2:   cmp  ax,bx
-        jle  @@d3
+.d2:   cmp  ax,bx
+        jle  .d3
         mov  bx,ax
-@@d3:   cmp  bx,ROADR           ; bx = the distance in CELLS, and it decides
-        jg   @@x                ; the level of detail as well as the cull
-        mov  word ptr [rlod],0
+.d3:   cmp  bx,ROADR           ; bx = the distance in CELLS, and it decides
+        jg   .x                ; the level of detail as well as the cull
+        mov  word [rlod],0
         cmp  bx,ROADLOD
-        jle  @@one
+        jle  .one
         mov  ax,[gi]            ; ---- grouped: the 2x2 block of cells whose
         or   ax,[gj]            ; corner is even. Only that corner draws;
         test ax,1               ; the other three are inside its quad.
-        jnz  @@x
-        mov  word ptr [rlod],1
-@@one:  mov  ax,[gi]            ; cell centre: gi*256 + 128 - BIAS ...
+        jnz  .x
+        mov  word [rlod],1
+.one:  mov  ax,[gi]            ; cell centre: gi*256 + 128 - BIAS ...
         mov  cl,8
         shl  ax,cl
         add  ax,128
-        cmp  word ptr [rlod],0
-        je   @@c1
+        cmp  word [rlod],0
+        je   .c1
         add  ax,128             ; ...and a group's centre is a cell further
-@@c1:   sub  ax,BIAS
+.c1:   sub  ax,BIAS
         mov  [wcx],ax
         mov  ax,[gj]
         mov  cl,8
         shl  ax,cl
         add  ax,128
-        cmp  word ptr [rlod],0
-        je   @@c2
+        cmp  word [rlod],0
+        je   .c2
         add  ax,128
-@@c2:   sub  ax,BIAS
+.c2:   sub  ax,BIAS
         mov  [wcz],ax
         mov  ax,128             ; the full cell, edge to edge - or the full
-        cmp  word ptr [rlod],0  ; group, which is two of them
-        je   @@c3
+        cmp  word [rlod],0  ; group, which is two of them
+        je   .c3
         mov  ax,256
-@@c3:   mov  [bhw],ax
+.c3:   mov  [bhw],ax
         mov  [bhd],ax
         call ROTCUL
-        jc   @@r
+        jc   .r
         mov  ax,[minrz]
         cmp  ax,ROADZ
-        jg   @@r
-        mov  byte ptr [COLOR],ASPHALT
+        jg   .r
+        mov  byte [COLOR],ASPHALT
         call FACETOPC           ; the quad, flat...
-        call FAR PTR ROADYF     ; ...and now bent onto the ground, corner by
+        call TOWNSEG:ROADYF   ; ...and now bent onto the ground, corner by
         call FACEFILL           ; corner (see TOWN.INC: it used to take ONE
                                 ; height for the whole cell, which on a
                                 ; slope is a slab hovering over the hill)
-        cmp  word ptr [rlod],0
-        jne  @@r                ; grouped detail is too far out for traffic
+        cmp  word [rlod],0
+        jne  .r                ; grouped detail is too far out for traffic
         mov  ax,[minrz]
         cmp  ax,CARZ
-        jg   @@r                ; tarmac reaches further than the traffic
+        jg   .r                ; tarmac reaches further than the traffic
         mov  ax,[gi]            ; the ground the vehicles stand on
         mov  bx,[gj]
         call GETH
         call WORLDH
         mov  [gbase],ax
-        mov  word ptr [vmode],0 ; draw them, do not test them
-        call FAR PTR TRAFFICF
-@@r:
-@@x:    ret
+        mov  word [vmode],0 ; draw them, do not test them
+        call TOWNSEG:TRAFFICF
+.r:
+.x:    ret
 
 ; ============================================================================
 ;  ROTCUL - shared box setup: world bounds from (wcx,wcz,bhw,bhd), rotate the
@@ -520,8 +520,8 @@ ROTCUL:
         mov  ax,[wcz]
         add  ax,[bhd]
         mov  [bwz1],ax
-        mov  word ptr [minrz],32767
-        mov  word ptr [maxrz],-32768
+        mov  word [minrz],32767
+        mov  word [maxrz],-32768
         mov  ax,[bwx0]          ; corner 0 = (bwx0,bwz0)
         sub  ax,[camx]
         mov  [wdx],ax
@@ -529,11 +529,11 @@ ROTCUL:
         sub  ax,[camz]
         mov  [wdz],ax
         call ROTXZ
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [FRX],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [FRZ],ax
-        call @@trk
+        call .trk
         mov  ax,[bwx1]          ; corner 1 = (bwx1,bwz0)
         sub  ax,[camx]
         mov  [wdx],ax
@@ -541,11 +541,11 @@ ROTCUL:
         sub  ax,[camz]
         mov  [wdz],ax
         call ROTXZ
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [FRX+2],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [FRZ+2],ax
-        call @@trk
+        call .trk
         mov  ax,[bwx1]          ; corner 2 = (bwx1,bwz1)
         sub  ax,[camx]
         mov  [wdx],ax
@@ -553,11 +553,11 @@ ROTCUL:
         sub  ax,[camz]
         mov  [wdz],ax
         call ROTXZ
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [FRX+4],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [FRZ+4],ax
-        call @@trk
+        call .trk
         mov  ax,[bwx0]          ; corner 3 = (bwx0,bwz1)
         sub  ax,[camx]
         mov  [wdx],ax
@@ -565,98 +565,98 @@ ROTCUL:
         sub  ax,[camz]
         mov  [wdz],ax
         call ROTXZ
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [FRX+6],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [FRZ+6],ax
-        call @@trk
+        call .trk
         mov  ax,[maxrz]         ; cull
         cmp  ax,NEARZ
-        jl   @@rej              ; entirely behind
+        jl   .rej              ; entirely behind
         mov  ax,[minrz]
         cmp  ax,FARZ
-        jg   @@rej              ; entirely too far
+        jg   .rej              ; entirely too far
         clc
         ret
-@@rej:  stc
+.rej:  stc
         ret
-@@trk:  mov  ax,[rcz]           ; update minrz/maxrz with rcz
+.trk:  mov  ax,[rc_z]           ; update minrz/maxrz with rc_z
         cmp  ax,[minrz]
-        jge  @@t1
+        jge  .t1
         mov  [minrz],ax
-@@t1:   cmp  ax,[maxrz]
-        jle  @@t2
+.t1:   cmp  ax,[maxrz]
+        jle  .t2
         mov  [maxrz],ax
-@@t2:   ret
+.t2:   ret
 
 ; iterate visible vertical faces, calling FACEV+FACEFILL for each
 VISFILL:
         ; west  (camx < bwx0): corners 3,0  - E/W faces get the shaded colour
         mov  ax,[camx]
         cmp  ax,[bwx0]
-        jge  @@e
+        jge  .e
         mov  al,[wallS]
         mov  [COLOR],al
-        mov  word ptr [fa],3
-        mov  word ptr [fb],0
+        mov  word [fa],3
+        mov  word [fb],0
         call FACEV
         call FACEFILL
-@@e:    mov  ax,[camx]          ; east (camx > bwx1): 1,2
+.e:    mov  ax,[camx]          ; east (camx > bwx1): 1,2
         cmp  ax,[bwx1]
-        jle  @@s
+        jle  .s
         mov  al,[wallS]
         mov  [COLOR],al
-        mov  word ptr [fa],1
-        mov  word ptr [fb],2
+        mov  word [fa],1
+        mov  word [fb],2
         call FACEV
         call FACEFILL
-@@s:    mov  ax,[camz]          ; south (camz < bwz0): 0,1 - sun-facing sides
+.s:    mov  ax,[camz]          ; south (camz < bwz0): 0,1 - sun-facing sides
         cmp  ax,[bwz0]
-        jge  @@n
+        jge  .n
         mov  al,[wallL]
         mov  [COLOR],al
-        mov  word ptr [fa],0
-        mov  word ptr [fb],1
+        mov  word [fa],0
+        mov  word [fb],1
         call FACEV
         call FACEFILL
-@@n:    mov  ax,[camz]          ; north (camz > bwz1): 2,3
+.n:    mov  ax,[camz]          ; north (camz > bwz1): 2,3
         cmp  ax,[bwz1]
-        jle  @@d
+        jle  .d
         mov  al,[wallL]
         mov  [COLOR],al
-        mov  word ptr [fa],2
-        mov  word ptr [fb],3
+        mov  word [fa],2
+        mov  word [fb],3
         call FACEV
         call FACEFILL
-@@d:    ret
+.d:    ret
 
 ; iterate visible vertical faces, stroking + windows on near ones
 VISSTROKE:
         mov  ax,[camx]
         cmp  ax,[bwx0]
-        jge  @@e
-        mov  word ptr [fa],3
-        mov  word ptr [fb],0
+        jge  .e
+        mov  word [fa],3
+        mov  word [fb],0
         call EDGEWIN
-@@e:    mov  ax,[camx]
+.e:    mov  ax,[camx]
         cmp  ax,[bwx1]
-        jle  @@s
-        mov  word ptr [fa],1
-        mov  word ptr [fb],2
+        jle  .s
+        mov  word [fa],1
+        mov  word [fb],2
         call EDGEWIN
-@@s:    mov  ax,[camz]
+.s:    mov  ax,[camz]
         cmp  ax,[bwz0]
-        jge  @@n
-        mov  word ptr [fa],0
-        mov  word ptr [fb],1
+        jge  .n
+        mov  word [fa],0
+        mov  word [fb],1
         call EDGEWIN
-@@n:    mov  ax,[camz]
+.n:    mov  ax,[camz]
         cmp  ax,[bwz1]
-        jle  @@d
-        mov  word ptr [fa],2
-        mov  word ptr [fb],3
+        jle  .d
+        mov  word [fa],2
+        mov  word [fb],3
         call EDGEWIN
-@@d:    ret
+.d:    ret
 
 ; ---------------------------------------------------------------------------
 ;  EDGEWIN - outline one wall, then glaze it.
@@ -676,12 +676,12 @@ EDGEWIN:
         call FACESTROKE
         mov  ax,[NPOLY]         ; the wall never made it through the clip
         cmp  ax,3
-        jl   @@x
-        cmp  word ptr [bhw],50  ; no windows on spikes/chimneys/lintels
-        jl   @@x
+        jl   .x
+        cmp  word [bhw],50  ; no windows on spikes/chimneys/lintels
+        jl   .x
         mov  ax,[boxt]
         sub  ax,[boxb]
         cmp  ax,60              ; nor on flat slabs
-        jl   @@x
-        call FAR PTR WINFACEF
-@@x:    ret
+        jl   .x
+        call TOWNSEG:WINFACEF
+.x:    ret

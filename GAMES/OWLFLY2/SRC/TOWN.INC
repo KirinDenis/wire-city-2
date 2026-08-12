@@ -30,10 +30,9 @@
 ;  LAB\README.md.
 ; ============================================================================
 
-TOWNSEG SEGMENT PARA PUBLIC 'CODE'
-        ASSUME  CS:TOWNSEG, DS:CODE, ES:NOTHING, SS:CODE
+segment TOWNSEG
 
-TOWNBASE label byte             ; offset zero, for the window guard below
+label TOWNBASE byte   ; zero, for the window guard below
 
 ; ============================================================================
 ;  WINFACEF - lit panes on the current wall (IX/IY/IZ[0..3] already pitched
@@ -75,7 +74,7 @@ TOWNBASE label byte             ; offset zero, for the window guard below
 ;  decision, for the whole facade, once. A dot has no size to change and
 ;  sits on the unshrunk centre, which moves smoothly.
 ; ============================================================================
-WINFACEF PROC FAR
+WINFACEF:
         ; ---- the wall's own projected box: the cull and the level of
         ; detail in one. PX/PY are the outline FACESTROKE just projected.
         mov  cx,[NPOLY]
@@ -87,56 +86,56 @@ WINFACEF PROC FAR
         mov  [fby1],ax
         dec  cx
         mov  si,2
-@@bb:   mov  ax,[PX+si]
+.bb:   mov  ax,[PX+si]
         cmp  ax,[fbx0]
-        jge  @@b1
+        jge  .b1
         mov  [fbx0],ax
-@@b1:   cmp  ax,[fbx1]
-        jle  @@b2
+.b1:   cmp  ax,[fbx1]
+        jle  .b2
         mov  [fbx1],ax
-@@b2:   mov  ax,[PY+si]
+.b2:   mov  ax,[PY+si]
         cmp  ax,[fby0]
-        jge  @@b3
+        jge  .b3
         mov  [fby0],ax
-@@b3:   cmp  ax,[fby1]
-        jle  @@b4
+.b3:   cmp  ax,[fby1]
+        jle  .b4
         mov  [fby1],ax
-@@b4:   add  si,2
-        loop @@bb
-        cmp  word ptr [fbx1],0  ; wholly off the glass? nothing to glaze
-        jl   @@ret
-        cmp  word ptr [fbx0],319
-        jg   @@ret
-        cmp  word ptr [fby1],0
-        jl   @@ret
-        cmp  word ptr [fby0],199
-        jg   @@ret
+.b4:   add  si,2
+        loop .bb
+        cmp  word [fbx1],0  ; wholly off the glass? nothing to glaze
+        jl   .ret
+        cmp  word [fbx0],319
+        jg   .ret
+        cmp  word [fby1],0
+        jl   .ret
+        cmp  word [fby0],199
+        jg   .ret
         mov  ax,[fbx1]
         sub  ax,[fbx0]
         cmp  ax,WMINPX
-        jl   @@ret
+        jl   .ret
         mov  ax,[fby1]
         sub  ax,[fby0]
         cmp  ax,WMINPX
-        jl   @@ret
+        jl   .ret
         ; ---- quads or dots, once, for the whole wall ----------------------
-        mov  byte ptr [wquad],0
+        mov  byte [wquad],0
         mov  ax,[fbx1]
         sub  ax,[fbx0]
         cwd
         mov  bx,NCOL
         idiv bx
         cmp  ax,WQUADPX
-        jl   @@lod
+        jl   .lod
         mov  ax,[fby1]
         sub  ax,[fby0]
         cwd
         mov  bx,NROW
         idiv bx
         cmp  ax,WQUADPX
-        jl   @@lod
-        mov  byte ptr [wquad],1
-@@lod:
+        jl   .lod
+        mov  byte [wquad],1
+.lod:
         ; ---- U along the wall, V up it ------------------------------------
         mov  ax,[IX+6]
         sub  ax,[IX]
@@ -161,95 +160,95 @@ WINFACEF PROC FAR
         ; the lattice - which lives at the bottom of this file - has to be
         ; addressed through CS. Miss one and it reads the main segment
         ; instead, silently.
-        mov  word ptr [wi],0
-@@ci:   mov  si,[wi]
+        mov  word [wi],0
+.ci:   mov  si,[wi]
         add  si,si
         mov  ax,[wux]
-        imul word ptr [wi]
+        imul word [wi]
         mov  bx,NCOL
         idiv bx
-        mov  cs:[CUX+si],ax
+        mov  [cs:CUX+si],ax
         mov  ax,[wuy]
-        imul word ptr [wi]
+        imul word [wi]
         mov  bx,NCOL
         idiv bx
-        mov  cs:[CUY+si],ax
+        mov  [cs:CUY+si],ax
         mov  ax,[wuz]
-        imul word ptr [wi]
+        imul word [wi]
         mov  bx,NCOL
         idiv bx
-        mov  cs:[CUZ+si],ax
-        inc  word ptr [wi]
-        cmp  word ptr [wi],NCOL
-        jle  @@ci
-        mov  word ptr [wj],0
-@@rj:   mov  si,[wj]
+        mov  [cs:CUZ+si],ax
+        inc  word [wi]
+        cmp  word [wi],NCOL
+        jle  .ci
+        mov  word [wj],0
+.rj:   mov  si,[wj]
         add  si,si
         mov  ax,[wvx]
-        imul word ptr [wj]
+        imul word [wj]
         mov  bx,NROW
         idiv bx
-        mov  cs:[RVX+si],ax
+        mov  [cs:RVX+si],ax
         mov  ax,[wvy]
-        imul word ptr [wj]
+        imul word [wj]
         mov  bx,NROW
         idiv bx
-        mov  cs:[RVY+si],ax
+        mov  [cs:RVY+si],ax
         mov  ax,[wvz]
-        imul word ptr [wj]
+        imul word [wj]
         mov  bx,NROW
         idiv bx
-        mov  cs:[RVZ+si],ax
-        inc  word ptr [wj]
-        cmp  word ptr [wj],NROW
-        jle  @@rj
+        mov  [cs:RVZ+si],ax
+        inc  word [wj]
+        cmp  word [wj],NROW
+        jle  .rj
         ; ---- project the lattice once ------------------------------------
-        mov  word ptr [wj],0
-@@lj:   mov  word ptr [wi],0
-@@li:   mov  si,[wi]
+        mov  word [wj],0
+.lj:   mov  word [wi],0
+.li:   mov  si,[wi]
         add  si,si
         mov  di,[wj]
         add  di,di
         mov  ax,[IZ]
-        add  ax,cs:[CUZ+si]
-        add  ax,cs:[RVZ+di]
+        add  ax,[cs:CUZ+si]
+        add  ax,[cs:RVZ+di]
         mov  [wlz],ax
         mov  ax,[IX]
-        add  ax,cs:[CUX+si]
-        add  ax,cs:[RVX+di]
+        add  ax,[cs:CUX+si]
+        add  ax,[cs:RVX+di]
         mov  [wlx],ax
         mov  ax,[IY]
-        add  ax,cs:[CUY+si]
-        add  ax,cs:[RVY+di]
+        add  ax,[cs:CUY+si]
+        add  ax,[cs:RVY+di]
         mov  [wly],ax
         mov  bx,[wj]            ; lattice slot = j*NSTR + i
         mov  cl,3
         shl  bx,cl
         add  bx,[wi]
-        cmp  word ptr [wlz],NEARZ
-        jge  @@lok
-        mov  byte ptr cs:[WSOK+bx],0 ; this corner is behind us; any pane
-        jmp  @@ln                    ; touching it drops out
-@@lok:  mov  byte ptr cs:[WSOK+bx],1
+        cmp  word [wlz],NEARZ
+        jge  .lok
+        mov  byte [cs:WSOK+bx],0 ; this corner is behind us; any pane
+        jmp  .ln                    ; touching it drops out
+.lok:  mov  byte [cs:WSOK+bx],1
         add  bx,bx
         push bx
         mov  ax,[wlx]
         mov  dx,[wly]
         mov  cx,[wlz]
-        call FAR PTR PROJPTF
+        call CODE:PROJPTF
         pop  bx
-        mov  cs:[WSX+bx],ax
-        mov  cs:[WSY+bx],dx
-@@ln:   inc  word ptr [wi]
-        cmp  word ptr [wi],NCOL
-        jle  @@li
-        inc  word ptr [wj]
-        cmp  word ptr [wj],NROW
-        jle  @@lj
+        mov  [cs:WSX+bx],ax
+        mov  [cs:WSY+bx],dx
+.ln:   inc  word [wi]
+        cmp  word [wi],NCOL
+        jle  .li
+        inc  word [wj]
+        cmp  word [wj],NROW
+        jle  .lj
         ; ---- one pane per cell -------------------------------------------
-        mov  byte ptr [wr],0
-@@pr:   mov  byte ptr [wc],0
-@@pc:   mov  al,[wr]
+        mov  byte [wr],0
+.pr:   mov  byte [wc],0
+.pc:   mov  al,[wr]
         cbw
         mov  cl,3
         shl  ax,cl              ; r*NSTR
@@ -258,33 +257,33 @@ WINFACEF PROC FAR
         add  ax,bx
         mov  [wbase],ax         ; the cell's bottom-left lattice slot
         mov  bx,ax
-        cmp  byte ptr cs:[WSOK+bx],0
-        je   @@pn
-        cmp  byte ptr cs:[WSOK+bx+1],0
-        je   @@pn
-        cmp  byte ptr cs:[WSOK+bx+NSTR],0
-        je   @@pn
-        cmp  byte ptr cs:[WSOK+bx+NSTR+1],0
-        je   @@pn
+        cmp  byte [cs:WSOK+bx],0
+        je   .pn
+        cmp  byte [cs:WSOK+bx+1],0
+        je   .pn
+        cmp  byte [cs:WSOK+bx+NSTR],0
+        je   .pn
+        cmp  byte [cs:WSOK+bx+NSTR+1],0
+        je   .pn
         call WLIT2              ; dark windows are most of them
-        jz   @@pn
+        jz   .pn
         mov  si,[wbase]
         add  si,si
-        mov  ax,cs:[WSX+si]     ; bottom left
+        mov  ax,[cs:WSX+si]     ; bottom left
         mov  [PX],ax
-        mov  ax,cs:[WSY+si]
+        mov  ax,[cs:WSY+si]
         mov  [PY],ax
-        mov  ax,cs:[WSX+si+2]   ; bottom right
+        mov  ax,[cs:WSX+si+2]   ; bottom right
         mov  [PX+2],ax
-        mov  ax,cs:[WSY+si+2]
+        mov  ax,[cs:WSY+si+2]
         mov  [PY+2],ax
-        mov  ax,cs:[WSX+si+2*NSTR+2] ; top right
+        mov  ax,[cs:WSX+si+2*NSTR+2] ; top right
         mov  [PX+4],ax
-        mov  ax,cs:[WSY+si+2*NSTR+2]
+        mov  ax,[cs:WSY+si+2*NSTR+2]
         mov  [PY+4],ax
-        mov  ax,cs:[WSX+si+2*NSTR]   ; top left
+        mov  ax,[cs:WSX+si+2*NSTR]   ; top left
         mov  [PX+6],ax
-        mov  ax,cs:[WSY+si+2*NSTR]
+        mov  ax,[cs:WSY+si+2*NSTR]
         mov  [PY+6],ax
         mov  ax,[PX]            ; centroid
         add  ax,[PX+2]
@@ -300,10 +299,10 @@ WINFACEF PROC FAR
         sar  ax,1
         sar  ax,1
         mov  [wcyc],ax
-        cmp  byte ptr [wquad],0
-        je   @@dot              ; the whole wall is in dot mode
+        cmp  byte [wquad],0
+        je   .dot              ; the whole wall is in dot mode
         xor  si,si              ; shrink to half the cell: the mullion
-@@sh:   mov  ax,[PX+si]
+.sh:   mov  ax,[PX+si]
         add  ax,[wcxc]
         sar  ax,1
         mov  [PX+si],ax
@@ -313,32 +312,31 @@ WINFACEF PROC FAR
         mov  [PY+si],ax
         add  si,2
         cmp  si,8
-        jb   @@sh
-        mov  word ptr [NPOLY],4
-        call FAR PTR SCANPLYF
-        jmp  @@pn
-@@dot:  ; one lit dot per window, from the UNSHRUNK centre - it moves as a
+        jb   .sh
+        mov  word [NPOLY],4
+        call CODE:SCANPLYF
+        jmp  .pn
+.dot:  ; one lit dot per window, from the UNSHRUNK centre - it moves as a
         ; smooth function of the camera, so the far city twinkles at worst
         ; and never changes size. A distant lit facade is exactly this.
         mov  ax,[wcxc]
         cmp  ax,0               ; MOV sets no flags - test, do not assume
-        jl   @@pn
+        jl   .pn
         cmp  ax,319
-        jg   @@pn
+        jg   .pn
         mov  bx,[wcyc]
         cmp  bx,0
-        jl   @@pn
+        jl   .pn
         cmp  bx,199
-        jg   @@pn
-        call FAR PTR PUTPIXF
-@@pn:   inc  byte ptr [wc]
-        cmp  byte ptr [wc],NCOL
-        jl   @@pc
-        inc  byte ptr [wr]
-        cmp  byte ptr [wr],NROW
-        jl   @@pr
-@@ret:  ret
-WINFACEF ENDP
+        jg   .pn
+        call CODE:PUTPIXF
+.pn:   inc  byte [wc]
+        cmp  byte [wc],NCOL
+        jl   .pc
+        inc  byte [wr]
+        cmp  byte [wr],NROW
+        jl   .pr
+.ret:  retf
 
 ; ---- lit? a hash of gi,gj,fa,wr,wc -> ZF=1 dark, else COLOR is the glass
 WLIT2:  mov  ax,[gi]
@@ -376,16 +374,16 @@ WLIT2:  mov  ax,[gi]
         mov  bx,ax
         and  bx,7
         cmp  bx,3
-        jl   @@lit
+        jl   .lit
         xor  al,al
         ret
-@@lit:  mov  bx,ax
+.lit:  mov  bx,ax
         and  bx,31
-        jnz  @@cy
-        mov  byte ptr [COLOR],5
-        jmp  @@d
-@@cy:   mov  byte ptr [COLOR],4
-@@d:    mov  al,1
+        jnz  .cy
+        mov  byte [COLOR],5
+        jmp  .d
+.cy:   mov  byte [COLOR],4
+.d:    mov  al,1
         or   al,al
         ret
 
@@ -425,19 +423,18 @@ WLIT2:  mov  ax,[gi]
 ;    slots in eight and the junction is clear at every red, for free, with
 ;    no vehicle ever having to look at another one.
 ; ============================================================================
-TRAFFICF PROC FAR
+TRAFFICF:
         mov  ax,[gi]
         and  ax,7
         cmp  ax,2
-        jge  @@ew
+        jge  .ew
         call NSAVE
-@@ew:   mov  ax,[gj]
+.ew:   mov  ax,[gj]
         and  ax,7
         cmp  ax,2
-        jge  @@d
+        jge  .d
         call EWAVE
-@@d:    ret
-TRAFFICF ENDP
+.d:    retf
 
 ; ---- a north-south avenue: the lanes run along Z, the cell index along
 ; the lane is gj, and the light takes the first green ------------------------
@@ -448,12 +445,12 @@ NSAVE:  mov  ax,[gi]            ; the avenue's centre line
         shl  ax,cl
         sub  ax,BIAS
         mov  [vcen],ax
-        mov  word ptr [vstart],0
+        mov  word [vstart],0
         call CARTIME
         mov  ax,[gi]
         and  ax,0FFF8h
         mov  [vlane],ax
-        mov  word ptr [vaxis],0
+        mov  word [vaxis],0
         mov  ax,[gj]            ; the cell's own start along the lane
         mov  cl,8
         shl  ax,cl
@@ -470,7 +467,7 @@ NSAVE:  mov  ax,[gi]            ; the avenue's centre line
         sub  ax,32
         sub  ax,[vadv]
         mov  [vslot],ax
-        mov  word ptr [vdir],1
+        mov  word [vdir],1
         call VEHICLE
         ; ---- the -Z lane, mirrored inside its own cell so it runs the
         ; other way and hands over to the cell behind it, not ahead
@@ -485,8 +482,8 @@ NSAVE:  mov  ax,[gi]            ; the avenue's centre line
         sub  ax,32
         add  ax,[vadv]
         mov  [vslot],ax
-        inc  word ptr [vlane]   ; the other side of the road is its own lane
-        mov  word ptr [vdir],-1
+        inc  word [vlane]   ; the other side of the road is its own lane
+        mov  word [vdir],-1
         call VEHICLE
         ret
 
@@ -498,13 +495,13 @@ EWAVE:  mov  ax,[gj]
         shl  ax,cl
         sub  ax,BIAS
         mov  [vcen],ax
-        mov  word ptr [vstart],CARG+CARCLR
+        mov  word [vstart],CARG+CARCLR
         call CARTIME
         mov  ax,[gj]
         and  ax,0FFF8h
         add  ax,200             ; keep the two axes' lane keys apart
         mov  [vlane],ax
-        mov  word ptr [vaxis],1
+        mov  word [vaxis],1
         mov  ax,[gi]
         mov  cl,8
         shl  ax,cl
@@ -522,7 +519,7 @@ EWAVE:  mov  ax,[gj]
         sub  ax,32
         sub  ax,[vadv]
         mov  [vslot],ax
-        mov  word ptr [vdir],1
+        mov  word [vdir],1
         call VEHICLE
         ; ---- the -X lane
         mov  ax,[vcen]
@@ -536,8 +533,8 @@ EWAVE:  mov  ax,[gj]
         sub  ax,32
         add  ax,[vadv]
         mov  [vslot],ax
-        inc  word ptr [vlane]
-        mov  word ptr [vdir],-1
+        inc  word [vlane]
+        mov  word [vdir],-1
         call VEHICLE
         ret
 
@@ -553,12 +550,12 @@ EWAVE:  mov  ax,[gj]
 CARTIME:
         mov  ax,[cartf]
         sub  ax,[vstart]
-        jge  @@c1
+        jge  .c1
         xor  ax,ax              ; the light has not gone green yet
-@@c1:   cmp  ax,CARG
-        jle  @@c2
+.c1:   cmp  ax,CARG
+        jle  .c2
         mov  ax,CARG            ; ...and now it is red again
-@@c2:   mov  bx,CARV
+.c2:   mov  bx,CARV
         imul bx
         add  ax,CARRST
         mov  bx,ax
@@ -579,14 +576,14 @@ VEHICLE:
         mov  ax,[vslot]
         and  ax,7
         cmp  ax,2
-        jl   @@no               ; this slot comes to rest ON a crossing, so
+        jl   .no               ; this slot comes to rest ON a crossing, so
                                 ; it does not exist - which is how the
                                 ; junction stays clear at every red without
                                 ; one vehicle ever looking at another
         call VHASH
         mov  [vh],ax
         and  ax,3
-        jz   @@no               ; a gap in the traffic
+        jz   .no               ; a gap in the traffic
         mov  ax,[vh]
         mov  cl,4
         shr  ax,cl
@@ -603,109 +600,109 @@ VEHICLE:
         inc  ax
         mov  [wallS],al
         call KDEAD              ; ...unless somebody shot it
-        jc   @@no
-        cmp  word ptr [vmode],0
-        jne  @@test             ; a bullet is asking, not the renderer
+        jc   .no
+        cmp  word [vmode],0
+        jne  .test             ; a bullet is asking, not the renderer
         mov  ax,[wcx]           ; a two-box vehicle moves its own centre
         mov  [vcx0],ax
         mov  ax,[wcz]
         mov  [vcz0],ax
-        mov  word ptr [boxb],0
+        mov  word [boxb],0
         mov  ax,[vtype]
         cmp  ax,5
-        je   @@bus
+        je   .bus
         cmp  ax,6
-        jge  @@truck
+        jge  .truck
         ; ---- a car: a low body with a cabin sat on it ---------------------
         mov  ax,31
         mov  bx,13
         call VSIZE
-        mov  word ptr [boxt],14
-        call FAR PTR DRAWBOXF
+        mov  word [boxt],14
+        call CODE:DRAWBOXF
         mov  ax,15
         mov  bx,12
         call VSIZE
-        mov  word ptr [boxb],14
-        mov  word ptr [boxt],26
-        call FAR PTR DRAWBOXF
+        mov  word [boxb],14
+        mov  word [boxt],26
+        call CODE:DRAWBOXF
         ret
-@@bus:  ; ---- a bus IS a box, and there is no shame in that ----------------
+.bus:  ; ---- a bus IS a box, and there is no shame in that ----------------
         mov  ax,82
         mov  bx,18
         call VSIZE
-        mov  word ptr [boxt],46
-        call FAR PTR DRAWBOXF
+        mov  word [boxt],46
+        call CODE:DRAWBOXF
         ret
-@@truck:; ---- a truck: a tall cab in front, a longer body behind it --------
+.truck:; ---- a truck: a tall cab in front, a longer body behind it --------
         mov  ax,16
         mov  bx,17
         call VSIZE
-        mov  word ptr [boxt],42
+        mov  word [boxt],42
         mov  ax,40
         call VSHIFT
-        call FAR PTR DRAWBOXF
+        call CODE:DRAWBOXF
         mov  ax,40
         mov  bx,18
         call VSIZE
-        mov  word ptr [boxb],6
-        mov  word ptr [boxt],46
+        mov  word [boxb],6
+        mov  word [boxt],46
         mov  ax,-22
         call VSHIFT
-        call FAR PTR DRAWBOXF
-@@no:   ret
+        call CODE:DRAWBOXF
+.no:   ret
 
 ; ---- the bullet's question. One box round the whole vehicle: a shell does
 ; not care that a truck has a cab. THIS IS WHY THE TRAFFIC NEEDED NO LIST -
 ; given the cell, where its vehicle is right now is arithmetic, so the test
 ; is O(1) per round and there is nothing to search.
-@@test: mov  bx,[vtype]         ; class: 0 car, 1 bus, 2 truck
+.test: mov  bx,[vtype]         ; class: 0 car, 1 bus, 2 truck
         cmp  bx,5
-        jb   @@c0
-        je   @@c1
+        jb   .c0
+        je   .c1
         mov  bx,2
-        jmp  @@cls
-@@c0:   xor  bx,bx
-        jmp  @@cls
-@@c1:   mov  bx,1
-@@cls:  mov  al,cs:[VLEN+bx]    ; half length along the lane
+        jmp  .cls
+.c0:   xor  bx,bx
+        jmp  .cls
+.c1:   mov  bx,1
+.cls:  mov  al,[cs:VLEN+bx]    ; half length along the lane
         xor  ah,ah
         mov  [vhl],ax
-        mov  al,cs:[VWID+bx]
+        mov  al,[cs:VWID+bx]
         xor  ah,ah
         mov  [vhw],ax
-        mov  al,cs:[VHGT+bx]
+        mov  al,[cs:VHGT+bx]
         xor  ah,ah
         mov  [vhh],ax
-        cmp  word ptr [vaxis],0
-        jne  @@tew
+        cmp  word [vaxis],0
+        jne  .tew
         mov  ax,[vhl]           ; length runs along Z
         mov  [vtz],ax
         mov  ax,[vhw]
         mov  [vtx],ax
-        jmp  @@tgo
-@@tew:  mov  ax,[vhl]
+        jmp  .tgo
+.tew:  mov  ax,[vhl]
         mov  [vtx],ax
         mov  ax,[vhw]
         mov  [vtz],ax
-@@tgo:  mov  ax,[hitx]
+.tgo:  mov  ax,[hitx]
         sub  ax,[wcx]
-        jns  @@t1
+        jns  .t1
         neg  ax
-@@t1:   cmp  ax,[vtx]
-        jg   @@no
+.t1:   cmp  ax,[vtx]
+        jg   .no
         mov  ax,[hitz]
         sub  ax,[wcz]
-        jns  @@t2
+        jns  .t2
         neg  ax
-@@t2:   cmp  ax,[vtz]
-        jg   @@no
+.t2:   cmp  ax,[vtz]
+        jg   .no
         mov  ax,[hity]
         sub  ax,[gbase]         ; height above the road
-        js   @@no
+        js   .no
         cmp  ax,[vhh]
-        jg   @@no
+        jg   .no
         call KADD               ; struck: it burns for KRESP ticks
-        mov  word ptr [vhitf],1
+        mov  word [vhitf],1
         ret
 
 VLEN    db 31,82,56             ; half length by class: car, bus, truck
@@ -745,43 +742,43 @@ KNEXT   dw 0
 ; KDEAD - is (vlane,vslot) a wreck?  CF=1 yes.  Clobbers AX,BX,CX.
 KDEAD:  xor  bx,bx
         mov  cx,NKILL
-@@k:    cmp  word ptr cs:[KTIM+bx],0
-        je   @@kn
+.k:    cmp  word [cs:KTIM+bx],0
+        je   .kn
         mov  ax,[vlane]
-        cmp  ax,cs:[KLANE+bx]
-        jne  @@kn
+        cmp  ax,[cs:KLANE+bx]
+        jne  .kn
         mov  ax,[vslot]
-        cmp  ax,cs:[KSLOT+bx]
-        jne  @@kn
+        cmp  ax,[cs:KSLOT+bx]
+        jne  .kn
         stc
         ret
-@@kn:   add  bx,2
-        loop @@k
+.kn:   add  bx,2
+        loop .k
         clc
         ret
 
 ; KADD - remember this one as dead. Clobbers AX,BX.
-KADD:   mov  bx,cs:[KNEXT]
+KADD:   mov  bx,[cs:KNEXT]
         mov  ax,[vlane]
-        mov  cs:[KLANE+bx],ax
+        mov  [cs:KLANE+bx],ax
         mov  ax,[vslot]
-        mov  cs:[KSLOT+bx],ax
-        mov  word ptr cs:[KTIM+bx],KRESP
+        mov  [cs:KSLOT+bx],ax
+        mov  word [cs:KTIM+bx],KRESP
         add  bx,2
         cmp  bx,NKILL*2
-        jb   @@k1
+        jb   .k1
         xor  bx,bx
-@@k1:   mov  cs:[KNEXT],bx
+.k1:   mov  [cs:KNEXT],bx
         ret
 
 ; KTICK - one tick of mourning. Clobbers AX,BX,CX.
 KTICK:  xor  bx,bx
         mov  cx,NKILL
-@@t:    cmp  word ptr cs:[KTIM+bx],0
-        je   @@tn
-        dec  word ptr cs:[KTIM+bx]
-@@tn:   add  bx,2
-        loop @@t
+.t:    cmp  word [cs:KTIM+bx],0
+        je   .tn
+        dec  word [cs:KTIM+bx]
+.tn:   add  bx,2
+        loop .t
         ret
 
 ; ============================================================================
@@ -789,50 +786,49 @@ KTICK:  xor  bx,bx
 ;  road under it), hitx/hity/hitz (the round). out: CF=1 struck.
 ;  The same lane arithmetic the renderer uses, asked a different question.
 ; ============================================================================
-CARHITF PROC FAR
-        mov  word ptr [vmode],1
-        mov  word ptr [vhitf],0
+CARHITF:
+        mov  word [vmode],1
+        mov  word [vhitf],0
         mov  ax,[gi]
         and  ax,7
         cmp  ax,2
-        jge  @@ew
+        jge  .ew
         call NSAVE
-        cmp  word ptr [vhitf],0
-        jne  @@yes
-@@ew:   mov  ax,[gj]
+        cmp  word [vhitf],0
+        jne  .yes
+.ew:   mov  ax,[gj]
         and  ax,7
         cmp  ax,2
-        jge  @@no
+        jge  .no
         call EWAVE
-        cmp  word ptr [vhitf],0
-        jne  @@yes
-@@no:   mov  word ptr [vmode],0
+        cmp  word [vhitf],0
+        jne  .yes
+.no:   mov  word [vmode],0
         clc
-        ret
-@@yes:  mov  word ptr [vmode],0
+        retf
+.yes:  mov  word [vmode],0
         stc
-        ret
-CARHITF ENDP
+        retf
 
 ; VSIZE - AX = half length along the lane, BX = half width across it
-VSIZE:  cmp  word ptr [vaxis],0
-        jne  @@ew
+VSIZE:  cmp  word [vaxis],0
+        jne  .ew
         mov  [bhd],ax
         mov  [bhw],bx
         ret
-@@ew:   mov  [bhw],ax
+.ew:   mov  [bhw],ax
         mov  [bhd],bx
         ret
 
 ; VSHIFT - AX = how far to move along the lane from the vehicle's centre,
 ; forward positive. Which world axis that is, and which sign, is vaxis/vdir.
-VSHIFT: imul word ptr [vdir]
-        cmp  word ptr [vaxis],0
-        jne  @@ew
+VSHIFT: imul word [vdir]
+        cmp  word [vaxis],0
+        jne  .ew
         add  ax,[vcz0]
         mov  [wcz],ax
         ret
-@@ew:   add  ax,[vcx0]
+.ew:   add  ax,[vcx0]
         mov  [wcx],ax
         ret
 
@@ -864,15 +860,15 @@ VHASH:  mov  ax,[vlane]
 ;  three LERPSET draws the camera between ticks with. Time from the clock,
 ;  smoothness from the frame rate, neither borrowing from the other.
 ; ============================================================================
-CCLOCKF PROC FAR
+CCLOCKF:
         mov  ax,[lasttk]
         mov  bx,ax
         sub  bx,[ctick]         ; whole ticks since we last looked
-        jz   @@same
+        jz   .same
         cmp  bx,64              ; a wrap or a very long stall: take one tick
-        jbe  @@dt               ; rather than leap a thousand
+        jbe  .dt               ; rather than leap a thousand
         mov  bx,1
-@@dt:   mov  [ctick],ax
+.dt:   mov  [ctick],ax
         push bx
         call KTICK              ; the wrecks burn down on the clock too
         pop  bx
@@ -881,35 +877,34 @@ CCLOCKF PROC FAR
         imul bx
         sub  ax,[cfrac]         ; minus what interpolation already advanced
         mov  [cstep],ax
-        mov  word ptr [cfrac],0
-        jmp  @@adv
-@@same: mov  ax,[fprev]
+        mov  word [cfrac],0
+        jmp  .adv
+.same: mov  ax,[fprev]
         cmp  ax,1
-        jge  @@r1
+        jge  .r1
         mov  ax,1
-@@r1:   mov  bx,ax
+.r1:   mov  bx,ax
         mov  ax,[fcnt]
         mov  cx,TKSUB
         imul cx
         idiv bx
         cmp  ax,TKSUB-1
-        jle  @@f1
+        jle  .f1
         mov  ax,TKSUB-1         ; never run past the tick we are inside
-@@f1:   mov  bx,ax
+.f1:   mov  bx,ax
         sub  ax,[cfrac]
         mov  [cstep],ax
         mov  [cfrac],bx
-@@adv:  mov  ax,[cstep]
+.adv:  mov  ax,[cstep]
         cmp  ax,0
-        jle  @@d
+        jle  .d
         add  [cartf],ax
-@@w:    cmp  word ptr [cartf],CART
-        jb   @@d
-        sub  word ptr [cartf],CART
-        add  word ptr [caradv],8
-        jmp  @@w
-@@d:    ret
-CCLOCKF ENDP
+.w:    cmp  word [cartf],CART
+        jb   .d
+        sub  word [cartf],CART
+        add  word [caradv],8
+        jmp  .w
+.d:    retf
 
 ; ============================================================================
 ;  THE BLOCK TABLE - one byte per 8x8-cell block, the whole toroidal world
@@ -938,13 +933,13 @@ CCLOCKF ENDP
 ;  1024 bytes, in a segment that was padding out its window with zeroes
 ;  anyway. The rule in this project is to open a segment, not to shave.
 ; ============================================================================
-BLKCITY equ 40h
+BLKCITY = 40h
 
 ; ---- BLKTABF - bake all 1024 blocks. Called once, after DSGEN. ------------
-BLKTABF PROC FAR
+BLKTABF:
         xor  si,si              ; block i
-@@bi:   xor  di,di              ; block j
-@@bj:   mov  ax,si
+.bi:   xor  di,di              ; block j
+.bj:   mov  ax,si
         mov  bx,di
         call BLKHASH
         mov  bx,ax
@@ -969,26 +964,25 @@ BLKTABF PROC FAR
         add  bx,ax
         mov  al,[HMAP+bx]       ; DS is the main segment in here
         cmp  al,120
-        jb   @@nz               ; the same band GETZONE calls city, read
+        jb   .nz               ; the same band GETZONE calls city, read
         cmp  al,168             ; once for the block instead of per cell
-        jae  @@nz
+        jae  .nz
         pop  ax
         or   ax,BLKCITY
-        jmp  @@put
-@@nz:   pop  ax
-@@put:  mov  bx,si
+        jmp  .put
+.nz:   pop  ax
+.put:  mov  bx,si
         mov  cl,5
         shl  bx,cl
         add  bx,di
-        mov  cs:[BLKT+bx],al
+        mov  [cs:BLKT+bx],al
         inc  di
         cmp  di,32
-        jb   @@bj
+        jb   .bj
         inc  si
         cmp  si,32
-        jb   @@bi
-        ret
-BLKTABF ENDP
+        jb   .bi
+        retf
 
 ; ---- BLKHASH - the superblock hash for block (AX=i, BX=j) -> AX.
 ; This is WORLD2.INC's old SBHASH with the >>3 already done by the caller,
@@ -1021,21 +1015,19 @@ BLKHASH:
 ;  were using - see the note over MMAPGENF. There is one town in this game
 ;  and this is where it is decided.
 ;   in: AX = block i, BX = block j.  out: CF=1 built. RETF leaves flags alone.
-BLKCTYF PROC FAR
+BLKCTYF:
         call BLKCTY
-        ret
-BLKCTYF ENDP
+        retf
 
 ; ---- BLKINFF - the block byte for the cell in [gi],[gj].  out: AX --------
-BLKINFF PROC FAR
+BLKINFF:
         mov  ax,[gi]
         mov  bx,[gj]
         mov  cl,3
         shr  ax,cl
         shr  bx,cl
         call BLKGETN
-        ret
-BLKINFF ENDP
+        retf
 
 ; BLKGETN - the byte for BLOCK (AX=i, BX=j) -> AX. Clobbers BX,CX.
 BLKGETN:
@@ -1044,7 +1036,7 @@ BLKGETN:
         shl  ax,cl
         and  bx,31
         add  bx,ax
-        mov  al,cs:[BLKT+bx]
+        mov  al,[cs:BLKT+bx]
         xor  ah,ah
         ret
 
@@ -1054,15 +1046,15 @@ BLKCTY: push ax
         push bx
         call BLKGETN
         test al,BLKCITY
-        jz   @@no
+        jz   .no
         and  al,15
         cmp  al,3               ; the same 3-in-16 that plants the buildings
-        jae  @@no
+        jae  .no
         pop  bx
         pop  ax
         stc
         ret
-@@no:   pop  bx
+.no:   pop  bx
         pop  ax
         clc
         ret
@@ -1106,7 +1098,7 @@ CELLH:  mov  cl,2
 ;  The sea is the one thing that still cuts a street. A causeway standing on
 ;  the water at height zero reads worse than an honest gap.
 ; ============================================================================
-ROADOKF PROC FAR
+ROADOKF:
         push dx                 ; HBLD's contract says it clobbers AX,BX,CX,SI
                                 ; and six call sites believe it; do not widen
                                 ; that from inside a far door
@@ -1114,7 +1106,7 @@ ROADOKF PROC FAR
         mov  bx,[gj]
         call CELLH
         cmp  al,88
-        jb   @@no               ; below sea level: no road, block or no block
+        jb   .no               ; below sea level: no road, block or no block
         mov  ax,[gi]
         mov  cl,3
         shr  ax,cl              ; block i
@@ -1122,33 +1114,32 @@ ROADOKF PROC FAR
         shr  bx,cl              ; block j
         mov  dx,ax              ; keep it: the west test moves AX
         call BLKCTY
-        jc   @@yes              ; our own block is city: the avenue runs
+        jc   .yes              ; our own block is city: the avenue runs
         mov  cx,[gi]            ; a north-south strip is this block's west
         and  cx,7               ; edge AND the east edge of the block before
         cmp  cx,2               ; it - and that one's outermost avenue is
-        jae  @@w                ; what closes the ring on this side
+        jae  .w                ; what closes the ring on this side
         dec  ax
         call BLKCTY
-        jc   @@yes
-@@w:    mov  cx,[gj]            ; the same again along the other axis
+        jc   .yes
+.w:    mov  cx,[gj]            ; the same again along the other axis
         and  cx,7
         cmp  cx,2
-        jae  @@no
+        jae  .no
         dec  bx
         call BLKCTY             ; AX is already i-1 if we came off a west
-        jc   @@yes              ; strip, so this is the DIAGONAL block - the
+        jc   .yes              ; strip, so this is the DIAGONAL block - the
         cmp  ax,dx              ; one cell that would otherwise leave a
-        je   @@no               ; two-by-two notch in the ring's corner
+        je   .no               ; two-by-two notch in the ring's corner
         mov  ax,dx
         call BLKCTY
-        jc   @@yes
-@@no:   pop  dx                 ; POP leaves the flags alone, so the carry
+        jc   .yes
+.no:   pop  dx                 ; POP leaves the flags alone, so the carry
         clc                     ; can be set either side of it
-        ret
-@@yes:  pop  dx
+        retf
+.yes:  pop  dx
         stc
-        ret
-ROADOKF ENDP
+        retf
 
 ; ============================================================================
 ;  ROADYF - sit the quad FACETOPC has just built ON THE GROUND, corner by
@@ -1175,7 +1166,7 @@ ROADOKF ENDP
 ;       the terrain quad and made camera-relative, in ROTCUL's corner order
 ;       (0 = x0z0, 1 = x1z0, 2 = x1z1, 3 = x0z1)
 ; ============================================================================
-ROADYF PROC FAR
+ROADYF:
         push si
         push di
         push dx
@@ -1185,68 +1176,67 @@ ROADYF PROC FAR
         shr  ax,cl
         mov  si,ax
         and  ax,3
-        mov  cs:[RYA],ax
+        mov  [cs:RYA],ax
         mov  ax,[bhw]           ; 128 -> one cell wide, 256 -> two
         mov  cl,7
         shr  ax,cl
-        add  ax,cs:[RYA]
-        mov  cs:[RYA1],ax       ; the east edge, 1..4 quarters along
+        add  ax,[cs:RYA]
+        mov  [cs:RYA1],ax       ; the east edge, 1..4 quarters along
         mov  ax,[bwz0]
         add  ax,BIAS
         mov  cl,8
         shr  ax,cl
         mov  di,ax
         and  ax,3
-        mov  cs:[RYB],ax
+        mov  [cs:RYB],ax
         mov  ax,[bhd]
         mov  cl,7
         shr  ax,cl
-        add  ax,cs:[RYB]
-        mov  cs:[RYB1],ax
+        add  ax,[cs:RYB]
+        mov  [cs:RYB1],ax
         mov  cl,2
         shr  si,cl              ; node x = cell >> 2
         shr  di,cl              ; node z
         mov  ax,si              ; ---- the four node heights, once
         mov  bx,di
         call NODEH
-        mov  cs:[RYH],ax
+        mov  [cs:RYH],ax
         mov  ax,si
         inc  ax
         mov  bx,di
         call NODEH
-        mov  cs:[RYH+2],ax
+        mov  [cs:RYH+2],ax
         mov  ax,si
         mov  bx,di
         inc  bx
         call NODEH
-        mov  cs:[RYH+4],ax
+        mov  [cs:RYH+4],ax
         mov  ax,si
         inc  ax
         mov  bx,di
         inc  bx
         call NODEH
-        mov  cs:[RYH+6],ax
-        mov  ax,cs:[RYA]        ; ---- and the four corners
-        mov  bx,cs:[RYB]
+        mov  [cs:RYH+6],ax
+        mov  ax,[cs:RYA]        ; ---- and the four corners
+        mov  bx,[cs:RYB]
         call RYLERP
         mov  [IY],ax
-        mov  ax,cs:[RYA1]
-        mov  bx,cs:[RYB]
+        mov  ax,[cs:RYA1]
+        mov  bx,[cs:RYB]
         call RYLERP
         mov  [IY+2],ax
-        mov  ax,cs:[RYA1]
-        mov  bx,cs:[RYB1]
+        mov  ax,[cs:RYA1]
+        mov  bx,[cs:RYB1]
         call RYLERP
         mov  [IY+4],ax
-        mov  ax,cs:[RYA]
-        mov  bx,cs:[RYB1]
+        mov  ax,[cs:RYA]
+        mov  bx,[cs:RYB1]
         call RYLERP
         mov  [IY+6],ax
         pop  dx
         pop  di
         pop  si
-        ret
-ROADYF ENDP
+        retf
 
 ; NODEH - world height of heightmap node (AX=x, BX=z) -> AX.  HGET and
 ; WORLDH in one, written out here because both live in the main segment
@@ -1259,40 +1249,40 @@ NODEH:  and  ax,63
         mov  al,[HMAP+bx]
         xor  ah,ah
         sub  ax,88              ; ...WORLDH: sea floor flat, mountains steep
-        jns  @@w0
+        jns  .w0
         xor  ax,ax
         ret
-@@w0:   mov  bx,5
+.w0:   mov  bx,5
         imul bx
         cmp  ax,560
-        jle  @@w1
+        jle  .w1
         mov  bx,ax
         sub  bx,560
         add  ax,bx
-@@w1:   ret
+.w1:   ret
 
 ; RYLERP - bilinear the four node heights at (AX=a, BX=b), a and b being
 ; QUARTERS of a node, 0..4.  out: AX, camera-relative and lifted.
-RYLERP: mov  cs:[RYTA],ax
-        mov  cs:[RYTB],bx
-        mov  ax,cs:[RYH+2]      ; ha = h00 + (h10-h00)*a/4
-        sub  ax,cs:[RYH]
-        imul word ptr cs:[RYTA]
+RYLERP: mov  [cs:RYTA],ax
+        mov  [cs:RYTB],bx
+        mov  ax,[cs:RYH+2]      ; ha = h00 + (h10-h00)*a/4
+        sub  ax,[cs:RYH]
+        imul word [cs:RYTA]
         mov  cl,2
         sar  ax,cl
-        add  ax,cs:[RYH]
-        mov  cs:[RYTH],ax
-        mov  ax,cs:[RYH+6]      ; hb = h01 + (h11-h01)*a/4
-        sub  ax,cs:[RYH+4]
-        imul word ptr cs:[RYTA]
+        add  ax,[cs:RYH]
+        mov  [cs:RYTH],ax
+        mov  ax,[cs:RYH+6]      ; hb = h01 + (h11-h01)*a/4
+        sub  ax,[cs:RYH+4]
+        imul word [cs:RYTA]
         mov  cl,2
         sar  ax,cl
-        add  ax,cs:[RYH+4]
-        sub  ax,cs:[RYTH]       ; h = ha + (hb-ha)*b/4
-        imul word ptr cs:[RYTB]
+        add  ax,[cs:RYH+4]
+        sub  ax,[cs:RYTH]       ; h = ha + (hb-ha)*b/4
+        imul word [cs:RYTB]
         mov  cl,2
         sar  ax,cl
-        add  ax,cs:[RYTH]
+        add  ax,[cs:RYTH]
         add  ax,ROADLIFT
         sub  ax,[camy]
         ret
@@ -1328,11 +1318,11 @@ BLKT    db 1024 dup(0)          ; 32x32 blocks, baked by BLKTABF
 ;  belt and braces, because this engine sorts by painter and a slab that
 ;  ties on depth with the one under it would flicker between frames.
 ; ============================================================================
-AFDRAWF PROC FAR
-        mov  word ptr [afi],0
-@@f:    mov  bx,[afi]
+AFDRAWF:
+        mov  word [afi],0
+.f:    mov  bx,[afi]
         add  bx,bx
-        mov  cs:[afq],bx        ; the word index, kept: everything below
+        mov  [cs:afq],bx        ; the word index, kept: everything below
                                 ;  clobbers BX and wants it again
         ; ---- the CHEAP cull first, on BOTH axes, the way ROADCELL does it.
         ; Culling on minrz alone is what let the first version paint half the
@@ -1343,34 +1333,34 @@ AFDRAWF PROC FAR
         mov  ax,[afx+bx]
         sub  ax,[camx]
         or   ax,ax
-        jns  @@cx
+        jns  .cx
         neg  ax
-@@cx:   cmp  ax,AFVIS
-        jg   @@n
+.cx:   cmp  ax,AFVIS
+        jg   .n
         mov  ax,[afz+bx]
         sub  ax,[camz]
         or   ax,ax
-        jns  @@cz
+        jns  .cz
         neg  ax
-@@cz:   cmp  ax,AFVIS
-        jg   @@n
-        mov  bx,cs:[afq]
+.cz:   cmp  ax,AFVIS
+        jg   .n
+        mov  bx,[cs:afq]
         mov  ax,[afx+bx]
         mov  [wcx],ax
         mov  ax,[afz+bx]
         mov  [wcz],ax
-        mov  word ptr [bhw],AFW ; ---- the CULL is done on the whole strip,
-        mov  word ptr [bhd],AFLEN ; and only the cull: this rectangle is far
-        call FAR PTR ROTCULF    ;  too big to hand to the rasteriser
-        jc   @@n
+        mov  word [bhw],AFW ; ---- the CULL is done on the whole strip,
+        mov  word [bhd],AFLEN ; and only the cull: this rectangle is far
+        call CODE:ROTCULF   ;  too big to hand to the rasteriser
+        jc   .n
         mov  ax,[minrz]
         cmp  ax,AFVIS
-        jg   @@n
-        mov  bx,cs:[afq]        ; the concrete's own flat height, made
+        jg   .n
+        mov  bx,[cs:afq]        ; the concrete's own flat height, made
         mov  ax,[afy+bx]        ;  camera-relative once for the whole field
         add  ax,ROADLIFT
         sub  ax,[camy]
-        mov  cs:[afy1],ax
+        mov  [cs:afy1],ax
         ; ====================================================================
         ;  AND NOW IN SEGMENTS, because a runway is not a road cell and this
         ;  engine only knows how to draw road cells.
@@ -1391,76 +1381,75 @@ AFDRAWF PROC FAR
         ;  what falls out of the loop for free - and a dashed centreline is
         ;  also exactly what is painted on a real one.
         ; ====================================================================
-        mov  word ptr cs:[afs],0
-@@sg:   mov  bx,cs:[afq]
-        mov  ax,cs:[afs]        ; this segment's centre: back to the near
+        mov  word [cs:afs],0
+.sg:   mov  bx,[cs:afq]
+        mov  ax,[cs:afs]        ; this segment's centre: back to the near
         mov  cx,AFSEGD*2        ;  threshold, then a segment and a half in
         imul cx
         add  ax,AFSEGD
         sub  ax,AFLEN
         add  ax,[afz+bx]
-        mov  cs:[afsz],ax
+        mov  [cs:afsz],ax
         mov  ax,[afx+bx]
-        mov  cs:[afsx],ax
-        mov  ax,cs:[afy1]       ; the concrete
+        mov  [cs:afsx],ax
+        mov  ax,[cs:afy1]       ; the concrete
         mov  [bry1],ax
-        mov  ax,cs:[afsx]
+        mov  ax,[cs:afsx]
         mov  [wcx],ax
-        mov  ax,cs:[afsz]
+        mov  ax,[cs:afsz]
         mov  [wcz],ax
-        mov  word ptr [bhw],AFW
-        mov  word ptr [bhd],AFSEGD
-        mov  byte ptr [COLOR],ASPHALT
+        mov  word [bhw],AFW
+        mov  word [bhd],AFSEGD
+        mov  byte [COLOR],ASPHALT
         call AFQUAD
-        mov  ax,cs:[afy1]       ; ...and the paint on it, a unit up
+        mov  ax,[cs:afy1]       ; ...and the paint on it, a unit up
         inc  ax
         mov  [bry1],ax
-        mov  byte ptr [COLOR],AFPAINT
-        mov  ax,cs:[afsx]       ; one dash of the centreline
+        mov  byte [COLOR],AFPAINT
+        mov  ax,[cs:afsx]       ; one dash of the centreline
         mov  [wcx],ax
-        mov  ax,cs:[afsz]
+        mov  ax,[cs:afsz]
         mov  [wcz],ax
-        mov  word ptr [bhw],AFCTR
-        mov  word ptr [bhd],AFSEGD/2
+        mov  word [bhw],AFCTR
+        mov  word [bhd],AFSEGD/2
         call AFQUAD
-        inc  word ptr cs:[afs]
-        cmp  word ptr cs:[afs],AFSEG
-        jb   @@sg
+        inc  word [cs:afs]
+        cmp  word [cs:afs],AFSEG
+        jb   .sg
         ; ---- a threshold bar across each end, the mark a pilot aims at ----
-        mov  ax,cs:[afy1]
+        mov  ax,[cs:afy1]
         inc  ax
         mov  [bry1],ax
-        mov  byte ptr [COLOR],AFPAINT
-        mov  bx,cs:[afq]
+        mov  byte [COLOR],AFPAINT
+        mov  bx,[cs:afq]
         mov  ax,[afx+bx]
         mov  [wcx],ax
         mov  ax,[afz+bx]
         sub  ax,AFLEN-AFTHR
         mov  [wcz],ax
-        mov  word ptr [bhw],AFW-AFEDGE
-        mov  word ptr [bhd],AFTHR
+        mov  word [bhw],AFW-AFEDGE
+        mov  word [bhd],AFTHR
         call AFQUAD
-        mov  bx,cs:[afq]
+        mov  bx,[cs:afq]
         mov  ax,[afx+bx]
         mov  [wcx],ax
         mov  ax,[afz+bx]
         add  ax,AFLEN-AFTHR
         mov  [wcz],ax
-        mov  word ptr [bhw],AFW-AFEDGE
-        mov  word ptr [bhd],AFTHR
+        mov  word [bhw],AFW-AFEDGE
+        mov  word [bhd],AFTHR
         call AFQUAD
         call AFBLD              ; ...and the things standing beside it
-@@n:    inc  word ptr [afi]
-        cmp  word ptr [afi],NAF
-        jb   @@f
-        ret
-AFDRAWF ENDP
+.n:    inc  word [afi]
+        cmp  word [afi],NAF
+        jb   .f
+        retf
 
 ; ============================================================================
 ;  AFBLD - THE APRON: three hangars in a row and the tower beside them.
-;  [afq] holds the field as a word index, and it survives everything here
+;  [cs:afq] holds the field as a word index, and it survives everything here
 ;  because it lives in CS - which is TOWNSEG, and nothing in the main
-;  segment can reach it. cs:[afy1] is NOT what these want: that is the
+;  segment can reach it. [cs:afy1] is NOT what these want: that is the
 ;  concrete made camera-relative and lifted by ROADLIFT, and DRAWBOX does
 ;  its own subtraction from a WORLD height. So gbase is read fresh.
 ;
@@ -1480,65 +1469,65 @@ AFDRAWF ENDP
 ;  field - AFINITF clamps the ground into the plains band so no block can
 ;  zone built-up on it - so the two are never near each other.
 ; ============================================================================
-AFBLD:  mov  bx,cs:[afq]
+AFBLD:  mov  bx,[cs:afq]
         mov  ax,[afy+bx]        ; the ironed ground: every box on the apron
         mov  [gbase],ax         ;  shares it, which is the flattening paying
                                 ;  out for the third time
-        mov  word ptr cs:[afb],0
-@@h:    mov  bx,cs:[afq]
+        mov  word [cs:afb],0
+.h:    mov  bx,[cs:afq]
         mov  ax,[afx+bx]
         add  ax,AFAPX
         mov  [wcx],ax
-        mov  ax,cs:[afb]        ; 0,1,2 -> -1,0,+1 down the strip, so the row
+        mov  ax,[cs:afb]        ; 0,1,2 -> -1,0,+1 down the strip, so the row
         dec  ax                 ;  is centred on the field whatever AFHGN is
         mov  cx,AFHGS
         imul cx
         add  ax,[afz+bx]
         mov  [wcz],ax
-        mov  word ptr [bhw],AFHGW
-        mov  word ptr [bhd],AFHGD
-        mov  word ptr [boxb],0
-        mov  word ptr [boxt],AFHGH
-        mov  byte ptr [wallL],AFBWL
-        mov  byte ptr [wallS],AFBWS
-        mov  byte ptr [roofc],AFBRF
-        call FAR PTR DRAWBOXF
-        inc  word ptr cs:[afb]
-        cmp  word ptr cs:[afb],AFHGN
-        jb   @@h
+        mov  word [bhw],AFHGW
+        mov  word [bhd],AFHGD
+        mov  word [boxb],0
+        mov  word [boxt],AFHGH
+        mov  byte [wallL],AFBWL
+        mov  byte [wallS],AFBWS
+        mov  byte [roofc],AFBRF
+        call CODE:DRAWBOXF
+        inc  word [cs:afb]
+        cmp  word [cs:afb],AFHGN
+        jb   .h
         ; ---- the tower: a shaft, and the cab that overhangs it ----
-        mov  bx,cs:[afq]
+        mov  bx,[cs:afq]
         mov  ax,[afx+bx]
         add  ax,AFTWX
         mov  [wcx],ax
         mov  ax,[afz+bx]
         add  ax,AFTWZ
         mov  [wcz],ax
-        mov  word ptr [bhw],AFTWW
-        mov  word ptr [bhd],AFTWW
-        mov  word ptr [boxb],0
-        mov  word ptr [boxt],AFTWH
-        mov  byte ptr [wallL],AFBWL
-        mov  byte ptr [wallS],AFBWS
-        mov  byte ptr [roofc],AFBWS
-        call FAR PTR DRAWBOXF
-        mov  word ptr [bhw],AFTCW ; wcx/wcz still stand: ROTCUL only READS
-        mov  word ptr [bhd],AFTCW ;  them, so the cab needs no re-centring
-        mov  word ptr [boxb],AFTWH
-        mov  word ptr [boxt],AFTWH+AFTCH
-        mov  byte ptr [wallL],AFTGL
-        mov  byte ptr [wallS],AFTGL
-        mov  byte ptr [roofc],AFBRF
-        call FAR PTR DRAWBOXF
+        mov  word [bhw],AFTWW
+        mov  word [bhd],AFTWW
+        mov  word [boxb],0
+        mov  word [boxt],AFTWH
+        mov  byte [wallL],AFBWL
+        mov  byte [wallS],AFBWS
+        mov  byte [roofc],AFBWS
+        call CODE:DRAWBOXF
+        mov  word [bhw],AFTCW ; wcx/wcz still stand: ROTCUL only READS
+        mov  word [bhd],AFTCW ;  them, so the cab needs no re-centring
+        mov  word [boxb],AFTWH
+        mov  word [boxt],AFTWH+AFTCH
+        mov  byte [wallL],AFTGL
+        mov  byte [wallS],AFTGL
+        mov  byte [roofc],AFBRF
+        call CODE:DRAWBOXF
         ret
 afb     dw 0                    ; the hangar being put up
 
 ; ---- AFQUAD - one painted slab, from wcx/wcz/bhw/bhd at bry1 --------------
-AFQUAD: call FAR PTR ROTCULF
-        jc   @@q
-        call FAR PTR FACETOPCF
-        call FAR PTR FACEFILLF
-@@q:    ret
+AFQUAD: call CODE:ROTCULF
+        jc   .q
+        call CODE:FACETOPCF
+        call CODE:FACEFILLF
+.q:    ret
 afs     dw 0                    ; the segment being laid...
 afsx    dw 0                    ;  ...and where it sits
 afsz    dw 0
@@ -1546,13 +1535,11 @@ afq     dw 0                    ; the field being paved, as a word index
 afy1    dw 0                    ; ...and its concrete, camera-relative
 
 ; ---- THE WINDOW GUARD ------------------------------------------------------
-        PUBLIC TWNEND           ; how full this window is, in the linker map
-TWNEND  label byte
-IF ($-TOWNBASE) GT 8176
+label TWNEND byte
+if ($-TOWNBASE) > 8176
         %OUT *** TOWNSEG overflows its 8K window ***
         .ERR
-ENDIF
-        ORG  1FF0h              ; claim the whole window, the way SKYSEG does
+end if
+        rb 1FF0h - $   ; claim the whole window, the way SKYSEG does
         db   16 dup(0)
 
-TOWNSEG ENDS

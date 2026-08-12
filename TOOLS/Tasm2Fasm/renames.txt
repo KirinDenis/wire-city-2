@@ -1,0 +1,84 @@
+; Renames Tasm2Fasm must not invent for itself.
+;
+; FASM reserves the register names of processors far newer than the idiom
+; this code is written in, so a variable called rcx now collides with a 64-bit
+; register. Renaming is safe - a label's name changes no emitted byte - but
+; WHICH occurrences to rename is a judgement, so it is recorded here rather
+; than guessed, and the translation stays reproducible.
+;
+;   file                      old=new        rename every whole word
+;   file                      old@def=new    rename ONLY the column-0 label
+;   *                         old=new        every file in the repository
+;
+; Use * when the name crosses files. rcx is DECLARED in five programs and
+; USED only inside ENGINE\E_M3D.INC, which every one of them includes; rename
+; it in the programs alone and the shared code stops compiling, rename it in
+; the shared code alone and so do the programs.
+;
+; Use @def when the name is also a register: then every other occurrence in
+; the file IS the register and must not be touched.
+;
+; ---------------------------------------------------------------------------
+; `rcx`/`rcz` are ROTXZ's in and out: the camera-relative coordinates of a
+; point. Only rcx collides - there is no register called rcz - but both are
+; renamed so the pair still reads as a pair. The slots are declared in each
+; program's own data and read by the shared ROTXZ in ENGINE\E_M3D.INC, so
+; this one has to be repository-wide.
+
+*                          rcx=rc_x  rcz=rc_z
+
+; ---------------------------------------------------------------------------
+; `rol` is the TRAINER's bank angle, one of the hdg/pit/rol trio, and it is
+; also the ROTATE LEFT instruction - which FASM will not have as a name and
+; TASM did not mind. It is declared in FIELD.ASM and read from four of its
+; includes, so it has to be repository-wide, and that is only safe because
+; ROL is never used as an instruction anywhere in these sources: the whole-
+; word rename cannot corrupt a `rol ax,1` that does not exist.
+;
+; NOT renamed to `roll`. FIELD.ASM already has a variable of that name, doing
+; something else entirely, eighty lines further down. `rll` keeps the shape of
+; the trio and collides with nothing.
+
+*                          rol=rll
+
+; ---------------------------------------------------------------------------
+; WIRECITY.
+;
+; `di` is the interesting one. It is a variable, and it has NEVER WORKED: the
+; register name shadowed it, so every `[di]` in that file is DS:[DI] and the
+; city-scan loop counter has been written through whatever DI happened to
+; hold. TASM's own listing says so plainly -
+;     mov word ptr [di],-RAD  ->  C7 05 FFFB        (register)
+;     mov word ptr [dj],-RAD  ->  C7 06 01A3 FFFB   (variable)
+; so the slot is kept - removing it would move every address after it - and
+; only the definition is renamed, to make the deadness impossible to miss.
+
+GAMES\WIRECITY\CITY.ASM    di@def=di_dead
+
+; ---------------------------------------------------------------------------
+; EXAMPLES. Two more collisions, each in one file only.
+;
+; SMOKE's `rdi` is the draw-order index of the painter's loop, and it is
+; live. TASM had no trouble with it - that assembler has never heard of a
+; 64-bit register. Only FASM sees a collision, so only FASM needs the name
+; changed; the one inserted character keeps it recognisable against the TASM
+; original frozen in TASM\EXAMPLES.
+;
+; FLIGHT's `spl` is a span length, and `spl` is now the low byte of RSP. This
+; one got through the reserved-word check entirely - the list did not have
+; the byte halves of SI, DI, BP and SP in it - and was found by FASM refusing
+; the file. The list has them now.
+
+EXAMPLES\SMOKE.ASM         rdi=rd_i
+
+; ---------------------------------------------------------------------------
+; `spl` is the span length of the scanline filler, and it is the low byte of
+; RSP to FASM. It turns up in FLIGHT, in NEWTON and in OWL FLY II, which all
+; share the renderer's shape - and in OWL FLY II it is declared in DATA.INC
+; and read from two other includes, so per-file rules cannot reach it.
+;
+; `rsi` is OWL FLY II's radar station index, declared in DATA.INC and ticked
+; from UI.INC. Neither name is ever an instruction, which is what makes a
+; whole-word rename across the repository safe.
+
+*                          spl=spanl  rsi=rs_i

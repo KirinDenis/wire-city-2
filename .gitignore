@@ -1,3 +1,8 @@
+# The Windows FASM cross-check binary. CITY.COM (assembled in DOS) is the real
+# one and is tracked; CITYW.COM is written by MAKEWIN CHECK only to be compared
+# against it.
+GAMES/WIRECITY/CITYW.COM
+
 # TASM / TLINK build artifacts
 *.OBJ
 *.obj

@@ -24,23 +24,23 @@
 ; so the whole world pitches for loops and dives. Clobbers AX,BX,CX,DI.
 PITCH4: push si
         xor  si,si
-@@l:    mov  ax,[IY+si]
-        imul word ptr [pcos]
+.l:    mov  ax,[IY+si]
+        imul word [pcos]
         mov  bx,256
         idiv bx
         mov  cx,ax              ; y*pcos/256
         mov  ax,[IZ+si]
-        imul word ptr [psin]
+        imul word [psin]
         mov  bx,256
         idiv bx
         sub  cx,ax              ; y' = (y*pcos - z*psin)/256
         mov  ax,[IY+si]
-        imul word ptr [psin]
+        imul word [psin]
         mov  bx,256
         idiv bx
         mov  di,ax              ; y*psin/256
         mov  ax,[IZ+si]
-        imul word ptr [pcos]
+        imul word [pcos]
         mov  bx,256
         idiv bx
         add  ax,di              ; z' = (y*psin + z*pcos)/256
@@ -48,49 +48,49 @@ PITCH4: push si
         mov  [IY+si],cx
         add  si,2
         cmp  si,8
-        jl   @@l
+        jl   .l
         pop  si
         ret
 
 CLIPNEAR:
         call PITCH4             ; apply pitch before the near-plane clip
-        mov  word ptr [oc],0
-        mov  word ptr [ci],0
-@@cl:   mov  ax,[ci]
+        mov  word [oc],0
+        mov  word [ci],0
+.cl:   mov  ax,[ci]
         add  ax,2
         cmp  ax,8
-        jl   @@nw
+        jl   .nw
         xor  ax,ax
-@@nw:   mov  [ni],ax
+.nw:   mov  [ni],ax
         ; curIn -> dl, nextIn -> dh
         mov  si,[ci]
         mov  ax,[IZ+si]
         mov  dl,0
         cmp  ax,NEARZ
-        jl   @@a
+        jl   .a
         mov  dl,1
-@@a:    mov  si,[ni]
+.a:    mov  si,[ni]
         mov  ax,[IZ+si]
         mov  dh,0
         cmp  ax,NEARZ
-        jl   @@b
+        jl   .b
         mov  dh,1
-@@b:    test dl,dl
-        jz   @@nocur
+.b:    test dl,dl
+        jz   .nocur
         mov  si,[ci]
         call APPENDV
-@@nocur:
+.nocur:
         cmp  dl,dh
-        je   @@nois
+        je   .nois
         call APPENDISECT
-@@nois:
+.nois:
         mov  ax,[ci]
         add  ax,2
         cmp  ax,8
-        jge  @@end
+        jge  .end
         mov  [ci],ax
-        jmp  @@cl
-@@end:  mov  ax,[oc]
+        jmp  .cl
+.end:  mov  ax,[oc]
         mov  [NPOLY],ax
         ret
 
@@ -104,7 +104,7 @@ APPENDV:
         mov  [OY+di],ax
         mov  ax,[IZ+si]
         mov  [OZ+di],ax
-        inc  word ptr [oc]
+        inc  word [oc]
         ret
 
 ; append intersection of edge ci->ni with plane Z=NEARZ
@@ -123,33 +123,33 @@ APPENDISECT:
         ; normalise den > 0 and clamp t into [0..1] - a garbage face
         ; (coords wrapped upstream) clips ugly instead of crashing.
         or   ax,ax
-        jg   @@tok
-        jl   @@tneg
-        mov  word ptr [tden],1  ; degenerate edge: t = 0
-        mov  word ptr [tnum],0
-        jmp  @@tok
-@@tneg: neg  ax
+        jg   .tok
+        jl   .tneg
+        mov  word [tden],1  ; degenerate edge: t = 0
+        mov  word [tnum],0
+        jmp  .tok
+.tneg: neg  ax
         mov  [tden],ax
-        neg  word ptr [tnum]
-@@tok:  mov  ax,[tnum]
+        neg  word [tnum]
+.tok:  mov  ax,[tnum]
         or   ax,ax
-        jns  @@tn1
-        mov  word ptr [tnum],0
-@@tn1:  mov  ax,[tnum]
+        jns  .tn1
+        mov  word [tnum],0
+.tn1:  mov  ax,[tnum]
         cmp  ax,[tden]
-        jle  @@tn2
+        jle  .tn2
         mov  ax,[tden]
         mov  [tnum],ax
-@@tn2:  mov  ax,[IX+di]
+.tn2:  mov  ax,[IX+di]
         sub  ax,[IX+si]
-        imul word ptr [tnum]
-        idiv word ptr [tden]
+        imul word [tnum]
+        idiv word [tden]
         add  ax,[IX+si]
         push ax                 ; ox
         mov  ax,[IY+di]
         sub  ax,[IY+si]
-        imul word ptr [tnum]
-        idiv word ptr [tden]
+        imul word [tnum]
+        idiv word [tden]
         add  ax,[IY+si]
         push ax                 ; oy
         mov  di,[oc]
@@ -158,14 +158,14 @@ APPENDISECT:
         mov  [OY+di],ax
         pop  ax
         mov  [OX+di],ax
-        mov  word ptr [OZ+di],NEARZ
-        inc  word ptr [oc]
+        mov  word [OZ+di],NEARZ
+        inc  word [oc]
         ret
 
 ; project OX/OY/OZ[0..NPOLY-1] -> PX/PY
 PROJPOLY:
-        mov  word ptr [pk],0
-@@p:    mov  si,[pk]
+        mov  word [pk],0
+.p:    mov  si,[pk]
         add  si,si
         mov  ax,[OX+si]
         mov  dx,[OY+si]
@@ -175,10 +175,10 @@ PROJPOLY:
         add  si,si
         mov  [PX+si],ax
         mov  [PY+si],dx
-        inc  word ptr [pk]
+        inc  word [pk]
         mov  ax,[pk]
         cmp  ax,[NPOLY]
-        jl   @@p
+        jl   .p
         ret
 
 ; ============================================================================
@@ -195,51 +195,51 @@ SCANPOLY:
         mov  cx,[NPOLY]
         dec  cx
         mov  si,2
-@@mm:   mov  ax,[PY+si]
+.mm:   mov  ax,[PY+si]
         cmp  ax,[pminy]
-        jge  @@mm1
+        jge  .mm1
         mov  [pminy],ax
-@@mm1:  cmp  ax,[pmaxy]
-        jle  @@mm2
+.mm1:  cmp  ax,[pmaxy]
+        jle  .mm2
         mov  [pmaxy],ax
-@@mm2:  add  si,2
-        loop @@mm
+.mm2:  add  si,2
+        loop .mm
         mov  ax,[pminy]
         cmp  ax,0
-        jge  @@y0
+        jge  .y0
         xor  ax,ax
-@@y0:   mov  [scy],ax
+.y0:   mov  [scy],ax
         mov  ax,[pmaxy]
         cmp  ax,199
-        jle  @@y1
+        jle  .y1
         mov  ax,199
-@@y1:   mov  [scymax],ax
+.y1:   mov  [scymax],ax
         mov  ax,[scy]
         cmp  ax,[scymax]
-        jg   @@done
-@@yloop:
-        mov  word ptr [scxl],32767
-        mov  word ptr [scxr],-32768
+        jg   .done
+.yloop:
+        mov  word [scxl],32767
+        mov  word [scxr],-32768
         mov  cx,[NPOLY]
         xor  si,si
-@@eloop:
+.eloop:
         mov  di,si
         add  di,2
         mov  ax,[NPOLY]
         add  ax,ax
         cmp  di,ax
-        jl   @@nw2
+        jl   .nw2
         xor  di,di
-@@nw2:  mov  ax,[PY+si]
+.nw2:  mov  ax,[PY+si]
         mov  bx,[PY+di]
         cmp  ax,bx
-        jle  @@io
+        jle  .io
         xchg ax,bx
-@@io:   mov  dx,[scy]
+.io:   mov  dx,[scy]
         cmp  dx,ax
-        jl   @@enext
+        jl   .enext
         cmp  dx,bx
-        jge  @@enext
+        jge  .enext
         mov  ax,[PX+di]
         sub  ax,[PX+si]
         mov  bx,[scy]
@@ -250,29 +250,29 @@ SCANPOLY:
         idiv bx
         add  ax,[PX+si]
         cmp  ax,[scxl]
-        jge  @@nxl
+        jge  .nxl
         mov  [scxl],ax
-@@nxl:  cmp  ax,[scxr]
-        jle  @@enext
+.nxl:  cmp  ax,[scxr]
+        jle  .enext
         mov  [scxr],ax
-@@enext:
+.enext:
         add  si,2
-        loop @@eloop
+        loop .eloop
         mov  ax,[scxl]
         cmp  ax,[scxr]
-        jg   @@nextY
+        jg   .nextY
         cmp  ax,0
-        jge  @@fxl
+        jge  .fxl
         xor  ax,ax
-@@fxl:  mov  [scxl],ax
+.fxl:  mov  [scxl],ax
         mov  ax,[scxr]
         cmp  ax,319
-        jle  @@fxr
+        jle  .fxr
         mov  ax,319
-@@fxr:  mov  [scxr],ax
+.fxr:  mov  [scxr],ax
         mov  ax,[scxl]
         cmp  ax,[scxr]
-        jg   @@nextY
+        jg   .nextY
         mov  di,[scy]
         mov  cl,8
         shl  di,cl
@@ -286,20 +286,20 @@ SCANPOLY:
         inc  cx
         mov  al,[COLOR]
         rep  stosb
-@@nextY:
+.nextY:
         mov  ax,[scy]
         inc  ax
         mov  [scy],ax
         cmp  ax,[scymax]
-        jle  @@yloop
-@@done: ret
+        jle  .yloop
+.done: ret
 
 ; ============================================================================
 ;  STROKEPOLY: outline polygon PX/PY[0..NPOLY-1] with COLOR  (ES=bufseg)
 ; ============================================================================
 STROKEPOLY:
-        mov  word ptr [pk],0
-@@s:    mov  si,[pk]
+        mov  word [pk],0
+.s:    mov  si,[pk]
         add  si,si
         mov  ax,[PX+si]
         mov  [sx0],ax
@@ -308,21 +308,21 @@ STROKEPOLY:
         mov  ax,[pk]
         inc  ax
         cmp  ax,[NPOLY]
-        jl   @@nj
+        jl   .nj
         xor  ax,ax
-@@nj:   add  ax,ax
+.nj:   add  ax,ax
         mov  si,ax
         mov  ax,[PX+si]
         mov  [sx1],ax
         mov  ax,[PY+si]
         mov  [sy1],ax
         call CLIPLINE
-        jc   @@sk
+        jc   .sk
         call LINE
-@@sk:   inc  word ptr [pk]
+.sk:   inc  word [pk]
         mov  ax,[pk]
         cmp  ax,[NPOLY]
-        jl   @@s
+        jl   .s
         ret
 
 ; ============================================================================
@@ -332,19 +332,19 @@ FACEFILL:
         call CLIPNEAR
         mov  ax,[NPOLY]
         cmp  ax,3
-        jl   @@x
+        jl   .x
         call PROJPOLY
         call SCANPOLY
-@@x:    ret
+.x:    ret
 
 FACESTROKE:
         call CLIPNEAR
         mov  ax,[NPOLY]
         cmp  ax,2
-        jl   @@x
+        jl   .x
         call PROJPOLY
         call STROKEPOLY
-@@x:    ret
+.x:    ret
 
 ; ============================================================================
 ;  SCREEN LINE CLIPPING (Cohen-Sutherland), rect 0..319 x 0..199
@@ -354,20 +354,20 @@ OUTCODE:                        ; in: AX=x, BX=y -> AL=code
         push cx
         xor  cl,cl
         cmp  ax,0
-        jge  @@c1
+        jge  .c1
         or   cl,1
-        jmp  @@c2
-@@c1:   cmp  ax,319
-        jle  @@c2
+        jmp  .c2
+.c1:   cmp  ax,319
+        jle  .c2
         or   cl,2
-@@c2:   cmp  bx,0
-        jge  @@c3
+.c2:   cmp  bx,0
+        jge  .c3
         or   cl,8
-        jmp  @@c4
-@@c3:   cmp  bx,199
-        jle  @@c4
+        jmp  .c4
+.c3:   cmp  bx,199
+        jle  .c4
         or   cl,4
-@@c4:   mov  al,cl
+.c4:   mov  al,cl
         pop  cx
         ret
 
@@ -380,21 +380,21 @@ CLIPLINE:
         mov  bx,[sy1]
         call OUTCODE
         mov  [oc1],al
-@@iter: mov  al,[oc0]
+.iter: mov  al,[oc0]
         or   al,[oc1]
-        jnz  @@nacc
+        jnz  .nacc
         clc
         ret
-@@nacc: mov  al,[oc0]
+.nacc: mov  al,[oc0]
         and  al,[oc1]
-        jz   @@clip
+        jz   .clip
         stc
         ret
-@@clip: mov  al,[oc0]
+.clip: mov  al,[oc0]
         test al,al
-        jnz  @@use0
+        jnz  .use0
         mov  al,[oc1]
-@@use0: mov  [ocsel],al
+.use0: mov  [ocsel],al
         mov  ax,[sx1]
         sub  ax,[sx0]
         mov  [cdx],ax
@@ -403,50 +403,50 @@ CLIPLINE:
         mov  [cdy],ax
         mov  al,[ocsel]
         test al,8
-        jnz  @@top
+        jnz  .top
         test al,4
-        jnz  @@bot
+        jnz  .bot
         test al,2
-        jnz  @@right
+        jnz  .right
         ; LEFT: x=0
         mov  ax,[sx0]
         neg  ax
-        imul word ptr [cdy]
-        idiv word ptr [cdx]
+        imul word [cdy]
+        idiv word [cdx]
         add  ax,[sy0]
         mov  [ny],ax
-        mov  word ptr [nx],0
-        jmp  @@apply
-@@right:                        ; x=319
+        mov  word [nx],0
+        jmp  .apply
+.right:                        ; x=319
         mov  ax,319
         sub  ax,[sx0]
-        imul word ptr [cdy]
-        idiv word ptr [cdx]
+        imul word [cdy]
+        idiv word [cdx]
         add  ax,[sy0]
         mov  [ny],ax
-        mov  word ptr [nx],319
-        jmp  @@apply
-@@top:                          ; y=0
+        mov  word [nx],319
+        jmp  .apply
+.top:                          ; y=0
         mov  ax,[sy0]
         neg  ax
-        imul word ptr [cdx]
-        idiv word ptr [cdy]
+        imul word [cdx]
+        idiv word [cdy]
         add  ax,[sx0]
         mov  [nx],ax
-        mov  word ptr [ny],0
-        jmp  @@apply
-@@bot:                          ; y=199
+        mov  word [ny],0
+        jmp  .apply
+.bot:                          ; y=199
         mov  ax,199
         sub  ax,[sy0]
-        imul word ptr [cdx]
-        idiv word ptr [cdy]
+        imul word [cdx]
+        idiv word [cdy]
         add  ax,[sx0]
         mov  [nx],ax
-        mov  word ptr [ny],199
-@@apply:
+        mov  word [ny],199
+.apply:
         mov  al,[oc0]
         test al,al
-        jz   @@setp1
+        jz   .setp1
         mov  ax,[nx]
         mov  [sx0],ax
         mov  ax,[ny]
@@ -455,8 +455,8 @@ CLIPLINE:
         mov  bx,[sy0]
         call OUTCODE
         mov  [oc0],al
-        jmp  @@iter
-@@setp1:
+        jmp  .iter
+.setp1:
         mov  ax,[nx]
         mov  [sx1],ax
         mov  ax,[ny]
@@ -465,7 +465,7 @@ CLIPLINE:
         mov  bx,[sy1]
         call OUTCODE
         mov  [oc1],al
-        jmp  @@iter
+        jmp  .iter
 
 ; ============================================================================
 ;  LINE (Bresenham)   in: sx0,sy0,sx1,sy1, COLOR   ; ES=bufseg
@@ -473,18 +473,18 @@ CLIPLINE:
 LINE:
         mov  ax,[sx1]
         sub  ax,[sx0]
-        mov  word ptr [lsx],1
-        jns  @@dxp
+        mov  word [lsx],1
+        jns  .dxp
         neg  ax
-        mov  word ptr [lsx],-1
-@@dxp:  mov  [ldx],ax
+        mov  word [lsx],-1
+.dxp:  mov  [ldx],ax
         mov  ax,[sy1]
         sub  ax,[sy0]
-        mov  word ptr [lsy],1
-        jns  @@dyp
+        mov  word [lsy],1
+        jns  .dyp
         neg  ax
-        mov  word ptr [lsy],-1
-@@dyp:  neg  ax
+        mov  word [lsy],-1
+.dyp:  neg  ax
         mov  [ldy],ax
         mov  ax,[ldx]
         add  ax,[ldy]
@@ -493,37 +493,37 @@ LINE:
         mov  [lx],ax
         mov  ax,[sy0]
         mov  [ly],ax
-@@loop:
+.loop:
         mov  ax,[lx]
         mov  bx,[ly]
         call PUTPIXEL
         mov  ax,[lx]
         cmp  ax,[sx1]
-        jne  @@cont
+        jne  .cont
         mov  ax,[ly]
         cmp  ax,[sy1]
-        jne  @@cont
+        jne  .cont
         ret
-@@cont: mov  ax,[lerr]
+.cont: mov  ax,[lerr]
         add  ax,ax
         mov  bx,ax              ; e2
         cmp  bx,[ldy]
-        jl   @@sx
+        jl   .sx
         mov  ax,[lerr]
         add  ax,[ldy]
         mov  [lerr],ax
         mov  ax,[lx]
         add  ax,[lsx]
         mov  [lx],ax
-@@sx:   cmp  bx,[ldx]
-        jg   @@sy
+.sx:   cmp  bx,[ldx]
+        jg   .sy
         mov  ax,[lerr]
         add  ax,[ldx]
         mov  [lerr],ax
         mov  ax,[ly]
         add  ax,[lsy]
         mov  [ly],ax
-@@sy:   jmp  @@loop
+.sy:   jmp  .loop
 
 ; ============================================================================
 ;  PUTPIXEL  in: AX=x, BX=y, COLOR   ; ES=bufseg   (preserves registers)
@@ -543,7 +543,7 @@ PUTPIXEL:
         add  di,dx
         add  di,ax              ; +x
         mov  dl,[COLOR]
-        mov  es:[di],dl
+        mov  [es:di],dl
         pop  di
         pop  dx
         pop  cx

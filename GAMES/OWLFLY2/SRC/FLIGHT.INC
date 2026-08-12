@@ -10,42 +10,42 @@
 ;  costs it) -> stall -> altitude clamp -> wind drift -> advance along heading.
 ; ============================================================================
 INPUT:
-        cmp  byte ptr [spect],0 ; WATCHING: the world turns, we do not fly
-        je   @@nspec
-        call FAR PTR SPECTUPF
-        jmp  @@dwr2             ; ...and everything else still gets its tick
-@@nspec:
-        cmp  byte ptr [dying],0
-        je   @@alive2
+        cmp  byte [spect],0 ; WATCHING: the world turns, we do not fly
+        je   .nspec
+        call SYMSEG:SPECTUPF
+        jmp  .dwr2             ; ...and everything else still gets its tick
+.nspec:
+        cmp  byte [dying],0
+        je   .alive2
         ; the fall: the world keeps turning, we just watch the wreck
-        inc  word ptr [dytick]
-        cmp  word ptr [dytick],18
-        jb   @@dwar             ; ignore Space for the first second
-        cmp  byte ptr [KEYS+SC_SP],0
-        je   @@dwar
-        call FAR PTR PLAYERRESETF ; EVICTED to UISEG, beside the landing code
+        inc  word [dytick]
+        cmp  word [dytick],18
+        jb   .dwar             ; ignore Space for the first second
+        cmp  byte [KEYS+SC_SP],0
+        je   .dwar
+        call UISEG:PLAYERRESETF   ; EVICTED to UISEG, beside the landing code
                                 ;  it now has to talk to. Once per death, and
                                 ;  it was the coldest thing left in here
-@@dwar: cmp  word ptr [flbcnt],0
-        je   @@dwr2
+.dwar: cmp  word [flbcnt],0
+        je   .dwr2
         mov  ax,[lasttk]        ; the recording is half-rate: play it so
         test ax,1
-        jnz  @@dwr2
-        dec  word ptr [flbcnt]  ; the flashback rolls one sample forward
+        jnz  .dwr2
+        dec  word [flbcnt]  ; the flashback rolls one sample forward
         mov  ax,[flbc]
         add  ax,12
         cmp  ax,FLBSZ
-        jb   @@dwr1
+        jb   .dwr1
         xor  ax,ax
-@@dwr1: mov  [flbc],ax
-@@dwr2: call PLANESUPD
+.dwr1: mov  [flbc],ax
+.dwr2: call PLANESUPD
         call MSLUPD
         call TRCUPD
         call AMSLUPD
         call AIGUN
         call WRECKUPD
         ret
-@@alive2:
+.alive2:
         ; --- air density: rho = 256 - camy/8, clamped to 64..256 ---
         mov  ax,[camy]
         mov  bx,ax
@@ -54,20 +54,20 @@ INPUT:
         mov  ax,256
         sub  ax,bx
         cmp  ax,64
-        jge  @@r1
+        jge  .r1
         mov  ax,64
-@@r1:   mov  [rho],ax
+.r1:   mov  [rho],ax
 
         ; --- throttle: W up, S down; A holds the afterburner. The
         ; F-15 SE II gates joined in OWL FLY II: Shift+plus slams the
         ; lever to the stop, Shift+minus chops it to idle ---
-        cmp  byte ptr [KEYS+SC_W],0
-        jne  @@tup
-        cmp  byte ptr [KEYS+SC_NPP],0
-        jne  @@tup
-        cmp  byte ptr [KEYS+SC_EQ],0
-        je   @@tw
-@@tup:  ; The throttle GATE: ANY throttle key with a shift on it slams the
+        cmp  byte [KEYS+SC_W],0
+        jne  .tup
+        cmp  byte [KEYS+SC_NPP],0
+        jne  .tup
+        cmp  byte [KEYS+SC_EQ],0
+        je   .tw
+.tup:  ; The throttle GATE: ANY throttle key with a shift on it slams the
         ; lever to the stop.
         ;
         ; THIS WENT ROUND ONCE AND CAME BACK, so the reasoning is written
@@ -86,10 +86,10 @@ INPUT:
         ; for '+', which is now exactly what it does.
         mov  al,[KEYS+SC_LSH]
         or   al,[KEYS+SC_RSH]
-        jz   @@tu1
-        mov  word ptr [throt],64
-        jmp  @@tw
-@@tu1:  mov  ax,[throt]
+        jz   .tu1
+        mov  word [throt],64
+        jmp  .tw
+.tu1:  mov  ax,[throt]
         add  ax,4               ; FOUR a tick, not two: idle to the stop in
                                 ;  nine tenths of a second instead of nearly
                                 ;  two. A lever you have to hold down while
@@ -99,30 +99,30 @@ INPUT:
                                 ;  precisely because the ramp was still too
                                 ;  slow to use in a fight
         cmp  ax,64
-        jle  @@tw1
+        jle  .tw1
         mov  ax,64
-@@tw1:  mov  [throt],ax
-@@tw:   cmp  byte ptr [KEYS+SC_S],0
-        jne  @@tdn
-        cmp  byte ptr [KEYS+SC_NPM],0
-        jne  @@tdn
-        cmp  byte ptr [KEYS+SC_MIN],0
-        je   @@ts
-@@tdn:  mov  al,[KEYS+SC_LSH]   ; idle gate: same rule, same reasoning
+.tw1:  mov  [throt],ax
+.tw:   cmp  byte [KEYS+SC_S],0
+        jne  .tdn
+        cmp  byte [KEYS+SC_NPM],0
+        jne  .tdn
+        cmp  byte [KEYS+SC_MIN],0
+        je   .ts
+.tdn:  mov  al,[KEYS+SC_LSH]   ; idle gate: same rule, same reasoning
         or   al,[KEYS+SC_RSH]
-        jz   @@td1
-        mov  word ptr [throt],0
-        jmp  @@ts
-@@td1:  mov  ax,[throt]
+        jz   .td1
+        mov  word [throt],0
+        jmp  .ts
+.td1:  mov  ax,[throt]
         sub  ax,4               ; and back the same way it went up
-        jns  @@ts1
+        jns  .ts1
         xor  ax,ax
-@@ts1:  mov  [throt],ax
-@@ts:   mov  byte ptr [abon],0
-        cmp  byte ptr [KEYS+SC_A],0
-        je   @@ab0
-        mov  byte ptr [abon],1  ; afterburner lit (needs fuel, checked below)
-@@ab0:
+.ts1:  mov  [throt],ax
+.ts:   mov  byte [abon],0
+        cmp  byte [KEYS+SC_A],0
+        je   .ab0
+        mov  byte [abon],1  ; afterburner lit (needs fuel, checked below)
+.ab0:
         ; --- engine: burn fuel; jet thrust breathes air: T*(rho+256)/512,
         ; scaled by throttle/64; the afterburner QUADRUPLES it and drinks
         ; eight times the fuel.
@@ -153,7 +153,7 @@ INPUT:
         xor  cx,cx              ; default thrust 0 (flame-out)
         mov  ax,[fuel]
         test ax,ax
-        jz   @@nofu
+        jz   .nofu
         dec  ax
         mov  [fuel],ax
         mov  ax,[rho]
@@ -163,37 +163,37 @@ INPUT:
         imul bx                 ; DX:AX = THRUST*(rho+256)
         mov  bx,512
         idiv bx
-        imul word ptr [throt]   ; * throttle
+        imul word [throt]   ; * throttle
         mov  bx,64
         idiv bx                 ; /64
         mov  cx,ax
-        cmp  byte ptr [abon],0
-        je   @@noth
+        cmp  byte [abon],0
+        je   .noth
         add  cx,cx              ; afterburner: FOUR times dry thrust...
         add  cx,cx
         mov  ax,[fuel]          ; ...and burn 7 extra units for it
         sub  ax,7
-        jns  @@abf
+        jns  .abf
         xor  ax,ax
-@@abf:  mov  [fuel],ax
-        jmp  @@noth
-@@nofu: mov  byte ptr [abon],0  ; tanks dry: no burner glow either
-@@noth: mov  [teff],cx
+.abf:  mov  [fuel],ax
+        jmp  .noth
+.nofu: mov  byte [abon],0  ; tanks dry: no burner glow either
+.noth: mov  [teff],cx
 
         ; --- F / L / B: flaps, gear, airbrake. Three edges, three toggles.
         ; Nothing is interlocked and nothing is refused - put the gear down
         ; at six hundred knots if you like, and wear the drag ---
-        call FAR PTR SWKEYSF    ; every plain on/off switch on the panel,
+        call UISEG:SWKEYSF   ; every plain on/off switch on the panel,
                                 ;  read off one table out in UISEG
         mov  ax,VSTALL          ; flaps buy a slower stall - three quarters
-        cmp  byte ptr [flaps],0 ;  of it - and that is what they are FOR
-        je   @@nvs
+        cmp  byte [flaps],0 ;  of it - and that is what they are FOR
+        je   .nvs
         mov  ax,VSTALL*3/4
-@@nvs:  mov  [vstl],ax
+.nvs:  mov  [vstl],ax
 
         ; --- drag = vel*rho/DRAGK ; net force = thrust - drag ---
         mov  ax,[vel]
-        imul word ptr [rho]     ; DX:AX = vel*rho
+        imul word [rho]     ; DX:AX = vel*rho
         mov  bx,DRAGK
         idiv bx
         mov  bx,ax              ; bx = drag
@@ -205,20 +205,20 @@ INPUT:
         mov  ax,bx
         mov  cl,2
         shr  ax,cl              ; a quarter
-        cmp  byte ptr [flaps],0
-        je   @@dgr
+        cmp  byte [flaps],0
+        je   .dgr
         add  bx,ax
-@@dgr:  cmp  byte ptr [gear],0
-        je   @@dbk
+.dgr:  cmp  byte [gear],0
+        je   .dbk
         add  bx,ax
         add  bx,ax              ; a half
-@@dbk:  cmp  byte ptr [abrk],0
-        je   @@ddn
+.dbk:  cmp  byte [abrk],0
+        je   .ddn
         add  bx,ax
         add  bx,ax
         add  bx,ax
         add  bx,ax              ; and the board doubles the clean figure
-@@ddn:
+.ddn:
         mov  ax,[teff]
         sub  ax,bx              ; ax = net force (+/-)
 
@@ -237,73 +237,73 @@ INPUT:
         pop  ax
         idiv bx                 ; ax = accel this tick
         add  ax,[vel]
-        jns  @@v0
+        jns  .v0
         xor  ax,ax              ; airspeed never negative
-@@v0:   mov  [vel],ax
+.v0:   mov  [vel],ax
 
         ; --- ROLL: left/right arrows spin the ailerons, full 360 degrees ---
-        mov  word ptr [tmpi],0
-        cmp  byte ptr [tgtcam],0
-        jne  @@nr               ; F4: hands off, dihedral takes over
-        cmp  byte ptr [KEYS+SC_CTL],0
-        jne  @@nr               ; Ctrl+arrow is a LOOK, not a roll - the whole
+        mov  word [tmpi],0
+        cmp  byte [tgtcam],0
+        jne  .nr               ; F4: hands off, dihedral takes over
+        cmp  byte [KEYS+SC_CTL],0
+        jne  .nr               ; Ctrl+arrow is a LOOK, not a roll - the whole
                                 ; point of putting it there is that the hand
                                 ; never leaves the stick, so it must not bank
-        cmp  byte ptr [KEYS+SC_LF],0
-        je   @@nl
+        cmp  byte [KEYS+SC_LF],0
+        je   .nl
         mov  ax,[roll]
         sub  ax,3               ; roll rate: full barrel roll in ~4.7 s
         and  ax,255
         mov  [roll],ax
-        mov  word ptr [tmpi],1
-@@nl:   cmp  byte ptr [KEYS+SC_RT],0
-        je   @@nr
+        mov  word [tmpi],1
+.nl:   cmp  byte [KEYS+SC_RT],0
+        je   .nr
         mov  ax,[roll]
         add  ax,3
         and  ax,255
         mov  [roll],ax
-        mov  word ptr [tmpi],1
-@@nr:   cmp  word ptr [tmpi],0  ; hands off: the jet HOLDS its bank in free
-        jne  @@rlp              ; air (real handling at the big scale) - only
+        mov  word [tmpi],1
+.nr:   cmp  word [tmpi],0  ; hands off: the jet HOLDS its bank in free
+        jne  .rlp              ; air (real handling at the big scale) - only
         mov  ax,[camy]          ; the ground cushion rights the wings, and at
         sub  ax,[lgnd]          ; 2/tick it cannot save a heavy bank in time
         cmp  ax,90
-        jge  @@rlp
+        jge  .rlp
         mov  ax,[roll]
         test ax,ax
-        jz   @@rlp
+        jz   .rlp
         cmp  ax,128
-        ja   @@rlup             ; 129..255: roll upward to 256 (= level)
+        ja   .rlup             ; 129..255: roll upward to 256 (= level)
         sub  ax,2               ; 1..128: roll down toward 0
-        jns  @@rls1
+        jns  .rls1
         xor  ax,ax
-@@rls1: cmp  ax,2               ; snap the last couple of units
-        ja   @@rls2
+.rls1: cmp  ax,2               ; snap the last couple of units
+        ja   .rls2
         xor  ax,ax
-@@rls2: mov  [roll],ax
-        jmp  @@rlp
-@@rlup: add  ax,2
+.rls2: mov  [roll],ax
+        jmp  .rlp
+.rlup: add  ax,2
         and  ax,255
         cmp  ax,254
-        jb   @@rlu2
+        jb   .rlu2
         xor  ax,ax
-@@rlu2: mov  [roll],ax
-@@rlp:
+.rlu2: mov  [roll],ax
+.rlp:
         ; --- RUDDER: Q/E yaw the nose flat, no bank. Slow like a real
         ; rudder: 1 unit/tick = a full circle in ~14 s. Good for lining
         ; up a runway or a gun run without dropping a wing.
         xor  cx,cx              ; r = rudder input, in eighths
-        cmp  byte ptr [KEYS+SC_1],0 ; the F-15 pedals: top-row 1 and 3
-        jne  @@rdl              ; (numpad 7/9 as aliases; Z/C left the
-        cmp  byte ptr [KEYS+SC_NP7],0 ; pedals for the radar zoom -
-        je   @@rdq              ; Z/X per the manual)
-@@rdl:  sub  cx,8
-@@rdq:  cmp  byte ptr [KEYS+SC_3],0
-        jne  @@rdr
-        cmp  byte ptr [KEYS+SC_NP9],0
-        je   @@rdz
-@@rdr:  add  cx,8
-@@rdz:  jcxz @@rde
+        cmp  byte [KEYS+SC_1],0 ; the F-15 pedals: top-row 1 and 3
+        jne  .rdl              ; (numpad 7/9 as aliases; Z/C left the
+        cmp  byte [KEYS+SC_NP7],0 ; pedals for the radar zoom -
+        je   .rdq              ; Z/X per the manual)
+.rdl:  sub  cx,8
+.rdq:  cmp  byte [KEYS+SC_3],0
+        jne  .rdr
+        cmp  byte [KEYS+SC_NP9],0
+        je   .rdz
+.rdr:  add  cx,8
+.rdz:  jcxz .rde
         ; LOCAL yaw (community feedback): the rudder turns about the
         ; plane's own vertical axis, so it blends by bank exactly like
         ; the elevator does - wings level it is the old flat turn, in
@@ -339,39 +339,39 @@ INPUT:
         idiv bx
         mov  [pfrac],dx
         add  [pitch],ax
-@@rde:
+.rde:
         ; --- PITCH: real fighter controls. Pull (DOWN key) rotates the nose
         ; through the roll plane: pitch_rate = q*cos(roll), yaw = q*sin(roll).
         ; Wings level -> loop; knife-edge -> flat turn; inverted -> split-S.
         xor  cx,cx              ; q = elevator direction
-        cmp  byte ptr [tgtcam],0
-        jne  @@nopq             ; F4: the stick is centred
-        cmp  byte ptr [KEYS+SC_DN],0
-        je   @@q1
+        cmp  byte [tgtcam],0
+        jne  .nopq             ; F4: the stick is centred
+        cmp  byte [KEYS+SC_DN],0
+        je   .q1
         mov  cx,1               ; pull: nose up
-@@q1:   cmp  byte ptr [KEYS+SC_UP],0
-        je   @@q2
+.q1:   cmp  byte [KEYS+SC_UP],0
+        je   .q2
         sub  cx,1               ; push: nose down
-@@q2:   jcxz @@nopq
+.q2:   jcxz .nopq
         ; the stick ramps: a tap nudges the nose a third of a degree
         ; (aiming), a hold builds to the full combat rate in ~0.4 s.
         ; q is in EIGHTHS of a unit; pfrac/hfrac carry the remainders.
         mov  ax,[qramp]
         add  ax,2
         cmp  ax,16
-        jle  @@qr1
+        jle  .qr1
         mov  ax,16
-@@qr1:  mov  [qramp],ax
+.qr1:  mov  [qramp],ax
         or   cx,cx
-        jns  @@qr2
+        jns  .qr2
         neg  ax
-@@qr2:  mov  cx,ax              ; q, signed, in eighths
+.qr2:  mov  cx,ax              ; q, signed, in eighths
         mov  [gq],cx            ; the G meter reads the live stick
         mov  ax,[vel]           ; turning bleeds a bit of airspeed
         sub  ax,TURNDRG
-        jns  @@qd
+        jns  .qd
         xor  ax,ax
-@@qd:   mov  [vel],ax
+.qd:   mov  [vel],ax
         push cx
         mov  ax,[roll]          ; cr = cos(roll)
         add  ax,64
@@ -401,37 +401,37 @@ INPUT:
         add  ax,[heading]
         and  ax,255
         mov  [heading],ax
-        jmp  @@gflip            ; active stick: skip the self-trim
-@@nopq: mov  word ptr [qramp],0 ; stick centred: the ramp lets go
-        mov  word ptr [gq],0    ; hands off: one G on the meter
+        jmp  .gflip            ; active stick: skip the self-trim
+.nopq: mov  word [qramp],0 ; stick centred: the ramp lets go
+        mov  word [gq],0    ; hands off: one G on the meter
         ; no auto-trim in free air - the attitude holds.
         ; Near the ground the cushion pushes a dropped nose back level,
         ; so a gentle descent surfs the terrain instead of meeting it.
         mov  ax,[camy]
         sub  ax,[lgnd]
         cmp  ax,90
-        jge  @@gflip
+        jge  .gflip
         mov  ax,[pitch]
         test ax,ax
-        jns  @@gflip            ; nose level or up: nothing to push
+        jns  .gflip            ; nose level or up: nothing to push
         inc  ax
         mov  [pitch],ax
-@@gflip:
+.gflip:
         ; --- gimbal flip at the vertical (the classic Euler trick): going
         ; over the top swaps to inverted flight so the loop closes smoothly
         mov  ax,[pitch]
         cmp  ax,64
-        jle  @@pf1
+        jle  .pf1
         mov  bx,128
         sub  bx,ax
         mov  [pitch],bx
-        jmp  @@pflip
-@@pf1:  cmp  ax,-64
-        jge  @@pok
+        jmp  .pflip
+.pf1:  cmp  ax,-64
+        jge  .pok
         mov  bx,-128
         sub  bx,ax
         mov  [pitch],bx
-@@pflip:
+.pflip:
         mov  ax,[heading]
         add  ax,128
         and  ax,255
@@ -440,7 +440,7 @@ INPUT:
         add  ax,128
         and  ax,255
         mov  [roll],ax
-@@pok:
+.pok:
 
         ; --- energy: climbing costs airspeed, diving buys it back ---
         mov  ax,[psin]          ; sin(pitch)*256
@@ -450,9 +450,9 @@ INPUT:
         idiv bx                 ; -24..24 per tick
         mov  bx,[vel]
         sub  bx,ax
-        jns  @@ve
+        jns  .ve
         xor  bx,bx
-@@ve:   ; --- AND THE AIRFRAME LIMIT, which this jet has never had. Every
+.ve:   ; --- AND THE AIRFRAME LIMIT, which this jet has never had. Every
         ; multiply and divide in this program was written when vel could not
         ; pass about 1500 - that was the old burner's terminal - and the
         ; burner is now four times dry thrust. At altitude the air is thin
@@ -464,76 +464,76 @@ INPUT:
         ; vel for exactly this reason. This is the LAST write to vel in the
         ; tick, so one clamp here bounds every reader downstream. ---
         cmp  bx,VNE
-        jle  @@ve1
+        jle  .ve1
         mov  bx,VNE
-@@ve1:  mov  [vel],bx
+.ve1:  mov  [vel],bx
         ; --- stall: below the stall speed AS FLOWN (flaps lower it) the
         ; nose falls through on its own ---
         mov  ax,[vel]
         cmp  ax,[vstl]
-        jge  @@nst
+        jge  .nst
         mov  ax,[pitch]
         cmp  ax,-48
-        jle  @@nst
+        jle  .nst
         dec  ax
         mov  [pitch],ax
-@@nst:
+.nst:
         ; --- altitude clamp [24, CEIL] ---
         mov  ax,[camy]
         cmp  ax,24
-        jge  @@y1
+        jge  .y1
         mov  ax,24
-@@y1:   cmp  ax,CEIL
-        jle  @@y2
+.y1:   cmp  ax,CEIL
+        jle  .y2
         mov  ax,CEIL
-@@y2:   mov  [camy],ax
+.y2:   mov  [camy],ax
 
         ; --- N key: toggle day/night palette (on key-down edge only) ---
         mov  al,[KEYS+SC_N]
         cmp  al,[prevn]
-        je   @@nn
+        je   .nn
         mov  [prevn],al
         test al,al
-        jz   @@nn
-        xor  byte ptr [daymode],1
-        call FAR PTR APPLYPALF
-@@nn:
+        jz   .nn
+        xor  byte [daymode],1
+        call UISEG:APPLYPALF
+.nn:
         ; --- V key: sound mode - all / effects only / silence (edge) ---
         mov  al,[KEYS+SC_V]
         cmp  al,[prevsk]
-        je   @@nv
+        je   .nv
         mov  [prevsk],al
         test al,al
-        jz   @@nv
+        jz   .nv
         call SNDTOG
-@@nv:
+.nv:
         ; --- F2: cockpit panel on/off (edge-triggered; C is rudder now) ---
         mov  al,[KEYS+SC_F2]
         cmp  al,[prevc]
-        je   @@ncp
+        je   .ncp
         mov  [prevc],al
         test al,al
-        jz   @@ncp
-        xor  byte ptr [cockpit],1
-@@ncp:
+        jz   .ncp
+        xor  byte [cockpit],1
+.ncp:
         ; --- F3: chase camera (edge) ---
         mov  al,[KEYS+SC_F3]
         cmp  al,[prevv]
-        je   @@nf3
+        je   .nf3
         mov  [prevv],al
         test al,al
-        jz   @@nf3
-        xor  byte ptr [chsview],1
-@@nf3:
+        jz   .nf3
+        xor  byte [chsview],1
+.nf3:
         ; --- Z / X: the scope zooms in and out, the manual's way - EXCEPT
         ; while the orbit camera is up, when they walk the camera in and
         ; out instead. Same two fingers, and the scope is not on the glass
         ; in that view anyway, so nothing is taken away. Held, not tapped:
         ; a camera dolly wants a continuous pull, not an edge.
-        cmp  byte ptr [tgtcam],0
-        je   @@nzk
-        cmp  byte ptr [KEYS+SC_Z],0
-        je   @@nzk1
+        cmp  byte [tgtcam],0
+        je   .nzk
+        cmp  byte [KEYS+SC_Z],0
+        je   .nzk1
         mov  ax,[tgrad]         ; in, by a twelfth a tick: smooth at any
         mov  bx,ax              ; distance, and it never crawls when far
         mov  cl,4
@@ -541,11 +541,11 @@ INPUT:
         inc  bx
         sub  ax,bx
         cmp  ax,TGRMIN
-        jge  @@nzk2
+        jge  .nzk2
         mov  ax,TGRMIN
-@@nzk2: mov  [tgrad],ax
-@@nzk1: cmp  byte ptr [KEYS+SC_X],0
-        je   @@nzo
+.nzk2: mov  [tgrad],ax
+.nzk1: cmp  byte [KEYS+SC_X],0
+        je   .nzo
         mov  ax,[tgrad]         ; ...and out
         mov  bx,ax
         mov  cl,4
@@ -553,66 +553,66 @@ INPUT:
         inc  bx
         add  ax,bx
         cmp  ax,TGRMAX
-        jle  @@nzk3
+        jle  .nzk3
         mov  ax,TGRMAX
-@@nzk3: mov  [tgrad],ax
-        jmp  @@nzo
-@@nzk:  mov  al,[KEYS+SC_Z]
+.nzk3: mov  [tgrad],ax
+        jmp  .nzo
+.nzk:  mov  al,[KEYS+SC_Z]
         cmp  al,[prevz]
-        je   @@nzi
+        je   .nzi
         mov  [prevz],al
         test al,al
-        jz   @@nzi
-        cmp  byte ptr [rzsh],6
-        jbe  @@nzi
-        dec  byte ptr [rzsh]
-@@nzi:  mov  al,[KEYS+SC_X]
+        jz   .nzi
+        cmp  byte [rzsh],6
+        jbe  .nzi
+        dec  byte [rzsh]
+.nzi:  mov  al,[KEYS+SC_X]
         cmp  al,[prevxx]
-        je   @@nzo
+        je   .nzo
         mov  [prevxx],al
         test al,al
-        jz   @@nzo
-        cmp  byte ptr [rzsh],10
-        jae  @@nzo
-        inc  byte ptr [rzsh]
-@@nzo:
+        jz   .nzo
+        cmp  byte [rzsh],10
+        jae  .nzo
+        inc  byte [rzsh]
+.nzo:
         ; --- K: the MAP zooms, 1 / 2 / 4 pixels to a world node, cycling.
         ; PROVISIONAL KEY - the whole keyboard is still to be laid out; K is
         ; simply free and next to M, which pages this same screen. ---
         mov  al,[KEYS+SC_K]
         cmp  al,[prevk2]
-        je   @@nmz
+        je   .nmz
         mov  [prevk2],al
         test al,al
-        jz   @@nmz
+        jz   .nmz
         mov  al,[mmzs]
         inc  al
         cmp  al,MMZN
-        jb   @@mzs
+        jb   .mzs
         xor  al,al
-@@mzs:  mov  [mmzs],al
-@@nmz:
+.mzs:  mov  [mmzs],al
+.nmz:
         ; --- F5: arm/disarm the missile camera (edge) ---
         mov  al,[KEYS+SC_F5]
         cmp  al,[prevf5]
-        je   @@nf5
+        je   .nf5
         mov  [prevf5],al
         test al,al
-        jz   @@nf5
-        xor  byte ptr [mslcam],1
-@@nf5:
+        jz   .nf5
+        xor  byte [mslcam],1
+.nf5:
         ; --- F4: orbit camera around the locked target (edge) ---
         mov  al,[KEYS+SC_F4]
         cmp  al,[prevt4]
-        je   @@nf4
+        je   .nf4
         mov  [prevt4],al
         test al,al
-        jz   @@nf4
-        cmp  byte ptr [tgtcam],0
-        jne  @@f4off
+        jz   .nf4
+        cmp  byte [tgtcam],0
+        jne  .f4off
         mov  si,[locki]
         cmp  si,0FFFFh
-        je   @@nf4              ; nothing locked: nothing to orbit
+        je   .nf4              ; nothing locked: nothing to orbit
         mov  [tgti],si          ; remember the star of the show
         ; How far to stand off depends on WHAT is being orbited, and the
         ; old flat 100 was a jet's number. A Shilka is 100 units long by
@@ -624,90 +624,90 @@ INPUT:
         xor  ax,ax              ; ground targets have no heading to sit behind
         mov  bx,100             ; a jet is small: four wingspans out
         cmp  si,SHKLK
-        jb   @@f4pl
+        jb   .f4pl
         mov  bx,450             ; a Shilka or a mast: clear of the thing
-        jmp  @@f4rd
-@@f4pl: mov  ax,[pah+si]
-@@f4rd: mov  [tgrad],bx
-@@f4az: mov  [tgaz],ax          ; start right behind the target
-        mov  word ptr [tgel],12
-        mov  byte ptr [tgtcam],1
-        jmp  @@nf4
-@@f4off:
-        mov  byte ptr [tgtcam],0
-@@nf4:  cmp  byte ptr [tgtcam],1
-        jne  @@wchk
-        cmp  word ptr [locki],0FFFFh
-        jne  @@lkok             ; lock alive: keep orbiting the jet
-        mov  byte ptr [tgtcam],2 ; target died: stay with the debris -
+        jmp  .f4rd
+.f4pl: mov  ax,[pah+si]
+.f4rd: mov  [tgrad],bx
+.f4az: mov  [tgaz],ax          ; start right behind the target
+        mov  word [tgel],12
+        mov  byte [tgtcam],1
+        jmp  .nf4
+.f4off:
+        mov  byte [tgtcam],0
+.nf4:  cmp  byte [tgtcam],1
+        jne  .wchk
+        cmp  word [locki],0FFFFh
+        jne  .lkok             ; lock alive: keep orbiting the jet
+        mov  byte [tgtcam],2 ; target died: stay with the debris -
         mov  ax,[wnext]         ; the freshest wreck slot is the show
         sub  ax,WRKSZ
-        jns  @@wok
+        jns  .wok
         add  ax,WRKSZ*4
-@@wok:  add  ax,offset WRK
+.wok:  add  ax,WRK
         mov  [tcws],ax
-        jmp  @@lkok
-@@wchk: cmp  byte ptr [tgtcam],2
-        jne  @@lkok
-        cmp  word ptr [locki],0FFFFh
-        je   @@lkok             ; still at the funeral
-        mov  byte ptr [tgtcam],1 ; a new lock: swing to the new target
+        jmp  .lkok
+.wchk: cmp  byte [tgtcam],2
+        jne  .lkok
+        cmp  word [locki],0FFFFh
+        je   .lkok             ; still at the funeral
+        mov  byte [tgtcam],1 ; a new lock: swing to the new target
         mov  ax,[locki]
         mov  [tgti],ax
-@@lkok:
+.lkok:
         ; --- F4 active: the arrows steer the camera, not the jet ---
-        cmp  byte ptr [tgtcam],0
-        je   @@ntc
-        cmp  byte ptr [KEYS+SC_LF],0
-        je   @@tc1
-        sub  word ptr [tgaz],2
-        and  word ptr [tgaz],255
-@@tc1:  cmp  byte ptr [KEYS+SC_RT],0
-        je   @@tc2
-        add  word ptr [tgaz],2
-        and  word ptr [tgaz],255
-@@tc2:  cmp  byte ptr [KEYS+SC_UP],0
-        je   @@tc3
+        cmp  byte [tgtcam],0
+        je   .ntc
+        cmp  byte [KEYS+SC_LF],0
+        je   .tc1
+        sub  word [tgaz],2
+        and  word [tgaz],255
+.tc1:  cmp  byte [KEYS+SC_RT],0
+        je   .tc2
+        add  word [tgaz],2
+        and  word [tgaz],255
+.tc2:  cmp  byte [KEYS+SC_UP],0
+        je   .tc3
         mov  ax,[tgel]
         inc  ax
         cmp  ax,56
-        jle  @@tcu
+        jle  .tcu
         mov  ax,56
-@@tcu:  mov  [tgel],ax
-@@tc3:  cmp  byte ptr [KEYS+SC_DN],0
-        je   @@ntc
+.tcu:  mov  [tgel],ax
+.tc3:  cmp  byte [KEYS+SC_DN],0
+        je   .ntc
         mov  ax,[tgel]
         dec  ax
         cmp  ax,-30
-        jge  @@tcd
+        jge  .tcd
         mov  ax,-30
-@@tcd:  mov  [tgel],ax
-@@ntc:
+.tcd:  mov  [tgel],ax
+.ntc:
         ; --- M key: centre MFD page, MAP -> SIT -> TGT (edge) ---
         mov  al,[KEYS+SC_M]
         cmp  al,[prevm]
-        je   @@nmfd
+        je   .nmfd
         mov  [prevm],al
         test al,al
-        jz   @@nmfd
+        jz   .nmfd
         mov  al,[mfdmode]
         inc  al
         cmp  al,3
-        jb   @@mfs
+        jb   .mfs
         xor  al,al
-@@mfs:  mov  [mfdmode],al
-@@nmfd:
+.mfs:  mov  [mfdmode],al
+.nmfd:
         ; --- Enter: lock the plane inside the aiming ring (edge). The
         ; nearest jet whose screen point is within 24 px of the ring
         ; centre (160,100) wins; nothing there = lock dropped.
         mov  al,[KEYS+SC_ENT]
         cmp  al,[prevt]
-        je   @@nlk
+        je   .nlk
         mov  [prevt],al
         test al,al
-        jz   @@nlk
-        mov  word ptr [locki],0FFFFh
-        mov  word ptr [lockd],7FFFh
+        jz   .nlk
+        mov  word [locki],0FFFFh
+        mov  word [lockd],7FFFh
         ; The master mode used to gate this scan - A-A saw only aircraft,
         ; A-G only the ground - and that was wrong, for a reason worth
         ; writing down: LOOKING IS THE PILOT'S OWN CAPABILITY. He points the
@@ -717,10 +717,10 @@ INPUT:
         ; A switch may take away other people's help. It may not take away
         ; his own eyes.
         xor  si,si
-@@lks:  mov  bx,si              ; cannot lock a dead jet
+.lks:  mov  bx,si              ; cannot lock a dead jet
         shr  bx,1
-        cmp  byte ptr [pst+bx],0
-        jne  @@lkn
+        cmp  byte [pst+bx],0
+        jne  .lkn
         mov  ax,[pax+si]
         sub  ax,[camx]
         mov  [wdx],ax
@@ -730,44 +730,44 @@ INPUT:
         push si
         call ROTXZ
         pop  si
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         cmp  ax,NEARZ
-        jl   @@lkn
+        jl   .lkn
         mov  [tpi],ax           ; keep the range for the best-pick test
         mov  dx,[pay+si]
         sub  dx,[camy]
-        mov  ax,[rcx]
-        mov  cx,[rcz]
+        mov  ax,[rc_x]
+        mov  cx,[rc_z]
         push si
         call PPOINT             ; last frame's view state: close enough
         pop  si
-        jc   @@lkn
+        jc   .lkn
         sub  ax,160
-        jns  @@lk1
+        jns  .lk1
         neg  ax
-@@lk1:  cmp  ax,24
-        jg   @@lkn
+.lk1:  cmp  ax,24
+        jg   .lkn
         sub  dx,[horiz]         ; the RING moved to the glass centre when
-        jns  @@lk2              ; the panel grew; this test did not, so the
+        jns  .lk2              ; the panel grew; this test did not, so the
                                 ; game was still looking for targets around
                                 ; row 100 - a hoop forty rows below the one
                                 ; the pilot was aiming through
         neg  dx
-@@lk2:  cmp  dx,24
-        jg   @@lkn
+.lk2:  cmp  dx,24
+        jg   .lkn
         mov  ax,[tpi]
         cmp  ax,[lockd]
-        jae  @@lkn
+        jae  .lkn
         mov  [lockd],ax
         mov  [locki],si
-@@lkn:  add  si,2
+.lkn:  add  si,2
         cmp  si,NPLANE*2
-        jb   @@lks
-        call FAR PTR RSLOCKF    ; the ground radars are targets too, and
-        call FAR PTR SHKLOCKF   ; so are the guns - all three legs play by
+        jb   .lks
+        call UISEG:RSLOCKF   ; the ground radars are targets too, and
+        call UISEG:SHKLOCKF   ; so are the guns - all three legs play by
                                 ; the same nearest-wins rule, so pointing
                                 ; at a thing is how you pick it
-@@nlk:
+.nlk:
         ; --- the wind moved OUT to WINDDRF in UISEG (see there for why it
         ; had to stop being a constant, and why it costs this segment
         ; nothing to have got better) ---
@@ -784,48 +784,48 @@ INPUT:
         ; rocks while the aeroplane is plainly parked, which reads as the
         ; picture being broken rather than as weather. It could never show
         ; before, because before this the jet was never stationary.
-        cmp  byte ptr [onrwy],0
-        je   @@swgo
-        mov  word ptr [swayy],0
-        mov  word ptr [swayx],0
-        jmp  @@swjolt
-@@swgo: mov  ax,[swph]
+        cmp  byte [onrwy],0
+        je   .swgo
+        mov  word [swayy],0
+        mov  word [swayx],0
+        jmp  .swjolt
+.swgo: mov  ax,[swph]
         add  ax,[swspd]
         mov  [swph],ax
-        jnc  @@sw1              ; carry = full circle: re-roll the dice
+        jnc  .sw1              ; carry = full circle: re-roll the dice
         call RND16
         and  ax,3
         add  ax,3               ; amplitude 3..6 px
         mov  bx,[lgnd]
         cmp  bx,700
-        jl   @@swm
+        jl   .swm
         add  ax,3               ; mountain waves run higher
-        jmp  @@swa
-@@swm:  cmp  bx,440
-        jge  @@swa
+        jmp  .swa
+.swm:  cmp  bx,440
+        jge  .swa
         inc  ax                 ; a little extra over open water
-@@swa:  mov  [swamp],ax
+.swa:  mov  [swamp],ax
         call RND16
         and  ax,255
         add  ax,278             ; phase step 278..533 = ~13..7 s cycle
         mov  [swspd],ax
-@@sw1:  mov  ax,[swph]
+.sw1:  mov  ax,[swph]
         mov  cl,8
         shr  ax,cl              ; angle 0..255
         push ax
         call SINQ               ; sin*256
-        imul word ptr [swamp]
+        imul word [swamp]
         mov  cx,256
         idiv cx
         mov  [swayy],ax         ; vertical float -amp..+amp
         pop  ax
         add  ax,64              ; X leads by a quarter turn (lazy circle)
         call SINQ
-        imul word ptr [swamp]
+        imul word [swamp]
         mov  cx,512
         idiv cx                 ; half amplitude sideways
         mov  [swayx],ax
-@@swjolt:
+.swjolt:
         ; ---- AND THE KICK OF BEING HIT, on top of whatever the air was
         ; doing - and on the ground too, which is why it sits below the
         ; branch and not inside it. It rides swayx/swayy because those are
@@ -833,12 +833,12 @@ INPUT:
         ; and the cockpit does not, which is exactly what a hit looks like
         ; from inside one. Scaled by phit, so it is a jolt that settles
         ; rather than a wobble that runs for half a second.
-        cmp  word ptr [phit],0
-        je   @@tb3
+        cmp  word [phit],0
+        je   .tb3
         mov  ax,[lasttk]
         and  ax,3
         sub  ax,2               ; -2..+1, a new number every tick
-        imul word ptr [phit]
+        imul word [phit]
         mov  cl,2
         sar  ax,cl
         add  [swayy],ax
@@ -846,34 +846,34 @@ INPUT:
         inc  ax                 ; the other axis, a tick out of step with it
         and  ax,3
         sub  ax,2
-        imul word ptr [phit]
+        imul word [phit]
         mov  cl,2
         sar  ax,cl
         add  [swayx],ax
-@@tb3:
+.tb3:
         ; --- advance: split vel/16 into horizontal (cos p) and climb (sin p)
         mov  ax,[vel]
         mov  cl,5
         shr  ax,cl              ; total speed: the world is x4, the speed
                                 ; only x2 down - a jet still moves like one
         push ax
-        imul word ptr [psin]    ; climb component
+        imul word [psin]    ; climb component
         mov  bx,256
         idiv bx
         mov  [vvy],ax           ; the HUD's IVV caret reads this
         add  [camy],ax
         pop  ax
-        imul word ptr [pcos]    ; horizontal component
+        imul word [pcos]    ; horizontal component
         mov  bx,256
         idiv bx
         mov  [fwd],ax
         mov  ax,[hsin]
-        imul word ptr [fwd]     ; DX:AX = hsin * fwd
+        imul word [fwd]     ; DX:AX = hsin * fwd
         mov  bx,256
         idiv bx                 ; AX = fwd * sin(heading)
         add  [camx],ax
         mov  ax,[hcos]
-        imul word ptr [fwd]
+        imul word [fwd]
         mov  bx,256
         idiv bx
         add  [camz],ax
@@ -885,38 +885,38 @@ INPUT:
         ; standing on three legs is entitled to argue with. It also keeps the
         ; sink rate in 8.8 every tick, airborne or not, because the one tick
         ; anybody reads it is the tick she arrives. See GNDSCH in UI.INC.
-        call FAR PTR GNDSCHF
+        call UISEG:GNDSCHF
         ; --- Backspace: fire a missile (edge; sits right above Enter =
         ; lock). Homing on the lock, straight down the nose otherwise.
         mov  al,[KEYS+SC_BS]
         cmp  al,[prevf]
-        je   @@nfr
+        je   .nfr
         mov  [prevf],al
         test al,al
-        jz   @@nfr
+        jz   .nfr
         ; ---- A FREE RAIL, not "the missile is not in flight". The gate used
         ; to be one airborne missile at a time, so a second launch was
         ; impossible for up to fifteen seconds - which is precisely the
         ; moment in a fight when you want it. Four rails, four in the air if
         ; you like; what stops you is pammo, and pammo does not come back. ----
-        call FAR PTR MSLFREEF   ; a rail with nothing on it
-        jc   @@nfr
-        cmp  byte ptr [pammo],0
-        je   @@nfr
-        dec  byte ptr [pammo]
-        mov  byte ptr [msact],1
+        call SYMSEG:MSLFREEF   ; a rail with nothing on it
+        jc   .nfr
+        cmp  byte [pammo],0
+        je   .nfr
+        dec  byte [pammo]
+        mov  byte [msact],1
         mov  ax,[locki]
         mov  [mstgt],ax
-        mov  word ptr [mlife],280
+        mov  word [mlife],280
         call SFXHISS            ; off the rail with a sharp hiss
-        cmp  byte ptr [mslcam],0
-        je   @@nomc
-        mov  byte ptr [mcact],1 ; armed: the camera rides this one, and it
+        cmp  byte [mslcam],0
+        je   .nomc
+        mov  byte [mcact],1 ; armed: the camera rides this one, and it
         mov  ax,[msi]           ;  has to remember WHICH one
         mov  [mcsl],ax
         mov  ax,[heading]
         mov  [mch],ax
-@@nomc:
+.nomc:
         mov  ax,[hsin]          ; spawn 25 ahead, 5 below the sightline
         mov  bx,25
         imul bx
@@ -962,8 +962,8 @@ INPUT:
         mov  bx,256
         idiv bx
         mov  [mvy],ax
-        call FAR PTR MSLSAVEF   ; ...and onto the rail it goes
-@@nfr:
+        call SYMSEG:MSLSAVEF   ; ...and onto the rail it goes
+.nfr:
         ; --- THE RAILS DO NOT REFILL THEMSELVES. There used to be a reload
         ; here, one missile back every ~20 s, and between it and the
         ; one-in-flight gate the weapon read as broken: fire, wait out the
@@ -974,50 +974,50 @@ INPUT:
         ; --- Space: the cannon. Hold to fire; a volley lands every
         ; 2nd tick on whatever sits inside the aiming circle. Each jet
         ; soaks 2..5 hits (its HP roll) before it comes apart.
-        cmp  byte ptr [guntik],0
-        je   @@gt0
-        dec  byte ptr [guntik]
-@@gt0:  cmp  word ptr [hitft],0
-        je   @@gt0a
-        dec  word ptr [hitft]
-@@gt0a: ; ---- THE HIT, heard. phit rising is the only thing all three damage
+        cmp  byte [guntik],0
+        je   .gt0
+        dec  byte [guntik]
+.gt0:  cmp  word [hitft],0
+        je   .gt0a
+        dec  word [hitft]
+.gt0a: ; ---- THE HIT, heard. phit rising is the only thing all three damage
         ; sites have in common, so the sound hangs off the EDGE of it rather
         ; than off three new call sites. The explosion recording at a quarter
         ; of its swing: a thump on your own airframe, not a blast out in the
         ; world - and it is the same sample, so it costs the bank nothing.
         mov  ax,[phit]
         cmp  ax,[phitp]
-        jbe  @@gt0b
+        jbe  .gt0b
         push ax
         mov  ax,SFX_BOOM+(2*256)
         call SFXPLAY
         pop  ax
-@@gt0b: mov  [phitp],ax
-        cmp  word ptr [phit],0
-        je   @@gt1
-        dec  word ptr [phit]
-@@gt1:  cmp  byte ptr [KEYS+SC_SP],0
-        je   @@gnr
-        cmp  word ptr [gunam],0
-        je   @@gnf
-        mov  byte ptr [guntik],2
+.gt0b: mov  [phitp],ax
+        cmp  word [phit],0
+        je   .gt1
+        dec  word [phit]
+.gt1:  cmp  byte [KEYS+SC_SP],0
+        je   .gnr
+        cmp  word [gunam],0
+        je   .gnf
+        mov  byte [guntik],2
         ; ---- launch one tracer round (ring of NTRC, oldest reused) ----
         mov  bx,[trnext]
-        inc  word ptr [trnext]
-        and  word ptr [trnext],NTRC-1
+        inc  word [trnext]
+        and  word [trnext],NTRC-1
         mov  di,bx
         add  di,di              ; word offset
-        mov  byte ptr [trcact+bx],1
-        mov  word ptr [trlif+di],60
+        mov  byte [trcact+bx],1
+        mov  word [trlif+di],60
         mov  ax,[hcos]          ; muzzle: wing-root offset, gun alternates
         mov  cx,10
         imul cx
         mov  cx,256
         idiv cx
         test bx,1
-        jz   @@gmr
+        jz   .gmr
         neg  ax                 ; left gun this time
-@@gmr:  add  ax,[camx]
+.gmr:  add  ax,[camx]
         mov  [tcx+di],ax
         mov  ax,[hsin]
         mov  cx,10
@@ -1026,9 +1026,9 @@ INPUT:
         idiv cx
         neg  ax
         test bx,1
-        jz   @@gmz
+        jz   .gmz
         neg  ax
-@@gmz:  add  ax,[camz]
+.gmz:  add  ax,[camz]
         mov  [tcz+di],ax
         mov  ax,[camy]
         sub  ax,3
@@ -1040,12 +1040,12 @@ INPUT:
         idiv cx
         mov  [dsac],ax          ; horizontal component
         mov  ax,[hsin]
-        imul word ptr [dsac]
+        imul word [dsac]
         mov  cx,256
         idiv cx
         mov  [trvx+di],ax
         mov  ax,[hcos]
-        imul word ptr [dsac]
+        imul word [dsac]
         mov  cx,256
         idiv cx
         mov  [trvz+di],ax
@@ -1076,14 +1076,14 @@ INPUT:
         add  [trvz+di],ax
         mov  ax,[lasttk]
         test ax,1
-        jnz  @@gnf              ; volleys on even ticks
-        dec  word ptr [gunam]
+        jnz  .gnf              ; volleys on even ticks
+        dec  word [gunam]
         call SFXPOP             ; the deep clap of the cannon
         xor  si,si              ; who is in the ring?
-@@gsc:  mov  bx,si
+.gsc:  mov  bx,si
         shr  bx,1
-        cmp  byte ptr [pst+bx],0
-        jne  @@gsn
+        cmp  byte [pst+bx],0
+        jne  .gsn
         mov  ax,[pax+si]
         sub  ax,[camx]
         mov  [wdx],ax
@@ -1093,90 +1093,90 @@ INPUT:
         push si
         call ROTXZ
         pop  si
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         cmp  ax,NEARZ
-        jl   @@gsn
+        jl   .gsn
         cmp  ax,4500            ; cannon reach
-        jg   @@gsn
+        jg   .gsn
         mov  dx,[pay+si]
         sub  dx,[camy]
-        mov  ax,[rcx]
-        mov  cx,[rcz]
+        mov  ax,[rc_x]
+        mov  cx,[rc_z]
         push si
         call PPOINT
         pop  si
-        jc   @@gsn
+        jc   .gsn
         sub  ax,160
-        jns  @@gh1
+        jns  .gh1
         neg  ax
-@@gh1:  cmp  ax,18
-        jg   @@gsn
+.gh1:  cmp  ax,18
+        jg   .gsn
         sub  dx,100
-        jns  @@gh2
+        jns  .gh2
         neg  dx
-@@gh2:  cmp  dx,18
-        jg   @@gsn
+.gh2:  cmp  dx,18
+        jg   .gsn
         mov  [hitfx],si         ; hit! sparkle on the victim
-        mov  word ptr [hitft],5
+        mov  word [hitft],5
         mov  bx,si
         shr  bx,1
-        cmp  byte ptr [premote+bx],0
-        je   @@gai              ; an AI jet: settle it here as always
+        cmp  byte [premote+bx],0
+        je   .gai              ; an AI jet: settle it here as always
         push si                 ; a real pilot: the wire carries the round,
         mov  al,bl              ; HIS machine counts his wounds
         mov  ah,1               ; cannon: one hit of the five
-        call FAR PTR NETHITF
+        call SKYSEG:NETHITF
         pop  si
-        jmp  @@gnf
-@@gai:  dec  byte ptr [php+bx]
-        jnz  @@gnf              ; wounded, still flying
+        jmp  .gnf
+.gai:  dec  byte [php+bx]
+        jnz  .gnf              ; wounded, still flying
         push si
         call BOOM
         pop  si
-        inc  word ptr [psc]
-        jmp  @@gnf
-@@gsn:  add  si,2
+        inc  word [psc]
+        jmp  .gnf
+.gsn:  add  si,2
         cmp  si,NPLANE*2
-        jb   @@gsc
-        jmp  @@gnf
-@@gnr:  ; the belt does not grow back either, for the same reason. Two
+        jb   .gsc
+        jmp  .gnf
+.gnr:  ; the belt does not grow back either, for the same reason. Two
         ; hundred and fifty rounds is what the drum holds; letting go of
         ; the trigger used to feed one back in every eight ticks, so the
         ; gun could never actually run dry and the count on the panel was
         ; decoration.
-@@gnf:
+.gnf:
         call SNDBEEP            ; the caution lamps sing
         ; --- manoeuvre loading for the engine sound: how hard is the
         ; airframe working the air? Attitude deltas, plus stall buffet;
         ; rises instantly, decays over ~a second.
         mov  ax,[pitch]
         sub  ax,[mprvp]
-        jns  @@md1
+        jns  .md1
         neg  ax
-@@md1:  mov  bx,ax              ; |dpitch|
+.md1:  mov  bx,ax              ; |dpitch|
         mov  ax,[roll]
         sub  ax,[mprvr]
         and  ax,255
         cmp  ax,128
-        jb   @@md2
+        jb   .md2
         neg  ax
         add  ax,256             ; |droll| the short way round
-@@md2:  add  bx,ax
+.md2:  add  bx,ax
         add  bx,bx              ; scale the kick
         mov  ax,[vel]
         cmp  ax,[vstl]
-        jge  @@md3
+        jge  .md3
         add  bx,4               ; stall buffet shakes the engine note
-@@md3:  mov  ax,[mlvl]          ; decay 1/16 per tick, add the kick
+.md3:  mov  ax,[mlvl]          ; decay 1/16 per tick, add the kick
         mov  dx,ax
         mov  cl,4
         shr  dx,cl
         sub  ax,dx
         add  ax,bx
         cmp  ax,48
-        jle  @@md4
+        jle  .md4
         mov  ax,48
-@@md4:  mov  [mlvl],ax
+.md4:  mov  [mlvl],ax
         mov  ax,[pitch]
         mov  [mprvp],ax
         mov  ax,[roll]
@@ -1184,7 +1184,7 @@ INPUT:
         ; --- the black box: record every 2nd tick for the flashback ---
         mov  ax,[lasttk]
         test ax,1
-        jnz  @@fbskip
+        jnz  .fbskip
         mov  bx,[flbh]
         mov  ax,[camx]
         mov  [FLB+bx],ax
@@ -1200,10 +1200,10 @@ INPUT:
         mov  [FLB+bx+10],ax
         add  bx,12
         cmp  bx,FLBSZ
-        jb   @@fbw
+        jb   .fbw
         xor  bx,bx
-@@fbw:  mov  [flbh],bx
-@@fbskip:
+.fbw:  mov  [flbh],bx
+.fbskip:
         call PLANESUPD          ; AI traffic flies on the same clock
         call MSLUPD             ; the missile chases on the same clock
         call TRCUPD             ; tracer rounds fly on the same clock
@@ -1216,10 +1216,10 @@ INPUT:
 ;  COLLISION
 ; ============================================================================
 COLLIDE:
-        cmp  byte ptr [dying],0
-        je   @@live3
+        cmp  byte [dying],0
+        je   .live3
         ret                     ; the wreck cannot crash twice
-@@live3:
+.live3:
         mov  ax,[camx]          ; camera cell
         add  ax,BIAS
         mov  cl,8
@@ -1243,34 +1243,34 @@ COLLIDE:
         ; the only way through the cushion was to dive - which arrives too
         ; fast to be a landing and is why it broke every time. A pilot with
         ; his legs out has said what he intends.
-        cmp  byte ptr [gear],0
-        jne  @@gfx
+        cmp  byte [gear],0
+        jne  .gfx
         mov  bx,[camy]
         sub  bx,ax              ; height above ground
         cmp  bx,62
-        jge  @@gfx
-        cmp  word ptr [vel],150
-        jl   @@gfx
+        jge  .gfx
+        cmp  word [vel],150
+        jl   .gfx
         mov  ax,62
         sub  ax,bx              ; cushion grows as the gap shrinks
         mov  cl,3
         shr  ax,cl              ; strong: up to ~7 units of lift per tick
         add  [camy],ax
-@@gfx:  mov  ax,[lgnd]
+.gfx:  mov  ax,[lgnd]
         add  ax,14              ; hull clearance above the slope
         cmp  [camy],ax
-        jge  @@terok
-        call FAR PTR LANDF      ; an arrival, or an accident?
-        jc   @@terok
+        jge  .terok
+        call UISEG:LANDF   ; an arrival, or an accident?
+        jc   .terok
         call CRASHHANDLE        ; flew into the hillside
         ret
-@@terok:
+.terok:
         call HBLD
         mov  ax,[bstreet]
         cmp  ax,0
-        jne  @@nocol            ; street / patch -> free air
+        jne  .nocol            ; street / patch -> free air
         call BCHK
-        jnz  @@nocol            ; a ruin: fly through the smoke
+        jnz  .nocol            ; a ruin: fly through the smoke
         ; --- building: inside footprint AND below rooftop (base+height)? ---
         mov  ax,[gi]
         mov  cl,8
@@ -1287,42 +1287,42 @@ COLLIDE:
         mov  ax,[camx]
         sub  ax,[wcx]
         cmp  ax,0
-        jge  @@a1
+        jge  .a1
         neg  ax
-@@a1:   cmp  ax,[bhw]
-        jge  @@nocol
+.a1:   cmp  ax,[bhw]
+        jge  .nocol
         mov  ax,[camz]
         sub  ax,[wcz]
         cmp  ax,0
-        jge  @@a2
+        jge  .a2
         neg  ax
-@@a2:   cmp  ax,[bhd]
-        jge  @@nocol
+.a2:   cmp  ax,[bhd]
+        jge  .nocol
         mov  ax,[gi]            ; rooftop = terrain base + building height
         mov  bx,[gj]
         call GETH
         call WORLDH
         add  ax,[bhgt2]
         cmp  [camy],ax
-        jge  @@nocol            ; above roof -> safe
+        jge  .nocol            ; above roof -> safe
         call BSET               ; the building comes down with us
         call BWRECK
         call CRASHHANDLE
-@@nocol:
+.nocol:
         ret
 
 CRASHHANDLE:
         ; cinematic death: our jet becomes a wreck (same breakup as the
         ; AI), the camera freezes on the chase spot and watches it fall.
         ; INPUT switches to the spectator branch until PLAYERRESET.
-        cmp  byte ptr [dying],0
-        jne  @@cr               ; already falling
-        mov  byte ptr [dying],1
-        mov  word ptr [dytick],0
-        inc  word ptr [tsch]    ; the player is a green too: his loss
+        cmp  byte [dying],0
+        jne  .cr               ; already falling
+        mov  byte [dying],1
+        mov  word [dytick],0
+        inc  word [tsch]    ; the player is a green too: his loss
         mov  ax,[flbh]          ; the flashback starts at the oldest tick
         mov  [flbc],ax
-        mov  word ptr [flbcnt],FLBN
+        mov  word [flbcnt],FLBN
         call PBOOM
         call SFXDETH            ; OUR bang, and its OWN recording - the only
                                 ;  sound in the game that is about you rather
@@ -1346,7 +1346,7 @@ CRASHHANDLE:
         mov  ax,[camy]
         add  ax,15
         mov  [dcy],ax
-@@cr:   ret
+.cr:   ret
 
 ; PLAYERRESET lived here until 2026-08-06. It is now PLAYERRESETF in
 ; UI.INC (UISEG) - see the note at its head. It ran once per death and

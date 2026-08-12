@@ -14,9 +14,52 @@ build publishes them to anyone who opens the page.
 | DOSBox, compiled to WebAssembly | `docs/jsdos/emulators/wdosbox.js`, `wdosbox.wasm` | js-dos 8.3.20 build | **GPL-2.0** | [DOSBox](https://www.dosbox.com/), via [js-dos](https://github.com/js-dos) |
 | libzip, compiled to WebAssembly | `docs/jsdos/emulators/wlibzip.js`, `wlibzip.wasm` | js-dos 8.3.20 build | BSD-3-Clause | [libzip](https://libzip.org/) |
 | coi-serviceworker | `docs/coi-serviceworker.js` | 0.1.7 | MIT | [gzuidhof/coi-serviceworker](https://github.com/gzuidhof/coi-serviceworker) |
+| flat assembler (fasm) | `TOOLS/FASM/` | 1.73.35 | BSD-style | [flatassembler.net](https://flatassembler.net/) |
+| CWSDPMI | `TOOLS/CWSDPMI/` | r7 | GPL-2.0, or binary-only with its notice | [DJGPP archive](http://www.delorie.com/pub/djgpp/current/v2misc/) |
 
 `coi-serviceworker.js` carries its own attribution in the first line of the
 file. The others carried nothing, which is what this page fixes.
+
+## flat assembler, and why it is in here at all
+
+`TOOLS/FASM/` is the official DOS package of flat assembler 1.73.35, unpacked
+exactly as downloaded from [flatassembler.net](https://flatassembler.net/) —
+binaries, documentation, licence and the assembler's own source, which is
+written in itself.
+
+Copyright (c) 1999-2026 Tomasz Grysztar. Its licence is BSD-style: free for
+commercial and non-commercial use, redistribution permitted in source and
+binary form provided the copyright notice, the conditions and the disclaimer
+travel with it. They do — see `TOOLS/FASM/LICENSE.TXT`, which is the file the
+licence asks to be included, and which is why the package is vendored whole
+rather than trimmed to the one executable we use.
+
+It is here because **the toolchain has to be one a viewer may also have.**
+This repository is built with tools bought in the nineties; nobody watching a
+lesson can be asked to buy them. FASM can simply be handed over, and it
+assembles the same bytes.
+
+## CWSDPMI, and why an assembler needs it
+
+`TOOLS/CWSDPMI/` is CWSDPMI r7, the DPMI host from the DJGPP archive.
+
+> CWSDPMI V0.90+ (r7) Copyright (C) 2010 CW Sandmann  ABSOLUTELY NO WARRANTY
+
+That notice is the licence's own condition for shipping the binary without
+source; the alternative is the GPL with source, and either is allowed. Its
+documentation travels with it in `cwsdpmi.doc`.
+
+It is here because **the DOS build of FASM cannot run in DOSBox without it.**
+`FASM.EXE` is a DPMI client and DOSBox is not a DPMI host; `FASMLITE.EXE`
+avoids DPMI by entering 32-bit real mode instead, which DOSBox refuses at
+every core and CPU setting — and so does DOSBox-X, which was tried next.
+CWSDPMI supplies the missing service in twenty-one kilobytes, and `MAKE WCDOS`
+then assembles inside DOS exactly as a viewer's browser will.
+
+That target exists for one purpose: to prove the DOS assembler and the Windows
+one emit the same bytes. **They do** — WIRECITY comes out of both as the same
+5230 bytes, hash for hash. Which is what makes `MAKE WCFASM`, the fast Windows
+path, legitimate rather than merely convenient.
 
 ## The GPL part, and what it means here
 

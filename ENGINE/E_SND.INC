@@ -17,11 +17,11 @@ SBWR:   push cx
         push dx
         mov  dx,22Ch
         mov  cx,1000
-@@w:    in   al,dx
+.w:    in   al,dx
         test al,80h
-        jz   @@go
-        loop @@w
-@@go:   mov  al,ah
+        jz   .go
+        loop .w
+.go:   mov  al,ah
         out  dx,al
         pop  dx
         pop  cx
@@ -40,16 +40,16 @@ SFXRAW: xor  al,al
         mov  bx,ax
         ret
 
-; ---- SFXMB: add the signed sample in DX to ES:[DI], clamp, advance -------
-SFXMB:  mov  al,es:[di]
+; ---- SFXMB: add the signed sample in DX to [ES:DI], clamp, advance -------
+SFXMB:  mov  al,[es:di]
         xor  ah,ah
         add  ax,dx
-        jns  @@p
+        jns  .p
         xor  ax,ax
-@@p:    cmp  ax,255
-        jle  @@q
+.p:    cmp  ax,255
+        jle  .q
         mov  ax,255
-@@q:    mov  es:[di],al
+.q:    mov  [es:di],al
         inc  di
         and  di,SNDN-1
         ret

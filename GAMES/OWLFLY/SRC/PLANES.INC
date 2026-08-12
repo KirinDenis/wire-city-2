@@ -14,47 +14,47 @@
 ; ---------------------------------------------------------------------------
 PLANESUPD:
         xor  si,si              ; plane offset (words)
-@@pl:
+.pl:
         mov  bx,si              ; the dead stay dead - attrition war
         shr  bx,1
-        cmp  byte ptr [pst+bx],0
-        je   @@fly
-        jmp  @@next
-@@fly:  mov  bx,si
+        cmp  byte [pst+bx],0
+        je   .fly
+        jmp  .next
+.fly:  mov  bx,si
         shr  bx,1
-        mov  word ptr [pspd],15
-        cmp  byte ptr [ptype+bx],0
-        je   @@fgt
+        mov  word [pspd],15
+        cmp  byte [ptype+bx],0
+        je   .fgt
         ; ---- specials: patrol an east-west lane at formation altitude;
         ; the lane's z never moves, so the border is never crossed
-        mov  word ptr [pspd],10
+        mov  word [pspd],10
         mov  ax,[pax+si]
         cmp  ax,24576+7000
-        jl   @@sp1
-        mov  word ptr [pah+si],192
-@@sp1:  cmp  ax,24576-7000
-        jg   @@mv
-        mov  word ptr [pah+si],64
-        jmp  @@mv
-@@fgt:
+        jl   .sp1
+        mov  word [pah+si],192
+.sp1:  cmp  ax,24576-7000
+        jg   .mv
+        mov  word [pah+si],64
+        jmp  .mv
+.fgt:
         ; gentle circle: nudge the heading on every 4th tick
         mov  ax,[lasttk]
         and  ax,3
-        jnz  @@mv
+        jnz  .mv
         mov  ax,[pah+si]
         test si,2               ; alternate circling directions
-        jnz  @@ccw
+        jnz  .ccw
         inc  ax
-        jmp  @@turn
-@@ccw:  dec  ax
-@@turn: and  ax,255
+        jmp  .turn
+.ccw:  dec  ax
+.turn: and  ax,255
         mov  [pah+si],ax
-@@mv:
+.mv:
         ; advance along the heading (fighters 15, specials 10)
         mov  ax,[pah+si]
         push si
         call SINQ
-        imul word ptr [pspd]
+        imul word [pspd]
         mov  bx,256
         idiv bx
         pop  si
@@ -63,7 +63,7 @@ PLANESUPD:
         add  ax,64
         push si
         call SINQ
-        imul word ptr [pspd]
+        imul word [pspd]
         mov  bx,256
         idiv bx
         pop  si
@@ -72,26 +72,26 @@ PLANESUPD:
         ; (fighters only: the specials hold their formation lanes)
         mov  bx,si
         shr  bx,1
-        cmp  byte ptr [ptype+bx],0
-        je   @@lsh
-        jmp  @@trl
-@@lsh:  mov  ax,[pax+si]
+        cmp  byte [ptype+bx],0
+        je   .lsh
+        jmp  .trl
+.lsh:  mov  ax,[pax+si]
         sub  ax,[camx]
-        jns  @@l1
+        jns  .l1
         neg  ax
-@@l1:   cmp  ax,12000
-        jge  @@resp
+.l1:   cmp  ax,12000
+        jge  .resp
         mov  ax,[paz+si]
         sub  ax,[camz]
-        jns  @@l2
+        jns  .l2
         neg  ax
-@@l2:   cmp  ax,12000
-        jl   @@trl              ; inside the leash: go drop a trail point
-@@resp: mov  ax,[locki]         ; a teleported target is a lost target
+.l2:   cmp  ax,12000
+        jl   .trl              ; inside the leash: go drop a trail point
+.resp: mov  ax,[locki]         ; a teleported target is a lost target
         cmp  ax,si
-        jne  @@rlk
-        mov  word ptr [locki],0FFFFh
-@@rlk:  push si                 ; the SAME jet teleports: callsign and
+        jne  .rlk
+        mov  word [locki],0FFFFh
+.rlk:  push si                 ; the SAME jet teleports: callsign and
                                 ; armour stay. It re-enters ON THE HORIZON
         call RND16              ; (a random bearing, 9500..11547 out) so it
         pop  si                 ; flies IN from beyond the render range -
@@ -107,7 +107,7 @@ PLANESUPD:
         push si
         call SINQ
         pop  si
-        imul word ptr [cty]
+        imul word [cty]
         mov  bx,256
         idiv bx
         add  ax,[camx]
@@ -117,7 +117,7 @@ PLANESUPD:
         push si
         call SINQ
         pop  si
-        imul word ptr [cty]
+        imul word [cty]
         mov  bx,256
         idiv bx
         add  ax,[camz]
@@ -135,19 +135,19 @@ PLANESUPD:
         add  ax,ax
         add  bx,ax
         mov  cx,TLN
-@@rtf:  mov  ax,[pax+si]
+.rtf:  mov  ax,[pax+si]
         mov  [TLX+bx],ax
         mov  ax,[pay+si]
         mov  [TLY+bx],ax
         mov  ax,[paz+si]
         mov  [TLZ+bx],ax
         add  bx,2
-        loop @@rtf
+        loop .rtf
         ; ---- flying into a building kills both (1 tick in 4) ----
         mov  ax,[lasttk]
         add  ax,si
         and  ax,3
-        jnz  @@nbld
+        jnz  .nbld
         push si
         mov  ax,[pax+si]
         add  ax,BIAS
@@ -160,10 +160,10 @@ PLANESUPD:
         shr  ax,cl
         mov  [gj],ax
         call BCHK
-        jnz  @@bldok            ; a ruin: fly through the smoke
+        jnz  .bldok            ; a ruin: fly through the smoke
         call HBLD
-        cmp  word ptr [bstreet],0
-        jne  @@bldok
+        cmp  word [bstreet],0
+        jne  .bldok
         pop  si
         push si
         mov  ax,[gi]
@@ -174,9 +174,9 @@ PLANESUPD:
         push si
         mov  bx,[pay+si]
         sub  bx,ax
-        js   @@bldok
+        js   .bldok
         cmp  bx,[bhgt2]
-        jg   @@bldok
+        jg   .bldok
         mov  ax,[gi]            ; inside the footprint?
         mov  cl,8
         shl  ax,cl
@@ -186,10 +186,10 @@ PLANESUPD:
         push si
         mov  bx,[pax+si]
         sub  bx,ax
-        jns  @@pb1
+        jns  .pb1
         neg  bx
-@@pb1:  cmp  bx,[bhw]
-        jge  @@bldok
+.pb1:  cmp  bx,[bhw]
+        jge  .bldok
         mov  ax,[gj]
         mov  cl,8
         shl  ax,cl
@@ -199,52 +199,52 @@ PLANESUPD:
         push si
         mov  bx,[paz+si]
         sub  bx,ax
-        jns  @@pb2
+        jns  .pb2
         neg  bx
-@@pb2:  cmp  bx,[bhd]
-        jge  @@bldok
+.pb2:  cmp  bx,[bhd]
+        jge  .bldok
         call BSET               ; both die: the block...
         call BWRECK
         pop  si
         push si
         call BOOM               ; ...and the jet
         pop  si
-        jmp  @@next
-@@bldok:
+        jmp  .next
+.bldok:
         pop  si
-@@nbld:
+.nbld:
         ; ---- ramming the player: both go down ----
-        cmp  byte ptr [dying],0
-        jne  @@nram
+        cmp  byte [dying],0
+        jne  .nram
         mov  ax,[pax+si]
         sub  ax,[camx]
-        jns  @@rm1
+        jns  .rm1
         neg  ax
-@@rm1:  cmp  ax,27
-        jge  @@nram
+.rm1:  cmp  ax,27
+        jge  .nram
         mov  bx,ax
         mov  ax,[pay+si]
         sub  ax,[camy]
-        jns  @@rm2
+        jns  .rm2
         neg  ax
-@@rm2:  add  bx,ax
+.rm2:  add  bx,ax
         mov  ax,[paz+si]
         sub  ax,[camz]
-        jns  @@rm3
+        jns  .rm3
         neg  ax
-@@rm3:  add  bx,ax
+.rm3:  add  bx,ax
         cmp  bx,27
-        jge  @@nram
+        jge  .nram
         push si
         call BOOM               ; the jet shatters...
         call CRASHHANDLE        ; ...and so do we
         pop  si
-        jmp  @@next
-@@nram:
-@@trl:  ; drop a contrail point every 8th tick
+        jmp  .next
+.nram:
+.trl:  ; drop a contrail point every 8th tick
         mov  ax,[lasttk]
         and  ax,7
-        jnz  @@next
+        jnz  .next
         mov  bx,si
         add  bx,bx
         add  bx,bx              ; si*4
@@ -258,19 +258,19 @@ PLANESUPD:
         mov  [TLY+bx],ax
         mov  ax,[paz+si]
         mov  [TLZ+bx],ax
-@@next: add  si,2
+.next: add  si,2
         cmp  si,NPLANE*2
-        jb   @@pl
+        jb   .pl
         mov  ax,[lasttk]        ; advance the shared ring head
         and  ax,7
-        jnz  @@nth
+        jnz  .nth
         mov  ax,[tlh]
         add  ax,2
         cmp  ax,TLN*2
-        jb   @@th2
+        jb   .th2
         xor  ax,ax
-@@th2:  mov  [tlh],ax
-@@nth:  ; ---- midair collisions: one candidate jet per tick vs all ----
+.th2:  mov  [tlh],ax
+.nth:  ; ---- midair collisions: one candidate jet per tick vs all ----
         mov  ax,[lasttk]
         xor  dx,dx
         mov  bx,NPLANE
@@ -279,78 +279,78 @@ PLANESUPD:
         add  si,si              ; the candidate's offset
         mov  bx,si
         shr  bx,1
-        cmp  byte ptr [pst+bx],0
-        jne  @@mce
+        cmp  byte [pst+bx],0
+        jne  .mce
         xor  di,di
-@@mc:   cmp  di,si
-        je   @@mcn
+.mc:   cmp  di,si
+        je   .mcn
         mov  bx,di
         shr  bx,1
-        cmp  byte ptr [pst+bx],0
-        jne  @@mcn
+        cmp  byte [pst+bx],0
+        jne  .mcn
         mov  ax,[pax+di]
         sub  ax,[pax+si]
-        jns  @@mc1
+        jns  .mc1
         neg  ax
-@@mc1:  cmp  ax,27
-        jge  @@mcn
+.mc1:  cmp  ax,27
+        jge  .mcn
         mov  bx,ax
         mov  ax,[pay+di]
         sub  ax,[pay+si]
-        jns  @@mc2
+        jns  .mc2
         neg  ax
-@@mc2:  add  bx,ax
+.mc2:  add  bx,ax
         mov  ax,[paz+di]
         sub  ax,[paz+si]
-        jns  @@mc3
+        jns  .mc3
         neg  ax
-@@mc3:  add  bx,ax
+.mc3:  add  bx,ax
         cmp  bx,27
-        jge  @@mcn
+        jge  .mcn
         push di                 ; a midair: both come apart
         call BOOM
         pop  si
         call BOOM
-        jmp  @@mce
-@@mcn:  add  di,2
+        jmp  .mce
+.mcn:  add  di,2
         cmp  di,NPLANE*2
-        jb   @@mc
-@@mce:
+        jb   .mc
+.mce:
         ; ---- attrition: when a team is wiped, run the victory banner,
         ; then field two fresh squadrons (scores carry over) ----
-        cmp  word ptr [rndovr],0
-        je   @@rchk
-        dec  word ptr [rndovr]
-        jnz  @@rret
+        cmp  word [rndovr],0
+        je   .rchk
+        dec  word [rndovr]
+        jnz  .rret
         call RESPAWNALL
-        jmp  @@rret
-@@rchk: xor  cx,cx              ; cl = friendlies alive, ch = hostiles
+        jmp  .rret
+.rchk: xor  cx,cx              ; cl = friendlies alive, ch = hostiles
         xor  si,si
-@@rc:   mov  bx,si
+.rc:   mov  bx,si
         shr  bx,1
-        cmp  byte ptr [pst+bx],0
-        jne  @@rcn
+        cmp  byte [pst+bx],0
+        jne  .rcn
         test si,2
-        jnz  @@rch
+        jnz  .rch
         inc  cl
-        jmp  @@rcn
-@@rch:  inc  ch
-@@rcn:  add  si,2
+        jmp  .rcn
+.rch:  inc  ch
+.rcn:  add  si,2
         cmp  si,NPLANE*2
-        jb   @@rc
-        cmp  byte ptr [dying],0 ; the player is a green too: while he
-        jne  @@rcp              ; fights, the team stands
+        jb   .rc
+        cmp  byte [dying],0 ; the player is a green too: while he
+        jne  .rcp              ; fights, the team stands
         inc  cl
-@@rcp:  test cl,cl
-        jnz  @@rc2
-        mov  byte ptr [rwin],1  ; the hostiles hold the sky
-        mov  word ptr [rndovr],160
-        jmp  @@rret
-@@rc2:  test ch,ch
-        jnz  @@rret
-        mov  byte ptr [rwin],0
-        mov  word ptr [rndovr],160
-@@rret: ret
+.rcp:  test cl,cl
+        jnz  .rc2
+        mov  byte [rwin],1  ; the hostiles hold the sky
+        mov  word [rndovr],160
+        jmp  .rret
+.rc2:  test ch,ch
+        jnz  .rret
+        mov  byte [rwin],0
+        mov  word [rndovr],160
+.rret: ret
 
 ; ---------------------------------------------------------------------------
 ;  PLANESDRAW - render the AI jets (called after BUILDINGS: they own the
@@ -360,13 +360,13 @@ PLANESUPD:
 ;  far -> near by average depth, then feed each to FACEFILL.
 ; ---------------------------------------------------------------------------
 PLANESDRAW:
-        mov  word ptr [pidx],0
-@@pd:
+        mov  word [pidx],0
+.pd:
         mov  si,[pidx]
         mov  bx,si              ; dead jets are debris, not aircraft
         shr  bx,1
-        cmp  byte ptr [pst+bx],0
-        jne  @@skip
+        cmp  byte [pst+bx],0
+        jne  .skip
         mov  al,[ptype+bx]      ; this slot's silhouette
         xor  ah,ah
         add  ax,ax
@@ -388,23 +388,23 @@ PLANESDRAW:
         mov  [wdz],ax
         ; quick reject on the world-space box
         mov  ax,[wdx]
-        jns  @@q1
+        jns  .q1
         neg  ax
-@@q1:   cmp  ax,13000
-        jge  @@skip
+.q1:   cmp  ax,13000
+        jge  .skip
         mov  ax,[wdz]
-        jns  @@q2
+        jns  .q2
         neg  ax
-@@q2:   cmp  ax,13000
-        jge  @@skip
-        call ROTXZ              ; -> rcx (right), rcz (depth)
-        mov  ax,[rcz]
+.q2:   cmp  ax,13000
+        jge  .skip
+        call ROTXZ              ; -> rc_x (right), rc_z (depth)
+        mov  ax,[rc_z]
         cmp  ax,-100
-        jl   @@skip             ; fully behind the camera
+        jl   .skip             ; fully behind the camera
         cmp  ax,12500
-        jge  @@skip             ; beyond the leash: truly out of sight
+        jge  .skip             ; beyond the leash: truly out of sight
         mov  [pdz],ax
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [pdx],ax
         mov  ax,[pay+si]
         sub  ax,[camy]
@@ -417,8 +417,8 @@ PLANESDRAW:
         add  ax,ax
         add  bx,ax              ; si*12: ring = TLN(12)*2 bytes per jet
         mov  [pfc],bx           ; slot base (TLN=16)
-        mov  word ptr [tpi],0
-@@tr:   mov  bx,[pfc]
+        mov  word [tpi],0
+.tr:   mov  bx,[pfc]
         add  bx,[tpi]
         mov  ax,[TLX+bx]
         sub  ax,[camx]
@@ -431,28 +431,28 @@ PLANESDRAW:
         pop  bx
         mov  dx,[TLY+bx]
         sub  dx,[camy]
-        mov  ax,[rcx]
-        mov  cx,[rcz]
+        mov  ax,[rc_x]
+        mov  cx,[rc_z]
         call PPOINT
-        jc   @@trn
+        jc   .trn
         cmp  ax,0
-        jl   @@trn
+        jl   .trn
         cmp  ax,319
-        jg   @@trn
+        jg   .trn
         cmp  dx,0
-        jl   @@trn
+        jl   .trn
         cmp  dx,199
-        jg   @@trn
+        jg   .trn
         mov  [dsx],ax
         mov  ax,dx
         call ROW320
         add  di,[dsx]
         mov  al,8               ; white vapour, 2 px - visible on the sky
-        mov  es:[di],al
-        mov  es:[di+1],al
-@@trn:  add  word ptr [tpi],2
-        cmp  word ptr [tpi],TLN*2
-        jb   @@tr
+        mov  [es:di],al
+        mov  [es:di+1],al
+.trn:  add  word [tpi],2
+        cmp  word [tpi],TLN*2
+        jb   .tr
         mov  si,[pidx]          ; PROJPT inside PPOINT clobbers SI
         ; model yaw relative to the camera: A = plane heading - heading
         mov  ax,[pah+si]
@@ -472,13 +472,13 @@ PLANESDRAW:
         ; ---- transform the 13 model vertices into the PV cache ----
         xor  si,si              ; model table offset (6 bytes/vertex)
         xor  di,di              ; cache offset (2 bytes/vertex)
-@@tv:   mov  bx,[mvb]           ; the model of THIS type of aircraft
+.tv:   mov  bx,[mvb]           ; the model of THIS type of aircraft
         mov  ax,[bx+si]         ; vx = (mx*mcos + mz*msin)/256 + pdx
-        imul word ptr [mcos]
+        imul word [mcos]
         mov  cx,ax
         mov  bx,[mvb]
         mov  ax,[bx+si+4]
-        imul word ptr [msin]
+        imul word [msin]
         add  ax,cx
         cwd
         mov  bx,256
@@ -491,11 +491,11 @@ PLANESDRAW:
         mov  [PVY+di],ax
         mov  bx,[mvb]
         mov  ax,[bx+si]         ; vz = (mz*mcos - mx*msin)/256 + pdz
-        imul word ptr [msin]
+        imul word [msin]
         mov  cx,ax
         mov  bx,[mvb]
         mov  ax,[bx+si+4]
-        imul word ptr [mcos]
+        imul word [mcos]
         sub  ax,cx
         cwd
         mov  bx,256
@@ -505,10 +505,10 @@ PLANESDRAW:
         add  si,6
         add  di,2
         cmp  si,[mvn]
-        jb   @@tv
+        jb   .tv
         ; ---- face depths: FCD = avg z of the face corners ----
         xor  si,si              ; face index
-@@fd:   mov  bx,si
+.fd:   mov  bx,si
         add  bx,bx
         add  bx,bx
         add  bx,si              ; face record = 5 bytes
@@ -547,32 +547,32 @@ PLANESDRAW:
         mov  [FCO+bx],al        ; order starts as identity
         inc  si
         cmp  si,[nfc]
-        jb   @@fd
+        jb   .fd
         ; ---- bubble far -> near (descending depth) ----
         mov  cx,[nfc]
         dec  cx
-@@bs:   push cx
+.bs:   push cx
         xor  si,si
-@@bi:   mov  bx,si
+.bi:   mov  bx,si
         add  bx,bx
         mov  ax,[FCD+bx]
         cmp  ax,[FCD+bx+2]
-        jge  @@nsw
+        jge  .nsw
         xchg ax,[FCD+bx+2]      ; swap depths
         mov  [FCD+bx],ax
         mov  al,[FCO+si]        ; swap order entries
         xchg al,[FCO+si+1]
         mov  [FCO+si],al
-@@nsw:  inc  si
+.nsw:  inc  si
         mov  bx,[nfc]
         dec  bx
         cmp  si,bx
-        jb   @@bi
+        jb   .bi
         pop  cx
-        loop @@bs
+        loop .bs
         ; ---- draw the faces in painter order ----
-        mov  word ptr [pfc],0
-@@df:   mov  si,[pfc]
+        mov  word [pfc],0
+.df:   mov  si,[pfc]
         mov  al,[FCO+si]
         xor  ah,ah
         mov  bx,ax
@@ -584,7 +584,7 @@ PLANESDRAW:
         mov  al,[bx+4]
         mov  [COLOR],al
         xor  cx,cx              ; corner 0..3
-@@dc:   push bx
+.dc:   push bx
         push cx
         mov  si,cx
         mov  al,[bx+si]
@@ -603,72 +603,72 @@ PLANESDRAW:
         pop  bx
         inc  cx
         cmp  cx,4
-        jb   @@dc
+        jb   .dc
         call FACEFILL
-        inc  word ptr [pfc]
+        inc  word [pfc]
         mov  ax,[nfc]
         cmp  [pfc],ax
-        jb   @@df
+        jb   .df
         ; ---- IFF marker: friendly = green square, hostile = yellow
         ; diamond, sized to the wingspan (11440/rz px half-size) ----
         mov  ax,[pdz]
         cmp  ax,NEARZ
-        jle  @@nomk
+        jle  .nomk
         cmp  ax,8500            ; the IFF box waits for visual range
-        jg   @@nomk
+        jg   .nomk
         mov  ax,[pdx]
         mov  dx,[pdy]
         mov  cx,[pdz]
         call PPOINT
-        jc   @@nomk
+        jc   .nomk
         mov  [dsx],ax           ; marker centre on screen
         mov  [dsy],dx
         mov  ax,[hitfx]         ; cannon-hit sparkle: a yellow star
         cmp  ax,[pidx]
-        jne  @@nfl
-        cmp  word ptr [hitft],0
-        je   @@nfl
+        jne  .nfl
+        cmp  word [hitft],0
+        je   .nfl
         mov  ax,[dsx]
         cmp  ax,3
-        jl   @@nfl
+        jl   .nfl
         cmp  ax,316
-        jg   @@nfl
+        jg   .nfl
         mov  ax,[dsy]
         cmp  ax,3
-        jl   @@nfl
+        jl   .nfl
         cmp  ax,188
-        jg   @@nfl
+        jg   .nfl
         call ROW320
         add  di,[dsx]
         mov  al,96
-        mov  es:[di],al
-        mov  es:[di-2],al
-        mov  es:[di+2],al
-        mov  es:[di-640],al
-        mov  es:[di+640],al
+        mov  [es:di],al
+        mov  [es:di-2],al
+        mov  [es:di+2],al
+        mov  [es:di-640],al
+        mov  [es:di+640],al
         mov  al,8
-        mov  es:[di-321],al
-        mov  es:[di+321],al
-        mov  es:[di-319],al
-        mov  es:[di+319],al
-@@nfl:  mov  bx,[pdz]
+        mov  [es:di-321],al
+        mov  [es:di+321],al
+        mov  [es:di-319],al
+        mov  [es:di+319],al
+.nfl:  mov  bx,[pdz]
         mov  ax,2860
         cwd
         idiv bx
         add  ax,3
         cmp  ax,24
-        jle  @@mr1
+        jle  .mr1
         mov  ax,24
-@@mr1:  mov  [dsac],ax          ; half-size
-        test word ptr [pidx],2
-        jnz  @@hst
+.mr1:  mov  [dsac],ax          ; half-size
+        test word [pidx],2
+        jnz  .hst
         ; friendly: green square (red when locked)
-        mov  byte ptr [COLOR],95
+        mov  byte [COLOR],95
         mov  ax,[locki]
         cmp  ax,[pidx]
-        jne  @@fc1
-        mov  byte ptr [COLOR],19
-@@fc1:
+        jne  .fc1
+        mov  byte [COLOR],19
+.fc1:
         mov  ax,[dsx]
         sub  ax,[dsac]
         mov  [sx0],ax
@@ -679,7 +679,7 @@ PLANESDRAW:
         sub  ax,[dsac]
         mov  [sy0],ax
         mov  [sy1],ax
-        call @@mln              ; top
+        call .mln              ; top
         mov  ax,[dsx]
         sub  ax,[dsac]
         mov  [sx0],ax
@@ -690,7 +690,7 @@ PLANESDRAW:
         add  ax,[dsac]
         mov  [sy0],ax
         mov  [sy1],ax
-        call @@mln              ; bottom
+        call .mln              ; bottom
         mov  ax,[dsx]
         sub  ax,[dsac]
         mov  [sx0],ax
@@ -701,7 +701,7 @@ PLANESDRAW:
         mov  ax,[dsy]
         add  ax,[dsac]
         mov  [sy1],ax
-        call @@mln              ; left
+        call .mln              ; left
         mov  ax,[dsx]
         add  ax,[dsac]
         mov  [sx0],ax
@@ -712,15 +712,15 @@ PLANESDRAW:
         mov  ax,[dsy]
         add  ax,[dsac]
         mov  [sy1],ax
-        call @@mln              ; right
-        jmp  @@mlbl
-@@hst:  ; hostile: yellow diamond (red when locked)
-        mov  byte ptr [COLOR],96
+        call .mln              ; right
+        jmp  .mlbl
+.hst:  ; hostile: yellow diamond (red when locked)
+        mov  byte [COLOR],96
         mov  ax,[locki]
         cmp  ax,[pidx]
-        jne  @@hc1
-        mov  byte ptr [COLOR],19
-@@hc1:
+        jne  .hc1
+        mov  byte [COLOR],19
+.hc1:
         mov  ax,[dsx]
         mov  [sx0],ax
         mov  ax,[dsy]
@@ -731,7 +731,7 @@ PLANESDRAW:
         mov  [sx1],ax
         mov  ax,[dsy]
         mov  [sy1],ax
-        call @@mln              ; top -> right
+        call .mln              ; top -> right
         mov  ax,[dsx]
         add  ax,[dsac]
         mov  [sx0],ax
@@ -742,7 +742,7 @@ PLANESDRAW:
         mov  ax,[dsy]
         add  ax,[dsac]
         mov  [sy1],ax
-        call @@mln              ; right -> bottom
+        call .mln              ; right -> bottom
         mov  ax,[dsx]
         mov  [sx0],ax
         mov  ax,[dsy]
@@ -753,7 +753,7 @@ PLANESDRAW:
         mov  [sx1],ax
         mov  ax,[dsy]
         mov  [sy1],ax
-        call @@mln              ; bottom -> left
+        call .mln              ; bottom -> left
         mov  ax,[dsx]
         sub  ax,[dsac]
         mov  [sx0],ax
@@ -764,22 +764,22 @@ PLANESDRAW:
         mov  ax,[dsy]
         sub  ax,[dsac]
         mov  [sy1],ax
-        call @@mln              ; left -> top
-@@mlbl: ; ---- the callsign under the marker (close targets only) ----
-        cmp  word ptr [dsac],6
-        jl   @@nomk             ; a distant dot stays a dot
+        call .mln              ; left -> top
+.mlbl: ; ---- the callsign under the marker (close targets only) ----
+        cmp  word [dsac],6
+        jl   .nomk             ; a distant dot stays a dot
         mov  ax,[dsx]
         cmp  ax,20              ; FDRAW has no clipping: stay on screen
-        jl   @@nomk
+        jl   .nomk
         cmp  ax,299
-        jg   @@nomk
+        jg   .nomk
         mov  ax,[dsy]
         add  ax,[dsac]
         add  ax,3
         cmp  ax,2
-        jl   @@nomk
+        jl   .nomk
         cmp  ax,185
-        jg   @@nomk
+        jg   .nomk
         mov  [fty],ax
         mov  ax,[dsx]
         sub  ax,14
@@ -790,23 +790,23 @@ PLANESDRAW:
         add  ax,[dsac]
         add  ax,11
         cmp  ax,185
-        jg   @@nomk
+        jg   .nomk
         mov  [fty],ax
         mov  ax,[dsx]
         sub  ax,14
         mov  [ftx],ax
         mov  si,[pidx]
         call TYPDRAW
-        jmp  @@nomk
-@@mln:  call CLIPLINE
-        jc   @@mlx
+        jmp  .nomk
+.mln:  call CLIPLINE
+        jc   .mlx
         call LINE
-@@mlx:  ret
-@@nomk:
-@@skip:
-        add  word ptr [pidx],2
-        cmp  word ptr [pidx],NPLANE*2
-        jb   @@pd
+.mlx:  ret
+.nomk:
+.skip:
+        add  word [pidx],2
+        cmp  word [pidx],NPLANE*2
+        jb   .pd
         ret
 
 ; ---------------------------------------------------------------------------
@@ -819,35 +819,35 @@ PPOINT: mov  [dsx],ax           ; rx
         mov  [dsy],dx           ; ry
         mov  [dsac],cx          ; rz
         mov  ax,dx              ; y' = (ry*pcos - rz*psin)/256
-        imul word ptr [pcos]
+        imul word [pcos]
         mov  bx,256
         idiv bx
         mov  cx,ax
         mov  ax,[dsac]
-        imul word ptr [psin]
+        imul word [psin]
         mov  bx,256
         idiv bx
         sub  cx,ax
         push cx                 ; y'
         mov  ax,[dsy]           ; z' = (ry*psin + rz*pcos)/256
-        imul word ptr [psin]
+        imul word [psin]
         mov  bx,256
         idiv bx
         mov  cx,ax
         mov  ax,[dsac]
-        imul word ptr [pcos]
+        imul word [pcos]
         mov  bx,256
         idiv bx
         add  ax,cx
         pop  dx                 ; y'
         cmp  ax,NEARZ
-        jl   @@behind
+        jl   .behind
         mov  cx,ax
         mov  ax,[dsx]
         call PROJPT             ; AX=sx, DX=sy
         clc
         ret
-@@behind:
+.behind:
         stc
         ret
 
@@ -858,30 +858,30 @@ PPOINT: mov  [dsx],ax           ; rx
 ;  printed under the ring.
 ; ---------------------------------------------------------------------------
 LOCKHUD:
-        cmp  byte ptr [chsview],0
-        jne  @@lkoff
-        cmp  byte ptr [mcact],0
-        jne  @@lkoff
-        cmp  byte ptr [tgtcam],0
-        jne  @@lkoff
-        cmp  byte ptr [dying],0
-        je   @@lkh
-@@lkoff:
+        cmp  byte [chsview],0
+        jne  .lkoff
+        cmp  byte [mcact],0
+        jne  .lkoff
+        cmp  byte [tgtcam],0
+        jne  .lkoff
+        cmp  byte [dying],0
+        je   .lkh
+.lkoff:
         ret                     ; no glass to project the ring on
-@@lkh:  mov  word ptr [dsac],8
-        cmp  word ptr [phit],0  ; taking fire: the ring flashes red
-        je   @@lh0
-        mov  word ptr [dsac],19
-        jmp  @@ring
-@@lh0:  mov  ax,[locki]
+.lkh:  mov  word [dsac],8
+        cmp  word [phit],0  ; taking fire: the ring flashes red
+        je   .lh0
+        mov  word [dsac],19
+        jmp  .ring
+.lh0:  mov  ax,[locki]
         cmp  ax,0FFFFh
-        je   @@ring
-        mov  word ptr [dsac],95
+        je   .ring
+        mov  word [dsac],95
         test ax,2
-        jz   @@ring
-        mov  word ptr [dsac],19
-@@ring: mov  word ptr [tpi],0
-@@ck:   mov  ax,[tpi]
+        jz   .ring
+        mov  word [dsac],19
+.ring: mov  word [tpi],0
+.ck:   mov  ax,[tpi]
         call SINQ
         mov  bx,20
         imul bx
@@ -902,13 +902,13 @@ LOCKHUD:
         call ROW320
         add  di,[dsx]
         mov  ax,[dsac]
-        mov  es:[di],al
-        add  word ptr [tpi],16
-        cmp  word ptr [tpi],256
-        jb   @@ck
+        mov  [es:di],al
+        add  word [tpi],16
+        cmp  word [tpi],256
+        jb   .ck
         mov  si,[locki]
         cmp  si,0FFFFh
-        je   @@done
+        je   .done
         ; where is the target on screen?
         mov  ax,[pax+si]
         sub  ax,[camx]
@@ -921,90 +921,90 @@ LOCKHUD:
         pop  si
         mov  dx,[pay+si]
         sub  dx,[camy]
-        mov  ax,[rcx]
-        mov  cx,[rcz]
+        mov  ax,[rc_x]
+        mov  cx,[rc_z]
         push si
         call PPOINT
         pop  si
-        jc   @@offs
+        jc   .offs
         cmp  ax,0
-        jl   @@dir
+        jl   .dir
         cmp  ax,319
-        jg   @@dir
+        jg   .dir
         cmp  dx,0
-        jl   @@dir
+        jl   .dir
         cmp  dx,191
-        jg   @@dir
-        jmp  @@text             ; visible: its marker is already red
-@@offs: mov  ax,160             ; behind us: point straight down
+        jg   .dir
+        jmp  .text             ; visible: its marker is already red
+.offs: mov  ax,160             ; behind us: point straight down
         mov  dx,192
-@@dir:  sub  ax,160             ; shrink the direction onto the ring edge
+.dir:  sub  ax,160             ; shrink the direction onto the ring edge
         sub  dx,100
-@@hv:   mov  bx,ax
+.hv:   mov  bx,ax
         or   bx,bx
-        jns  @@a1
+        jns  .a1
         neg  bx
-@@a1:   cmp  bx,18
-        jg   @@shr
+.a1:   cmp  bx,18
+        jg   .shr
         mov  bx,dx
         or   bx,bx
-        jns  @@a2
+        jns  .a2
         neg  bx
-@@a2:   cmp  bx,18
-        jle  @@pt
-@@shr:  sar  ax,1
+.a2:   cmp  bx,18
+        jle  .pt
+.shr:  sar  ax,1
         sar  dx,1
-        jmp  @@hv
-@@pt:   add  ax,160
+        jmp  .hv
+.pt:   add  ax,160
         add  dx,100
         mov  [dsx],ax
         mov  ax,dx
         call ROW320
         add  di,[dsx]
         mov  ax,[dsac]
-        mov  es:[di],al
-        mov  es:[di+1],al
-        mov  es:[di+320],al
-        mov  es:[di+321],al
-@@text: mov  si,[locki]
-        mov  byte ptr [COLOR],19
-        mov  bx,offset MSGTGT
+        mov  [es:di],al
+        mov  [es:di+1],al
+        mov  [es:di+320],al
+        mov  [es:di+321],al
+.text: mov  si,[locki]
+        mov  byte [COLOR],19
+        mov  bx,MSGTGT
         test si,2
-        jnz  @@t2
-        mov  byte ptr [COLOR],95
-        mov  bx,offset MSGFRD
-@@t2:   mov  word ptr [ftx],148
-        mov  word ptr [fty],124
+        jnz  .t2
+        mov  byte [COLOR],95
+        mov  bx,MSGFRD
+.t2:   mov  word [ftx],148
+        mov  word [fty],124
         push si
         mov  si,bx
         call FDRAW
         pop  si
-        mov  word ptr [ftx],142
-        mov  word ptr [fty],132
+        mov  word [ftx],142
+        mov  word [fty],132
         call CSDRAW
-        mov  word ptr [ftx],142
-        mov  word ptr [fty],140
+        mov  word [ftx],142
+        mov  word [fty],140
         mov  si,[locki]
         call TYPDRAW
-@@done: cmp  word ptr [rndovr],0
-        je   @@nob
+.done: cmp  word [rndovr],0
+        je   .nob
         mov  ax,[lasttk]        ; the victory banner blinks
         test ax,4
-        jz   @@nob
-        cmp  byte ptr [rwin],0
-        jne  @@bw
-        mov  byte ptr [COLOR],95
-        mov  word ptr [ftx],140
-        mov  word ptr [fty],44
-        mov  si,offset MSGVWIN
+        jz   .nob
+        cmp  byte [rwin],0
+        jne  .bw
+        mov  byte [COLOR],95
+        mov  word [ftx],140
+        mov  word [fty],44
+        mov  si,MSGVWIN
         call FDRAW
-        jmp  @@nob
-@@bw:   mov  byte ptr [COLOR],96
-        mov  word ptr [ftx],138
-        mov  word ptr [fty],44
-        mov  si,offset MSGBWIN
+        jmp  .nob
+.bw:   mov  byte [COLOR],96
+        mov  word [ftx],138
+        mov  word [fty],44
+        mov  si,MSGBWIN
         call FDRAW
-@@nob:  ret
+.nob:  ret
 
 ; ---------------------------------------------------------------------------
 ;  CSDRAW - print the callsign of plane SI (offset) at ftx/fty in the
@@ -1020,12 +1020,12 @@ CSDRAW: push si
         pop  ax                 ; plane offset
         push ax
         test ax,2
-        jnz  @@hn
+        jnz  .hn
         mov  si,[FNTAB+bx]
-        jmp  @@nm
-@@hn:   mov  si,[HNTAB+bx]
-@@nm:   call FDRAW
-        add  word ptr [ftx],2
+        jmp  .nm
+.hn:   mov  si,[HNTAB+bx]
+.nm:   call FDRAW
+        add  word [ftx],2
         pop  bx
         shr  bx,1
         mov  al,[pnum+bx]
@@ -1042,10 +1042,10 @@ TYPDRAW:
         add  ax,ax
         mov  bx,ax
         mov  si,[TYPTAB+bx]
-        cmp  byte ptr [si],0
-        je   @@r
+        cmp  byte [si],0
+        je   .r
         call FDRAW
-@@r:    ret
+.r:    ret
 
 ; ---------------------------------------------------------------------------
 ;  TGTVIEW - sensor view of the locked target on the green MFD: callsign,
@@ -1053,23 +1053,23 @@ TYPDRAW:
 ; ---------------------------------------------------------------------------
 TGTVIEW:
         mov  si,[locki]
-        mov  byte ptr [COLOR],8
-        mov  word ptr [ftx],197
-        mov  word ptr [fty],155
+        mov  byte [COLOR],8
+        mov  word [ftx],197
+        mov  word [fty],155
         call CSDRAW
-        mov  word ptr [ftx],197
-        mov  word ptr [fty],163
+        mov  word [ftx],197
+        mov  word [fty],163
         mov  si,[locki]
         call TYPDRAW
         mov  si,[locki]
-        mov  byte ptr [COLOR],19
-        mov  bx,offset MSGTGT
+        mov  byte [COLOR],19
+        mov  bx,MSGTGT
         test si,2
-        jnz  @@tg
-        mov  byte ptr [COLOR],95
-        mov  bx,offset MSGFRD
-@@tg:   mov  word ptr [ftx],197
-        mov  word ptr [fty],182
+        jnz  .tg
+        mov  byte [COLOR],95
+        mov  bx,MSGFRD
+.tg:   mov  word [ftx],197
+        mov  word [fty],182
         push si
         mov  si,bx
         call FDRAW
@@ -1097,13 +1097,13 @@ TGTVIEW:
         mov  [mcos],ax
         xor  si,si
         xor  di,di
-@@tv2:  mov  bx,[mvb]
+.tv2:  mov  bx,[mvb]
         mov  ax,[bx+si]         ; vx = (mx*mcos + mz*msin)/256
-        imul word ptr [mcos]
+        imul word [mcos]
         mov  cx,ax
         mov  bx,[mvb]
         mov  ax,[bx+si+4]
-        imul word ptr [msin]
+        imul word [msin]
         add  ax,cx
         cwd
         mov  bx,256
@@ -1111,11 +1111,11 @@ TGTVIEW:
         mov  [dsx],ax
         mov  bx,[mvb]
         mov  ax,[bx+si]         ; vz = (mz*mcos - mx*msin)/256 + 300
-        imul word ptr [msin]
+        imul word [msin]
         mov  cx,ax
         mov  bx,[mvb]
         mov  ax,[bx+si+4]
-        imul word ptr [mcos]
+        imul word [mcos]
         sub  ax,cx
         cwd
         mov  bx,256
@@ -1125,23 +1125,23 @@ TGTVIEW:
         mov  ax,[dsx]           ; sx = 217 + vx*64/vz
         mov  bx,64
         imul bx
-        idiv word ptr [dsac]
+        idiv word [dsac]
         add  ax,217
         mov  [PVX+di],ax
         mov  bx,[mvb]
         mov  ax,[bx+si+2]       ; sy = 170 - vy*64/vz
         mov  bx,64
         imul bx
-        idiv word ptr [dsac]
+        idiv word [dsac]
         mov  bx,170
         sub  bx,ax
         mov  [PVY+di],bx
         add  si,6
         add  di,2
         cmp  si,[mvn]
-        jb   @@tv2
+        jb   .tv2
         xor  si,si              ; sensor-green edges
-@@te:   mov  al,[WEDG+si]
+.te:   mov  al,[WEDG+si]
         xor  ah,ah
         add  ax,ax
         mov  bx,ax
@@ -1157,34 +1157,34 @@ TGTVIEW:
         mov  [sx1],ax
         mov  ax,[PVY+bx]
         mov  [sy1],ax
-        mov  byte ptr [COLOR],95
+        mov  byte [COLOR],95
         push si
         call CLIPLINE
-        jc   @@ten
+        jc   .ten
         call LINE
-@@ten:  pop  si
+.ten:  pop  si
         add  si,2
         cmp  si,NWEDG*2
-        jb   @@te
+        jb   .te
         ret
 
 ; ---------------------------------------------------------------------------
 ;  MSLUPD - one tick of the missile: home on the lock target (or fly
 ;  straight), proximity-fuse against every living jet, die by timer.
 ; ---------------------------------------------------------------------------
-MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
-        jne  @@mc0
-        dec  word ptr [mcret]
-        jnz  @@mc0
-        mov  byte ptr [mcact],0 ; and the old view returns
-@@mc0:  cmp  byte ptr [msact],0
-        je   @@out
-        dec  word ptr [mlife]
-        jnz  @@mv
+MSLUPD: cmp  byte [mcact],2 ; the aftermath plays itself out
+        jne  .mc0
+        dec  word [mcret]
+        jnz  .mc0
+        mov  byte [mcact],0 ; and the old view returns
+.mc0:  cmp  byte [msact],0
+        je   .out
+        dec  word [mlife]
+        jnz  .mv
         call MCEND              ; burned out: watch the empty sky a bit
-        mov  byte ptr [msact],0
+        mov  byte [msact],0
         ret
-@@mv:   mov  ax,[msx]           ; remember the old spot (exhaust puff)
+.mv:   mov  ax,[msx]           ; remember the old spot (exhaust puff)
         mov  [mpx],ax
         mov  ax,[msy]
         mov  [mpy],ax
@@ -1192,20 +1192,20 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         mov  [mpz],ax
         mov  si,[mstgt]
         cmp  si,0FFFFh
-        je   @@str
+        je   .str
         mov  bx,si              ; target died mid-flight? go ballistic
         shr  bx,1
-        cmp  byte ptr [pst+bx],0
-        je   @@home
-        mov  word ptr [mstgt],0FFFFh
-@@str:  mov  ax,[mvx]           ; straight: the velocity set at launch
+        cmp  byte [pst+bx],0
+        je   .home
+        mov  word [mstgt],0FFFFh
+.str:  mov  ax,[mvx]           ; straight: the velocity set at launch
         add  [msx],ax
         mov  ax,[mvy]
         add  [msy],ax
         mov  ax,[mvz]
         add  [msz],ax
-        jmp  @@prox
-@@home: ; chase at 32/tick, direction normalised by the dominant axis
+        jmp  .prox
+.home: ; chase at 32/tick, direction normalised by the dominant axis
         mov  ax,[pax+si]
         sub  ax,[msx]
         mov  [wdx],ax           ; dx
@@ -1217,44 +1217,44 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         mov  [ctx],ax           ; dz
         mov  bx,[wdx]           ; m = max of the absolutes
         or   bx,bx
-        jns  @@m1
+        jns  .m1
         neg  bx
-@@m1:   mov  ax,[wdz]
+.m1:   mov  ax,[wdz]
         or   ax,ax
-        jns  @@m2
+        jns  .m2
         neg  ax
-@@m2:   cmp  ax,bx
-        jle  @@m3
+.m2:   cmp  ax,bx
+        jle  .m3
         mov  bx,ax
-@@m3:   mov  ax,[ctx]
+.m3:   mov  ax,[ctx]
         or   ax,ax
-        jns  @@m4
+        jns  .m4
         neg  ax
-@@m4:   cmp  ax,bx
-        jle  @@m5
+.m4:   cmp  ax,bx
+        jle  .m5
         mov  bx,ax
-@@m5:   test bx,bx
-        jnz  @@m6
+.m5:   test bx,bx
+        jnz  .m6
         inc  bx
-@@m6:   mov  [cty],bx           ; m
+.m6:   mov  [cty],bx           ; m
         mov  ax,[wdx]
         mov  cx,32
         imul cx
-        idiv word ptr [cty]
+        idiv word [cty]
         add  [msx],ax
         mov  ax,[wdz]
         mov  cx,32
         imul cx
-        idiv word ptr [cty]
+        idiv word [cty]
         add  [msy],ax
         mov  ax,[ctx]
         mov  cx,32
         imul cx
-        idiv word ptr [cty]
+        idiv word [cty]
         add  [msz],ax
-@@prox: ; ---- camera course servo: lean the view after the missile ----
-        cmp  byte ptr [mcact],1
-        jne  @@nsv
+.prox: ; ---- camera course servo: lean the view after the missile ----
+        cmp  byte [mcact],1
+        jne  .nsv
         mov  ax,[mch]
         call SINQ
         mov  [ctx],ax           ; sin
@@ -1264,27 +1264,27 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         mov  [cty],ax           ; cos
         mov  ax,[msx]
         sub  ax,[mpx]
-        imul word ptr [cty]
+        imul word [cty]
         mov  bx,256
         idiv bx
         mov  [ctz],ax           ; dvx*cos
         mov  ax,[msz]
         sub  ax,[mpz]
-        imul word ptr [ctx]
+        imul word [ctx]
         mov  bx,256
         idiv bx
         mov  bx,[ctz]
         sub  bx,ax              ; err: + = the missile drifts right
         cmp  bx,4
-        jle  @@sv1
-        add  word ptr [mch],3
-        and  word ptr [mch],255
-        jmp  @@nsv
-@@sv1:  cmp  bx,-4
-        jge  @@nsv
-        sub  word ptr [mch],3
-        and  word ptr [mch],255
-@@nsv:  ; ---- a building in the way eats the missile whole ----
+        jle  .sv1
+        add  word [mch],3
+        and  word [mch],255
+        jmp  .nsv
+.sv1:  cmp  bx,-4
+        jge  .nsv
+        sub  word [mch],3
+        and  word [mch],255
+.nsv:  ; ---- a building in the way eats the missile whole ----
         mov  ax,[msx]
         add  ax,BIAS
         mov  cl,8
@@ -1296,19 +1296,19 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         shr  ax,cl
         mov  [gj],ax
         call BCHK
-        jnz  @@mbn              ; a ruin cannot die twice
+        jnz  .mbn              ; a ruin cannot die twice
         call HBLD
-        cmp  word ptr [bstreet],0
-        jne  @@mbn
+        cmp  word [bstreet],0
+        jne  .mbn
         mov  ax,[gi]
         mov  bx,[gj]
         call GETH
         call WORLDH
         mov  bx,[msy]
         sub  bx,ax
-        js   @@mbn
+        js   .mbn
         cmp  bx,[bhgt2]
-        jg   @@mbn
+        jg   .mbn
         mov  ax,[gi]
         mov  cl,8
         shl  ax,cl
@@ -1316,10 +1316,10 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         sub  ax,BIAS
         mov  bx,[msx]
         sub  bx,ax
-        jns  @@mb1
+        jns  .mb1
         neg  bx
-@@mb1:  cmp  bx,[bhw]
-        jge  @@mbn
+.mb1:  cmp  bx,[bhw]
+        jge  .mbn
         mov  ax,[gj]
         mov  cl,8
         shl  ax,cl
@@ -1327,49 +1327,49 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
         sub  ax,BIAS
         mov  bx,[msz]
         sub  bx,ax
-        jns  @@mb2
+        jns  .mb2
         neg  bx
-@@mb2:  cmp  bx,[bhd]
-        jge  @@mbn
+.mb2:  cmp  bx,[bhd]
+        jge  .mbn
         call BSET               ; one missile levels the block
         call BWRECK
         call MCEND
-        mov  byte ptr [msact],0
+        mov  byte [msact],0
         ret
-@@mbn:  ; proximity fuse: |dx|+|dy|+|dz| < 160 pops any living jet
+.mbn:  ; proximity fuse: |dx|+|dy|+|dz| < 160 pops any living jet
         xor  si,si
-@@px:   mov  bx,si
+.px:   mov  bx,si
         shr  bx,1
-        cmp  byte ptr [pst+bx],0
-        jne  @@pxn
+        cmp  byte [pst+bx],0
+        jne  .pxn
         mov  ax,[pax+si]
         sub  ax,[msx]
-        jns  @@p1
+        jns  .p1
         neg  ax
-@@p1:   cmp  ax,40
-        jge  @@pxn
+.p1:   cmp  ax,40
+        jge  .pxn
         mov  bx,ax
         mov  ax,[pay+si]
         sub  ax,[msy]
-        jns  @@p2
+        jns  .p2
         neg  ax
-@@p2:   add  bx,ax
+.p2:   add  bx,ax
         mov  ax,[paz+si]
         sub  ax,[msz]
-        jns  @@p3
+        jns  .p3
         neg  ax
-@@p3:   add  bx,ax
+.p3:   add  bx,ax
         cmp  bx,40
-        jge  @@pxn
+        jge  .pxn
         call BOOM               ; direct hit: SI = the unlucky jet
-        inc  word ptr [psc]     ; chalk one on the canopy
+        inc  word [psc]     ; chalk one on the canopy
         call MCEND
-        mov  byte ptr [msact],0
+        mov  byte [msact],0
         ret
-@@pxn:  add  si,2
+.pxn:  add  si,2
         cmp  si,NPLANE*2
-        jb   @@px
-@@out:  ret
+        jb   .px
+.out:  ret
 
 ; ---------------------------------------------------------------------------
 ;  BOOM - break plane SI into its faces. The jet hides behind a respawn
@@ -1379,7 +1379,7 @@ MSLUPD: cmp  byte ptr [mcact],2 ; the aftermath plays itself out
 ; ---------------------------------------------------------------------------
 BOOM:   mov  bx,si
         shr  bx,1
-        mov  byte ptr [pst+bx],1 ; down for good (attrition war)
+        mov  byte [pst+bx],1 ; down for good (attrition war)
         mov  al,[ptype+bx]      ; the wreck keeps the victim's shape
         xor  ah,ah
         add  ax,ax
@@ -1388,14 +1388,14 @@ BOOM:   mov  bx,si
         mov  [mvb],ax
         mov  ax,[locki]
         cmp  ax,si
-        jne  @@bk1
-        mov  word ptr [locki],0FFFFh
-@@bk1:  test si,2               ; scoreboard: the other team scores
-        jnz  @@bsc
-        inc  word ptr [tsch]    ; a friendly fell
-        jmp  @@bsd
-@@bsc:  inc  word ptr [tscf]    ; a hostile fell
-@@bsd:  mov  ax,[pax+si]        ; hand the breakup spot to WRKFILL
+        jne  .bk1
+        mov  word [locki],0FFFFh
+.bk1:  test si,2               ; scoreboard: the other team scores
+        jnz  .bsc
+        inc  word [tsch]    ; a friendly fell
+        jmp  .bsd
+.bsc:  inc  word [tscf]    ; a hostile fell
+.bsd:  mov  ax,[pax+si]        ; hand the breakup spot to WRKFILL
         mov  [bpx],ax
         mov  ax,[pay+si]
         mov  [bpy],ax
@@ -1409,7 +1409,7 @@ BOOM:   mov  bx,si
         jmp  WRKFILL
 
 ; PBOOM - the PLAYER breaks apart (cinematic death).
-PBOOM:  mov  word ptr [mvb],offset MVERT ; the player flies a fighter
+PBOOM:  mov  word [mvb],MVERT ; the player flies a fighter
         mov  ax,[camx]
         mov  [bpx],ax
         mov  ax,[camy]
@@ -1427,15 +1427,15 @@ PBOOM:  mov  word ptr [mvb],offset MVERT ; the player flies a fighter
 ; ---------------------------------------------------------------------------
 WRKFILL:
         mov  di,[wnext]         ; claim a wreck slot
-        add  word ptr [wnext],WRKSZ
-        cmp  word ptr [wnext],WRKSZ*4
-        jb   @@bk2
-        mov  word ptr [wnext],0
-@@bk2:  add  di,offset WRK
-        mov  word ptr [di],1    ; wtim = 1: alive and burning
+        add  word [wnext],WRKSZ
+        cmp  word [wnext],WRKSZ*4
+        jb   .bk2
+        mov  word [wnext],0
+.bk2:  add  di,WRK
+        mov  word [di],1    ; wtim = 1: alive and burning
         ; ground height under the kill (TERRH reads camx/camz: swap in)
-        push word ptr [camx]
-        push word ptr [camz]
+        push word [camx]
+        push word [camz]
         mov  ax,[bpx]
         mov  [camx],ax
         mov  ax,[bpz]
@@ -1443,8 +1443,8 @@ WRKFILL:
         push di
         call TERRH
         pop  di
-        pop  word ptr [camz]
-        pop  word ptr [camx]
+        pop  word [camz]
+        pop  word [camx]
         add  ax,6               ; debris rests a touch above the slope
         mov  [di+2],ax          ; wgy
         ; the dying jet's orientation
@@ -1460,14 +1460,14 @@ WRKFILL:
         mov  [mcos],ax
         pop  di
         ; ---- per face: centroid -> world position + velocity + corners ----
-        mov  word ptr [tpi],0   ; face index
-@@bf:   ; centroid = avg of the face's 4 vertices (model space)
+        mov  word [tpi],0   ; face index
+.bf:   ; centroid = avg of the face's 4 vertices (model space)
         xor  ax,ax
         mov  [ctx],ax
         mov  [cty],ax
         mov  [ctz],ax
-        mov  word ptr [wcc],0
-@@bc:   mov  bx,[tpi]
+        mov  word [wcc],0
+.bc:   mov  bx,[tpi]
         add  bx,bx
         add  bx,bx
         mov  ax,[tpi]
@@ -1487,9 +1487,9 @@ WRKFILL:
         add  [cty],ax
         mov  ax,[bx+4]
         add  [ctz],ax
-        inc  word ptr [wcc]
-        cmp  word ptr [wcc],4
-        jb   @@bc
+        inc  word [wcc]
+        cmp  word [wcc],4
+        jb   .bc
         mov  ax,[ctx]
         sar  ax,1
         sar  ax,1
@@ -1554,8 +1554,8 @@ WRKFILL:
         add  bx,di
         mov  [bx+WCL],al
         ; ---- corners: pre-rotated offsets from the face centre ----
-        mov  word ptr [wcc],0
-@@bo:   mov  bx,[tpi]
+        mov  word [wcc],0
+.bo:   mov  bx,[tpi]
         add  bx,bx
         add  bx,bx
         mov  ax,[tpi]
@@ -1571,7 +1571,7 @@ WRKFILL:
         add  bx,[mvb]
         mov  ax,[bx]
         sub  ax,[ctx]
-        push word ptr [bx+2]
+        push word [bx+2]
         mov  dx,[bx+4]
         sub  dx,[ctz]
         call ROTMS              ; AX/DX = rotated x/z offsets
@@ -1597,12 +1597,12 @@ WRKFILL:
         pop  ax                 ; raw model y
         sub  ax,[cty]
         mov  [bx+2],ax          ; oy
-        inc  word ptr [wcc]
-        cmp  word ptr [wcc],4
-        jb   @@bo
-        inc  word ptr [tpi]
-        cmp  word ptr [tpi],NFACE
-        jb   @@bf
+        inc  word [wcc]
+        cmp  word [wcc],4
+        jb   .bo
+        inc  word [tpi]
+        cmp  word [tpi],NFACE
+        jb   .bf
         ret
 
 ; ---------------------------------------------------------------------------
@@ -1611,20 +1611,20 @@ WRKFILL:
 ; ---------------------------------------------------------------------------
 ROTMS:  mov  [dsx],ax
         mov  [dsy],dx
-        imul word ptr [mcos]
+        imul word [mcos]
         mov  bx,ax
         mov  ax,[dsy]
-        imul word ptr [msin]
+        imul word [msin]
         add  ax,bx
         cwd
         mov  bx,256
         idiv bx
         push ax
         mov  ax,[dsx]
-        imul word ptr [msin]
+        imul word [msin]
         mov  bx,ax
         mov  ax,[dsy]
-        imul word ptr [mcos]
+        imul word [mcos]
         sub  ax,bx
         cwd
         mov  bx,256
@@ -1638,15 +1638,15 @@ ROTMS:  mov  [dsx],ax
 ;  stop on the ground. Landed pieces zero their velocities and stay.
 ; ---------------------------------------------------------------------------
 WRECKUPD:
-        mov  di,offset WRK
-        mov  word ptr [tpi],4   ; wreck slots
-@@ww:   cmp  word ptr [di],0
-        je   @@wn
-        cmp  word ptr [di],30000
-        jae  @@wf
-        inc  word ptr [di]      ; age (burns while < 600)
-@@wf:   mov  bx,WFP
-@@wp:   mov  ax,[bx+di+6]       ; fx += vx
+        mov  di,WRK
+        mov  word [tpi],4   ; wreck slots
+.ww:   cmp  word [di],0
+        je   .wn
+        cmp  word [di],30000
+        jae  .wf
+        inc  word [di]      ; age (burns while < 600)
+.wf:   mov  bx,WFP
+.wp:   mov  ax,[bx+di+6]       ; fx += vx
         add  [bx+di],ax
         mov  ax,[bx+di+10]      ; fz += vz
         add  [bx+di+4],ax
@@ -1656,21 +1656,21 @@ WRECKUPD:
         add  [bx+di+2],ax       ; fy += vy
         mov  ax,[di+2]          ; wgy
         cmp  [bx+di+2],ax
-        jg   @@air
+        jg   .air
         mov  [bx+di+2],ax       ; grounded: rest and stop
         xor  ax,ax
         mov  [bx+di+6],ax
         mov  [bx+di+8],ax
         mov  [bx+di+10],ax
-        jmp  @@wg
-@@air:  ; ---- a falling piece can bring a building down (1 in 4) ----
+        jmp  .wg
+.air:  ; ---- a falling piece can bring a building down (1 in 4) ----
         mov  ax,[lasttk]
         and  ax,3
-        jnz  @@wg
+        jnz  .wg
         mov  ax,[bx+di+6]       ; only pieces still moving
         or   ax,[bx+di+8]
         or   ax,[bx+di+10]
-        jz   @@wg
+        jz   .wg
         push bx
         push di
         mov  ax,[bx+di]         ; the piece's cell
@@ -1686,31 +1686,31 @@ WRECKUPD:
         mov  ax,[bx+di+2]
         mov  [ctz],ax           ; the piece's height
         call BCHK
-        jnz  @@wbn
+        jnz  .wbn
         call HBLD
-        cmp  word ptr [bstreet],0
-        jne  @@wbn
+        cmp  word [bstreet],0
+        jne  .wbn
         mov  ax,[gi]
         mov  bx,[gj]
         call GETH
         call WORLDH
         mov  bx,[ctz]
         sub  bx,ax
-        js   @@wbn
+        js   .wbn
         cmp  bx,[bhgt2]
-        jg   @@wbn
-        push word ptr [tpi]     ; BWRECK reuses the slot counter
+        jg   .wbn
+        push word [tpi]     ; BWRECK reuses the slot counter
         call BSET               ; dominoes: the wreck takes it down
         call BWRECK
-        pop  word ptr [tpi]
-@@wbn:  pop  di
+        pop  word [tpi]
+.wbn:  pop  di
         pop  bx
-@@wg:   add  bx,12
+.wg:   add  bx,12
         cmp  bx,WFP+8*12
-        jb   @@wp
-@@wn:   add  di,WRKSZ
-        dec  word ptr [tpi]
-        jnz  @@ww
+        jb   .wp
+.wn:   add  di,WRKSZ
+        dec  word [tpi]
+        jnz  .ww
         ret
 
 ; ---------------------------------------------------------------------------
@@ -1719,28 +1719,28 @@ WRECKUPD:
 ;  smoke dots while the wreck still burns (wtim < 600).
 ; ---------------------------------------------------------------------------
 WRECKDRAW:
-        mov  word ptr [pidx],0  ; wreck slot index 0..3
-@@wd:   mov  ax,WRKSZ
-        imul word ptr [pidx]
+        mov  word [pidx],0  ; wreck slot index 0..3
+.wd:   mov  ax,WRKSZ
+        imul word [pidx]
         mov  di,ax
-        add  di,offset WRK
-        cmp  word ptr [di],0
-        je   @@wdn
+        add  di,WRK
+        cmp  word [di],0
+        je   .wdn
         mov  ax,[di+WFP]        ; reject by the first face's position
         sub  ax,[camx]
-        jns  @@wq1
+        jns  .wq1
         neg  ax
-@@wq1:  cmp  ax,9000
-        jge  @@wdn
+.wq1:  cmp  ax,9000
+        jge  .wdn
         mov  ax,[di+WFP+4]
         sub  ax,[camz]
-        jns  @@wq2
+        jns  .wq2
         neg  ax
-@@wq2:  cmp  ax,9000
-        jge  @@wdn
+.wq2:  cmp  ax,9000
+        jge  .wdn
         ; ---- the eight faces ----
-        mov  word ptr [pfc],0
-@@wface:
+        mov  word [pfc],0
+.wface:
         mov  bx,[pfc]
         add  bx,bx
         add  bx,bx
@@ -1756,8 +1756,8 @@ WRECKDRAW:
         add  bx,di
         mov  al,[bx+WCL]
         mov  [COLOR],al
-        mov  word ptr [wcc],0   ; four corners -> IX/IY/IZ
-@@wc:   mov  bx,[pfc]
+        mov  word [wcc],0   ; four corners -> IX/IY/IZ
+.wc:   mov  bx,[pfc]
         mov  ax,bx
         add  bx,bx
         add  bx,ax              ; f*3
@@ -1792,24 +1792,24 @@ WRECKDRAW:
         mov  si,[wcc]
         add  si,si
         mov  [IY+si],ax
-        mov  ax,[rcx]
+        mov  ax,[rc_x]
         mov  [IX+si],ax
-        mov  ax,[rcz]
+        mov  ax,[rc_z]
         mov  [IZ+si],ax
-        inc  word ptr [wcc]
-        cmp  word ptr [wcc],4
-        jb   @@wc
+        inc  word [wcc]
+        cmp  word [wcc],4
+        jb   .wc
         push di
         call FACEFILL
         pop  di
-        inc  word ptr [pfc]
-        cmp  word ptr [pfc],NFACE
-        jb   @@wface
+        inc  word [pfc]
+        cmp  word [pfc],NFACE
+        jb   .wface
         ; ---- fire and smoke while it burns ----
-        cmp  word ptr [di],600
-        jae  @@wdn
-        mov  word ptr [wcc],0   ; three plumes on faces 0, 3 and 6
-@@wsm:  mov  ax,[wcc]
+        cmp  word [di],600
+        jae  .wdn
+        mov  word [wcc],0   ; three plumes on faces 0, 3 and 6
+.wsm:  mov  ax,[wcc]
         mov  bx,36
         imul bx                 ; face k*3 record = k*36 bytes
         mov  bx,ax
@@ -1818,7 +1818,7 @@ WRECKDRAW:
         ; fire: flickering glow block right at the piece
         mov  ax,[lasttk]
         test ax,2
-        jz   @@wfm
+        jz   .wfm
         mov  ax,[bx]
         sub  ax,[camx]
         mov  [wdx],ax
@@ -1833,20 +1833,20 @@ WRECKDRAW:
         push di
         call ROTXZ
         mov  dx,[ctz]
-        mov  ax,[rcx]
-        mov  cx,[rcz]
+        mov  ax,[rc_x]
+        mov  cx,[rc_z]
         call PPOINT
         pop  di
         pop  bx
-        jc   @@wfm
+        jc   .wfm
         cmp  ax,0
-        jl   @@wfm
+        jl   .wfm
         cmp  ax,318
-        jg   @@wfm
+        jg   .wfm
         cmp  dx,0
-        jl   @@wfm
+        jl   .wfm
         cmp  dx,190
-        jg   @@wfm
+        jg   .wfm
         push bx
         push di
         mov  [dsx],ax
@@ -1854,13 +1854,13 @@ WRECKDRAW:
         call ROW320
         add  di,[dsx]
         mov  al,94              ; palette-cycled fire
-        mov  es:[di],al
-        mov  es:[di+1],al
-        mov  es:[di+320],al
-        mov  es:[di+321],al
+        mov  [es:di],al
+        mov  [es:di+1],al
+        mov  [es:di+320],al
+        mov  [es:di+321],al
         pop  di
         pop  bx
-@@wfm:  ; smoke: a grey dot climbing out of the same piece
+.wfm:  ; smoke: a grey dot climbing out of the same piece
         mov  ax,[wcc]
         mov  cx,40
         imul cx
@@ -1883,33 +1883,33 @@ WRECKDRAW:
         push di
         call ROTXZ
         mov  dx,[ctz]
-        mov  ax,[rcx]
-        mov  cx,[rcz]
+        mov  ax,[rc_x]
+        mov  cx,[rc_z]
         call PPOINT
         pop  di
-        jc   @@wsn
+        jc   .wsn
         cmp  ax,0
-        jl   @@wsn
+        jl   .wsn
         cmp  ax,319
-        jg   @@wsn
+        jg   .wsn
         cmp  dx,0
-        jl   @@wsn
+        jl   .wsn
         cmp  dx,191
-        jg   @@wsn
+        jg   .wsn
         push di
         mov  [dsx],ax
         mov  ax,dx
         call ROW320
         add  di,[dsx]
         mov  al,25              ; smoke grey
-        mov  es:[di],al
+        mov  [es:di],al
         pop  di
-@@wsn:  inc  word ptr [wcc]
-        cmp  word ptr [wcc],3
-        jb   @@wsm
-@@wdn:  inc  word ptr [pidx]
-        cmp  word ptr [pidx],4
-        jb   @@wd
+.wsn:  inc  word [wcc]
+        cmp  word [wcc],3
+        jb   .wsm
+.wdn:  inc  word [pidx]
+        cmp  word [pidx],4
+        jb   .wd
         ret
 
 ; ---------------------------------------------------------------------------
@@ -1917,8 +1917,8 @@ WRECKDRAW:
 ;  little grey exhaust puff at its previous position.
 ; ---------------------------------------------------------------------------
 MSLDRAW:
-        cmp  byte ptr [msact],0
-        je   @@no
+        cmp  byte [msact],0
+        je   .no
         mov  ax,[msx]
         sub  ax,[camx]
         mov  [wdx],ax
@@ -1928,28 +1928,28 @@ MSLDRAW:
         call ROTXZ
         mov  dx,[msy]
         sub  dx,[camy]
-        mov  ax,[rcx]
-        mov  cx,[rcz]
+        mov  ax,[rc_x]
+        mov  cx,[rc_z]
         call PPOINT
-        jc   @@puff
+        jc   .puff
         cmp  ax,0
-        jl   @@puff
+        jl   .puff
         cmp  ax,318
-        jg   @@puff
+        jg   .puff
         cmp  dx,0
-        jl   @@puff
+        jl   .puff
         cmp  dx,190
-        jg   @@puff
+        jg   .puff
         mov  [dsx],ax
         mov  ax,dx
         call ROW320
         add  di,[dsx]
         mov  al,94              ; the motor burns with the engine palette
-        mov  es:[di],al
-        mov  es:[di+1],al
-        mov  es:[di+320],al
-        mov  es:[di+321],al
-@@puff: mov  ax,[mpx]
+        mov  [es:di],al
+        mov  [es:di+1],al
+        mov  [es:di+320],al
+        mov  [es:di+321],al
+.puff: mov  ax,[mpx]
         sub  ax,[camx]
         mov  [wdx],ax
         mov  ax,[mpz]
@@ -1958,25 +1958,25 @@ MSLDRAW:
         call ROTXZ
         mov  dx,[mpy]
         sub  dx,[camy]
-        mov  ax,[rcx]
-        mov  cx,[rcz]
+        mov  ax,[rc_x]
+        mov  cx,[rc_z]
         call PPOINT
-        jc   @@no
+        jc   .no
         cmp  ax,0
-        jl   @@no
+        jl   .no
         cmp  ax,319
-        jg   @@no
+        jg   .no
         cmp  dx,0
-        jl   @@no
+        jl   .no
         cmp  dx,191
-        jg   @@no
+        jg   .no
         mov  [dsx],ax
         mov  ax,dx
         call ROW320
         add  di,[dsx]
         mov  al,25              ; exhaust puff
-        mov  es:[di],al
-@@no:   ret
+        mov  [es:di],al
+.no:   ret
 
 ; ---------------------------------------------------------------------------
 ;  AMSLUPD - the AI's war: every couple of seconds a random living jet
@@ -1985,60 +1985,60 @@ MSLDRAW:
 ;  Nobody shoots at the player - yet.
 ; ---------------------------------------------------------------------------
 AMSLUPD:
-        cmp  word ptr [aifire],0
-        je   @@tcy
-        dec  word ptr [aifire]
-        jmp  @@fly
-@@tcy:  mov  word ptr [aifire],24
+        cmp  word [aifire],0
+        je   .tcy
+        dec  word [aifire]
+        jmp  .fly
+.tcy:  mov  word [aifire],24
         xor  bx,bx              ; a free launch rail?
-@@fs:   cmp  byte ptr [amact+bx],0
-        je   @@have
+.fs:   cmp  byte [amact+bx],0
+        je   .have
         inc  bx
         cmp  bx,NAMSL
-        jb   @@fs
-        jmp  @@fly
-@@have: mov  [wcc],bx           ; slot index
+        jb   .fs
+        jmp  .fly
+.have: mov  [wcc],bx           ; slot index
         call RND16              ; random shooter
         and  ax,31
         add  ax,ax
         mov  si,ax              ; shooter offset
         mov  bx,si
         shr  bx,1
-        cmp  byte ptr [pst+bx],0
-        jne  @@fly
+        cmp  byte [pst+bx],0
+        jne  .fly
         mov  dx,si              ; hunt the OTHER team
         and  dx,2
         xor  dx,2
         xor  di,di
-@@tg:   mov  bx,di
+.tg:   mov  bx,di
         and  bx,2
         cmp  bx,dx
-        jne  @@tgn
+        jne  .tgn
         mov  bx,di
         shr  bx,1
-        cmp  byte ptr [pst+bx],0
-        jne  @@tgn
+        cmp  byte [pst+bx],0
+        jne  .tgn
         mov  ax,[pax+di]
         sub  ax,[pax+si]
-        jns  @@g1
+        jns  .g1
         neg  ax
-@@g1:   mov  bx,ax
+.g1:   mov  bx,ax
         cmp  bx,10000
-        jge  @@tgn
+        jge  .tgn
         mov  ax,[paz+di]
         sub  ax,[paz+si]
-        jns  @@g2
+        jns  .g2
         neg  ax
-@@g2:   add  bx,ax
+.g2:   add  bx,ax
         cmp  bx,10000
-        jl   @@shoot
-@@tgn:  add  di,2
+        jl   .shoot
+.tgn:  add  di,2
         cmp  di,NPLANE*2
-        jb   @@tg
-        jmp  @@fly
-@@shoot:
+        jb   .tg
+        jmp  .fly
+.shoot:
         mov  bx,[wcc]
-        mov  byte ptr [amact+bx],1
+        mov  byte [amact+bx],1
         add  bx,bx              ; word offset
         mov  ax,[pax+si]
         mov  [amx+bx],ax
@@ -2051,19 +2051,19 @@ AMSLUPD:
         mov  [amz+bx],ax
         mov  [ampz+bx],ax
         mov  [amtgt+bx],di
-        mov  word ptr [amlife+bx],320
-@@fly:  ; ---- fly the pool ----
-        mov  word ptr [wcc],0
-@@ml:   mov  bx,[wcc]
-        cmp  byte ptr [amact+bx],0
-        je   @@mn
+        mov  word [amlife+bx],320
+.fly:  ; ---- fly the pool ----
+        mov  word [wcc],0
+.ml:   mov  bx,[wcc]
+        cmp  byte [amact+bx],0
+        je   .mn
         add  bx,bx
-        dec  word ptr [amlife+bx]
-        jnz  @@go
-@@fiz:  mov  bx,[wcc]           ; burned out (or the target died)
-        mov  byte ptr [amact+bx],0
-        jmp  @@mn
-@@go:   mov  ax,[amx+bx]        ; old spot for the puff
+        dec  word [amlife+bx]
+        jnz  .go
+.fiz:  mov  bx,[wcc]           ; burned out (or the target died)
+        mov  byte [amact+bx],0
+        jmp  .mn
+.go:   mov  ax,[amx+bx]        ; old spot for the puff
         mov  [ampx+bx],ax
         mov  ax,[amy+bx]
         mov  [ampy+bx],ax
@@ -2072,8 +2072,8 @@ AMSLUPD:
         mov  si,[amtgt+bx]
         mov  di,si
         shr  di,1
-        cmp  byte ptr [pst+di],0
-        jne  @@fiz
+        cmp  byte [pst+di],0
+        jne  .fiz
         ; chase at 56/tick, dominant-axis normalised
         mov  ax,[pax+si]
         sub  ax,[amx+bx]
@@ -2086,48 +2086,48 @@ AMSLUPD:
         mov  [ctz],ax
         mov  di,[ctx]           ; m = max of the absolutes
         or   di,di
-        jns  @@a1
+        jns  .a1
         neg  di
-@@a1:   mov  ax,[cty]
+.a1:   mov  ax,[cty]
         or   ax,ax
-        jns  @@a2
+        jns  .a2
         neg  ax
-@@a2:   cmp  ax,di
-        jle  @@a3
+.a2:   cmp  ax,di
+        jle  .a3
         mov  di,ax
-@@a3:   mov  ax,[ctz]
+.a3:   mov  ax,[ctz]
         or   ax,ax
-        jns  @@a4
+        jns  .a4
         neg  ax
-@@a4:   cmp  ax,di
-        jle  @@a5
+.a4:   cmp  ax,di
+        jle  .a5
         mov  di,ax
-@@a5:   test di,di
-        jnz  @@a6
+.a5:   test di,di
+        jnz  .a6
         inc  di
-@@a6:   ; proximity fuse first: manhattan < 160
+.a6:   ; proximity fuse first: manhattan < 160
         mov  ax,[ctx]
         or   ax,ax              ; mov sets no flags
-        jns  @@b1
+        jns  .b1
         neg  ax
-@@b1:   mov  dx,ax
+.b1:   mov  dx,ax
         mov  ax,[cty]
         or   ax,ax
-        jns  @@b2
+        jns  .b2
         neg  ax
-@@b2:   add  dx,ax
+.b2:   add  dx,ax
         mov  ax,[ctz]
         or   ax,ax
-        jns  @@b3
+        jns  .b3
         neg  ax
-@@b3:   add  dx,ax
+.b3:   add  dx,ax
         cmp  dx,40
-        jge  @@step
-        push word ptr [wcc]     ; BOOM reuses this scratch
+        jge  .step
+        push word [wcc]     ; BOOM reuses this scratch
         call BOOM               ; SI = the target
-        pop  word ptr [wcc]
-        jmp  @@fiz
-@@step: mov  ax,[ctx]
+        pop  word [wcc]
+        jmp  .fiz
+.step: mov  ax,[ctx]
         mov  cx,28
         imul cx
         idiv di
@@ -2142,19 +2142,19 @@ AMSLUPD:
         imul cx
         idiv di
         add  [amz+bx],ax
-@@mn:   inc  word ptr [wcc]
-        cmp  word ptr [wcc],NAMSL
-        jb   @@ml
+.mn:   inc  word [wcc]
+        cmp  word [wcc],NAMSL
+        jb   .ml
         ret
 
 ; ---------------------------------------------------------------------------
 ;  AMSLDRAW - the AI missiles: glow dots with exhaust puffs.
 ; ---------------------------------------------------------------------------
 AMSLDRAW:
-        mov  word ptr [tpi],0
-@@dl:   mov  bx,[tpi]
-        cmp  byte ptr [amact+bx],0
-        je   @@dn
+        mov  word [tpi],0
+.dl:   mov  bx,[tpi]
+        cmp  byte [amact+bx],0
+        je   .dn
         add  bx,bx
         mov  ax,[amx+bx]
         sub  ax,[camx]
@@ -2167,32 +2167,32 @@ AMSLDRAW:
         pop  bx
         mov  dx,[amy+bx]
         sub  dx,[camy]
-        mov  ax,[rcx]
-        mov  cx,[rcz]
+        mov  ax,[rc_x]
+        mov  cx,[rc_z]
         push bx
         call PPOINT
         pop  bx
-        jc   @@puff
+        jc   .puff
         cmp  ax,0
-        jl   @@puff
+        jl   .puff
         cmp  ax,318
-        jg   @@puff
+        jg   .puff
         cmp  dx,0
-        jl   @@puff
+        jl   .puff
         cmp  dx,190
-        jg   @@puff
+        jg   .puff
         push bx
         mov  [dsx],ax
         mov  ax,dx
         call ROW320
         add  di,[dsx]
         mov  al,94
-        mov  es:[di],al
-        mov  es:[di+1],al
-        mov  es:[di+320],al
-        mov  es:[di+321],al
+        mov  [es:di],al
+        mov  [es:di+1],al
+        mov  [es:di+320],al
+        mov  [es:di+321],al
         pop  bx
-@@puff: mov  ax,[ampx+bx]
+.puff: mov  ax,[ampx+bx]
         sub  ax,[camx]
         mov  [wdx],ax
         mov  ax,[ampz+bx]
@@ -2203,27 +2203,27 @@ AMSLDRAW:
         pop  bx
         mov  dx,[ampy+bx]
         sub  dx,[camy]
-        mov  ax,[rcx]
-        mov  cx,[rcz]
+        mov  ax,[rc_x]
+        mov  cx,[rc_z]
         call PPOINT
-        jc   @@dn
+        jc   .dn
         cmp  ax,0
-        jl   @@dn
+        jl   .dn
         cmp  ax,319
-        jg   @@dn
+        jg   .dn
         cmp  dx,0
-        jl   @@dn
+        jl   .dn
         cmp  dx,191
-        jg   @@dn
+        jg   .dn
         mov  [dsx],ax
         mov  ax,dx
         call ROW320
         add  di,[dsx]
         mov  al,25
-        mov  es:[di],al
-@@dn:   inc  word ptr [tpi]
-        cmp  word ptr [tpi],NAMSL
-        jb   @@dl
+        mov  [es:di],al
+.dn:   inc  word [tpi]
+        cmp  word [tpi],NAMSL
+        jb   .dl
         ret
 
 ; ---------------------------------------------------------------------------
@@ -2231,23 +2231,23 @@ AMSLDRAW:
 ;  droop, burned out after 30 ticks (~4500 reach, same as the hit test).
 ; ---------------------------------------------------------------------------
 TRCUPD: xor  bx,bx
-@@t:    cmp  byte ptr [trcact+bx],0
-        je   @@n
+.t:    cmp  byte [trcact+bx],0
+        je   .n
         mov  di,bx
         add  di,di
-        dec  word ptr [trlif+di]
-        jnz  @@f
-        mov  byte ptr [trcact+bx],0
-        jmp  @@n
-@@f:    mov  ax,[trvx+di]
+        dec  word [trlif+di]
+        jnz  .f
+        mov  byte [trcact+bx],0
+        jmp  .n
+.f:    mov  ax,[trvx+di]
         add  [tcx+di],ax
         mov  ax,[trvy+di]
         add  [tcy+di],ax
         mov  ax,[lasttk]
         and  ax,3
-        jnz  @@nodrp
-        dec  word ptr [trvy+di] ; the round droops as it flies (1-in-4)
-@@nodrp:
+        jnz  .nodrp
+        dec  word [trvy+di] ; the round droops as it flies (1-in-4)
+.nodrp:
         mov  ax,[trvz+di]
         add  [tcz+di],ax
         ; ---- did it meet a building? ----
@@ -2264,10 +2264,10 @@ TRCUPD: xor  bx,bx
         push bx
         push di
         call BCHK
-        jnz  @@thn              ; already rubble: sail through
+        jnz  .thn              ; already rubble: sail through
         call HBLD
-        cmp  word ptr [bstreet],0
-        jne  @@thn
+        cmp  word [bstreet],0
+        jne  .thn
         pop  di
         push di
         mov  ax,[tcy+di]
@@ -2278,9 +2278,9 @@ TRCUPD: xor  bx,bx
         call WORLDH
         mov  bx,[ctz]
         sub  bx,ax              ; height above the base
-        js   @@thn
+        js   .thn
         cmp  bx,[bhgt2]
-        jg   @@thn              ; sailed over the roof
+        jg   .thn              ; sailed over the roof
         mov  ax,[gi]            ; inside the footprint?
         mov  cl,8
         shl  ax,cl
@@ -2290,10 +2290,10 @@ TRCUPD: xor  bx,bx
         push di
         mov  bx,[tcx+di]
         sub  bx,ax
-        jns  @@ta1
+        jns  .ta1
         neg  bx
-@@ta1:  cmp  bx,[bhw]
-        jge  @@thn
+.ta1:  cmp  bx,[bhw]
+        jge  .thn
         mov  ax,[gj]
         mov  cl,8
         shl  ax,cl
@@ -2303,20 +2303,20 @@ TRCUPD: xor  bx,bx
         push di
         mov  bx,[tcz+di]
         sub  bx,ax
-        jns  @@ta2
+        jns  .ta2
         neg  bx
-@@ta2:  cmp  bx,[bhd]
-        jge  @@thn
+.ta2:  cmp  bx,[bhd]
+        jge  .thn
         call BDAMAGE            ; a shell in the wall
         pop  di
         pop  bx
-        mov  byte ptr [trcact+bx],0 ; the round is spent
-        jmp  @@n
-@@thn:  pop  di
+        mov  byte [trcact+bx],0 ; the round is spent
+        jmp  .n
+.thn:  pop  di
         pop  bx
-@@n:    inc  bx
+.n:    inc  bx
         cmp  bx,NTRC
-        jb   @@t
+        jb   .t
         ret
 
 ; ---------------------------------------------------------------------------
@@ -2326,10 +2326,10 @@ TRCUPD: xor  bx,bx
 ;  released - the pool renders whatever is still in the air.
 ; ---------------------------------------------------------------------------
 GUNDRAW:
-        mov  word ptr [tpi],0
-@@gl:   mov  bx,[tpi]
-        cmp  byte ptr [trcact+bx],0
-        je   @@gn
+        mov  word [tpi],0
+.gl:   mov  bx,[tpi]
+        cmp  byte [trcact+bx],0
+        je   .gn
         mov  di,bx
         add  di,di
         mov  ax,[tcx+di]        ; the head of the streak
@@ -2343,12 +2343,12 @@ GUNDRAW:
         pop  di
         mov  dx,[tcy+di]
         sub  dx,[camy]
-        mov  ax,[rcx]
-        mov  cx,[rcz]
+        mov  ax,[rc_x]
+        mov  cx,[rc_z]
         push di
         call PPOINT
         pop  di
-        jc   @@gn
+        jc   .gn
         mov  [sx0],ax
         mov  [sy0],dx
         mov  ax,[trvx+di]       ; the tail: half a step behind
@@ -2373,10 +2373,10 @@ GUNDRAW:
         call ROTXZ
         pop  di
         pop  dx
-        mov  ax,[rcx]
-        mov  cx,[rcz]
+        mov  ax,[rc_x]
+        mov  cx,[rc_z]
         call PPOINT
-        jc   @@gn
+        jc   .gn
         push ax                 ; a pinch of tumble on the tail end
         push dx
         call RND16
@@ -2397,16 +2397,16 @@ GUNDRAW:
         pop  ax
         mov  [sx1],ax
         mov  [sy1],dx
-        mov  byte ptr [COLOR],96
+        mov  byte [COLOR],96
         test bx,1000h
-        jz   @@gc
-        mov  byte ptr [COLOR],19
-@@gc:   call CLIPLINE
-        jc   @@gn
+        jz   .gc
+        mov  byte [COLOR],19
+.gc:   call CLIPLINE
+        jc   .gn
         call LINE
-@@gn:   inc  word ptr [tpi]
-        cmp  word ptr [tpi],NTRC
-        jb   @@gl
+.gn:   inc  word [tpi]
+        cmp  word [tpi],NTRC
+        jb   .gl
         ret
 
 ; ---------------------------------------------------------------------------
@@ -2416,72 +2416,72 @@ GUNDRAW:
 ;  hit. Jets lose HP down to the usual BOOM; the player soaks 8 hits,
 ;  flashes the ring red, and rides the crash screen on the last one.
 ; ---------------------------------------------------------------------------
-AIGUN:  cmp  word ptr [aigt],0
-        je   @@go
-        dec  word ptr [aigt]
+AIGUN:  cmp  word [aigt],0
+        je   .go
+        dec  word [aigt]
         ret
-@@go:   mov  word ptr [aigt],14
+.go:   mov  word [aigt],14
         call RND16
         and  ax,31              ; shooter among the first 32
         add  ax,ax
         mov  si,ax
         mov  bx,si
         shr  bx,1
-        cmp  byte ptr [pst+bx],0
-        jne  @@no
+        cmp  byte [pst+bx],0
+        jne  .no
         test si,2               ; hostiles check the player first
-        jz   @@ai
-        cmp  byte ptr [dying],0
-        jne  @@ai               ; the player is already falling
+        jz   .ai
+        cmp  byte [dying],0
+        jne  .ai               ; the player is already falling
         mov  ax,[camx]
         sub  ax,[pax+si]
-        jns  @@p1
+        jns  .p1
         neg  ax
-@@p1:   cmp  ax,2500
-        jge  @@ai
+.p1:   cmp  ax,2500
+        jge  .ai
         mov  bx,ax
         mov  ax,[camz]
         sub  ax,[paz+si]
-        jns  @@p2
+        jns  .p2
         neg  ax
-@@p2:   add  bx,ax
+.p2:   add  bx,ax
         cmp  bx,2500
-        jge  @@ai
+        jge  .ai
         mov  di,0FFFFh          ; target: the player
-        jmp  @@fire
-@@ai:   mov  dx,si              ; find a living enemy in knife range
+        jmp  .fire
+.ai:   mov  dx,si              ; find a living enemy in knife range
         and  dx,2
         xor  dx,2
         xor  di,di
-@@tg:   mov  bx,di
+.tg:   mov  bx,di
         and  bx,2
         cmp  bx,dx
-        jne  @@tn
+        jne  .tn
         mov  bx,di
         shr  bx,1
-        cmp  byte ptr [pst+bx],0
-        jne  @@tn
+        cmp  byte [pst+bx],0
+        jne  .tn
         mov  ax,[pax+di]
         sub  ax,[pax+si]
-        jns  @@g1
+        jns  .g1
         neg  ax
-@@g1:   mov  bx,ax
+.g1:   mov  bx,ax
         cmp  bx,2500
-        jge  @@tn
+        jge  .tn
         mov  ax,[paz+di]
         sub  ax,[paz+si]
-        jns  @@g2
+        jns  .g2
         neg  ax
-@@g2:   add  bx,ax
+.g2:   add  bx,ax
         cmp  bx,2500
-        jl   @@fire
-@@tn:   add  di,2
+        jl   .fire
+.tn:   add  di,2
         cmp  di,NPLANE*2
-        jb   @@tg
-@@no:   ret
-@@fire: ; direction to the target
+        jb   .tg
+.no:   ret
+.fire: ; direction to the target
         cmp  di,0FFFFh
-        jne  @@tt
+        jne  .tt
         mov  ax,[camx]
         sub  ax,[pax+si]
         mov  [ctx],ax
@@ -2491,8 +2491,8 @@ AIGUN:  cmp  word ptr [aigt],0
         mov  ax,[camz]
         sub  ax,[paz+si]
         mov  [ctz],ax
-        jmp  @@dir
-@@tt:   mov  ax,[pax+di]
+        jmp  .dir
+.tt:   mov  ax,[pax+di]
         sub  ax,[pax+si]
         mov  [ctx],ax
         mov  ax,[pay+di]
@@ -2501,35 +2501,35 @@ AIGUN:  cmp  word ptr [aigt],0
         mov  ax,[paz+di]
         sub  ax,[paz+si]
         mov  [ctz],ax
-@@dir:  mov  bx,[ctx]           ; m = max of the absolutes
+.dir:  mov  bx,[ctx]           ; m = max of the absolutes
         or   bx,bx
-        jns  @@m1
+        jns  .m1
         neg  bx
-@@m1:   mov  ax,[cty]
+.m1:   mov  ax,[cty]
         or   ax,ax
-        jns  @@m2
+        jns  .m2
         neg  ax
-@@m2:   cmp  ax,bx
-        jle  @@m3
+.m2:   cmp  ax,bx
+        jle  .m3
         mov  bx,ax
-@@m3:   mov  ax,[ctz]
+.m3:   mov  ax,[ctz]
         or   ax,ax
-        jns  @@m4
+        jns  .m4
         neg  ax
-@@m4:   cmp  ax,bx
-        jle  @@m5
+.m4:   cmp  ax,bx
+        jle  .m5
         mov  bx,ax
-@@m5:   test bx,bx
-        jz   @@no               ; on top of each other: hold fire
+.m5:   test bx,bx
+        jz   .no               ; on top of each other: hold fire
         mov  [wcc],bx           ; m
         ; ---- a 4-round burst into the shared tracer pool ----
-        mov  word ptr [tpi],4
-@@bs:   mov  bx,[trnext]
-        inc  word ptr [trnext]
-        and  word ptr [trnext],NTRC-1
-        mov  byte ptr [trcact+bx],1
+        mov  word [tpi],4
+.bs:   mov  bx,[trnext]
+        inc  word [trnext]
+        and  word [trnext],NTRC-1
+        mov  byte [trcact+bx],1
         add  bx,bx
-        mov  word ptr [trlif+bx],48
+        mov  word [trlif+bx],48
         mov  ax,[pax+si]
         mov  [tcx+bx],ax
         mov  ax,[pay+si]
@@ -2540,17 +2540,17 @@ AIGUN:  cmp  word ptr [aigt],0
         mov  ax,[ctx]           ; velocity = dir*75/m + spread
         mov  cx,75
         imul cx
-        idiv word ptr [wcc]
+        idiv word [wcc]
         mov  [trvx+bx],ax
         mov  ax,[cty]
         mov  cx,75
         imul cx
-        idiv word ptr [wcc]
+        idiv word [wcc]
         mov  [trvy+bx],ax
         mov  ax,[ctz]
         mov  cx,75
         imul cx
-        idiv word ptr [wcc]
+        idiv word [wcc]
         mov  [trvz+bx],ax
         push bx
         call RND16
@@ -2570,27 +2570,27 @@ AIGUN:  cmp  word ptr [aigt],0
         and  ax,7
         sub  ax,3
         add  [trvz+bx],ax
-        dec  word ptr [tpi]
-        jnz  @@bs
+        dec  word [tpi]
+        jnz  .bs
         ; ---- the dice: 1-in-4 bursts connect ----
         call RND16
         and  ax,3
-        jnz  @@no2
+        jnz  .no2
         cmp  di,0FFFFh
-        jne  @@hai
-        inc  byte ptr [pdam]    ; the player takes one
-        mov  word ptr [phit],9
-        cmp  byte ptr [pdam],5  ; five hits bring the player down
-        jb   @@no2
+        jne  .hai
+        inc  byte [pdam]    ; the player takes one
+        mov  word [phit],9
+        cmp  byte [pdam],5  ; five hits bring the player down
+        jb   .no2
         call CRASHHANDLE        ; shot down (resets pdam itself)
         ret
-@@hai:  mov  bx,di
+.hai:  mov  bx,di
         shr  bx,1
-        dec  byte ptr [php+bx]
-        jnz  @@no2
+        dec  byte [php+bx]
+        jnz  .no2
         mov  si,di              ; the last hit: BOOM wants SI
         call BOOM
-@@no2:  ret
+.no2:  ret
 
 ; ---------------------------------------------------------------------------
 ;  RESPAWNALL - field two fresh squadrons: every slot alive, scattered
@@ -2598,14 +2598,14 @@ AIGUN:  cmp  word ptr [aigt],0
 ;  startup and at the start of every round. Drops any lock.
 ; ---------------------------------------------------------------------------
 RESPAWNALL:
-        mov  word ptr [locki],0FFFFh
+        mov  word [locki],0FFFFh
         xor  ax,ax              ; a fresh round starts at 0:0 (personal
         mov  [tscf],ax          ; kills stay - that is the pilot's log)
         mov  [tsch],ax
         xor  si,si
-@@rs:   mov  bx,si
+.rs:   mov  bx,si
         shr  bx,1
-        mov  byte ptr [pst+bx],0
+        mov  byte [pst+bx],0
         call RND16              ; preserves SI/BX
         and  ax,16383
         sub  ax,8192
@@ -2641,19 +2641,19 @@ RESPAWNALL:
         add  ax,ax
         add  bx,ax              ; si*12: ring = TLN(12)*2 bytes per jet
         mov  cx,TLN
-@@rsf:  mov  ax,[pax+si]
+.rsf:  mov  ax,[pax+si]
         mov  [TLX+bx],ax
         mov  ax,[pay+si]
         mov  [TLY+bx],ax
         mov  ax,[paz+si]
         mov  [TLZ+bx],ax
         add  bx,2
-        loop @@rsf
+        loop .rsf
         add  si,2
         cmp  si,NPLANE*2
-        jb   @@rs
+        jb   .rs
         call FORMATION          ; ...then arrange the battle lines
-        mov  byte ptr [pst],1   ; slot 0 never flies: the player is the
+        mov  byte [pst],1   ; slot 0 never flies: the player is the
         ret                     ; 20th green
 
 ; ---------------------------------------------------------------------------
@@ -2665,95 +2665,95 @@ RESPAWNALL:
 ; ---------------------------------------------------------------------------
 FORMATION:
         xor  si,si
-@@f:    mov  bx,si
+.f:    mov  bx,si
         shr  bx,1               ; slot
         mov  ax,bx
         shr  ax,1               ; k = index within the team
-        mov  byte ptr [ptype+bx],0
+        mov  byte [ptype+bx],0
         cmp  ax,13
-        jae  @@spec
+        jae  .spec
         sub  ax,6               ; fighters: a line abreast
         mov  cx,1200
         imul cx
         mov  [ctx],ax
-        mov  word ptr [cty],2200
-        mov  word ptr [tpi],900
-        jmp  @@place
-@@spec: cmp  ax,16
-        jb   @@bmb
-        je   @@rdr
+        mov  word [cty],2200
+        mov  word [tpi],900
+        jmp  .place
+.spec: cmp  ax,16
+        jb   .bmb
+        je   .rdr
         cmp  ax,19
-        jb   @@trn
-        mov  byte ptr [ptype+bx],4      ; k=19: the tanker
-        mov  byte ptr [php+bx],5
-        mov  word ptr [ctx],4200
-        mov  word ptr [cty],6400
-        mov  word ptr [tpi],1300
-        jmp  @@place
-@@bmb:  mov  byte ptr [ptype+bx],1      ; k=13..15: bombers
-        mov  byte ptr [php+bx],6        ; they soak more lead
+        jb   .trn
+        mov  byte [ptype+bx],4      ; k=19: the tanker
+        mov  byte [php+bx],5
+        mov  word [ctx],4200
+        mov  word [cty],6400
+        mov  word [tpi],1300
+        jmp  .place
+.bmb:  mov  byte [ptype+bx],1      ; k=13..15: bombers
+        mov  byte [php+bx],6        ; they soak more lead
         sub  ax,14
         mov  cx,2400
         imul cx
         mov  [ctx],ax
-        mov  word ptr [cty],4200
-        mov  word ptr [tpi],1100
-        jmp  @@place
-@@rdr:  mov  byte ptr [ptype+bx],2      ; k=16: the radar plane
-        mov  byte ptr [php+bx],5
-        mov  word ptr [ctx],0
-        mov  word ptr [cty],6400
-        mov  word ptr [tpi],1300
-        jmp  @@place
-@@trn:  mov  byte ptr [ptype+bx],3      ; k=17,18: transports
-        mov  byte ptr [php+bx],5
+        mov  word [cty],4200
+        mov  word [tpi],1100
+        jmp  .place
+.rdr:  mov  byte [ptype+bx],2      ; k=16: the radar plane
+        mov  byte [php+bx],5
+        mov  word [ctx],0
+        mov  word [cty],6400
+        mov  word [tpi],1300
+        jmp  .place
+.trn:  mov  byte [ptype+bx],3      ; k=17,18: transports
+        mov  byte [php+bx],5
         sub  ax,17
         add  ax,ax
         dec  ax                 ; -1, +1
         mov  cx,2800
         imul cx
         mov  [ctx],ax
-        mov  word ptr [cty],5000
-        mov  word ptr [tpi],1200
-@@place:
+        mov  word [cty],5000
+        mov  word [tpi],1200
+.place:
         mov  ax,[ctx]
         add  ax,24576
         mov  [pax+si],ax
         mov  ax,[tpi]
         mov  [pay+si],ax
         test bx,1               ; even slot = green = the south
-        jnz  @@north
+        jnz  .north
         mov  ax,24576
         sub  ax,[cty]
         mov  [paz+si],ax
-        mov  word ptr [pah+si],0        ; nose at the enemy
-        jmp  @@fz
-@@north:
+        mov  word [pah+si],0        ; nose at the enemy
+        jmp  .fz
+.north:
         mov  ax,24576
         add  ax,[cty]
         mov  [paz+si],ax
-        mov  word ptr [pah+si],128
-@@fz:   cmp  byte ptr [ptype+bx],0      ; specials start on their lane
-        je   @@ftr
-        mov  word ptr [pah+si],64
-@@ftr:  mov  bx,si              ; reseed the contrail at the new spot
+        mov  word [pah+si],128
+.fz:   cmp  byte [ptype+bx],0      ; specials start on their lane
+        je   .ftr
+        mov  word [pah+si],64
+.ftr:  mov  bx,si              ; reseed the contrail at the new spot
         add  bx,bx
         add  bx,bx
         mov  ax,bx
         add  ax,ax
         add  bx,ax              ; si*12
         mov  cx,TLN
-@@ff:   mov  ax,[pax+si]
+.ff:   mov  ax,[pax+si]
         mov  [TLX+bx],ax
         mov  ax,[pay+si]
         mov  [TLY+bx],ax
         mov  ax,[paz+si]
         mov  [TLZ+bx],ax
         add  bx,2
-        loop @@ff
+        loop .ff
         add  si,2
         cmp  si,NPLANE*2
-        jb   @@f
+        jb   .f
         ret
 
 ; ---------------------------------------------------------------------------
@@ -2763,15 +2763,15 @@ FORMATION:
 ;  pilot's world back before physics touches psin/pcos again.
 ; ---------------------------------------------------------------------------
 CHASESET:
-        cmp  byte ptr [dying],0
-        jne  @@go2
-        cmp  byte ptr [mcact],0
-        jne  @@go2
-        cmp  byte ptr [tgtcam],0
-        jne  @@go2
-        cmp  byte ptr [chsview],0
-        je   @@r
-@@go2:  mov  ax,[camx]
+        cmp  byte [dying],0
+        jne  .go2
+        cmp  byte [mcact],0
+        jne  .go2
+        cmp  byte [tgtcam],0
+        jne  .go2
+        cmp  byte [chsview],0
+        je   .r
+.go2:  mov  ax,[camx]
         mov  [svx],ax
         mov  ax,[camy]
         mov  [svy],ax
@@ -2783,10 +2783,10 @@ CHASESET:
         mov  [svr],ax
         mov  ax,[heading]
         mov  [svh],ax
-        cmp  byte ptr [dying],0
-        je   @@livecam
-        cmp  word ptr [flbcnt],0
-        je   @@wrk
+        cmp  byte [dying],0
+        je   .livecam
+        cmp  word [flbcnt],0
+        je   .wrk
         mov  bx,[flbc]          ; flashback: re-fly the recorded tick,
         mov  ax,[FLB+bx]        ; full attitude - reliving the moment
         mov  [camx],ax
@@ -2800,19 +2800,19 @@ CHASESET:
         mov  [pitch],ax
         mov  ax,[FLB+bx+10]
         mov  [roll],ax
-        jmp  @@r
-@@wrk:  mov  ax,[dcx]           ; then hold on the burning wreck
+        jmp  .r
+.wrk:  mov  ax,[dcx]           ; then hold on the burning wreck
         mov  [camx],ax
         mov  ax,[dcy]
         mov  [camy],ax
         mov  ax,[dcz]
         mov  [camz],ax
-        jmp  @@level
-@@livecam:
-        cmp  byte ptr [mcact],0
-        jne  @@mcam
-        cmp  byte ptr [tgtcam],0
-        jne  @@tcam
+        jmp  .level
+.livecam:
+        cmp  byte [mcact],0
+        jne  .mcam
+        cmp  byte [tgtcam],0
+        jne  .tcam
         mov  ax,[hsin]          ; 100 back along the heading
         mov  bx,100
         imul bx
@@ -2825,27 +2825,27 @@ CHASESET:
         mov  bx,256
         idiv bx
         sub  [camz],ax
-        add  word ptr [camy],15
-@@level:
-        mov  word ptr [pitch],0
-        mov  word ptr [roll],0
-@@r:    ret
-@@mcam: ; ---- ride the missile (1) or hover at its grave (2) ----
+        add  word [camy],15
+.level:
+        mov  word [pitch],0
+        mov  word [roll],0
+.r:    ret
+.mcam: ; ---- ride the missile (1) or hover at its grave (2) ----
         mov  ax,[msx]
-        cmp  byte ptr [mcact],1
-        je   @@mm1
+        cmp  byte [mcact],1
+        je   .mm1
         mov  ax,[mimx]
-@@mm1:  mov  [pdx],ax
+.mm1:  mov  [pdx],ax
         mov  ax,[msy]
-        cmp  byte ptr [mcact],1
-        je   @@mm2
+        cmp  byte [mcact],1
+        je   .mm2
         mov  ax,[mimy]
-@@mm2:  mov  [pdy],ax
+.mm2:  mov  [pdy],ax
         mov  ax,[msz]
-        cmp  byte ptr [mcact],1
-        je   @@mm3
+        cmp  byte [mcact],1
+        je   .mm3
         mov  ax,[mimz]
-@@mm3:  mov  [pdz],ax
+.mm3:  mov  [pdz],ax
         mov  ax,[mch]           ; 65 behind along the camera course
         call SINQ
         mov  bx,65
@@ -2870,13 +2870,13 @@ CHASESET:
         mov  [camy],ax
         mov  ax,[mch]
         mov  [heading],ax
-        mov  word ptr [pitch],-4
-        mov  word ptr [roll],0
-        jmp  @@r
+        mov  word [pitch],-4
+        mov  word [roll],0
+        jmp  .r
 
-@@tcam: ; ---- orbit the target (mode 1: the jet; mode 2: its debris) ----
-        cmp  byte ptr [tgtcam],2
-        je   @@twrk
+.tcam: ; ---- orbit the target (mode 1: the jet; mode 2: its debris) ----
+        cmp  byte [tgtcam],2
+        je   .twrk
         mov  si,[tgti]
         mov  ax,[pax+si]
         mov  [pdx],ax
@@ -2884,15 +2884,15 @@ CHASESET:
         mov  [pdy],ax
         mov  ax,[paz+si]
         mov  [pdz],ax
-        jmp  @@torb
-@@twrk: mov  bx,[tcws]          ; follow the first piece as it falls
+        jmp  .torb
+.twrk: mov  bx,[tcws]          ; follow the first piece as it falls
         mov  ax,[bx+WFP]
         mov  [pdx],ax
         mov  ax,[bx+WFP+2]
         mov  [pdy],ax
         mov  ax,[bx+WFP+4]
         mov  [pdz],ax
-@@torb: mov  ax,[tgel]          ; H = sin(el)*100/256
+.torb: mov  ax,[tgel]          ; H = sin(el)*100/256
         and  ax,255
         call SINQ
         mov  bx,100
@@ -2911,7 +2911,7 @@ CHASESET:
         mov  [ctx],ax
         mov  ax,[tgaz]          ; cam = centre - dir(az)*R + (0,H,0)
         call SINQ
-        imul word ptr [ctx]
+        imul word [ctx]
         mov  bx,256
         idiv bx
         mov  bx,[pdx]
@@ -2920,7 +2920,7 @@ CHASESET:
         mov  ax,[tgaz]
         add  ax,64
         call SINQ
-        imul word ptr [ctx]
+        imul word [ctx]
         mov  bx,256
         idiv bx
         mov  bx,[pdz]
@@ -2934,19 +2934,19 @@ CHASESET:
         mov  ax,[tgel]
         neg  ax
         mov  [pitch],ax
-        mov  word ptr [roll],0
-        jmp  @@r
+        mov  word [roll],0
+        jmp  .r
 
 CHASERST:
-        cmp  byte ptr [dying],0
-        jne  @@go2
-        cmp  byte ptr [mcact],0
-        jne  @@go2
-        cmp  byte ptr [tgtcam],0
-        jne  @@go2
-        cmp  byte ptr [chsview],0
-        je   @@r
-@@go2:
+        cmp  byte [dying],0
+        jne  .go2
+        cmp  byte [mcact],0
+        jne  .go2
+        cmp  byte [tgtcam],0
+        jne  .go2
+        cmp  byte [chsview],0
+        je   .r
+.go2:
         mov  ax,[svx]
         mov  [camx],ax
         mov  ax,[svy]
@@ -2960,7 +2960,7 @@ CHASERST:
         mov  ax,[svh]
         mov  [heading],ax
         call SETTRIG            ; physics needs the real trig back
-@@r:    ret
+.r:    ret
 
 ; ---------------------------------------------------------------------------
 ;  PLAYERDRAW - our own jet in the chase view: the model rolls about the
@@ -2987,30 +2987,30 @@ PLAYERDRAW:
         ; ---- transform the 13 vertices ----
         xor  si,si
         xor  di,di
-@@tv:   mov  ax,[MVERT+si]      ; x' = (x*rc + y*rs)/256
-        imul word ptr [mcos]
+.tv:   mov  ax,[MVERT+si]      ; x' = (x*rc + y*rs)/256
+        imul word [mcos]
         mov  bx,ax
         mov  ax,[MVERT+si+2]
-        imul word ptr [msin]
+        imul word [msin]
         add  ax,bx
         cwd
         mov  bx,256
         idiv bx
         mov  [PVX+di],ax
         mov  ax,[MVERT+si]      ; y' = (y*rc - x*rs)/256
-        imul word ptr [msin]
+        imul word [msin]
         mov  cx,ax
         mov  ax,[MVERT+si+2]
-        imul word ptr [mcos]
+        imul word [mcos]
         sub  ax,cx
         cwd
         mov  bx,256
         idiv bx
         mov  [pdz],ax           ; y' scratch
-        imul word ptr [pdy]     ; y'' = (y'*pc + z*ps)/256 - 60
+        imul word [pdy]     ; y'' = (y'*pc + z*ps)/256 - 60
         mov  bx,ax
         mov  ax,[MVERT+si+4]
-        imul word ptr [pdx]
+        imul word [pdx]
         add  ax,bx
         cwd
         mov  bx,256
@@ -3018,10 +3018,10 @@ PLAYERDRAW:
         sub  ax,15
         mov  [PVY+di],ax
         mov  ax,[pdz]           ; z'' = (z*pc - y'*ps)/256 + 400
-        imul word ptr [pdx]
+        imul word [pdx]
         mov  cx,ax
         mov  ax,[MVERT+si+4]
-        imul word ptr [pdy]
+        imul word [pdy]
         sub  ax,cx
         cwd
         mov  bx,256
@@ -3031,10 +3031,10 @@ PLAYERDRAW:
         add  si,6
         add  di,2
         cmp  si,13*6
-        jb   @@tv
+        jb   .tv
         ; ---- face depths, painter sort, draw (as PLANESDRAW does) ----
         xor  si,si
-@@fd:   mov  bx,si
+.fd:   mov  bx,si
         add  bx,bx
         add  bx,bx
         add  bx,si
@@ -3072,27 +3072,27 @@ PLAYERDRAW:
         mov  [FCO+bx],al
         inc  si
         cmp  si,NFACE
-        jb   @@fd
+        jb   .fd
         mov  cx,NFACE-1
-@@bs:   push cx
+.bs:   push cx
         xor  si,si
-@@bi:   mov  bx,si
+.bi:   mov  bx,si
         add  bx,bx
         mov  ax,[FCD+bx]
         cmp  ax,[FCD+bx+2]
-        jge  @@nsw
+        jge  .nsw
         xchg ax,[FCD+bx+2]
         mov  [FCD+bx],ax
         mov  al,[FCO+si]
         xchg al,[FCO+si+1]
         mov  [FCO+si],al
-@@nsw:  inc  si
+.nsw:  inc  si
         cmp  si,NFACE-1
-        jb   @@bi
+        jb   .bi
         pop  cx
-        loop @@bs
-        mov  word ptr [pfc],0
-@@df:   mov  si,[pfc]
+        loop .bs
+        mov  word [pfc],0
+.df:   mov  si,[pfc]
         mov  al,[FCO+si]
         xor  ah,ah
         mov  bx,ax
@@ -3103,7 +3103,7 @@ PLAYERDRAW:
         mov  al,[MFACE+bx+4]
         mov  [COLOR],al
         xor  cx,cx
-@@dc:   push bx
+.dc:   push bx
         push cx
         mov  si,cx
         mov  al,[MFACE+bx+si]
@@ -3122,35 +3122,35 @@ PLAYERDRAW:
         pop  bx
         inc  cx
         cmp  cx,4
-        jb   @@dc
+        jb   .dc
         call FACEFILL
-        inc  word ptr [pfc]
-        cmp  word ptr [pfc],NFACE
-        jb   @@df
+        inc  word [pfc]
+        cmp  word [pfc],NFACE
+        jb   .df
         ret
 
 ; ---------------------------------------------------------------------------
 ;  DEATHTXT - CRASH (blinking red) and PRESS SPACE over the falling wreck.
 ; ---------------------------------------------------------------------------
 DEATHTXT:
-        cmp  byte ptr [dying],0
-        je   @@no
+        cmp  byte [dying],0
+        je   .no
         mov  ax,[lasttk]
         test ax,4
-        jz   @@ps
-        mov  byte ptr [COLOR],19
-        mov  word ptr [ftx],142
-        mov  word ptr [fty],80
-        mov  si,offset MSGGO
+        jz   .ps
+        mov  byte [COLOR],19
+        mov  word [ftx],142
+        mov  word [fty],80
+        mov  si,MSGGO
         call FDRAW
-@@ps:   cmp  word ptr [dytick],18
-        jb   @@no               ; the prompt waits out the first second
-        mov  byte ptr [COLOR],8
-        mov  word ptr [ftx],138
-        mov  word ptr [fty],92
-        mov  si,offset MSGPS2
+.ps:   cmp  word [dytick],18
+        jb   .no               ; the prompt waits out the first second
+        mov  byte [COLOR],8
+        mov  word [ftx],138
+        mov  word [fty],92
+        mov  si,MSGPS2
         call FDRAW
-@@no:   ret
+.no:   ret
 
 ; ---------------------------------------------------------------------------
 ;  FLBSEED - fill the black box with the current state, so an early death
@@ -3158,7 +3158,7 @@ DEATHTXT:
 ; ---------------------------------------------------------------------------
 FLBSEED:
         xor  bx,bx
-@@f:    mov  ax,[camx]
+.f:    mov  ax,[camx]
         mov  [FLB+bx],ax
         mov  ax,[camy]
         mov  [FLB+bx+2],ax
@@ -3172,8 +3172,8 @@ FLBSEED:
         mov  [FLB+bx+10],ax
         add  bx,12
         cmp  bx,FLBSZ
-        jb   @@f
-        mov  word ptr [flbh],0
+        jb   .f
+        mov  word [flbh],0
         ret
 
 ; ---------------------------------------------------------------------------
@@ -3230,14 +3230,14 @@ BDAMAGE:
         and  bx,63
         add  ax,bx
         xor  bx,bx
-@@s:    cmp  ax,[bhpc+bx]
-        je   @@hit
+.s:    cmp  ax,[bhpc+bx]
+        je   .hit
         add  bx,2
         cmp  bx,8
-        jb   @@s
+        jb   .s
         mov  bx,[bhnext]        ; a fresh victim: this hit counted, it
-        add  word ptr [bhnext],2 ; takes 1..4 more
-        and  word ptr [bhnext],6
+        add  word [bhnext],2 ; takes 1..4 more
+        and  word [bhnext],6
         mov  [bhpc+bx],ax
         push bx
         call RND16
@@ -3248,14 +3248,14 @@ BDAMAGE:
         shr  si,1
         mov  [bhph+si],al
         ret
-@@hit:  mov  si,bx
+.hit:  mov  si,bx
         shr  si,1
-        dec  byte ptr [bhph+si]
-        jnz  @@out
-        mov  word ptr [bhpc+bx],0FFFFh
+        dec  byte [bhph+si]
+        jnz  .out
+        mov  word [bhpc+bx],0FFFFh
         call BSET               ; down it goes
         call BWRECK
-@@out:  ret
+.out:  ret
 
 ; ---------------------------------------------------------------------------
 ;  BWRECK - blow the building at (gi,gj) into a wreck slot: eight wall
@@ -3264,12 +3264,12 @@ BDAMAGE:
 ;  Needs HBLD data valid (bhgt2, bschm). Clobbers everything.
 ; ---------------------------------------------------------------------------
 BWRECK: mov  di,[wnext]         ; claim a wreck slot
-        add  word ptr [wnext],WRKSZ
-        cmp  word ptr [wnext],WRKSZ*4
-        jb   @@w1
-        mov  word ptr [wnext],0
-@@w1:   add  di,offset WRK
-        mov  word ptr [di],1
+        add  word [wnext],WRKSZ
+        cmp  word [wnext],WRKSZ*4
+        jb   .w1
+        mov  word [wnext],0
+.w1:   add  di,WRK
+        mov  word [di],1
         mov  ax,[gi]            ; cell centre world coords
         mov  cl,8
         shl  ax,cl
@@ -3285,8 +3285,8 @@ BWRECK: mov  di,[wnext]         ; claim a wreck slot
         mov  dx,[bpx]           ; a falling house is heard by distance
         mov  bx,[bpz]
         call SFXBM2
-        push word ptr [camx]    ; ground height (TERRH reads camx/camz)
-        push word ptr [camz]
+        push word [camx]    ; ground height (TERRH reads camx/camz)
+        push word [camz]
         mov  ax,[bpx]
         mov  [camx],ax
         mov  ax,[bpz]
@@ -3294,14 +3294,14 @@ BWRECK: mov  di,[wnext]         ; claim a wreck slot
         push di
         call TERRH
         pop  di
-        pop  word ptr [camz]
-        pop  word ptr [camx]
+        pop  word [camz]
+        pop  word [camx]
         add  ax,6
         mov  [di+2],ax          ; wgy
         mov  [bpy],ax
         ; ---- eight wall slabs ----
-        mov  word ptr [tpi],0
-@@bp:   call RND16              ; slab yaw
+        mov  word [tpi],0
+.bp:   call RND16              ; slab yaw
         and  ax,255
         push ax
         call SINQ
@@ -3379,35 +3379,35 @@ BWRECK: mov  di,[wnext]         ; claim a wreck slot
         ; colour: this building's walls, one roof, one glass sheet
         mov  ax,[tpi]
         cmp  ax,6
-        jb   @@bcw
+        jb   .bcw
         cmp  ax,7
-        jne  @@bc6
+        jne  .bc6
         mov  al,4               ; slab 7: a sheet of glass
-        jmp  @@bcs
-@@bc6:  mov  al,17              ; slab 6: a piece of roof
-        jmp  @@bcs
-@@bcw:  push bx
+        jmp  .bcs
+.bc6:  mov  al,17              ; slab 6: a piece of roof
+        jmp  .bcs
+.bcw:  push bx
         mov  bx,[bschm]
         add  bx,bx
         mov  al,[WSCH+bx]       ; lit wall
         mov  cx,[tpi]
         test cx,1
-        jz   @@bcl
+        jz   .bcl
         mov  al,[WSCH+bx+1]     ; shaded wall
-@@bcl:  pop  bx
-@@bcs:  push bx
+.bcl:  pop  bx
+.bcs:  push bx
         mov  bx,[tpi]
         add  bx,di
         mov  [bx+WCL],al
         pop  bx
         ; corners: a vertical slab, rotated by the slab yaw
         mov  ax,[ctx]
-        imul word ptr [mcos]
+        imul word [mcos]
         mov  cx,256
         idiv cx
         mov  [ctz],ax           ; offx = w*cos
         mov  ax,[ctx]
-        imul word ptr [msin]
+        imul word [msin]
         mov  cx,256
         idiv cx
         mov  [wcc],ax           ; offz = w*sin
@@ -3449,9 +3449,9 @@ BWRECK: mov  di,[wnext]         ; claim a wreck slot
         mov  ax,[wcc]
         neg  ax
         mov  [bx+22],ax
-        inc  word ptr [tpi]
-        cmp  word ptr [tpi],NFACE
-        jb   @@bp
+        inc  word [tpi]
+        cmp  word [tpi],NFACE
+        jb   .bp
         ret
 
 ; ---------------------------------------------------------------------------
@@ -3466,9 +3466,9 @@ BWRECK: mov  di,[wnext]         ; claim a wreck slot
 LERPSET:
         mov  ax,[fprev]
         test ax,ax
-        jz   @@r                ; a tick every frame: nothing to smooth
+        jz   .r                ; a tick every frame: nothing to smooth
         cmp  ax,[fcnt]
-        jbe  @@r                ; interval over: show the real state
+        jbe  .r                ; interval over: show the real state
         mov  ax,[camx]          ; park the truth
         mov  [lvx],ax
         mov  ax,[camy]
@@ -3483,30 +3483,30 @@ LERPSET:
         mov  [lvr],ax
         mov  ax,[camx]          ; positions: plain lerp
         sub  ax,[ocx]
-        imul word ptr [fcnt]
-        idiv word ptr [fprev]
+        imul word [fcnt]
+        idiv word [fprev]
         add  ax,[ocx]
         mov  [camx],ax
         mov  ax,[camy]
         sub  ax,[ocy]
-        imul word ptr [fcnt]
-        idiv word ptr [fprev]
+        imul word [fcnt]
+        idiv word [fprev]
         add  ax,[ocy]
         mov  [camy],ax
         mov  ax,[camz]
         sub  ax,[ocz]
-        imul word ptr [fcnt]
-        idiv word ptr [fprev]
+        imul word [fcnt]
+        idiv word [fprev]
         add  ax,[ocz]
         mov  [camz],ax
         mov  ax,[heading]       ; heading: shortest way around
         sub  ax,[ohd]
         and  ax,255
         cmp  ax,128
-        jb   @@h1
+        jb   .h1
         sub  ax,256
-@@h1:   imul word ptr [fcnt]
-        idiv word ptr [fprev]
+.h1:   imul word [fcnt]
+        idiv word [fprev]
         add  ax,[ohd]
         and  ax,255
         mov  [heading],ax
@@ -3514,27 +3514,27 @@ LERPSET:
         sub  ax,[orl]
         and  ax,255
         cmp  ax,128
-        jb   @@r1
+        jb   .r1
         sub  ax,256
-@@r1:   imul word ptr [fcnt]
-        idiv word ptr [fprev]
+.r1:   imul word [fcnt]
+        idiv word [fprev]
         add  ax,[orl]
         and  ax,255
         mov  [roll],ax
         mov  ax,[pitch]         ; pitch: linear (-64..64, no wrap)
         sub  ax,[opt]
-        imul word ptr [fcnt]
-        idiv word ptr [fprev]
+        imul word [fcnt]
+        idiv word [fprev]
         add  ax,[opt]
         mov  [pitch],ax
-@@r:    ret
+.r:    ret
 
 LERPRST:
         mov  ax,[fprev]
         test ax,ax
-        jz   @@r
+        jz   .r
         cmp  ax,[fcnt]
-        jbe  @@r
+        jbe  .r
         mov  ax,[lvx]
         mov  [camx],ax
         mov  ax,[lvy]
@@ -3548,20 +3548,20 @@ LERPRST:
         mov  ax,[lvr]
         mov  [roll],ax
         call SETTRIG            ; physics gets its true trig back
-@@r:    ret
+.r:    ret
 
 ; ---------------------------------------------------------------------------
 ;  MCEND - the ridden missile just ended (hit or burnout): mark the grave
 ;  and give the camera ~3 seconds of aftermath before the old view returns.
 ; ---------------------------------------------------------------------------
-MCEND:  cmp  byte ptr [mcact],1
-        jne  @@r
-        mov  byte ptr [mcact],2
-        mov  word ptr [mcret],54
+MCEND:  cmp  byte [mcact],1
+        jne  .r
+        mov  byte [mcact],2
+        mov  word [mcret],54
         mov  ax,[msx]
         mov  [mimx],ax
         mov  ax,[msy]
         mov  [mimy],ax
         mov  ax,[msz]
         mov  [mimz],ax
-@@r:    ret
+.r:    ret

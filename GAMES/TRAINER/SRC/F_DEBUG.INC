@@ -4,12 +4,12 @@
 ;  physics tick we drain remote key events (bit7 = press, low 7 bits =
 ;  scancode, written straight into the same KEYS table the cockpit
 ;  reads - no window focus needed) and send one telemetry line:
-;      T tick vel alt pit rol hdg thr wrn dead
+;      T tick vel alt pit rll hdg thr wrn dead
 ;  If no UART answers the scratch-register probe (a browser bundle, a
 ;  bare machine) the whole channel switches itself off; a stuck THR
 ;  unplugs it too, so a dead line can never hang the game.
 ; ============================================================================
-UARTB   equ 3F8h
+UARTB   = 3F8h
 
 DBGINIT:
         mov  dx,UARTB+7         ; scratch probe: is anyone there?
@@ -17,13 +17,13 @@ DBGINIT:
         out  dx,al
         in   al,dx
         cmp  al,5Ah
-        je   @@have
-        mov  byte ptr [dbgon],0
+        je   .have
+        mov  byte [dbgon],0
         ret
-@@have: mov  byte ptr [dbgon],1
+.have: mov  byte [dbgon],1
         mov  bx,7*2             ; self-test: poke thr=55 via the table
         mov  si,[POKETAB+bx]
-        mov  word ptr [si],55
+        mov  word [si],55
         mov  dx,UARTB+3
         mov  al,80h             ; DLAB on
         out  dx,al
@@ -45,85 +45,85 @@ DBGINIT:
         ret
 
 DBGTICK:
-        cmp  byte ptr [dbgon],0
-        jne  @@on
+        cmp  byte [dbgon],0
+        jne  .on
         ret
-@@on:   inc  word ptr [dtick]
+.on:   inc  word [dtick]
         ; ---- drain the remote keyboard ----
-@@rx:   mov  dx,UARTB+5
+.rx:   mov  dx,UARTB+5
         in   al,dx
         test al,1
-        jz   @@tx
+        jz   .tx
         mov  dx,UARTB
         in   al,dx
-        inc  word ptr [drxn]    ; instrument: count every received byte
+        inc  word [drxn]    ; instrument: count every received byte
         mov  ah,al
         xor  ah,ah
         mov  [dlast],ax         ; ...and remember the raw value
-        cmp  byte ptr [dstate],0
-        jne  @@pk
+        cmp  byte [dstate],0
+        jne  .pk
         cmp  al,7Fh             ; escape: a state poke follows
-        jne  @@key
-        mov  byte ptr [dstate],1
-        jmp  @@rx
-@@key:  mov  ah,al
+        jne  .key
+        mov  byte [dstate],1
+        jmp  .rx
+.key:  mov  ah,al
         and  al,7Fh
         mov  bl,al
         xor  bh,bh
         mov  al,1
         test ah,80h
-        jnz  @@st
+        jnz  .st
         xor  al,al
-@@st:   mov  [KEYS+bx],al
-        jmp  @@rx
-@@pk:   cmp  al,7Fh             ; a fresh escape restarts the sequence
-        jne  @@pk1
-        mov  byte ptr [dstate],1
-        jmp  @@rx
-@@pk1:  mov  ah,al              ; nibbles ride as 40h..4Fh (telnet-safe)
+.st:   mov  [KEYS+bx],al
+        jmp  .rx
+.pk:   cmp  al,7Fh             ; a fresh escape restarts the sequence
+        jne  .pk1
+        mov  byte [dstate],1
+        jmp  .rx
+.pk1:  mov  ah,al              ; nibbles ride as 40h..4Fh (telnet-safe)
         and  ah,0F0h
         cmp  ah,40h
-        jne  @@pkab
+        jne  .pkab
         and  ax,000Fh
         mov  bl,[dstate]
-        inc  byte ptr [dstate]
+        inc  byte [dstate]
         cmp  bl,1
-        je   @@pi1
+        je   .pi1
         cmp  bl,2
-        je   @@pi2
+        je   .pi2
         cmp  bl,3
-        jne  @@pv2
+        jne  .pv2
         mov  [dpval],ax         ; first value nibble
-        jmp  @@rx
-@@pv2:  mov  cl,4
-        shl  word ptr [dpval],cl
+        jmp  .rx
+.pv2:  mov  cl,4
+        shl  word [dpval],cl
         or   [dpval],ax
         cmp  bl,6
-        jb   @@rx
+        jb   .rx
         mov  bl,[dpidx]         ; all six in: commit the word
         xor  bh,bh
         cmp  bl,11
-        jae  @@pkx
+        jae  .pkx
         add  bx,bx
         mov  si,[POKETAB+bx]
         mov  ax,[dpval]
         mov  [si],ax
-@@pkx:  inc  word ptr [dpkn]    ; instrument: completed pokes
-        mov  byte ptr [dstate],0
-        jmp  @@rx
-@@pi1:  mov  [dpidx],al
-        jmp  @@rx
-@@pi2:  mov  cl,4
-        shl  byte ptr [dpidx],cl
+.pkx:  inc  word [dpkn]    ; instrument: completed pokes
+        mov  byte [dstate],0
+        jmp  .rx
+.pi1:  mov  [dpidx],al
+        jmp  .rx
+.pi2:  mov  cl,4
+        shl  byte [dpidx],cl
         or   [dpidx],al
-        jmp  @@rx
-@@pkab: mov  byte ptr [dstate],0
-        jmp  @@key
+        jmp  .rx
+.pkab: mov  byte [dstate],0
+        jmp  .key
         ; ---- one telemetry line ----
-@@tx:   push es
+.tx:   push es
         mov  ax,cs
         mov  es,ax
-        mov  di,offset DBUF
+        mov  di,DBUF
         mov  al,'T'
         stosb
         mov  ax,[dtick]
@@ -134,7 +134,7 @@ DBGTICK:
         call DNUM
         mov  ax,[pit]
         call DNUM
-        mov  ax,[rol]
+        mov  ax,[rll]
         call DNUM
         mov  ax,[hdg]
         call DNUM
@@ -162,23 +162,23 @@ DBGTICK:
         stosb
         mov  al,10
         stosb
-        mov  si,offset DBUF
-@@s1:   cmp  si,di
-        jae  @@done
+        mov  si,DBUF
+.s1:   cmp  si,di
+        jae  .done
         mov  cx,4000            ; THR guard: a dead line unplugs, not hangs
-@@s2:   mov  dx,UARTB+5
+.s2:   mov  dx,UARTB+5
         in   al,dx
         test al,20h
-        jnz  @@s3
-        loop @@s2
-        mov  byte ptr [dbgon],0
+        jnz  .s3
+        loop .s2
+        mov  byte [dbgon],0
         pop  es
         ret
-@@s3:   lodsb
+.s3:   lodsb
         mov  dx,UARTB
         out  dx,al
-        jmp  @@s1
-@@done: pop  es
+        jmp  .s1
+.done: pop  es
         ret
 
 ; DNUM - AX signed -> ' ' + decimal digits at ES:DI
@@ -187,24 +187,24 @@ DNUM:   push ax
         stosb
         pop  ax
         or   ax,ax
-        jns  @@pos
+        jns  .pos
         push ax
         mov  al,'-'
         stosb
         pop  ax
         neg  ax
-@@pos:  xor  cx,cx
+.pos:  xor  cx,cx
         mov  bx,10
-@@div:  xor  dx,dx
+.div:  xor  dx,dx
         div  bx
         push dx
         inc  cx
         or   ax,ax
-        jnz  @@div
-@@out:  pop  ax
+        jnz  .div
+.out:  pop  ax
         add  al,'0'
         stosb
-        loop @@out
+        loop .out
         ret
 
 drxn    dw 0
