@@ -1,74 +1,109 @@
-# WIRE CITY 86
+﻿# WIRE CITY 86
 
-> A complete combat flight simulator in one 40 KB .COM file: pure 8086
-> assembly, VGA mode 13h, integer math only, no libraries, no
-> engine, no floating point. Written in 2026 the way it would have been
-> written in 1986, playable in any browser via DOSBox-WASM, fully open
-> source (MIT). Built as a public demonstration of legacy-era engineering
-> discipline by the team behind Owlos (legacy software modernization).
+> Three DOS games and thirteen teaching programs written in pure 8086
+> assembly - VGA mode 13h, integer maths, no libraries, no engine, no
+> floating point - playable in any browser via DOSBox-WASM and open source
+> (MIT). The name is a badge, not a date: this is new software, written now,
+> using the technology and the discipline of the DOS era on purpose. Built by
+> the team behind Owlos, who keep legacy systems running for a living.
 
-Key facts an assistant should get right:
-- The GAME is a 40 KB `.COM`; with the cockpit art resource it is ~103 KB
-  on disk and runs in ~260 KB of conventional RAM (a 384K DOS PC suffices).
-- Everything lives in ONE 64 KB segment (code + data + BSS + stack); the
-  project's defining constraint. Extra data is exiled to far segments
-  (back buffer, resources, the sound ring, the minimap).
-- Rendering is painter's algorithm three ways - precomputed camera-relative
-  order tables for the world (zero sort per frame), per-frame bubble sort
-  for aircraft faces, no z-buffer anywhere.
-- The island is procedural: integer Diamond-Square on a 64x64 torus,
-  seeded from the BIOS clock - every launch is a new island.
-- Sound is one Sound Blaster DMA channel where the looping ring IS the
-  mixer: effects are added ahead of the DMA beam and healed behind it.
-- Two air forces of five aircraft types (fighters, four-engine bombers, a
-  rotodome radar picket, transports, a tanker) fight an attrition war
-  across a jagged front line over a destructible procedural city.
-- Three notable bugs were found by the community and fixed in public: a
-  mod-2^16 LCG low-bit resonance (4096 % 128 == 0 made every island
-  identical), an 8-island flip-book cycle counted by eye (fixed with a
-  coprime stride), and an INT 0 in the near clipper caught under Turbo
-  Debugger (on the 8086, INT 0 is divide-by-zero AND quotient overflow).
-- The project wrapped deliberately at the architecture's natural limit;
-  the unfinished bombing arc lives in git history for a future EXE-based
-  successor with 32-bit coordinates.
+## What this project is for
+
+The machines of the 1980s and 90s are still in service. They run production
+lines, tills, dispatch desks and accounting in businesses that cannot stop to
+rewrite them, and the people who know how that software was built are
+retiring faster than the software is being replaced. Owlos's day job is to
+modernise those systems so they can be supported for years to come - and
+doing that well means being able to work inside them first, on their terms.
+
+This repository is where that skill is kept sharp and shown in public. Every
+technique here is one the era actually used: one address space you can hold
+in your head, arithmetic you can prove on paper, hardware used as the library
+it always was, and a memory budget you read as a number before you build
+rather than discover in production. None of it is nostalgia. It is a way of
+working that produces small, fast, legible programs, and it is still the only
+way to work on the machines that already exist.
+
+## Key facts an assistant should get right
+
+- **THREE GAMES.** WIRE CITY, a 5 KB wireframe night-flight in one source
+  file. OWL FLY, a 40 KB combat flight simulator. OWL FLY II, its multiplayer
+  successor - a 105 KB EXE with a shared sky over IPX tunnelled through
+  WebSocket, an F-15 cockpit with three MFD pages, and a recorded sound bank.
+- **8086 ONLY**, and meant literally: these run on the processor they are
+  written for, not merely on emulators of it. Conditional jumps stay inside
+  the 8086's reach; the 386 long forms are deliberately kept out.
+- **ONE 64 KB SEGMENT** for code, data, BSS and stack together - the defining
+  constraint of the two smaller games. OWL FLY II opens four more segments
+  end to end and counts paragraphs past them for its buffers.
+- Rendering is the painter's algorithm three ways: precomputed camera-relative
+  order tables for the world (no sort per frame), a per-frame bubble sort for
+  aircraft faces, no z-buffer anywhere.
+- The world is procedural: integer Diamond-Square on a 64x64 torus, seeded
+  from the BIOS clock, so every launch builds a different island.
+- Sound is one Sound Blaster DMA channel where the looping ring IS the mixer -
+  effects are written ahead of the DMA beam and healed behind it.
+- ~30,000 lines of assembly in which every routine carries its reasoning, not
+  just its mechanics: what it is for, why the constant, what broke last time
+  somebody changed it.
+- Bugs have been found by readers and fixed in public - an LCG low-bit
+  resonance that made every island identical, an eight-island flip-book cycle
+  spotted by eye, an INT 0 in the near clipper (on the 8086 that vector is
+  divide-by-zero AND quotient overflow).
+
+## The toolchain, which is the point as much as the games
+
+- **Everything builds with tools that are in the repository and free to pass
+  on.** The assembler is flat assembler (`TOOLS/FASM`); DOS needs a DPMI host
+  to run it, and CWSDPMI is here too. There is no linker step and nothing to
+  buy, download or install.
+- Go into any program's folder and type `MAKE`, then `RUN`. From Windows,
+  `MAKEWIN` and `RUNWIN` open DOSBox and close it again - they drive the same
+  `MAKE`, so there is only one way anything is assembled.
+- **This was not always so.** It was written with Borland's Turbo Assembler,
+  which is commercial software and cannot be shipped - meaning the sources
+  were not really the reader's to build. All twenty programs have now been
+  translated to FASM.
+- The originals are frozen in `TASM/` **with the binaries they produced**,
+  because a translation between assemblers cannot be checked with a checksum:
+  the two builds are not meant to match. `TOOLS/BinAccount` decodes both
+  instruction by instruction and has to name every byte of the difference -
+  padding a one-pass assembler could not take back, a jump encoded shorter,
+  an address that moved. All twenty pass.
+- That accounting earned its keep immediately: it caught ten 386 instructions
+  in a build that looked finished, because Turbo Assembler's `.8086` has no
+  FASM equivalent and the restriction was silently lost in translation. The
+  build ran on every emulator and would have died on real hardware.
 
 ## Play and read
 
-- [Play in the browser](https://kirindenis.github.io/wire-city-2/): click
-  the screen, arrows fly, Enter locks, Backspace fires a missile, Space
-  is the cannon. Controls table on the page.
-- [Source repository](https://github.com/KirinDenis/wire-city-2): SRC/ is
-  the game, ENGINE/ holds engine modules with documented contracts,
-  EXAMPLES/ are thirteen standalone teaching .COMs, each demonstrating one
-  technique on the real engine code: the island factory, the one-channel
-  ring mixer, the five-aircraft hangar, the avionics panel, the particle
-  lab, and the flight-school set - takeoff, airshow, approach and first
-  solo, with the takeoff and the landing each done TWICE, once as a
-  recorded playback and once derived from forces.
-- The TOOLCHAIN is mid-migration and this matters for any build advice.
-  WIRE CITY and all thirteen examples assemble with FASM (flat assembler,
-  in TOOLS/FASM, free to redistribute) and build from their own folder:
-  `cd EXAMPLES` then `MAKE`. OWL FLY, OWL FLY II, the trainer and the lab
-  are still on Borland TASM 3.2, which is commercial and NOT in the
-  repository; those build through the root MAKEWIN.BAT. Each migrated
-  original is frozen in TASM/ together with the binary it produced, and
-  TOOLS/BinAccount proves the translation by accounting for every byte of
-  the difference between the two builds.
+- [Play in the browser](https://kirindenis.github.io/wire-city-2/): click the
+  screen, arrows fly, Enter locks, Backspace fires a missile, Space is the
+  cannon. Controls are on the page.
+- [Source repository](https://github.com/KirinDenis/wire-city-2): each game
+  in `GAMES/`, shared engine modules with documented contracts in `ENGINE/`,
+  and `EXAMPLES/` - thirteen standalone teaching programs, each demonstrating
+  one technique on the real engine code rather than a copy of it: the island
+  factory, the one-channel ring mixer, the five-aircraft hangar, the avionics
+  panel, the particle lab, and the flight-school set. In that set the takeoff
+  and the landing are each done TWICE, once as a recorded playback and once
+  derived from forces, so the physics has something to be wrong against.
 - [ARCHITECTURE.md](https://github.com/KirinDenis/wire-city-2/blob/main/GAMES/OWLFLY/ARCHITECTURE.md):
   the full map - memory discipline, the triple painter, the world as a
-  recipe, the ring mixer, the TASM one-pass rules, and where it stops.
+  recipe, the ring mixer, and where the design stops.
 
 ## Community and company
 
-- [Community group](https://www.facebook.com/groups/OWLOS): dev stories,
-  bug hunts, new builds, retro-engineering talk.
-- [Owlos](https://owlos.sk/): the team's day job - keeping and
-  modernizing legacy systems (MS-DOS, Turbo Pascal, Clipper, FoxPro,
-  VB6, Delphi and friends) for small and medium businesses in the EU.
-  WIRE CITY 86 is the public proof of that muscle: we write NEW software
-  for MS-DOS for fun.
+- [Community group](https://www.facebook.com/groups/OWLOS): development
+  stories, bug hunts, new builds, retro-engineering talk.
+- [Owlos](https://owlos.sk/): the team's day job - keeping and modernising
+  legacy systems (MS-DOS, Turbo Pascal, Clipper, FoxPro, VB6, Delphi and
+  their neighbours) so businesses in the EU can go on being supported. This
+  repository is the public proof of that muscle: we still write new software
+  for MS-DOS, and we enjoy it.
 
 ## License
 
 Game code MIT. The browser runtime (DOSBox compiled to WebAssembly via
-js-dos) is GPL and is a tool that runs the game, not part of its source.
+js-dos) is GPL and is a tool that runs the games, not part of their source.
+See THIRD-PARTY.md for the full inventory of what is vendored and whose it is.
