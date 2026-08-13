@@ -1,0 +1,68 @@
+TITLE
+=====
+OWL FLY II - a new flight simulator for DOS, and you can fly it with someone
+
+(Alternatives:
+   OWL FLY II - a new DOS flight sim, with real IPX multiplayer
+   Someone wrote a new multiplayer flight simulator for DOS - OWL FLY II
+
+ DOS, not MS-DOS. It wants DOS and a VGA card, and it does not care whose:
+ FreeDOS, PC-DOS, DR-DOS, MS-DOS. Saying MS-DOS is narrower than the truth,
+ and in this community FreeDOS is the one half of them are running.)
+
+
+DESCRIPTION
+===========
+OWL FLY II - a new flight simulator for DOS. Not a port and not a remaster -
+written now, in 8086 assembly, for the machine you already have.
+
+MIT, and it builds with the assembler that ships beside it. Nothing to buy,
+nothing to install.
+
+Fly it in your browser:
+https://kirindenis.github.io/wire-city-2/owlfly2.html
+
+And you are not alone up there. Multiplayer over IPX - in your browser, or on
+your own DOS box, and everybody ends up in the same sky. You drop in over a
+war that is already going on, and Enter puts you in a jet.
+
+Source (MIT), assembler included:
+https://github.com/KirinDenis/wire-city-2/tree/main/GAMES/OWLFLY2
+
+Made by Owlos. Keeping old systems alive is our day job.
+https://owlos.sk
+
+#dos #retrogaming #assembly #freedos #retrocomputing #flightsim #dosbox
+#opensource #ipx #x86
+
+NOTES
+=====
+- SHORT ON PURPOSE. This is a gameplay clip, not a lesson: what it is,
+  that you can fly it with someone, and that the source is yours. The spec
+  sheet belongs in the repository, and anyone who wants it will click.
+- The source link is labelled "Source (MIT), assembler included" and not
+  "the assembler source": that link goes to the GAME. Anyone in this
+  community reading "assembler source" clicks expecting flat assembler's own
+  code, finds a flight simulator, and leaves.
+- NO MECHANISM in the copy. "Multiplayer over IPX, in your browser or on your
+  own DOS box" is the whole of what a viewer needs. ipxnet, the WebSocket
+  relay and which packets carry what are answers to comments, not lines in a
+  description - these people are here to fly it, not to build it.
+- DOS, not MS-DOS, anywhere in the copy. It needs DOS and VGA and does not
+  care whose DOS - and half this audience is on FreeDOS.
+- The first three hashtags show above the title: #dos #retrogaming #assembly.
+  Ten in total; more than fifteen and YouTube ignores every one of them.
+- The two QR codes point at the same links, for the end of the clip:
+  qr-source.png and qr-play.png. Keep the white margin or phones will not
+  read them.
+- If somebody asks HOW the multiplayer works: native DOSBoxes find each other
+  over ipxnet (NETHOST.BAT / NETJOIN.BAT in the game's folder), and the
+  browser build tunnels the same IPX packets through a WebSocket relay, so a
+  DOS box and a browser tab share one sky.
+- If somebody asks for numbers in the comments: FLYOWL2.EXE is 107,408 bytes
+  of 8086 code, plus 162 KB of painted cockpit and recorded sound. It is a
+  real MZ executable of five segments - the main one 64K, then SKYSEG, UISEG,
+  SYMSEG and TOWNSEG end to end.
+- Do not claim multiplayer on bare metal without saying how: IPX needs a
+  network stack. Single player is 8086-only by construction, and that is the
+  claim worth making.

@@ -1,11 +1,11 @@
 PLAYLIST
 ========
-Writing a DOS Game from Scratch — Turbo Pascal & Assembly
+Writing a DOS Game from Scratch — C & Assembly
 
 Playlist description:
 ------------------------------------------------------------------------------
-Building a DOS game the way it was built in the late eighties — one constraint
-at a time. Turbo Pascal first, assembly later, and nothing at all between the
+Building a DOS game the way these machines were actually programmed — one
+constraint at a time, in C and assembly, with nothing at all between the
 program and the hardware.
 
 No engine, no framework, no library to call. In DOS one program owns the whole
@@ -26,8 +26,16 @@ The constraints are the teacher. No floating point. No memory to spare. One
 of something the machine would not do, and most episodes contain a mistake
 that really happened and what it looked like on screen when it did.
 
-Tools: DOSBox, Borland Turbo Pascal 7.0, and TASM once the assembly starts.
-Everything is free and everything runs on a modern machine.
+Why bother, in this decade? Because these machines are still running. Tills,
+production lines, dispatch desks and accounting rooms are full of software
+written this way, still in service, and the people who know how it was built
+are retiring faster than it is being replaced. This series is that knowledge
+written down while it can still be demonstrated rather than described.
+
+Tools: DOSBox, Open Watcom C for the first lessons, flat assembler after that.
+All of it free, all of it open, and all of it running on a modern machine. The
+assembler ships inside the source repository, so from the second lesson on
+there is nothing at all to download.
 
 Source for every episode:
 https://github.com/KirinDenis/wire-city-2
@@ -40,7 +48,7 @@ https://owlos.sk
 
 TITLE
 =====
-Lecture 1: The Screen Is Just Memory — DOS Game from Scratch (Turbo Pascal, Mode 13h)
+Lecture 1: The Screen Is Just Memory — DOS Game from Scratch (C, Mode 13h)
 
 (No "#1" in the title: a hash in a title is a hashtag, and a numeric one is a
 useless hashtag. "Lecture 1:" also survives truncation - the first 60
@@ -50,64 +58,99 @@ series name.)
 
 DESCRIPTION
 ===========
-In the late eighties there was no graphics library to call. The screen WAS
-memory: write a byte to the right address and it is on the glass. This first
-lesson does exactly that, in Turbo Pascal, on DOS, with nothing in between.
+On a DOS machine there is no graphics library to call. The screen IS memory:
+write a byte to the right address and it is on the glass. This first lesson
+does exactly that, in C, with nothing in between.
 
-No BGI driver, no output function, no permission asked. Two addresses do all
-of it:
+No driver, no output function, no permission asked. Two addresses do all of
+it:
 
-  $B800  the text screen — 80x25 cells, two bytes each: the character, and
-         then its colour
-  $A000  mode 13h — 320x200 in 256 colours, one byte per pixel, and that byte
-         IS the colour
+  0xB800  the text screen — 80x25 cells, two bytes each: the character, and
+          then its colour
+  0xA000  mode 13h — 320x200 in 256 colours, one byte per pixel, and that byte
+          IS the colour
 
 We write HELLO straight into the text screen without printing it — nothing is
 cleared, because nothing was printed — then switch to 320x200 and build up a
 pixel, a line, a line in another colour, and a square, all out of the same two
 lines of code.
 
+The word that makes it possible is "far":
+
+  unsigned char far *vga = (unsigned char far *) 0xA0000000L;
+
+An address on this machine is two numbers, not one — a segment and an offset
+inside it — and "far" is C saying so out loud. Everything in this series that
+looks strange later comes back to that.
+
+And then the part everything else leans on: WHICH byte, exactly, and why the
+corner is the TOP left one, when every graph ever drawn puts nought, nought at
+the bottom. Because offset zero is the first byte of the segment - and because
+the electron beam swept the glass from left to right, dropped a line and swept
+again, from the top down. The bytes are simply in the order the beam needed
+them, and every canvas since has counted from that corner.
+
+  x = 5, y = 0   ->  offset = 5
+  x = 0, y = 1   ->  offset = 320
+  x = 5, y = 2   ->  offset = 2 * 320 + 5 = 645
+
 Source (runs on its own, nothing else needed):
-https://github.com/KirinDenis/wire-city-2/blob/main/LESSONS/L01/MEMORY.PAS
+https://github.com/KirinDenis/wire-city-2/blob/main/LESSONS/L01/MEMORY.C
 
-Tools: DOSBox 0.74-3, Borland Turbo Pascal 7.0 (real mode IDE).
+Tools: DOSBox 0.74-3 and Open Watcom C — free, open source, and it still
+builds 16-bit real-mode DOS programs today:
 
-On the dates, since the Pascal here says 1992 on the box: VGA and mode 13h
-arrived in 1987, and the text screen at $B800 goes back to 1981. Turbo Pascal
-4.0, from 1987, does every line of this identically. The version matters far
-less than it looks — it was simply the tool everybody reached for.
+  wcl -0 -ml -bcl=dos MEMORY.C
 
-Assembly comes later in this series, and it changes none of this. It only makes
+From the next lesson on, the assembler ships inside the repository and there
+is nothing left to download at all.
+
+On the dates: mode 13h and the VGA card arrived in 1987, and the text screen at
+0xB800 is older still. Any compiler that can build a 16-bit real-mode DOS
+program does every line of this identically — the tool matters far less than
+it looks.
+
+And the diagrams in the opening were drawn by the same program - the same far
+pointer, the same y * 320 + x, the same video BIOS for the text. There is
+nothing on screen in this video that the video does not explain.
+
+Assembly comes next in this series, and it changes none of this. It only makes
 it fast enough to do sixty thousand times a second.
 
 CHAPTERS
-00:00 DOS, and a machine with nothing in the way
-00:11 Turbo Pascal, and why an IDE was revolutionary
-00:47 The text screen is memory at B800
-00:55 Asking the BIOS: Intr, and the registers
-01:23 WriteAt and Plot: the whole drawing engine
-02:17 Run it: HELLO, with nothing printed
-02:33 Mode 13h, and one pixel
-02:59 A line, a colour, a square
-03:32 Giving the text screen back
-04:06 The whole thing, drawn one byte at a time
-04:42 What this means, and what comes next
+(generated, not typed - re-run after the recording, the timings move:
+     Director.exe --chapters L01-memory)
+00:00 What we are going to do
+00:13 Why DOS, and not nostalgia
+00:53 Which byte, exactly
+01:58 The tools: a prompt, an editor, a compiler
+02:32 The map: two screens, one piece of arithmetic
+03:21 far - an address is two numbers
+03:57 Asking the BIOS: int86, and the registers
+04:47 WriteAt and Plot: the whole drawing engine
+05:50 The program itself
+07:01 Giving the text screen back
+07:25 Compiling it: three switches and no project
+07:49 Run it: HELLO, with nothing printed
+08:12 Mode 13h, and one pixel
+08:22 A line, a colour, a square
+08:35 What this means, and what comes next
 
-Next: why the picture tears when it moves, and the second screen that fixes it.
+Next: the file IS the program - a COM in eighteen bytes, and what an EXE adds.
 
 Made by Owlos. We modernise legacy software for the people who still depend on
 it, and knowing how it was written the first time is the whole reason we can.
 https://owlos.sk
 
-#dos #turbopascal #retroprogramming #retrocomputing #msdos #vga #mode13h
-#assembly #gamedev #x86 #dosbox #borland
+#dos #cprogramming #retroprogramming #retrocomputing #msdos #vga #mode13h
+#assembly #gamedev #x86 #dosbox #openwatcom
 
 
 HASHTAGS - the three rules that actually matter
 ===============================================
 - The FIRST THREE hashtags in the description are shown above the video
   title. Everything after that only helps search. So the order is a decision,
-  not a list: #dos #turbopascal #retroprogramming are the three a viewer
+  not a list: #dos #cprogramming #retroprogramming are the three a viewer
   should see and click.
 - MORE THAN FIFTEEN and YouTube ignores every one of them. There are twelve
   here on purpose - room to add one per episode without ever hitting the wall.
@@ -118,10 +161,12 @@ HASHTAGS - the three rules that actually matter
 NOTES FOR UPLOAD
 ================
 - Subtitles: Lecture/voice/L01-memory.srt, uploaded WITH TIMING. Do not let
-  YouTube auto-caption this - it turns "Mem[$A000]" and "hexadecimal one
-  three" into porridge, and those are the words people search for.
+  YouTube auto-caption this - it turns "0xA000" and "hexadecimal one three"
+  into porridge, and those are the words people search for.
 - Trim the head of the recording to the first spoken word. Every timestamp
   above is measured from there.
 - The chapter list is generated, not typed:
       Director.exe --chapters L01-memory
   Re-run it if the narration is re-rendered, because the timings move.
+- The FIRST recording of this lesson used Turbo Pascal. If that video is still
+  public, put a card on it pointing here: same lesson, free compiler.
