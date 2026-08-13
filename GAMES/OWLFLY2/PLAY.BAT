@@ -1,6 +1,7 @@
 @echo off
-REM PLAY.BAT - fly OWL FLY II offline in DOSBox. Build it first with
-REM MAKE.BAT OWLFLY2 from the repo root. For a shared sky use NETHOST.BAT
+REM PLAY.BAT - fly OWL FLY II offline in DOSBox. Nothing needs building:
+REM INSTALL\ holds the game and the files it loads, and they are committed.
+REM For a shared sky use NETHOST.BAT
 REM / NETJOIN.BAT instead. -noautoexec is not optional: without it DOSBox
 REM runs the machine's own autoexec and every -c below is buried under it.
 cd /d %~dp0

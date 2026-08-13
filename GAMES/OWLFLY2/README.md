@@ -132,6 +132,37 @@ corner protocol, the two-mode control scheme, and the hard-won ledger
 of 8086 integer traps and projection lessons in the project memory.
 Raid it for parts; do not resurrect it whole.
 
+## Playing it in DOSBox, or on a real machine
+
+It is a **DOS** program - not specifically MS-DOS. It wants DOS and a VGA
+card and does not care whose: DOSBox, FreeDOS, PC-DOS, MS-DOS, or a real
+486 with the lid off. Nothing has to be built: the game and the files it
+loads are committed, in [`INSTALL/`](INSTALL).
+
+1. Download the repository as a ZIP and unpack it:
+   <https://github.com/KirinDenis/wire-city-2/archive/refs/heads/main.zip>
+2. Start DOSBox and point it at that one folder:
+
+   ```
+   mount c C:\path\to\wire-city-2\GAMES\OWLFLY2\INSTALL
+   c:
+   FLYOWL2
+   ```
+3. If it feels heavy, give it more machine: `Ctrl-F12` a few times, or put
+   `cycles=30000` in your `dosbox.conf`.
+
+On Windows, **`PLAY.BAT`** in this folder does all of that for you.
+
+**A shared sky.** `NETHOST.BAT` starts one and prints nothing clever; whoever
+is joining runs `NETJOIN.BAT <your-ip>`. Both are DOSBox's own `ipxnet`, which
+is IPX over UDP - the same packets the browser build tunnels through a
+WebSocket, so a DOS box and a browser tab can end up in the same war.
+
+**On real hardware**, copy the four files out of `INSTALL/` and run
+`FLYOWL2`. VGA is required; a Sound Blaster is not, but it is what the sound
+was written for. Single player needs nothing but the machine - the multiplayer
+side needs a network stack, which is why DOSBox is the easy road.
+
 ## Building
 
 Everything you need is in this repository. Mount it in DOSBox and, in this
