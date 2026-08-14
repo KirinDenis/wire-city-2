@@ -83,11 +83,15 @@ RUN JET
 ## The lessons
 
 A video series that builds a DOS game from nothing, one constraint at a time —
-[LESSONS/](LESSONS/). The second one comes with its workbench:
-**[▶ open a DOS prompt with the assembler already on it](https://kirindenis.github.io/wire-city-2/l02.html)**
-and type `MAKE`. Three sources become three programs in your browser tab, and
-then you can take the eighteen bytes apart. Nothing is installed and nothing is
-downloaded — reload the page and the machine is clean again.
+[LESSONS/](LESSONS/). Two of them come with a workbench rather than a video of
+one: a DOS prompt in your browser tab with the assembler already on the disk.
+Type `MAKE` and you have built what the lesson builds. Nothing is installed and
+nothing is downloaded — reload the page and the machine is clean again.
+
+- **[▶ Lesson 2 — the file *is* the program](https://kirindenis.github.io/wire-city-2/l02.html)**
+  · eighteen bytes, and you can take them apart and change five of them
+- **[▶ Lesson 3 — the screen, one byte at a time](https://kirindenis.github.io/wire-city-2/l03.html)**
+  · a dot, then every colour there is — and why that picture comes out slanted
 
 ## Reading
 

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 3 - the screen, one byte at a time</title>
+<link rel="stylesheet" href="jsdos/js-dos.css">
+<style>
+  html,body{margin:0;min-height:100vh;background:#04060f;color:#bcd;font-family:monospace}
+  #wrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px}
+  h1{letter-spacing:2px;color:#bcf;margin:4px;text-shadow:0 0 8px #46c;font-size:18px}
+  #dos{width:min(96vw,1000px);aspect-ratio:4/3;background:#000}
+  .hint{font-size:13px;color:#89b;text-align:center}
+  a{color:#9bf}
+  #about{width:min(96vw,1000px);font-size:13px;line-height:1.55;color:#abc}
+  #about h2{color:#9bf;letter-spacing:2px;margin:18px 0 6px;font-size:14px}
+  #about p{margin:0 0 8px}
+  #about b{color:#dfe}
+  pre{background:#080c18;border-left:3px solid #2a4a7a;color:#dfe;
+      padding:10px 12px;overflow-x:auto;font-size:13px;line-height:1.5;margin:8px 0}
+  .cards{display:flex;flex-wrap:wrap;gap:10px;width:min(96vw,1000px);margin-top:4px}
+  .card{flex:1 1 200px;background:#080c18;border:1px solid #1c2c4a;padding:10px 12px}
+  .card h3{color:#9bf;font-size:13px;margin:0 0 6px;letter-spacing:1px}
+  .card span{color:#89b;font-size:12px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>LESSON 3 &mdash; THE SCREEN, ONE BYTE AT A TIME</h1>
+  <div class="hint">click the black screen first to grab the keyboard &middot;
+    <a href="index.html">back to the arcade</a></div>
+  <div id="dos"></div>
+  <div class="hint">Type <b>MAKE</b>, then <b>RUN</b>. Seven frames &mdash; a
+    key moves on, Esc leaves early.</div>
+
+  <div class="cards">
+    <div class="card">
+      <h3>1 &middot; A DOT</h3>
+      <span>One byte, written to one address. There is no draw call
+        underneath it, because there is nothing underneath it.</span>
+    </div>
+    <div class="card">
+      <h3>2 &middot; EVERY COLOUR</h3>
+      <span>64000 bytes, each one greater than the last. Watch which way
+        the stripes lean &mdash; that slant is the lesson.</span>
+    </div>
+    <div class="card">
+      <h3>3 &middot; BLACK</h3>
+      <span>And nothing else. The screen only goes empty because we asked
+        it to, in one instruction that repeats itself.</span>
+    </div>
+    <div class="card">
+      <h3>4 &middot; TWO LINES</h3>
+      <span>One of them is a single instruction. The other cannot be, and
+        the reason is the whole of graphics on this machine.</span>
+    </div>
+    <div class="card">
+      <h3>5 &middot; AN OUTLINE</h3>
+      <span>Drawn straight on top. The lines are still underneath it,
+        because nothing here is ever cleared unless you clear it.</span>
+    </div>
+    <div class="card">
+      <h3>6 &middot; A FILLED SQUARE</h3>
+      <span>The line from frame 4, done once per row. Nothing new was
+        invented between them.</span>
+    </div>
+    <div class="card">
+      <h3>7 &middot; TWO HUNDRED</h3>
+      <span>Same routine, random colours, random places, and four lines of
+        arithmetic pretending to be chance.</span>
+    </div>
+  </div>
+
+  <div id="about">
+    <h2>WHY THE STRIPES LEAN</h2>
+    <p>Frame 2 writes every byte of the screen in order: nought, one, two, all
+    the way to 255, and round again. <b>Nothing in that loop says where a
+    colour goes.</b> The colours are simply laid down the memory one after
+    another &mdash; and what comes out is diagonal.</p>
+    <p>That slant is the proof of the whole lesson. A row is 320 bytes wide and
+    there are only 256 colours, so every row begins 64 colours further along
+    than the row above it. The picture leans because 320 does not divide by
+    256. If the screen were really a grid of rows, it could not.</p>
+    <pre>offset = y * 320 + x</pre>
+    <p>That is the same line lesson 1 wrote in C, and it is still the only
+    arithmetic in the file. The screen is not a grid. It is one long row of
+    64000 bytes, and it only looks like a grid because the card reads 320 of
+    them, drops a line, and reads 320 more.</p>
+
+    <h2>WHAT A LINE COSTS</h2>
+    <pre>mov  di, 100*320 + 60     ; across
+mov  cx, 200
+rep  stosb                ; ...and that is the whole line
+
+mov  di, 40*320 + 160     ; down
+mov  cx, 120
+.down:  mov  byte [es:di], 14
+        add  di, 320      ; the pixel below is 320 bytes further on
+        loop .down</pre>
+    <p>Same line on the glass, completely different price. Across, the pixels
+    are neighbours in memory and one instruction draws all two hundred; down,
+    they are 320 bytes apart and it has to be a loop. <b>That difference is why
+    everything in these games is drawn in horizontal spans</b> &mdash; the
+    terrain, the aircraft, the cockpit. It is not a style, it is what the
+    memory layout charges you.</p>
+
+    <h2>CHANGE SOMETHING</h2>
+    <p>The assembler is in the tab with you, which is the point of this page
+    rather than a video of it. The dot in frame 1 is colour 15, white:</p>
+    <pre>EDIT PIXEL.ASM
+MAKE
+RUN</pre>
+    <p>Try 4. Try 40. Try moving it. Reload the page and everything is back as
+    it was, so there is nothing you can break.</p>
+
+    <p><a href="https://github.com/KirinDenis/wire-city-2/tree/main/LESSONS/L03"
+       target="_blank" rel="noopener">the lesson's source and notes</a>
+    &middot; <a href="l02.html">lesson 2</a>
+    &middot; <a href="index.html">back to the arcade</a>
+    &middot; the assembler is <a href="https://flatassembler.net/"
+       target="_blank" rel="noopener">flat assembler</a>, and the DOS is DOSBox
+    compiled to WebAssembly via <a href="https://js-dos.com" target="_blank"
+       rel="noopener">js-dos</a></p>
+  </div>
+</div>
+<script src="coi-serviceworker.js"></script>
+<script src="jsdos/js-dos.js"></script>
+<script>
+(function () {
+  // Everything stays inside this IIFE: the minified js-dos.js READS the
+  // global single-letter variable "g", so a top-level "var g" here breaks
+  // Dos() with createElement('[object Object]'). Found the hard way.
+  var KBDFIX = { Equal: 61, Minus: 45, NumpadAdd: 334, NumpadSubtract: 333 };
+  var kbdDown = {};
+  window.addEventListener("keydown", function (e) {
+    var k = KBDFIX[e.code];
+    if (!k || !window.__ci) return;
+    e.preventDefault();
+    if (kbdDown[e.code]) return;
+    kbdDown[e.code] = true;
+    window.__ci.sendKeyEvent(k, true);
+  }, true);
+  window.addEventListener("keyup", function (e) {
+    var k = KBDFIX[e.code];
+    if (!k || !window.__ci) return;
+    e.preventDefault();
+    kbdDown[e.code] = false;
+    window.__ci.sendKeyEvent(k, false);
+  }, true);
+
+  Dos(document.getElementById("dos"), {
+    url: "l03_v3.jsdos",
+    pathPrefix: "jsdos/emulators/",
+    theme: "dark",
+    imageRendering: "pixelated",
+    scaleControls: 0.2,
+    onEvent: function (e, ci) { if (e === "ci-ready") window.__ci = ci; }
+  });
+})();
+</script>
+</body>
+</html>
+
+
+

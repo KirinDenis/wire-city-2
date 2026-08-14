@@ -285,6 +285,15 @@ multi-segment program, four things have no COM equivalent:
 - **FASM does not merge same-named segments.** A file written as a
   continuation of another's segment must have its `include` moved up to
   follow it, or its bytes land in the next window.
+- **`entry SEG:LABEL` must come BEFORE `segment SEG`.** This one has no
+  warning attached to it. Put the declaration after the segment it names and
+  FASM stops on the **`segment` line** — not on the `entry` line — with
+  `error: invalid argument`, and writes no EXE at all. Since TASM's `END
+  start` lives on the *last* line of a file, translating it in place is the
+  natural thing to do and it is exactly wrong. Verified four ways: entry
+  first passes, entry last fails, and where `stack` goes makes no difference
+  to either. It cost a take of lesson 2, whose script had the declarations at
+  the bottom because they read better there.
 
 Check an EXE with `BinAccount -exe old.exe new.exe`. It cannot be walked in
 one pass — each segment is padded to a fixed window, so the two builds are the

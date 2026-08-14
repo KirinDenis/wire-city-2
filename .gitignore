@@ -84,3 +84,6 @@ relay/WireCityChat/logs/
 LESSONS/L02/HELLO.COM
 LESSONS/L02/HELLO2.EXE
 LESSONS/L02/HEX.COM
+# LESSONS\L03 build output, for the same reason as L02's: the reader types
+# MAKE and produces it. The lesson's whole shape is that you build it.
+LESSONS/L03/PIXEL.COM

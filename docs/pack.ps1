@@ -111,6 +111,31 @@ $MAP = @{
       @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`ncls`nHELP.BAT`n" }
     )
   }
+  # Lesson 3, same workshop shape as L02: sources and the assembler, no
+  # binary. EDIT.BAT and FASMD.EXE come along because this is the first
+  # lesson where changing a number and rebuilding is worth doing - one
+  # constant is the colour of the dot.
+  L03 = @{
+    prefix = "l03"
+    page   = Join-Path $root "docs\l03.html"
+    detect = "l03_v(\d+)\.jsdos"
+    files  = @(
+      @{ p = "LESSONS\L03\PIXEL.ASM";     n = "PIXEL.ASM" },
+      @{ p = "LESSONS\L03\WEB\MAKE.BAT";  n = "MAKE.BAT" },
+      @{ p = "LESSONS\L03\WEB\RUN.BAT";   n = "RUN.BAT" },
+      @{ p = "LESSONS\L03\WEB\HELP.BAT";  n = "HELP.BAT" },
+      @{ p = "LESSONS\L02\WEB\EDIT.BAT";  n = "EDIT.BAT" },
+      @{ p = "TOOLS\FASM\FASM.EXE";       n = "FASM.EXE" },
+      @{ p = "TOOLS\FASM\FASMD.EXE";      n = "FASMD.EXE" },
+      @{ p = "TOOLS\FASM\LICENSE.TXT";    n = "LICENSE.TXT" },
+      @{ p = "TOOLS\CWSDPMI\CWSDPMI.EXE"; n = "CWSDPMI.EXE" },
+      @{ p = "TOOLS\CWSDPMI\cwsdpmi.doc"; n = "CWSDPMI.DOC" }
+    )
+    strings = @(
+      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`ncls`nHELP.BAT`n" },
+      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`ncls`nHELP.BAT`n" }
+    )
+  }
   WIRECITY = @{
     prefix = "wirecity"
     page   = Join-Path $root "docs\play.html"
