@@ -77,6 +77,40 @@ $MAP = @{
       @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`nfield`n" }
     )
   }
+  # The odd one out: this bundle is not a game, it is a WORKSHOP. It carries
+  # SOURCES and the assembler rather than a finished binary, and the visitor
+  # builds the programs themselves by typing MAKE - which is the entire point
+  # of the lesson, and the reason FASM.EXE and CWSDPMI.EXE are in the list.
+  # Their licences are in the list for the same reason: shipping the binaries
+  # is only allowed with the notices beside them (see THIRD-PARTY.md).
+  # The .BAT files come from LESSONS\L02\WEB and not from the lesson folder,
+  # because in here every file sits in one directory and the lesson's own
+  # MAKE.BAT reaches the assembler through ..\..\TOOLS\FASM.
+  L02 = @{
+    prefix = "l02"
+    page   = Join-Path $root "docs\l02.html"
+    detect = "l02_v(\d+)\.jsdos"
+    files  = @(
+      @{ p = "LESSONS\L02\HELLO.ASM";     n = "HELLO.ASM" },
+      @{ p = "LESSONS\L02\HELLO2.ASM";    n = "HELLO2.ASM" },
+      @{ p = "LESSONS\L02\HEX.ASM";       n = "HEX.ASM" },
+      @{ p = "LESSONS\L02\WEB\MAKE.BAT";  n = "MAKE.BAT" },
+      @{ p = "LESSONS\L02\WEB\EDIT.BAT";  n = "EDIT.BAT" },
+      @{ p = "LESSONS\L02\WEB\HELP.BAT";  n = "HELP.BAT" },
+      @{ p = "TOOLS\FASM\FASM.EXE";       n = "FASM.EXE" },
+      @{ p = "TOOLS\FASM\FASMD.EXE";      n = "FASMD.EXE" },
+      @{ p = "TOOLS\FASM\LICENSE.TXT";    n = "LICENSE.TXT" },
+      @{ p = "TOOLS\CWSDPMI\CWSDPMI.EXE"; n = "CWSDPMI.EXE" },
+      @{ p = "TOOLS\CWSDPMI\cwsdpmi.doc"; n = "CWSDPMI.DOC" }
+    )
+    # No binaries: the visitor assembles them. Shipping HELLO.COM would let
+    # somebody reach step 3 without ever having run the assembler, and then
+    # the page is a toy rather than a lesson.
+    strings = @(
+      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`ncls`nHELP.BAT`n" },
+      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`ncls`nHELP.BAT`n" }
+    )
+  }
   WIRECITY = @{
     prefix = "wirecity"
     page   = Join-Path $root "docs\play.html"

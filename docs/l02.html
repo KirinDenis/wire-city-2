@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 2 - assemble it yourself, in your browser</title>
+<link rel="stylesheet" href="jsdos/js-dos.css">
+<style>
+  html,body{margin:0;min-height:100vh;background:#04060f;color:#bcd;font-family:monospace}
+  #wrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px}
+  h1{letter-spacing:2px;color:#bcf;margin:4px;text-shadow:0 0 8px #46c;font-size:18px}
+  #dos{width:min(96vw,1000px);aspect-ratio:4/3;background:#000}
+  .hint{font-size:13px;color:#89b;text-align:center}
+  a{color:#9bf}
+  #about{width:min(96vw,1000px);font-size:13px;line-height:1.55;color:#abc}
+  #about h2{color:#9bf;letter-spacing:2px;margin:18px 0 6px;font-size:14px}
+  #about p{margin:0 0 8px}
+  #about b{color:#dfe}
+  pre{background:#080c18;border-left:3px solid #2a4a7a;color:#dfe;
+      padding:10px 12px;overflow-x:auto;font-size:13px;line-height:1.5;margin:8px 0}
+  .cards{display:flex;flex-wrap:wrap;gap:10px;width:min(96vw,1000px);margin-top:4px}
+  .card{flex:1 1 240px;background:#080c18;border:1px solid #1c2c4a;padding:10px 12px}
+  .card h3{color:#9bf;font-size:13px;margin:0 0 6px;letter-spacing:1px}
+  .card code{color:#dfe;display:block;margin:2px 0}
+  .card span{color:#89b;font-size:12px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>LESSON 2 &mdash; THE FILE IS THE PROGRAM</h1>
+  <div class="hint">click the black screen first to grab the keyboard &middot;
+    <a href="index.html">back to the arcade</a></div>
+  <div id="dos"></div>
+  <div class="hint">This is a real DOS machine, and you are at its prompt.
+    Type <b>MAKE</b>.</div>
+
+  <div class="cards">
+    <div class="card">
+      <h3>1 &middot; ASSEMBLE IT</h3>
+      <code>MAKE</code>
+      <span>Three programs, built by the assembler sitting on the same
+        disk. Nothing was downloaded to do it.</span>
+    </div>
+    <div class="card">
+      <h3>2 &middot; LOOK AT IT</h3>
+      <code>HEX HELLO.COM</code>
+      <code>HELLO</code>
+      <span>Eighteen bytes, all of them on one line. That file has no
+        header: DOS loads it and jumps straight to the first byte.</span>
+    </div>
+    <div class="card">
+      <h3>3 &middot; CHANGE IT</h3>
+      <code>HEX HELLO.COM 12 WORLD</code>
+      <code>HELLO</code>
+      <span>Without assembling anything. The source still says HELLO.
+        The program does not.</span>
+    </div>
+    <div class="card">
+      <h3>4 &middot; AND THE EXE</h3>
+      <code>HEX HELLO2.EXE</code>
+      <span>The same program with a header, a relocation table and a
+        stack of its own &mdash; 81 bytes to do what 18 did.</span>
+    </div>
+  </div>
+
+  <div id="about">
+    <h2>WHAT THIS PAGE IS</h2>
+    <p>The second lesson of the series, with the machine attached. Everything
+    you need is already in the tab: three assembly sources, the assembler that
+    builds them, and a DOS to run the result on. <b>Nothing is installed and
+    nothing is downloaded.</b> Reload the page and you get a fresh machine with
+    the sources back as they were, so there is nothing you can break.</p>
+
+    <p>Type <b>HELP</b> at any point and the machine prints the list again.</p>
+
+    <h2>WHAT YOU ARE LOOKING AT WHEN YOU TYPE HEX HELLO.COM</h2>
+    <pre>0000: BA 0C 01 B4 09 CD 21 B8 00 4C CD 21 48 45 4C 4C  ......!..L.!HELL
+0010: 4F 24                                            O$</pre>
+    <p>Twelve bytes of instructions, then the word itself. <code>BA 0C 01</code>
+    is <i>put 010Ch into DX</i> &mdash; the address of the text, and 010Ch is
+    where the text landed because a COM file starts at offset 100h. That is why
+    the patch in step 3 writes at <b>offset 12</b>: it is the first letter, and
+    it is simply lying there in the file.</p>
+
+    <h2>THE EDITOR IS HERE TOO</h2>
+    <p>If you would rather change the source than the finished program:</p>
+    <pre>EDIT HELLO.ASM</pre>
+    <p>That opens flat assembler's own DOS editor. Change the text, save with
+    F2, leave with Esc, and type <b>MAKE</b> again.</p>
+
+    <h2>WHY THERE IS NO FILE MANAGER IN HERE</h2>
+    <p>The recorded lesson uses one to look at the bytes. It could not come
+    with you: that program is shareware, free to use and not free to hand out,
+    and this page is meant to be opened by somebody who agreed to nothing and
+    downloaded nothing. So the byte viewer you are using is
+    <a href="https://github.com/KirinDenis/wire-city-2/blob/main/LESSONS/L02/HEX.ASM"
+       target="_blank" rel="noopener">a program of ours</a>, written in the
+    language this lesson is about and built by the assembler this lesson uses
+    &mdash; and you rebuilt it yourself when you typed <b>MAKE</b>.</p>
+
+    <p><a href="https://github.com/KirinDenis/wire-city-2/tree/main/LESSONS/L02"
+       target="_blank" rel="noopener">the lesson's sources and notes</a>
+    &middot; <a href="index.html">back to the arcade</a>
+    &middot; the assembler is <a href="https://flatassembler.net/"
+       target="_blank" rel="noopener">flat assembler</a>, and the DOS is DOSBox
+    compiled to WebAssembly via <a href="https://js-dos.com" target="_blank"
+       rel="noopener">js-dos</a></p>
+  </div>
+</div>
+<script src="coi-serviceworker.js"></script>
+<script src="jsdos/js-dos.js"></script>
+<script>
+(function () {
+  // Everything stays inside this IIFE: the minified js-dos.js READS the
+  // global single-letter variable "g", so a top-level "var g" here breaks
+  // Dos() with createElement('[object Object]'). Found the hard way, on
+  // play.html.
+
+  // The '+' fix, same as play.html and owlfly2.html: js-dos has KBD_equals
+  // and KBD_minus constants but no "Equal"/"Minus" entry in its DOM-code
+  // table, so those physical keys never reach DOSBox. On a page about typing
+  // at a prompt and editing source that is not cosmetic.
+  var KBDFIX = { Equal: 61, Minus: 45, NumpadAdd: 334, NumpadSubtract: 333 };
+  var kbdDown = {};
+  window.addEventListener("keydown", function (e) {
+    var k = KBDFIX[e.code];
+    if (!k || !window.__ci) return;
+    e.preventDefault();
+    if (kbdDown[e.code]) return;
+    kbdDown[e.code] = true;
+    window.__ci.sendKeyEvent(k, true);
+  }, true);
+  window.addEventListener("keyup", function (e) {
+    var k = KBDFIX[e.code];
+    if (!k || !window.__ci) return;
+    e.preventDefault();
+    kbdDown[e.code] = false;
+    window.__ci.sendKeyEvent(k, false);
+  }, true);
+
+  Dos(document.getElementById("dos"), {
+    url: "l02_v1.jsdos",
+    pathPrefix: "jsdos/emulators/",
+    theme: "dark",
+    imageRendering: "pixelated",
+    scaleControls: 0.2,
+    onEvent: function (e, ci) { if (e === "ci-ready") window.__ci = ci; }
+  });
+})();
+</script>
+</body>
+</html>
+

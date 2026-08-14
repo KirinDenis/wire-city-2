@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "arcade",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "-d", "docs", "8080"],
+      "port": 8080
+    }
+  ]
+}

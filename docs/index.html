@@ -211,6 +211,25 @@
     </div>
   </div>
 
+  <h3>LESSONS <span class="sub">&mdash; not a machine to play, a machine to
+      build on: the assembler is in the tab with you</span></h3>
+  <div class="grid">
+    <div class="card">
+      <h2>THE FILE IS THE PROGRAM <span class="kb">18 BYTES &middot; ASSEMBLE IT YOURSELF</span></h2>
+      <p>Lesson 2, with the workbench attached. Type <b>MAKE</b> and flat
+         assembler &mdash; running in the same browser tab &mdash; turns three
+         sources into three programs. Then look at what you made: eighteen
+         bytes, all of them on one line, no header at all. Change five of them
+         and it prints something else, while the source still says the old
+         thing. Nothing is installed, nothing is downloaded, and reloading the
+         page gives you a clean machine.</p>
+      <div class="row">
+        <a class="play" href="l02.html">&#9654; OPEN THE PROMPT</a>
+        <a class="src" href="https://github.com/KirinDenis/wire-city-2/tree/main/LESSONS/L02">source</a>
+      </div>
+    </div>
+  </div>
+
   <h3>READING</h3>
   <div class="foot">
     <a href="https://github.com/KirinDenis/wire-city-2/blob/main/GAMES/OWLFLY/ARCHITECTURE.md">ARCHITECTURE</a> — the 64K discipline, the memory map, where it stops and why &middot;
@@ -221,9 +240,12 @@
   </div>
 
   <div class="foot">
-    Every machine here is a real DOS program built with TASM 3.2, running in
-    DOSBox compiled to WebAssembly (<a href="https://js-dos.com">js-dos</a>).
-    Multiplayer over IPX-through-WebSocket is live in OWL FLY II.
+    Every machine here is a real DOS program in 8086 assembly, built with
+    <a href="https://flatassembler.net/">flat assembler</a> &mdash; which ships
+    inside the repository, so you can rebuild any of it without installing
+    anything &mdash; and running in DOSBox compiled to WebAssembly
+    (<a href="https://js-dos.com">js-dos</a>). Multiplayer over
+    IPX-through-WebSocket is live in OWL FLY II.
   </div>
 </div>
 <script>

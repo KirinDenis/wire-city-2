@@ -39,6 +39,22 @@ This repository is built with tools bought in the nineties; nobody watching a
 lesson can be asked to buy them. FASM can simply be handed over, and it
 assembles the same bytes.
 
+### And why the lesson-2 bundle carries it too
+
+`docs/l02_v*.jsdos` is the only bundle here that ships an assembler rather than
+a game: the reader opens
+[the page](https://kirindenis.github.io/wire-city-2/l02.html) and builds the
+lesson's programs themselves. So `FASM.EXE`, `FASMD.EXE` and `CWSDPMI.EXE` are
+redistributed inside that zip — and **their notices are in the zip beside
+them**, as `LICENSE.TXT` and `CWSDPMI.DOC`. `docs/pack.ps1` lists both files
+explicitly for that reason; they are not optional payload.
+
+The same test is what kept Volkov Commander out of it. It is the file manager
+the recorded lesson uses to show the bytes, it is shareware, and shareware may
+be used without being handed on. The bundle needed something that shows a file
+and edits it, so `LESSONS/L02/HEX.ASM` was written to do that job — ours, MIT,
+and assembled by the reader along with everything else.
+
 ## CWSDPMI, and why an assembler needs it
 
 `TOOLS/CWSDPMI/` is CWSDPMI r7, the DPMI host from the DJGPP archive.

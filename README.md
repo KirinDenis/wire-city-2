@@ -80,6 +80,15 @@ MAKE JET        just that one
 RUN JET
 ```
 
+## The lessons
+
+A video series that builds a DOS game from nothing, one constraint at a time —
+[LESSONS/](LESSONS/). The second one comes with its workbench:
+**[▶ open a DOS prompt with the assembler already on it](https://kirindenis.github.io/wire-city-2/l02.html)**
+and type `MAKE`. Three sources become three programs in your browser tab, and
+then you can take the eighteen bytes apart. Nothing is installed and nothing is
+downloaded — reload the page and the machine is clean again.
+
 ## Reading
 
 [ARCHITECTURE.md](GAMES/OWLFLY/ARCHITECTURE.md) — the 64K one-segment discipline and the
@@ -126,6 +135,37 @@ way anything here is assembled. Machine paths go in a gitignored `LOCAL.BAT`
 
 The site deploys from `docs/` via GitHub Pages; `PUBLISH.BAT` packs a fresh
 game bundle (filename-versioned — js-dos caches by path).
+
+**Running the browser build yourself.** Everything the web version needs is in
+`docs/`, and none of it depends on our site: a page, a `.jsdos` bundle which is
+a zip of the game and its data, and `jsdos/` — DOSBox compiled to WebAssembly.
+Nothing is fetched from anywhere else at run time.
+
+You cannot just double-click the page: a browser will not let a file opened
+from disk fetch other files, so it has to be SERVED. Any small web server
+does; this one is already in the game READMEs because it needs nothing
+installed on most machines:
+
+```bash
+python -m http.server -d docs 8080
+```
+
+then open `http://localhost:8080/owlfly2.html`. No Python? Anything static
+works - `npx serve docs`, `php -S localhost:8080 -t docs`, VS Code's Live
+Server, or simply uploading the folder to any hosting.
+
+Two things to know before you put it on a server of your own:
+
+- **`file://` will not do.** The page fetches its bundle, so it needs a real
+  origin. Any static host will do — there is nothing to run server-side.
+- **It needs HTTPS off localhost.** js-dos wants `SharedArrayBuffer`, which
+  wants COOP/COEP headers; `coi-serviceworker.js` supplies them, and a service
+  worker only runs in a secure context. `localhost` is the exception, a LAN
+  address is not.
+
+The emulator is **GPL-2.0** and the games are MIT: if you redistribute the
+`docs/` folder, `docs/jsdos/NOTICE.md` has to travel with it. See
+[THIRD-PARTY.md](THIRD-PARTY.md).
 
 ## Off Turbo Assembler, all of it
 

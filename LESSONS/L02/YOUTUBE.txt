@@ -36,12 +36,23 @@ source rather than a flag on a command line.
 That is the whole fork in the road, and it is in the program, where you can
 see it.
 
-Source, both files, runs on its own:
+DO IT YOURSELF WHILE YOU WATCH — there is a DOS prompt at this address, with
+the assembler already sitting on the disk:
+
+https://kirindenis.github.io/wire-city-2/l02.html
+
+Type MAKE and you have built the same three programs I build in the video.
+Then HEX HELLO.COM to see the eighteen bytes, and HEX HELLO.COM 12 WORLD to
+change them. Nothing to install, nothing to download, and reloading the page
+gives you a clean machine — so there is nothing you can break.
+
+Source:
 https://github.com/KirinDenis/wire-city-2/tree/main/LESSONS/L02
 
-Tools: DOSBox 0.74-3, flat assembler (ships in the repository), and Volkov
-Commander as the hex editor — this machine has no DEBUG.EXE, and VC is the one
-tool in DOS that both shows bytes and changes them.
+Tools: DOSBox 0.74-3 and flat assembler, which ships in the repository. The
+byte viewer is ours too — HEX.ASM, a hundred and fifty lines, assembled by you
+along with everything else. It exists because the file manager I use on camera
+is shareware: fine on my machine, not something I can hand out with a lesson.
 
 CHAPTERS
 (regenerate after the recording - the timings move:
@@ -82,3 +93,10 @@ NOTES FOR UPLOAD
 - The FIRST recording of this lesson used Turbo Assembler and TLINK, and the
   EXE was 562 bytes because TLINK padded it. The numbers spoken on camera must
   match the ones above: 18 and 81.
+- PIN THE BROWSER LINK as the top comment as well as putting it in the
+  description. It is the only thing in this series a viewer can act on without
+  leaving the tab, and it is what turns a lecture into a workshop.
+- Volkov on camera is fine and stays: it is legal to USE, only not to ship.
+  What the bundle carries instead is HEX.COM. If the two look different on
+  screen, say so in one sentence rather than pretending - "the page has a
+  smaller tool that does the same two things, and you build it yourself".

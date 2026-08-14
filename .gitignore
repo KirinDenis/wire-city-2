@@ -75,3 +75,12 @@ Debug/FlyDbg.exe
 # WireCityChat: local API key and runtime artifacts stay out of the repo
 relay/WireCityChat/settings.local.json
 relay/WireCityChat/logs/
+
+# LESSONS\L02 build output. These three are the LESSON'S POINT: the reader
+# types MAKE and produces them, and step three deliberately PATCHES
+# HELLO.COM in place so it prints WORLD while the source still says HELLO.
+# A tracked copy is therefore a copy that changes every time anyone works
+# through the lesson - and one of them spent a while saying WORLD.
+LESSONS/L02/HELLO.COM
+LESSONS/L02/HELLO2.EXE
+LESSONS/L02/HEX.COM
