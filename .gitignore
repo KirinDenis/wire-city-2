@@ -87,3 +87,10 @@ LESSONS/L02/HEX.COM
 # LESSONS\L03 build output, for the same reason as L02's: the reader types
 # MAKE and produces it. The lesson's whole shape is that you build it.
 LESSONS/L03/PIXEL.COM
+# LESSONS\L05 - the table generator's build output. MKSIN.C is the source and
+# SINT.INC is tracked because the assembly includes it and the browser bundle
+# cannot build it (Open Watcom is not in the repository), but the executable
+# and the object file are made on the spot.
+LESSONS/L05/MKSIN.EXE
+LESSONS/L05/MKSIN.OBJ
+LESSONS/L04/MATH.COM
