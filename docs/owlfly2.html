@@ -16,6 +16,49 @@
   h2{color:#9bf;letter-spacing:2px;margin:14px 0 6px;font-size:15px}
   #dos{width:min(96vw,1080px);aspect-ratio:16/10;background:#000;
        box-shadow:0 0 24px #1330}
+  /* ---- the phone.
+     16/10 on a 375-pixel screen is a box 225 tall, and js-dos puts its
+     switch panel INSIDE that box, under the picture. Measured: a 294-pixel
+     panel in a 225-pixel box, so the sky disappears behind the switches.
+     The box has to grow while the panel is open - and only while it is
+     open, or a closed panel leaves half a screen of black. The class is
+     put on and taken off by the observer at the foot of this file. ---- */
+  @media (max-width:820px){
+    #dos.kb{aspect-ratio:auto;height:min(80vh,600px)}
+  }
+  /* ---- the flight controls, ours rather than js-dos's.
+     js-dos WILL draw a stick and buttons from a layers block in the bundle,
+     and we shipped one - but two of its rules cannot be configured away.
+     Its button caption is symbol.substr(0,1): ONE character, which is why
+     the lock button said "O" and got read as a zero. And its joystick cuts
+     the circle into eight equal 45-degree sectors, so straight down owns
+     only 45 degrees and a thumb that is 25 degrees off gets a roll it did
+     not ask for. Both are ours to set here, so the layer is ours: real
+     words on the caps, and a cardinal that owns 56 degrees against a
+     diagonal's 34. ---- */
+  /* left/top/width/height are written by the mount below: the layer is laid
+     exactly over the CANVAS, not over its box. The box is 16/10 and the
+     picture inside it is letterboxed, so anchoring to the box puts the
+     buttons on the black margin under the aeroplane. */
+  .owl-touch{position:absolute;z-index:1000;pointer-events:none;
+             font-family:monospace;-webkit-user-select:none;user-select:none}
+  .owl-touch *{touch-action:none;-webkit-tap-highlight-color:transparent}
+  .owl-pad{position:absolute;right:2%;bottom:3%;display:grid;
+           grid-template-columns:repeat(3,auto);gap:5px}
+  .owl-btn{pointer-events:auto;display:flex;align-items:center;
+           justify-content:center;height:19%;min-height:38px;aspect-ratio:1;
+           box-sizing:border-box;border:1px solid rgba(255,255,255,.55);
+           border-radius:8px;background:rgba(255,255,255,.16);color:#fff;
+           font-size:9px;letter-spacing:.5px;text-shadow:0 1px 2px #000}
+  .owl-btn.on{background:rgba(255,255,255,.5);border-color:#fff}
+  .owl-btn.gap{visibility:hidden;pointer-events:none}
+  .owl-stick{position:absolute;left:3%;bottom:3%;height:42%;min-height:84px;
+             aspect-ratio:1;pointer-events:auto;border-radius:50%;
+             background:rgba(255,255,255,.16);
+             border:1px solid rgba(255,255,255,.5)}
+  .owl-knob{position:absolute;left:50%;top:50%;width:44%;height:44%;
+            margin-left:-22%;margin-top:-22%;border-radius:50%;
+            background:rgba(255,255,255,.5);pointer-events:none}
   .hint{font-size:13px;color:#89b;text-align:center}
   a{color:#9bf}
   #manual{width:min(96vw,1080px);font-size:13px;line-height:1.5;color:#abc;
@@ -146,6 +189,33 @@
       <text class="cap" x="260" y="208">SPD speed &middot; ALT altitude &middot; NAV heading &middot; HDG climb rate</text>
     </svg>
     </div>
+
+    <h2>ON A PHONE</h2>
+    <p>
+      There is a <b>stick at the bottom left</b> &mdash; put a thumb on it and
+      fly. The nine buttons on the right read left to right, top to bottom:
+      <b>THR+</b> <b>ENTER</b> <b>BURN</b> / <b>THR&minus;</b> <b>MSL</b>
+      <b>SPACE</b> / <b>RUD&lt;</b> <b>RUD&gt;</b>.
+    </p>
+    <p>
+      <b>SPACE is the cannon</b> and <b>ENTER is the lock</b> &mdash; they are
+      labelled with the keys rather than the jobs on purpose, because the game
+      itself asks for them by name: <i>PRESS ENTER TO JOIN</i> when you are
+      watching somebody else's fight, and <i>PRESS SPACE</i> over your own
+      wreckage. Those two prompts now point at a button you can see.
+    </p>
+    <p>
+      Everything you press <i>once</i> &mdash; gear, flaps, airbrake, the
+      radios, the transponder, the cameras &mdash; is on the
+      <b>keyboard button in the side menu</b>, spelled out: GEAR, FLAP, IFF,
+      CPIT. It opens under the picture and shuts again; it does not cover the
+      sky. <b>Turn the phone sideways first.</b> The game is 320 by 200 and
+      upright it gets a third of your screen.
+    </p>
+    <p class="hint" style="text-align:left">
+      Every switch below is still there and still does what it says &mdash;
+      the phone panel is a shortlist, not a different aeroplane.
+    </p>
 
     <h2>CONTROLS &mdash; all of them</h2>
     <table>
@@ -370,31 +440,280 @@
     window.__ci.sendKeyEvent(k, false);
   }, true);
 
+  // ---- the phone: what the switches are called, and where they live.
+  //
+  // js-dos ships a generic DOS keyboard - ESC, F1-F12, the digits, a numpad.
+  // Fifty-five keys, and not one of them flies this aeroplane. Measured on a
+  // 375x812 screen it is 639 pixels tall over a 195-pixel picture, so the
+  // pilot loses the sky to a keyboard that cannot fly. Both halves of that
+  // are ours to fix, and this is the second half.
+  //
+  // The DIVISION OF LABOUR matters more than the layout. What you hold -
+  // stick, throttle, trigger - belongs on the buttons drawn over the picture
+  // (the `layers` block in the bundle, which is always on screen). What you
+  // press ONCE - gear, flaps, a radio, a camera - belongs here, on a panel
+  // you open, use and shut. Putting the stick on a pop-up panel would mean
+  // flying blind whenever you touched it.
+  //
+  // So this is the SWITCHES, and nothing else. Three panels, two rows each:
+  // js-dos lays panel 0 to the left, 1 to the middle, 2 to the right.
+  //
+  // NO SECOND PAGE, deliberately. A `{layout}` key would buy a QWERTY board
+  // and the game asks you to type nothing at all. The one keystroke that is
+  // not a switch is Alt+Q, and that is two keys held with two fingers -
+  // which is why they sit next to each other.
+  const PANEL = [[
+    ["l f b",           "m z x"],
+    ["g u i",           "r n v"],
+    ["{f2} {f3} {f4}",  "{f5} {f6} {f7}",  "{alt} q"],
+  ]];
+
+  // The labels. js-dos looks a key's caption up by its own token, so this
+  // renames the caps without touching what is sent - `l` still sends L, it
+  // just stops pretending the pilot knows that L is the landing gear.
+  // Four characters is the most a cap holds before the text wraps.
+  const CAPS = {
+    l: "GEAR", f: "FLAP", b: "BRK",
+    m: "MFD",  z: "ZM+",  x: "ZM-",
+    g: "GND",  u: "AIR",  i: "IFF",
+    r: "T-R",  n: "NGT",  v: "SND",
+    "{f2}": "CPIT", "{f3}": "CHSE", "{f4}": "ORBT",
+    // ASCII only, all of it: pack.ps1 rewrites this page with
+    // Set-Content -Encoding ascii to point it at the new bundle, and a
+    // pretty arrow would come back from that as a question mark.
+    "{f5}": "MCAM", "{f6}": "LK<", "{f7}": "LK>",
+    "{alt}": "ALT", q: "Q",
+  };
+
+  // ---- the flight controls on a touch screen.
+  //
+  // Codes are js-dos's own KBD_ table, the same numbers the physical
+  // keyboard ends up sending.
+  // EVERY NAME OUT HERE CARRIES THE OWL PREFIX, and that is not decoration.
+  // This script shares the global lexical scope with the minified js-dos.js,
+  // which declares its own short names there - a plain `const K` collided
+  // with one, the whole page script failed to parse, and the emulator never
+  // started at all. The same trap as the `var g` noted in play.html.
+  const OWLK = { UP:265, DOWN:264, LEFT:263, RIGHT:262,
+                 ENTER:257, SPACE:32, MSL:259, BURN:65,
+                 THRUP:334, THRDN:333, RUDL:49, RUDR:51 };
+
+  // THE CAPS SAY WHAT THE GAME SAYS. Not what the switch does - what the
+  // words on the screen call it. The game asks for ENTER to take a jet and
+  // SPACE to take a fresh one after a crash, and a pilot on a phone should
+  // not have to work out that the cannon button is also the one the death
+  // screen means. So the trigger says SPACE, and the page explains that
+  // SPACE is the cannon. The other way round leaves the game's own prompts
+  // pointing at nothing.
+  const OWLPAD = [
+    ["THR+", OWLK.THRUP], ["ENTER", OWLK.ENTER], ["BURN",  OWLK.BURN ],
+    ["THR-", OWLK.THRDN], ["MSL",   OWLK.MSL  ], ["SPACE", OWLK.SPACE],
+    ["RUD<", OWLK.RUDL ], ["RUD>",  OWLK.RUDR ], null,
+  ];
+
+  // A CARDINAL IS WIDER THAN A DIAGONAL, and that is the whole fix. Eight
+  // equal sectors give straight-down 45 degrees, so a thumb 25 degrees off
+  // centre gets a roll it did not ask for - which is exactly what flying it
+  // felt like. Here a cardinal owns 60 degrees and a diagonal 30: twice the
+  // room for the four you mean most, and it still tiles the circle
+  // (4*60 + 4*30 = 360). You have to MEAN a diagonal to get one now.
+  //
+  // This is the ONE number to turn if it still feels wrong. Bigger and the
+  // diagonals get harder to hit - and they are not decoration, a turn is
+  // roll and pitch together. 30 is a working compromise, not a law.
+  const OWLCARD = 30;
+  const OWLDIRS = [
+    { a:  90, k:[OWLK.UP]            }, { a: 270, k:[OWLK.DOWN]           },
+    { a: 180, k:[OWLK.LEFT]          }, { a:   0, k:[OWLK.RIGHT]          },
+    { a:  45, k:[OWLK.UP,  OWLK.RIGHT] }, { a: 135, k:[OWLK.UP,  OWLK.LEFT] },
+    { a: 225, k:[OWLK.DOWN,OWLK.LEFT]  }, { a: 315, k:[OWLK.DOWN,OWLK.RIGHT]},
+  ];
+  function owlPickDir(ang) {
+    for (const d of OWLDIRS) {
+      let off = Math.abs(ang - d.a) % 360;
+      if (off > 180) off = 360 - off;
+      if (off <= (d.k.length === 1 ? OWLCARD : 45 - OWLCARD)) return d.k;
+    }
+    return [];
+  }
+
+  function owlMountTouch(ci) {
+    // Fine pointers get nothing: a mouse cannot fly this and the buttons
+    // would only sit on top of the instruments.
+    if (!window.matchMedia("(pointer: coarse)").matches) return;
+    // js-dos only builds its .emulator-mouse-overlay when ITS OWN control
+    // layer is switched on, and ours replaced it - so there is nothing to
+    // hang this on but the canvas's own parent, which js-dos keeps
+    // position:relative for exactly this sort of thing.
+    const canvas = document.querySelector("#dos canvas");
+    if (!canvas) { setTimeout(() => owlMountTouch(ci), 300); return; }
+    const host = canvas.parentElement;
+    if (host.querySelector(".owl-touch")) return;
+
+    const layer = document.createElement("div");
+    layer.className = "owl-touch";
+
+    // THE CANVAS IS LOOKED UP AFRESH EVERY TIME, never held. js-dos replaces
+    // the element after boot and resizes it again after that, and a
+    // ResizeObserver left on the first one reported 300x150 for ever while
+    // the picture was really 312x195 - the whole layer sat 15 pixels high
+    // and short of the right edge. Watching the PARENT survives both.
+    let lastFit = "";
+    const fit = () => {
+      const c = host.querySelector("canvas");
+      if (!c) return;
+      const cb = c.getBoundingClientRect(), hb = host.getBoundingClientRect();
+      const want = [cb.x - hb.x, cb.y - hb.y, cb.width, cb.height].join("|");
+      if (want === lastFit) return;      // our own write comes back through
+      lastFit = want;                     // the observer below - stop here
+      layer.style.left   = (cb.x - hb.x) + "px";
+      layer.style.top    = (cb.y - hb.y) + "px";
+      layer.style.width  = cb.width  + "px";
+      layer.style.height = cb.height + "px";
+    };
+    new ResizeObserver(fit).observe(host);
+    new MutationObserver(fit).observe(host, { childList: true, subtree: true,
+        attributes: true, attributeFilter: ["style", "width", "height"] });
+    window.addEventListener("resize", fit);
+    fit();
+
+    // ---- which keys the stick is holding down right now. Everything goes
+    // through here so a direction change releases what it replaces; a stick
+    // that presses without releasing leaves the aeroplane in a turn.
+    let held = [];
+    const setDir = (keys) => {
+      for (const k of held) if (keys.indexOf(k) < 0) ci.sendKeyEvent(k, false);
+      for (const k of keys) if (held.indexOf(k) < 0) ci.sendKeyEvent(k, true);
+      held = keys;
+    };
+
+    const stick = document.createElement("div");
+    stick.className = "owl-stick";
+    const knob = document.createElement("div");
+    knob.className = "owl-knob";
+    stick.appendChild(knob);
+    layer.appendChild(stick);
+
+    let sid = null;
+    const place = (dx, dy) => {
+      knob.style.transform = "translate(" + dx + "px," + dy + "px)";
+    };
+    const track = (ev) => {
+      const r = stick.getBoundingClientRect();
+      const R = r.width / 2;
+      const dx = ev.clientX - (r.x + R), dy = ev.clientY - (r.y + R);
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < R * 0.3) { setDir([]); place(0, 0); return; }   // dead centre
+      const ang = (Math.atan2(-dy, dx) * 180 / Math.PI + 360) % 360;
+      setDir(owlPickDir(ang));
+      const c = Math.min(1, dist / R) * R * 0.5;
+      place(dx / dist * c, dy / dist * c);
+    };
+    const release = (ev) => {
+      if (sid === null || (ev && ev.pointerId !== sid)) return;
+      sid = null; setDir([]); place(0, 0);
+      if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    };
+    stick.addEventListener("pointerdown", (ev) => {
+      if (sid !== null) return;
+      sid = ev.pointerId;
+      try { stick.setPointerCapture(sid); } catch (err) {}
+      track(ev); ev.preventDefault(); ev.stopPropagation();
+    });
+    stick.addEventListener("pointermove", (ev) => {
+      if (ev.pointerId !== sid) return;
+      track(ev); ev.preventDefault(); ev.stopPropagation();
+    });
+    stick.addEventListener("pointerup", release);
+    stick.addEventListener("pointercancel", release);
+
+    const pad = document.createElement("div");
+    pad.className = "owl-pad";
+    for (const item of OWLPAD) {
+      const b = document.createElement("div");
+      if (!item) { b.className = "owl-btn gap"; pad.appendChild(b); continue; }
+      b.className = "owl-btn";
+      b.textContent = item[0];
+      const code = item[1];
+      let down = false;
+      b.addEventListener("pointerdown", (ev) => {
+        if (down) return;
+        down = true; b.classList.add("on");
+        try { b.setPointerCapture(ev.pointerId); } catch (err) {}
+        ci.sendKeyEvent(code, true);
+        ev.preventDefault(); ev.stopPropagation();
+      });
+      const up = (ev) => {
+        if (!down) return;
+        down = false; b.classList.remove("on");
+        ci.sendKeyEvent(code, false);
+        ev.preventDefault(); ev.stopPropagation();
+      };
+      b.addEventListener("pointerup", up);
+      b.addEventListener("pointercancel", up);
+      pad.appendChild(b);
+    }
+    layer.appendChild(pad);
+    host.appendChild(layer);
+
+    // A phone that rings mid-sortie takes the pointer events with it and
+    // never sends the release. Without this the jet flies away holding
+    // whatever was last pressed.
+    window.addEventListener("blur", () => release(null));
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) release(null);
+    });
+  }
+
   // Worker mode, minimal options - the one config where real typing
   // provably works (the BBS lesson, 2026-07-19). Networking is wired
   // AFTER boot via networkConnect; no ipx:/room: page options.
   Dos(document.getElementById("dos"), {
-    url: "owlfly2_v30.jsdos",
+    url: "owlfly2_v33.jsdos",
     pathPrefix: "jsdos/emulators/",
     theme: "dark",
     renderAspect: "16/10",
     imageRendering: "pixelated",
     scaleControls: 0.2,
+    softKeyboardLayout: PANEL,
+    softKeyboardSymbols: [CAPS],
     noNetworking: false,
     autoStart: params.get("autostart") === "1", // the test rig's door
 
     onEvent: (e, ci) => {
       if (e !== "ci-ready") return;
       window.__ci = ci;
+      owlMountTouch(ci);
       const st = document.getElementById("stat");
       ci.networkConnect(0, RELAY + "/ipx/" + ROOM)
         .then(() => { st.textContent = "wire: LIVE - sky \"" + ROOM + "\""; })
-        .catch((err) => { st.textContent = "wire: dark (" + err.message + ") - solo flight"; });
+        // js-dos rejects this one with undefined when the socket simply
+        // never opens, so err.message threw and the status line was left
+        // saying "connecting..." for ever. Caught while measuring the
+        // phone controls, 2026-08-15.
+        .catch((err) => {
+          const why = (err && err.message) ? err.message : "no answer";
+          st.textContent = "wire: dark (" + why + ") - solo flight";
+        });
     }
   });
+
+  // ---- room for the switch panel, and only while it is open.
+  // js-dos has no event for this and no class on the host element, so we
+  // watch for its panel arriving in the tree. Cheap: the observer fires on
+  // the sidebar opening and closing, which is a handful of times a flight.
+  (function () {
+    const host = document.getElementById("dos");
+    const sync = () => host.classList.toggle("kb", !!host.querySelector(".soft-keyboard"));
+    new MutationObserver(sync).observe(host, { childList: true, subtree: true });
+    sync();
+  })();
 </script>
 </body>
 </html>
+
+
+
 
 
 

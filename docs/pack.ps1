@@ -32,6 +32,14 @@ $MAP = @{
       # engine note carried on because it is generated.
       @{ p = "GAMES\OWLFLY2\INSTALL\SFX.DAT";     n = "SFX.DAT" }
     )
+    # NO .jsdos/jsdos.json HERE, AND THAT IS DELIBERATE. js-dos draws a
+    # stick and buttons of its own from such a file, and for one afternoon
+    # it did. Two of its rules cannot be configured: a button caption is
+    # symbol.substr(0,1) - one character, so the lock button read as a zero
+    # - and its joystick splits the circle into eight equal sectors, so a
+    # thumb 25 degrees off straight-down gets a roll. The controls moved
+    # into owlfly2.html, where both are ours to set. Put a jsdos.json back
+    # and the pilot gets BOTH sets of buttons on top of each other.
     # Left out ON PURPOSE, and named here so the "not in the bundle" warning
     # below stays quiet about it. A warning that always fires is a warning
     # nobody reads, which would put us straight back where SFX.DAT was.
