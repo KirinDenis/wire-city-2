@@ -93,4 +93,15 @@ LESSONS/L03/PIXEL.COM
 # and the object file are made on the spot.
 LESSONS/L05/MKSIN.EXE
 LESSONS/L05/MKSIN.OBJ
+# ...and the assembled lessons themselves, for the same reason as L02 and L03:
+# the lesson's whole shape is that the reader types MAKE and watches it happen.
+LESSONS/L05/TURN.COM
+LESSONS/L05/PIVOT.COM
+# RECON.ASM is the lecture script replayed into a file by the reconstruction
+# check (LESSON.md section 3) and RECON.COM is what the assembler makes of
+# it. Both are scratch: written, assembled, compared and thrown away.
+LESSONS/L05/RECON.ASM
+LESSONS/L05/RECON.COM
+LESSONS/L06/PIVOT.COM
+LESSONS/L06/CIRCLE.COM
 LESSONS/L04/MATH.COM

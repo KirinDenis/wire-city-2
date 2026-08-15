@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 5 - sixty-five numbers, and what they are for</title>
+<link rel="stylesheet" href="jsdos/js-dos.css">
+<style>
+  html,body{margin:0;min-height:100vh;background:#04060f;color:#bcd;font-family:monospace}
+  #wrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px}
+  h1{letter-spacing:2px;color:#bcf;margin:4px;text-shadow:0 0 8px #46c;font-size:18px}
+  #dos{width:min(96vw,1000px);aspect-ratio:4/3;background:#000}
+  .hint{font-size:13px;color:#89b;text-align:center}
+  a{color:#9bf}
+  #about{width:min(96vw,1000px);font-size:13px;line-height:1.55;color:#abc}
+  #about h2{color:#9bf;letter-spacing:2px;margin:18px 0 6px;font-size:14px}
+  #about p{margin:0 0 8px}
+  #about b{color:#dfe}
+  pre{background:#080c18;border-left:3px solid #2a4a7a;color:#dfe;
+      padding:10px 12px;overflow-x:auto;font-size:13px;line-height:1.5;margin:8px 0}
+  .cards{display:flex;flex-wrap:wrap;gap:10px;width:min(96vw,1000px);margin-top:4px}
+  .card{flex:1 1 200px;background:#080c18;border:1px solid #1c2c4a;padding:10px 12px}
+  .card h3{color:#9bf;font-size:13px;margin:0 0 6px;letter-spacing:1px}
+  .card span{color:#89b;font-size:12px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>LESSON 5 &mdash; SIXTY-FIVE NUMBERS, AND WHAT THEY ARE FOR</h1>
+  <div class="hint">click the black screen first to grab the keyboard &middot;
+    <b>this lesson wants a real keyboard</b> &mdash; you are here to type
+    assembly, and no on-screen panel makes that pleasant &middot;
+    <a href="index.html">back to the arcade</a></div>
+  <div id="dos"></div>
+  <div class="hint">Type <b>MAKE</b>, then <b>RUN</b>. Four frames &mdash; a
+    key moves on, Esc leaves early.</div>
+
+  <div class="cards">
+    <div class="card">
+      <h3>1 &middot; THE WAVE</h3>
+      <span>The table drawn as what it is: the angle across, the sine up and
+        down. If any of the sixty-five numbers were wrong you would see a
+        notch in it.</span>
+    </div>
+    <div class="card">
+      <h3>2 &middot; THE RING</h3>
+      <span>The same numbers, asked a different question. Nothing is added to
+        the table &mdash; the sine goes on a radius instead of on the
+        screen.</span>
+    </div>
+    <div class="card">
+      <h3>3 &middot; THE VECTOR</h3>
+      <span>One angle, and the triangle it stands on. The blue run is the
+        cosine, the yellow drop is the sine. Every dot on the ring is this,
+        turned.</span>
+    </div>
+    <div class="card">
+      <h3>4 &middot; NO MULTIPLY</h3>
+      <span>The ring built twice &mdash; once with IMUL, once with shifts and
+        adds &mdash; and drawn one on top of the other. The strip along the
+        top is the alarm. It stays black.</span>
+    </div>
+  </div>
+
+  <div id="about">
+    <h2>WHY A CIRCLE HERE HAS 256 STEPS</h2>
+    <p>Not 360. Three hundred and sixty is a human convention with no factor
+    of two in it worth having, and every time an angle ran off the end you
+    would need a division to bring it back. <b>With 256 an angle wraps in one
+    instruction</b>, and the quarter you are in is a shift:</p>
+    <pre>and  ax, 255      ; 255 = 11111111b. Any angle at all -> 0..255
+mov  cl, 6
+shr  bx, cl       ; BX = which quarter, 0..3   (that is a/64)
+and  ax, 63       ; AX = how far into it       (that is a mod 64)</pre>
+    <p>Those last two lines are a quotient and a remainder, from a shift and a
+    mask. <b>AND with a mask of all ones IS the remainder of a division by a
+    power of two</b> &mdash; not an approximation of it, the same answer, in
+    three clocks where DIV wants a hundred and sixty. It only works when the
+    divisor is a power of two, which is why every constant in the file is
+    one.</p>
+
+    <h2>SAR IS NOT SHR, AND IT IS NOT A STYLE CHOICE</h2>
+    <p>Half the sines in the table are negative, and the two shift-right
+    instructions disagree completely about what that means. Take &minus;8,
+    written as a byte for legibility:</p>
+    <pre>-8 = 11111000b
+
+SAR 1  ->  11111100b  =   -4      correct
+SHR 1  ->  01111100b  = +124      a large positive number</pre>
+    <p><b>SAR copies the top bit into itself</b> instead of letting a zero in,
+    so the sign survives and the shift really is a divide. Use the other one
+    here and every point below the axis is flung to the far side of the
+    screen. One letter. And SAR rounds <i>down</i>, towards minus infinity,
+    not towards zero &mdash; which is where one-pixel errors come from.</p>
+
+    <h2>SEVENTY, IN THREE SHIFTS AND TWO ADDS</h2>
+    <p>Frame 4 is the lesson paying a debt. The ring costs two IMULs a point,
+    and IMUL is 128 clocks on an 8086 where ADD is 3. But the radius is 70,
+    and 70 in binary is <b>1000110b</b> &mdash; three bits set, at 64, 4 and
+    2:</p>
+    <pre>n * 70  =  n*64 + n*4 + n*2
+
+256*64 = 16384
+256*4  =  1024      16384 + 1024 = 17408
+256*2  =   512      17408 +  512 = 17920   = 256 * 70</pre>
+    <p>Three shifts, two adds, about 30 clocks. And it is <b>exact</b> &mdash;
+    nothing is rounded and nothing is approximated, which is what frame 4
+    exists to show: the two rings are drawn on top of each other, red first
+    and white over it, and every one of the 128 coordinates is compared. If a
+    single one disagreed the top of the screen would turn red.</p>
+    <p>The pixel address goes the same way. A row is 320 bytes, and 320 is
+    256 + 64, so <code>y*320</code> is two shifts and an add and the last
+    multiply in the program is gone.</p>
+
+    <h2>THE NUMBER THAT WAS WRONG FOR YEARS</h2>
+    <p>The table in <b>SINT.INC</b> was generated by <b>MKSIN.C</b>, which is
+    in this bundle to read rather than to build &mdash; it needs a compiler
+    and floating point, and neither is in here. That is the arrangement the
+    whole repository runs on: today's tools prepare the data, and the 8086 is
+    the runtime, never the toolchain.</p>
+    <p>The generated table and the hand-made one carried by three of my
+    shipped games agree on 64 values out of 65. They disagree at index 26,
+    where the true value is <b>152.4990</b> &mdash; four ten-thousandths below
+    the rounding boundary. A hand rounded up. It is an error of one part in
+    256 of a sine, it is invisible, and it is in all three games identically,
+    which tells you it was worked out once and copied twice.</p>
+
+    <h2>CHANGE SOMETHING</h2>
+    <p>The assembler is in the tab with you, which is the point of this page
+    rather than a video of it:</p>
+    <pre>EDIT TURN.ASM
+MAKE
+RUN</pre>
+    <p><b>RAD</b> is 70. Try 40, try 95. Above 127 the ring turns inside out,
+    and the comment beside IMUL says exactly why: sine times 256 times 128 is
+    32768, which is negative in sixteen bits. Reload the page and everything
+    is back as it was, so there is nothing you can break.</p>
+
+    <p><a href="https://github.com/KirinDenis/wire-city-2/tree/main/LESSONS/L05"
+       target="_blank" rel="noopener">the lesson's source and notes</a>
+    &middot; <a href="l03.html">lesson 3</a>
+    &middot; <a href="index.html">back to the arcade</a>
+    &middot; the assembler is <a href="https://flatassembler.net/"
+       target="_blank" rel="noopener">flat assembler</a>, and the DOS is DOSBox
+    compiled to WebAssembly via <a href="https://js-dos.com" target="_blank"
+       rel="noopener">js-dos</a></p>
+  </div>
+</div>
+<script src="coi-serviceworker.js"></script>
+<script src="jsdos/js-dos.js"></script>
+<script>
+(function () {
+  // Everything stays inside this IIFE: the minified js-dos.js READS the
+  // global single-letter variable "g", so a top-level "var g" here breaks
+  // Dos() with createElement('[object Object]'). Found the hard way - and
+  // again on owlfly2.html, where a plain "const K" collided with a name of
+  // its own and the whole page script stopped parsing.
+  var KBDFIX = { Equal: 61, Minus: 45, NumpadAdd: 334, NumpadSubtract: 333 };
+  var kbdDown = {};
+  window.addEventListener("keydown", function (e) {
+    var k = KBDFIX[e.code];
+    if (!k || !window.__ci) return;
+    e.preventDefault();
+    if (kbdDown[e.code]) return;
+    kbdDown[e.code] = true;
+    window.__ci.sendKeyEvent(k, true);
+  }, true);
+  window.addEventListener("keyup", function (e) {
+    var k = KBDFIX[e.code];
+    if (!k || !window.__ci) return;
+    e.preventDefault();
+    kbdDown[e.code] = false;
+    window.__ci.sendKeyEvent(k, false);
+  }, true);
+
+  Dos(document.getElementById("dos"), {
+    url: "l05_v2.jsdos",
+    pathPrefix: "jsdos/emulators/",
+    theme: "dark",
+    imageRendering: "pixelated",
+    scaleControls: 0.2,
+    onEvent: function (e, ci) { if (e === "ci-ready") window.__ci = ci; }
+  });
+})();
+</script>
+</body>
+</html>
+

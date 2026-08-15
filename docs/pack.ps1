@@ -144,6 +144,34 @@ $MAP = @{
       @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`ncls`nHELP.BAT`n" }
     )
   }
+  # Lesson 5, the workshop shape again. MKSIN.C rides along as SOURCE ONLY:
+  # it needs a C compiler and floating point, and neither is in here. That is
+  # not a gap in the bundle, it is the lesson's own argument - the modern
+  # tool prepares the data somewhere else and the 8086 never meets it. So
+  # SINT.INC is shipped finished, and MKSIN.C is shipped to be read.
+  L05 = @{
+    prefix = "l05"
+    page   = Join-Path $root "docs\l05.html"
+    detect = "l05_v(\d+)\.jsdos"
+    files  = @(
+      @{ p = "LESSONS\L05\TURN.ASM";      n = "TURN.ASM" },
+      @{ p = "LESSONS\L05\SINT.INC";      n = "SINT.INC" },
+      @{ p = "LESSONS\L05\MKSIN.C";       n = "MKSIN.C" },
+      @{ p = "LESSONS\L05\WEB\MAKE.BAT";  n = "MAKE.BAT" },
+      @{ p = "LESSONS\L05\WEB\RUN.BAT";   n = "RUN.BAT" },
+      @{ p = "LESSONS\L05\WEB\HELP.BAT";  n = "HELP.BAT" },
+      @{ p = "LESSONS\L02\WEB\EDIT.BAT";  n = "EDIT.BAT" },
+      @{ p = "TOOLS\FASM\FASM.EXE";       n = "FASM.EXE" },
+      @{ p = "TOOLS\FASM\FASMD.EXE";      n = "FASMD.EXE" },
+      @{ p = "TOOLS\FASM\LICENSE.TXT";    n = "LICENSE.TXT" },
+      @{ p = "TOOLS\CWSDPMI\CWSDPMI.EXE"; n = "CWSDPMI.EXE" },
+      @{ p = "TOOLS\CWSDPMI\cwsdpmi.doc"; n = "CWSDPMI.DOC" }
+    )
+    strings = @(
+      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`ncls`nHELP.BAT`n" },
+      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`ncls`nHELP.BAT`n" }
+    )
+  }
   WIRECITY = @{
     prefix = "wirecity"
     page   = Join-Path $root "docs\play.html"
