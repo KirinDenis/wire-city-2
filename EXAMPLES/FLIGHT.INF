@@ -1,0 +1,7 @@
+.title  The airshow
+.what   Takeoff, level-off, a full roll and a hard pull - a scripted keyframe performance
+.tier   EXAMPLE
+.main   FLIGHT.ASM
+.build  FASM FLIGHT.ASM FLIGHT.COM
+.run    FLIGHT.COM
+.engine ENGINE\E_8086.INC ENGINE\E_MATH.INC ENGINE\E_SND.INC

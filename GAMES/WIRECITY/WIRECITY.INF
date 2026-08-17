@@ -1,0 +1,7 @@
+.title  WIRE CITY 86 - the wireframe night flight
+.what   A procedural megacity in a five-kilobyte COM
+.tier   GAME
+.main   CITY.ASM
+.build  FASM CITY.ASM CITY.COM
+.run    CITY.COM
+.engine ENGINE\E_8086.INC

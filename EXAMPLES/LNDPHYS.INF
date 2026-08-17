@@ -1,0 +1,7 @@
+.title  The landing, by forces
+.what   LAND with the script torn out - the approach emerges from lift, drag, mass, gravity
+.tier   EXAMPLE
+.main   LNDPHYS.ASM
+.build  FASM LNDPHYS.ASM LNDPHYS.COM
+.run    LNDPHYS.COM
+.engine ENGINE\E_8086.INC ENGINE\E_MATH.INC ENGINE\E_SND.INC

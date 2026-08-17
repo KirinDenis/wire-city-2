@@ -25,15 +25,24 @@
    twin hides the same thing inside Mem[$A000:o]; here it is in the type,
    where you can see it.
 
-   Build it with Open Watcom (free, and not in this repository - see the
-   README):
+   Build it with Open Watcom. It is free and open source, and it is NOT on
+   this disk - a C compiler is far too big to ship for one lesson, which is
+   itself the lesson: the modern tool prepares things elsewhere, and the
+   8086 never meets it. Get it and set it up from a command line:
 
-       wcl -0 -ml -bcl=dos MEMORY.C
+       download:  https://github.com/open-watcom/open-watcom-v2/releases
+                  (or the older 1.9 from openwatcom.org)
+       unpack it, then tell the shell where it lives:
+           set WATCOM=C:\WATCOM
+           set PATH=%WATCOM%\BINW;%PATH%
+           set INCLUDE=%WATCOM%\H
+       then, in this file's directory:
+           wcl -0 -ml -bcl=dos MEMORY.C
 
    -0 means write 8086 instructions, -ml is the large memory model so that
    far pointers are the normal kind, and -bcl=dos builds a plain DOS
-   executable. It waits for a key between stages, so press one to move
-   along.
+   executable. Any 16-bit real-mode C compiler builds it the same. It waits
+   for a key between stages, so press one to move along.
 
    Video: https://github.com/KirinDenis/wire-city-2
    Owlos - legacy software modernization - https://owlos.sk

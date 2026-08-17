@@ -1,0 +1,8 @@
+.title  NEWTON - the aeroplane flown by force
+.what   Nothing moves here unless a force acted on a mass
+.tier   GAME
+.main   SRC\NEWTON.ASM
+.needs  SRC
+.build  FASM SRC\NEWTON.ASM NEWTON.COM
+.run    NEWTON.COM
+.engine ENGINE\E_8086.INC ENGINE\E_MATH.INC ENGINE\E_TERR.INC ENGINE\E_SND.INC

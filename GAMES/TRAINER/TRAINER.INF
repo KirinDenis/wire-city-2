@@ -1,0 +1,15 @@
+.title  THE FLIGHT SCHOOL - take-off and landing
+.what   VR, the stall, the crosswind - a grease, a bounce or a crash
+.tier   GAME
+.main   SRC\FIELD.ASM
+.needs  SRC res PANEL1.RAW
+.build  OBJ2DAT res\PLANE1.OBJ PLANE1.DAT 4
+.build  OBJ2DAT res\RBASE1.OBJ RBASE1.DAT 4
+.build  OBJ2DAT res\RDISH1.OBJ RDISH1.DAT 4
+.build  OBJ2DAT res\TWR1.OBJ TWR1.DAT 12
+.build  OBJ2DAT res\CKPT1.OBJ CKPT1.DAT 120
+.build  OBJ2DAT res\CNPY1.OBJ CNPY1.DAT 120
+.build  FASM SRC\FIELD.ASM FIELD.COM
+.run    FIELD.COM
+.ignore PLANE1.DAT RBASE1.DAT RDISH1.DAT TWR1.DAT CKPT1.DAT CNPY1.DAT
+.engine ENGINE\E_8086.INC ENGINE\E_MATH.INC ENGINE\E_M3D.INC ENGINE\E_RAST.INC

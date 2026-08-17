@@ -1,0 +1,7 @@
+.title  The spool-up
+.what   The 2.5 seconds before the takeoff roll, played on the game's own sound rig
+.tier   EXAMPLE
+.main   SPOOL.ASM
+.build  FASM SPOOL.ASM SPOOL.COM
+.run    SPOOL.COM
+.engine ENGINE\E_8086.INC ENGINE\E_MATH.INC ENGINE\E_SND.INC

@@ -1,0 +1,7 @@
+.title  The one-channel mixer
+.what   A looping sound ring on auto-init DMA - effects ahead of the beam, healed behind
+.tier   EXAMPLE
+.main   RING.ASM
+.build  FASM RING.ASM RING.COM
+.run    RING.COM
+.engine ENGINE\E_8086.INC ENGINE\E_MATH.INC ENGINE\E_SND.INC

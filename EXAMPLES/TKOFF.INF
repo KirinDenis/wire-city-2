@@ -1,0 +1,7 @@
+.title  The measured takeoff
+.what   A keyframe replay of a real cockpit tape - no controls, no simulation
+.tier   EXAMPLE
+.main   TKOFF.ASM
+.build  FASM TKOFF.ASM TKOFF.COM
+.run    TKOFF.COM
+.engine ENGINE\E_8086.INC ENGINE\E_MATH.INC ENGINE\E_SND.INC

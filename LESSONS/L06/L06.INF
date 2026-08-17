@@ -1,0 +1,9 @@
+.title  A round thing, on a screen that is not square
+.what   The midpoint circle - and why a perfect one looks like an egg
+.tier   LESSON
+.main   CIRCLE.ASM
+.needs  SINT.INC PIVOT.ASM
+.build  FASM CIRCLE.ASM CIRCLE.COM
+.build  FASM PIVOT.ASM PIVOT.COM
+.run    CIRCLE.COM
+.uses   ADD CMP INC IMUL SAR STOSB

@@ -1,0 +1,7 @@
+.title  The arithmetic underneath everything
+.what   A program cannot even show you a number until it can divide
+.tier   LESSON
+.main   MATH.ASM
+.build  FASM MATH.ASM MATH.COM
+.run    MATH.COM
+.uses   DIV MUL LODSB STOSW PUSH POP

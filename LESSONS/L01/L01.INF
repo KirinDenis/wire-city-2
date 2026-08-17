@@ -1,0 +1,5 @@
+.title  The screen is memory
+.what   Two addresses - B800 for text, A000 for pixels - and why FAR exists
+.tier   LESSON
+.main   MEMORY.C
+.reads  INTRO.C MEMORY.PAS

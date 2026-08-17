@@ -1,0 +1,7 @@
+.title  The screen, one byte at a time
+.what   Mode 13h - a dot, lines and squares written straight into A000
+.tier   LESSON
+.main   PIXEL.ASM
+.build  FASM PIXEL.ASM PIXEL.COM
+.run    PIXEL.COM
+.uses   STOSB STOSW LOOP INT

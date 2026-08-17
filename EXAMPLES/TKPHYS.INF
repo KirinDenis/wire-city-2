@@ -1,0 +1,7 @@
+.title  The takeoff, by forces
+.what   TKOFF with the script torn out - thrust, drag, friction, and Newton sets the speed
+.tier   EXAMPLE
+.main   TKPHYS.ASM
+.build  FASM TKPHYS.ASM TKPHYS.COM
+.run    TKPHYS.COM
+.engine ENGINE\E_8086.INC ENGINE\E_MATH.INC ENGINE\E_SND.INC

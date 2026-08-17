@@ -1,0 +1,7 @@
+.title  The avionics
+.what   A flying instrument panel with no world attached - arrows fly it
+.tier   EXAMPLE
+.main   AVIO.ASM
+.build  FASM AVIO.ASM AVIO.COM
+.run    AVIO.COM
+.engine ENGINE\E_8086.INC ENGINE\E_M3D.INC ENGINE\E_RAST.INC

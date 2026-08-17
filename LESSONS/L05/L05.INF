@@ -1,0 +1,11 @@
+.title  Sixty-five numbers, and what they are for
+.what   A sine table, and a dozen instructions that unfold it
+.tier   LESSON
+.main   TURN.ASM
+.needs  SINT.INC PIVOT.ASM
+.reads  MKSIN.C
+.build  FASM TURN.ASM TURN.COM
+.build  FASM PIVOT.ASM PIVOT.COM
+.run    TURN.COM
+.uses   AND SHR NEG MUL SHL SAR IMUL LOOP
+.engine ENGINE\E_MATH.INC

@@ -1,0 +1,10 @@
+.title  The file is the program
+.what   COM against EXE - one source line decides which file comes out
+.tier   LESSON
+.main   HELLO.ASM
+.needs  HELLO2.ASM HEX.ASM
+.build  FASM HELLO.ASM HELLO.COM
+.build  FASM HELLO2.ASM HELLO2.EXE
+.build  FASM HEX.ASM HEX.COM
+.run    HELLO.COM
+.uses   MOV INT

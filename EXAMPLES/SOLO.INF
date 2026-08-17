@@ -1,0 +1,8 @@
+.title  The first solo
+.what   The whole flight school in one machine - roll, rotate, fly, land
+.tier   EXAMPLE
+.main   SOLO.ASM
+.needs  SOLODBG.INC
+.build  FASM SOLO.ASM SOLO.COM
+.run    SOLO.COM
+.engine ENGINE\E_8086.INC ENGINE\E_MATH.INC ENGINE\E_SND.INC

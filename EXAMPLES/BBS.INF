@@ -1,0 +1,7 @@
+.title  The chat terminal
+.what   Multi-user IPX broadcast chat against the real INT 7Ah API
+.tier   EXAMPLE
+.main   BBS.ASM
+.build  FASM BBS.ASM BBS.COM
+.run    BBS.COM
+.engine ENGINE\E_8086.INC
