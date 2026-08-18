@@ -1,9 +1,11 @@
-.title  A round thing, on a screen that is not square
-.what   The midpoint circle - and why a perfect one looks like an egg
+.title  Ten clocks, and one formula
+.what   The radius vector - a length and an angle in, a point out
 .tier   LESSON
-.main   CIRCLE.ASM
-.needs  SINT.INC PIVOT.ASM
+.main   CLOCK.ASM
+.needs  SINT.INC DRAW.INC CIRCLE.ASM PIVOT.ASM
+.build  FASM CLOCK.ASM CLOCK.COM
 .build  FASM CIRCLE.ASM CIRCLE.COM
 .build  FASM PIVOT.ASM PIVOT.COM
-.run    CIRCLE.COM
-.uses   ADD CMP INC IMUL SAR STOSB
+.run    CLOCK.COM
+.uses   IMUL SAR SHL DIV MUL NEG PUSH POP
+.engine ENGINE\E_MATH.INC
