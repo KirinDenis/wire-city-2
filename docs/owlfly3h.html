@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OWL FLY III &mdash; HERCULES</title>
+<link rel="stylesheet" href="jsdos/js-dos.css">
+<style>
+  html{background:#0a0804}
+  body{margin:0;min-height:100vh;background:#0a0804;color:#dcb;
+       font-family:monospace}
+  #wrap{display:flex;flex-direction:column;align-items:center;
+        justify-content:flex-start;gap:10px;padding:12px;box-sizing:border-box}
+  h1{font-weight:bold;letter-spacing:3px;color:#fd9;margin:4px;
+     text-shadow:0 0 8px #a60}
+  #dos{width:min(96vw,1080px);aspect-ratio:4/3;background:#000;
+       box-shadow:0 0 24px #3310}
+  .hint{font-size:13px;color:#b98;text-align:center}
+  a{color:#fc7}
+  #manual{width:min(96vw,1080px);font-size:13px;line-height:1.5;color:#cba;
+          background:#0a0804}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>O W L&nbsp;&nbsp;F L Y&nbsp;&nbsp;I I I &nbsp;&middot;&nbsp; H E R C U L E S</h1>
+  <div class="hint">click the screen first to grab the keyboard &middot;
+    this machine IS a Hercules &mdash; the front step lands on it by
+    itself, so one <b>ENTER</b> and you fly &middot; colour cards live on
+    <a href="owlfly3.html">the other page</a></div>
+  <div id="dos"></div>
+  <div class="hint">720x348, one bit per dot: the 6845 programmed by hand, the world dithered by luminance, the cockpit drawn in densities &mdash; seams dark, plates half-tone, lamps burning. Pure 8086 assembly in DOSBox (WASM) via <a href="https://js-dos.com" target="_blank" rel="noopener">js-dos</a> &middot; <a href="https://github.com/KirinDenis/wire-city-2/tree/main/GAMES/OWLFLY3" target="_blank" rel="noopener">source</a> &middot; built by <a href="https://owlos.sk/" target="_blank" rel="noopener">Owlos</a></div>
+
+  <div id="manual">
+    <p>
+      There was no colour on a Hercules and there is none here: what the
+      card gives you is RESOLUTION &mdash; 720x348, twice a CGA's dots
+      &mdash; and this game spends all of it. The picture rides 640x300;
+      brightness is dither density, and the cockpit ships pre-drawn in
+      those densities, baked offline. <b>L</b> still switches day and
+      night: the night sky thins to sparse grain. The keys are OWL FLY
+      II's, key for key &mdash; the full manual lives on the
+      <a href="owlfly2.html">OWL FLY II page</a>. <b>Alt-Q</b> leaves.
+    </p>
+  </div>
+</div>
+
+<!-- Enables cross-origin isolation (SharedArrayBuffer) on static hosts like
+     GitHub Pages, which can't send COOP/COEP headers. Must load FIRST. -->
+<script src="coi-serviceworker.js"></script>
+
+<script src="jsdos/js-dos.js"></script>
+<script>
+  Dos(document.getElementById("dos"), {
+    url: "owlfly3h_v1.jsdos",
+    pathPrefix: "jsdos/emulators/",
+    theme: "dark",
+    renderAspect: "4/3",
+    imageRendering: "pixelated",
+    scaleControls: 0.2
+  });
+</script>
+</body>
+</html>
+

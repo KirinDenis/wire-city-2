@@ -1,0 +1,40 @@
+# STURR.OBJ - the ZSU-23-4 "Shilka" TURRET: the boxy drum, the four 23 mm
+# barrels stacked two over two on the right cheek, and the Gun Dish radar
+# hinged up off the roof behind them. Drawn at the SAME world point as
+# SHULL.OBJ but on its OWN yaw, exactly the way the radar station's dish
+# turns on the mast - so this model's origin is the TURRET RING, on the
+# vehicle's centreline at ground level.
+#
+# Same frame and same scale as SHULL.OBJ: -Z forward, Y up, one unit =
+# 0.2 m, converted at -s 3. The deck it sits on is at y=7 there, so the
+# turret floor is at y=7 here; roof 12 (2.4 m), dish top 18 (3.6 m).
+#
+# MODELDRAW YAWS ONLY - it cannot pitch - so the barrels are BAKED at
+# zero elevation and level: the turret's yaw is the whole of the tracking.
+# The brief costed the alternatives; this is the honest cheap one.
+#
+# 8 vertices / 5 faces - just the drum now. It was 25/15 and full; the Gun
+# Dish left for SDISH.OBJ and the barrels for SBARR.OBJ, because all three
+# move differently: the radar sweeps, the drum tracks, the guns tilt. A
+# model carries ONE transform, so three motions need three models.
+o sturr
+
+# ---- the drum: a box with the front plate raked back a little -------------
+v -5.5000 7.0000 7.0000
+v 5.5000 7.0000 7.0000
+v 5.5000 12.0000 7.0000
+v -5.5000 12.0000 7.0000
+v -5.5000 7.0000 -6.0000
+v 5.5000 7.0000 -6.0000
+v 5.5000 11.2000 -6.0000
+v -5.5000 11.2000 -6.0000
+
+# ---- the drum ------------------------------------------------------------
+usemtl PAL17
+f 4 3 7 8
+usemtl PAL0
+f 5 6 7 8
+usemtl PAL16
+f 1 4 8 5
+f 2 3 7 6
+f 1 2 3 4

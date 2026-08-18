@@ -1,0 +1,49 @@
+# SBARR.OBJ - the four 23 mm barrels, their OWN model because they carry a
+# second joint. MODELDRAW pitches this group about its TRUNNION and then
+# yaws the result with the turret's bearing, so the guns ride the drum
+# round and tilt at the mount - which is what a real gun mount does, and
+# what one transform per model could never express.
+#
+# The trunnion is at engine (y 29, z 15) - the barrel roots. Everything
+# here is measured from the same origin as the turret so the group bolts
+# straight on.
+#
+# Same frame and scale as the rest of the vehicle: -Z forward, Y up, one
+# unit = 0.2 m, at -s 3.
+#
+# 12 vertices / 6 faces.
+o sbarr
+
+# ---- the four barrels. Each is one tapered TRIANGLE lying in the
+# horizontal plane - the plane a pilot actually looks down on - rooted
+# inside the drum at z=-5 and drawn to a muzzle point at z=-16. Two of
+# them at y=8.3, two at y=10.9: the stack of pairs from the drawing.
+# The pairs are set 2.6 apart (0.52 m, wider than the real gun) so the
+# cradle cheeks below have something to BE: at 0.32 m the whole assembly
+# vanished into one grey line when the vehicle was seen level-on.
+v 0.8000 8.3000 -5.0000
+v 2.4000 8.3000 -5.0000
+v 1.6000 8.3000 -16.0000
+v 3.8000 8.3000 -5.0000
+v 5.4000 8.3000 -5.0000
+v 4.6000 8.3000 -16.0000
+v 0.8000 10.9000 -5.0000
+v 2.4000 10.9000 -5.0000
+v 1.6000 10.9000 -16.0000
+v 3.8000 10.9000 -5.0000
+v 5.4000 10.9000 -5.0000
+v 4.6000 10.9000 -16.0000
+
+# ---- the guns. Four dark barrels for the view from ABOVE, which is the
+# one a pilot gets; two LIGHT cradle cheeks for the view from the side,
+# which is the one a gun run ends in. The cheeks cost NO new vertices -
+# they are stitched from the barrels' own corners - and they are the whole
+# reason the assembly does not vanish when the vehicle is seen level-on.
+usemtl PAL3
+f 1 2 3
+f 4 5 6
+f 7 8 9
+f 10 11 12
+usemtl PAL0
+f 1 3 9 7
+f 5 6 12 11

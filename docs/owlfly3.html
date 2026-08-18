@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OWL FLY III &mdash; CGA / EGA</title>
+<link rel="stylesheet" href="jsdos/js-dos.css">
+<style>
+  html{background:#04060f}
+  body{margin:0;min-height:100vh;background:#04060f;color:#bcd;
+       font-family:monospace}
+  #wrap{display:flex;flex-direction:column;align-items:center;
+        justify-content:flex-start;gap:10px;padding:12px;box-sizing:border-box}
+  h1{font-weight:bold;letter-spacing:3px;color:#bcf;margin:4px;
+     text-shadow:0 0 8px #46c}
+  h2{color:#9bf;letter-spacing:2px;margin:14px 0 6px;font-size:15px}
+  #dos{width:min(96vw,1080px);aspect-ratio:4/3;background:#000;
+       box-shadow:0 0 24px #1330}
+  .hint{font-size:13px;color:#89b;text-align:center}
+  a{color:#9bf}
+  #manual{width:min(96vw,1080px);font-size:13px;line-height:1.5;color:#abc;
+          background:#04060f}
+  table{border-collapse:collapse;width:100%;background:#04060f}
+  td{padding:2px 8px;border-bottom:1px solid #123;vertical-align:top;
+     background:#04060f;color:#abc}
+  td.k{color:#dfe;white-space:nowrap;width:14em}
+  .cyn{color:#5ff}.mag{color:#f5f}.amb{color:#fb4}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>O W L&nbsp;&nbsp;F L Y&nbsp;&nbsp;I I I</h1>
+  <div class="hint">click the screen first to grab the keyboard &middot;
+    the game opens with SELECT VIDEO SYSTEM &mdash; press
+    <b>2</b> for <span class="cyn">C</span><span class="mag">G</span>A,
+    <b>3</b> or <b>4</b> for EGA, <b>6</b> or <b>7</b> for VGA &middot;
+    for the Hercules mono edition
+    <a href="owlfly3h.html">fly the amber machine</a></div>
+  <div id="dos"></div>
+  <div class="hint">OWL FLY II's war, flown the way 1988 saw it &middot; pure 8086 assembly, running in DOSBox (WASM) via <a href="https://js-dos.com" target="_blank" rel="noopener">js-dos</a> &middot; <a href="https://github.com/KirinDenis/wire-city-2/tree/main/GAMES/OWLFLY3" target="_blank" rel="noopener">source</a> &middot; <a href="https://www.facebook.com/groups/OWLOS" target="_blank" rel="noopener">community</a> &middot; built by <a href="https://owlos.sk/" target="_blank" rel="noopener">Owlos</a> &mdash; legacy systems are our day job</div>
+
+  <div id="manual">
+    <h2>THE FRONT STEP</h2>
+    <table>
+      <tr><td class="k">2) CGA 320x200</td><td>the classic palette 1 &mdash; <span class="cyn">cyan</span>, <span class="mag">magenta</span>, white &mdash; with the cockpit redrawn as 1988 line art</td></tr>
+      <tr><td class="k">3) EGA 320x200</td><td>sixteen colours on ANY EGA &mdash; the 64K launch card included</td></tr>
+      <tr><td class="k">4) EGA 640x350</td><td>EGA's best: sixteen curated colours, the drawn grey cockpit, no dither anywhere</td></tr>
+      <tr><td class="k">6) VGA 320x200</td><td>the game as born, 256 colours</td></tr>
+      <tr><td class="k">7) VGA 640x480</td><td>sixteen colours at the crispest geometry of all</td></tr>
+      <tr><td class="k">1) HERCULES</td><td>marked <i>NOT IN THIS MACHINE</i> here &mdash; this browser machine is a VGA; the <a href="owlfly3h.html">mono edition</a> boots a real Hercules</td></tr>
+    </table>
+    <p>
+      The menu quizzes the hardware before offering, exactly as the metal
+      would: every entry states its resolution and colours, and a card the
+      machine has not got refuses the key. Every retro mode converts the
+      same finished 256-colour frame; the cockpit on the retro cards is its
+      own drawn artwork, baked offline &mdash; not a per-pixel conversion.
+      <b>L</b> switches day and night on every card.
+    </p>
+    <h2>THE KEYS</h2>
+    <p>
+      The aeroplane is OWL FLY II's, key for key: arrows fly, Shift+W/S gate
+      the throttle, <b>A</b> lights the burner, Enter locks, Backspace fires
+      a missile, Space holds the cannon, F2&ndash;F7 are the views,
+      <b>Alt-Q</b> leaves. The full manual lives on the
+      <a href="owlfly2.html">OWL FLY II page</a>.
+    </p>
+  </div>
+</div>
+
+<!-- Enables cross-origin isolation (SharedArrayBuffer) on static hosts like
+     GitHub Pages, which can't send COOP/COEP headers. Must load FIRST. -->
+<script src="coi-serviceworker.js"></script>
+
+<script src="jsdos/js-dos.js"></script>
+<script>
+  Dos(document.getElementById("dos"), {
+    url: "owlfly3_v1.jsdos",
+    pathPrefix: "jsdos/emulators/",
+    theme: "dark",
+    renderAspect: "4/3",
+    imageRendering: "pixelated",
+    scaleControls: 0.2
+  });
+</script>
+</body>
+</html>
+

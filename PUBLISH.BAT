@@ -22,6 +22,14 @@ if "%GAME%"=="" set GAME=OWLFLY2
 echo [1/2] Packing a fresh %GAME% bundle ...
 powershell -NoProfile -ExecutionPolicy Bypass -File docs\pack.ps1 -Game %GAME%
 if errorlevel 1 goto fail
+if /i not "%GAME%"=="OWLFLY3" goto packed
+REM OWL FLY III ships as TWO bundles - the colour machine and the
+REM Hercules machine - and they publish together or the pages tell
+REM different versions of the game.
+echo [1b/2] ...and the Hercules edition ...
+powershell -NoProfile -ExecutionPolicy Bypass -File docs\pack.ps1 -Game OWLFLY3H
+if errorlevel 1 goto fail
+:packed
 
 echo [2/2] Commit + push ...
 echo.

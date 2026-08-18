@@ -54,6 +54,63 @@ $MAP = @{
       @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[ipx]`nipx=true`n[autoexec]`necho off`nmount c .`nc:`nFLYOWL2`n" }
     )
   }
+  OWLFLY3 = @{
+    # the retro-cards release, on a COLOUR machine: the front step offers
+    # CGA / EGA x2 / MCGA / VGA x2 and marks Hercules away. The mono
+    # edition is its own bundle (OWLFLY3H) because the MACHINE differs.
+    prefix = "owlfly3"
+    page   = Join-Path $root "docs\owlfly3.html"
+    detect = "owlfly3_v(\d+)\.jsdos"
+    files  = @(
+      @{ p = "GAMES\OWLFLY3\INSTALL\OWLFLY3.EXE"; n = "OWLFLY3.EXE" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\CITY.DAT";    n = "CITY.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\CPSIDE.DAT";  n = "CPSIDE.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SFX.DAT";     n = "SFX.DAT" },
+      # the retro cards' baked cockpits and side-console marker maps
+      # (TOOLS\VidRig emit) - miss one and that card flies on the plain
+      # lookup, silently, which is exactly the SFX.DAT shape of failure
+      @{ p = "GAMES\OWLFLY3\INSTALL\CPCGA.DAT";   n = "CPCGA.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\CPEGA.DAT";   n = "CPEGA.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\CPHGC.DAT";   n = "CPHGC.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\CPSCGA.DAT";  n = "CPSCGA.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\CPSEGA.DAT";  n = "CPSEGA.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\CPSHGC.DAT";  n = "CPSHGC.DAT" }
+    )
+    ignore = @("ENGINE.RAW")
+    # NO [ipx] HERE, DELIBERATELY: OWL FLY III still speaks OWL FLY II's
+    # wire protocol byte for byte, so a browser v3 with the wire up would
+    # walk into v2's public relay skies. The wire comes back the day the
+    # protocol (or the port) diverges - Skill\VIDTASK.md, the open item.
+    strings = @(
+      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`nOWLFLY3`n" },
+      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`nOWLFLY3`n" }
+    )
+  }
+  OWLFLY3H = @{
+    # the Hercules edition: the same game, the same files, but DOSBox
+    # comes up as a real mono machine - the only place 720x348 exists.
+    # The front step's hardware quiz lands on 1) HERCULES by itself.
+    prefix = "owlfly3h"
+    page   = Join-Path $root "docs\owlfly3h.html"
+    detect = "owlfly3h_v(\d+)\.jsdos"
+    files  = @(
+      @{ p = "GAMES\OWLFLY3\INSTALL\OWLFLY3.EXE"; n = "OWLFLY3.EXE" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\CITY.DAT";    n = "CITY.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\CPSIDE.DAT";  n = "CPSIDE.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SFX.DAT";     n = "SFX.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\CPCGA.DAT";   n = "CPCGA.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\CPEGA.DAT";   n = "CPEGA.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\CPHGC.DAT";   n = "CPHGC.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\CPSCGA.DAT";  n = "CPSCGA.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\CPSEGA.DAT";  n = "CPSEGA.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\CPSHGC.DAT";  n = "CPSHGC.DAT" }
+    )
+    ignore = @("ENGINE.RAW")
+    strings = @(
+      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=hercules`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`nOWLFLY3`n" },
+      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=hercules`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`nOWLFLY3`n" }
+    )
+  }
   OWLFLY = @{
     prefix = "owlfly"
     page   = Join-Path $root "docs\owlfly.html"
