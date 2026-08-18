@@ -25,6 +25,12 @@ EXAMPLES/*.EXE
 # documentation. The public story lives in README.md and docs/.
 Skill/
 
+# ...and the AI harness config for the same reason: skills, launch
+# entries and machine-local paths are workshop tooling, not the
+# project. (launch.json and the fasm-migration skill leaked into two
+# 2026-08 commits before this rule existed - untracked since.)
+.claude/
+
 # editor / OS noise
 *~
 Thumbs.db

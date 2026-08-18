@@ -39,7 +39,9 @@ ENTER - and every one of them flies:
 
 1. HERCULES 720x348 mono - the 6845 programmed by hand, dithered by
    density, drawn cockpit
-2. CGA 320x200, the classic palette 1 (cyan/magenta/white)
+2. CGA 320x200, the classic palette 1 (cyan/magenta/white) - H swaps
+   the hardware palette in flight (green/red/yellow and back), lookup
+   banks and palette register together
 3. EGA 320x200x16 - runs on ANY EGA, the 64K launch card included
 4. EGA 640x350x16 - EGA's best (needs a 128K card and an EGA monitor)
 5. MCGA 320x200x256 - the same mode 13h path as VGA

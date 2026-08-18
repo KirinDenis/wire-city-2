@@ -332,11 +332,11 @@ MAIN:
         ; SKYSEG gets a full 8K window (CS+1000h..CS+11FFh) with
         ; its own assemble-time guard, and the far map starts past it.
         mov  ax,cs
-        add  ax,1E00h           ; past SKYSEG (CS+1000h, 8K), UISEG
+        add  ax,2000h           ; past SKYSEG (CS+1000h, 8K), UISEG
         mov  [bufseg],ax        ; (CS+1200h, SIXTEEN K), SYMSEG (CS+1600h,
                                 ; 8K), TOWNSEG (CS+1800h, 8K) and VIDSEG
-                                ; (CS+1A00h, SIXTEEN K since the seven-item
-                                ; menu) - each with its own guard
+                                ; (CS+1A00h, TWENTY-FOUR K since the second
+                                ; CGA palette) - each with its own guard
 
         ; hook INT 9
         mov  ax,3509h
@@ -352,7 +352,7 @@ MAIN:
         ; ---- load CITY.DAT into its own segment (resources: font, ...) ----
         ; PAST THE BACK BUFFER, and mind the arithmetic. The buffer is
         ; 64000 bytes = 0FA0h paragraphs, so it reaches bufseg+0FA0h:
-        ;   buffer 1E00h .. 2DA0h   ->   this must start at 2E00h.
+        ;   buffer 2000h .. 2FA0h   ->   this must start at 3000h.
         ;
         ; THIS HAS NOW GONE WRONG TWICE, BOTH TIMES THE SAME WAY. Opening
         ; SYMSEG pushed the buffer up 200h and it ate the front of the
@@ -362,13 +362,14 @@ MAIN:
         ; straight back up as the TOP of the cockpit, pixel for pixel -
         ; which looks like a deliberate reflection effect rather than a
         ; fault, and that is exactly why it gets missed.
-        ; (VIDSEG, 2026-08-18, moved the pair a THIRD 200h, and its
-        ; window growing to 16K the same day moved them a FOURTH - both
-        ; times with this note read first, both constants in one edit,
+        ; (VIDSEG, 2026-08-18, moved the pair a THIRD 200h, its window
+        ; growing to 16K moved them a FOURTH, and to 24K a FIFTH - each
+        ; time with this note read first, both constants in one edit,
         ; and the far map walked: sndseg and everything above it align
         ; from CS+4000h and CS+5000h, and CITY.DAT now ends at
-        ; CS+3DB1h, still short of the first alignment. Nothing above
-        ; the buffer pair moved either time.)
+        ; CS+3FB1h - SEVENTY-NINE paragraphs short of sndseg's floor.
+        ; THE SHELF IS FULL: the next VIDSEG growth cannot come from
+        ; here, it must take a far page instead.)
         ;
         ; THE RULE: opening a far segment moves the back buffer, and
         ; moving the back buffer moves EVERYTHING STACKED ABOVE IT. Walk
@@ -376,7 +377,7 @@ MAIN:
         ; aligned from CS+4000h) and scrseg above it - before believing
         ; the new segment cost nothing.
         mov  ax,cs
-        add  ax,2E00h           ; past the back buffer at CS+1E00h
+        add  ax,3000h           ; past the back buffer at CS+2000h
         mov  [resseg],ax
         mov  dx,FNAME
         mov  ax,3D00h           ; open read-only

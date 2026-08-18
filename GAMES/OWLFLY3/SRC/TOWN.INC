@@ -7,8 +7,8 @@
 ;  parks the next thing where the loader expects, and an assemble-time
 ;  guard that refuses to overflow.
 ;  Layout now: CODE at CS+0, SKYSEG CS+1000h, UISEG CS+1200h, SYMSEG
-;  CS+1600h, TOWNSEG CS+1800h, VIDSEG CS+1A00h (16K) - see OWLFLY3.ASM,
-;  which moved the back buffer up to CS+1E00h to make room.
+;  CS+1600h, TOWNSEG CS+1800h, VIDSEG CS+1A00h (24K) - see OWLFLY3.ASM,
+;  which moved the back buffer up to CS+2000h to make room.
 ;
 ;  What lives here: THE TOWN. The windows on the buildings, and the traffic
 ;  in the streets. Both earned the move the way the scope symbols did -

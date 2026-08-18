@@ -29,6 +29,8 @@ segment VIDSEG
 ; gates in BLIT/UBLIT/APPLYPALF test "vcard >= VMMCGA -> the straight
 ; mode-13h path", so everything that CONVERTS - including the 16-colour
 ; VGA mode - must sit below VMMCGA. VMPICK translates menu row to code.
+SC_H    = 23h                   ; H: swap the CGA hardware palette in
+                                ; flight - cyan/magenta <-> green/red
 VMHERC  = 1                     ; Hercules 720x348 mono
 VMCGA   = 2                     ; CGA mode 4, palette 1
 VMEGA   = 3                     ; EGA mode 10h, 640x350x16
@@ -394,8 +396,12 @@ cimg    dw 0
 cscr    dw 0
 cy      dw 0                    ; the row being converted
 dib     dw 0                    ; the row's first output byte, for bakrow
-vlutoff dw 1024                 ; CGA: 0 = day bank, 1024 = night (day is
-                                ; set by the first APPLYPALF at takeoff)
+vlutoff dw 1024                 ; CGA: vpal*2048 + (night? 1024 : 0) -
+                                ; four banks (day is set by the first
+                                ; APPLYPALF at takeoff)
+vpal    db 0                    ; 0 = palette 1 (cyan/magenta), 1 =
+                                ; palette 0 (green/red/yellow); H swaps
+vpedge  db 0                    ; ...on the key's EDGE, once per press
 elutoff dw 256                  ; EGA: 0 = day, 256 = night, same switch
 vcgok   db 0                    ; the bake is in and the artwork exists
 vbklen  dw 0                    ; how many bytes the bake file owes us
@@ -497,7 +503,29 @@ CGABLT:
         push bp
         push ds
         push es
-        mov  ax,[bufseg]        ; DS is the main segment on entry
+        ; ---- H swaps the hardware palette, in flight. It rides HERE
+        ; because this code already runs once per frame on the CGA card
+        ; and nowhere else - no new call site, no main-segment byte.
+        ; Both halves move together: the 3D9h register AND the lookup
+        ; bank, or the picture aims at colours the card no longer shows.
+        mov  al,[KEYS+SC_H]     ; DS is the main segment on entry
+        or   al,al
+        jz   .hup
+        cmp  byte [cs:vpedge],0
+        jne  .hdn
+        mov  byte [cs:vpedge],1
+        xor  byte [cs:vpal],1
+        mov  dx,3D9h
+        mov  al,30h             ; palette 1 intense: cyan/magenta/white
+        cmp  byte [cs:vpal],0
+        je   @f
+        mov  al,10h             ; palette 0 intense: green/red/yellow
+@@:    out  dx,al
+        call VPALSW             ; ...and the lookup bank follows
+        jmp  .hdn
+.hup:  mov  byte [cs:vpedge],0
+.hdn:
+        mov  ax,[bufseg]
         mov  [cs:cbuf],ax
         mov  ax,[resseg]
         mov  [cs:cres],ax
@@ -1046,7 +1074,10 @@ HGCBLT:
 ;  working on every card without one extra call site.
 ; ============================================================================
 VPALSWF:
-        mov  word [cs:vlutoff],0
+        call VPALSW
+        retf
+VPALSW:                          ; the near core: CGABLT's H key needs it
+        mov  word [cs:vlutoff],0 ; too, and a far proc cannot be near-called
         mov  word [cs:elutoff],0
         mov  word [cs:hoff],0
         cmp  byte [daymode],0
@@ -1054,7 +1085,10 @@ VPALSWF:
         mov  word [cs:vlutoff],1024
         mov  word [cs:elutoff],256
         mov  word [cs:hoff],2048
-.d:    retf
+.d:    cmp  byte [cs:vpal],0   ; the CGA hardware palette picks its own
+        je   .p                  ; pair of banks on top of day/night
+        add  word [cs:vlutoff],2048
+.p:    ret
 
 ; ============================================================================
 ;  VCGLDF - the picked card's baked panel into scrseg:2000h, one page
@@ -1234,6 +1268,9 @@ VSGETB: push bx
                                 ; PALDAY/PALNITE change
 
 label VIDEND byte
-        rb 3FF0h - $   ; claim the whole window - SIXTEEN K since the
-                        ; seven-item menu (the growth moved bufseg and
-                        ; resseg up 200h; see the note beside resseg)
+        rb 5FF0h - $   ; claim the whole window - TWENTY-FOUR K since the
+                        ; second CGA palette's banks (each growth moved
+                        ; bufseg and resseg up 200h; the note beside
+                        ; resseg keeps the count. CITY.DAT now ends 79
+                        ; paragraphs short of sndseg's guaranteed floor -
+                        ; the NEXT growth must take a page ABOVE instead)

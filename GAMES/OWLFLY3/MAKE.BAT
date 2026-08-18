@@ -48,10 +48,21 @@ if errorlevel 1 goto failed
 if not exist INSTALL\CPSIDE.DAT goto failed
 
 echo Assembling SRC\OWLFLY3.ASM ...
-if exist INSTALL\OWLFLY3.EXE del INSTALL\OWLFLY3.EXE
+REM The EXE is written under a .NEW name and RENAMED into place. Writing
+REM INSTALL\OWLFLY3.EXE directly kept failing on the host side - a
+REM freshly created .EXE gets grabbed by the machine's scanner and
+REM FASM's write dies, leaving a zero-byte file (2026-08-18, twice).
+REM A .DAT never suffered it, so the fix is to not BE an .EXE while
+REM being written. The del of the old EXE still happens - after the new
+REM one provably exists - so a failed build can never leave yesterday's
+REM binary looking like today's.
+if exist INSTALL\OWLFLY3.NEW del INSTALL\OWLFLY3.NEW
 ..\..\TOOLS\CWSDPMI\CWSDPMI.EXE
-..\..\TOOLS\FASM\FASM.EXE SRC\OWLFLY3.ASM INSTALL\OWLFLY3.EXE
+..\..\TOOLS\FASM\FASM.EXE SRC\OWLFLY3.ASM INSTALL\OWLFLY3.NEW
 if errorlevel 1 goto failed
+if not exist INSTALL\OWLFLY3.NEW goto failed
+if exist INSTALL\OWLFLY3.EXE del INSTALL\OWLFLY3.EXE
+ren INSTALL\OWLFLY3.NEW OWLFLY3.EXE
 if not exist INSTALL\OWLFLY3.EXE goto failed
 echo.
 echo Built INSTALL\OWLFLY3.EXE.  Type RUN to fly it.
