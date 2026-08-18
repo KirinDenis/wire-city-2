@@ -17,6 +17,12 @@
        box-shadow:0 0 24px #3310}
   .hint{font-size:13px;color:#b98;text-align:center}
   a{color:#fc7}
+  .phos{display:flex;gap:8px;align-items:center;font-size:12px;color:#b98}
+  .phos button{background:#161006;border:1px solid #543;color:#dcb;
+       font-family:monospace;font-size:12px;letter-spacing:1px;
+       padding:4px 14px;cursor:pointer}
+  .phos button:hover{border-color:#a80}
+  .phos button.on{border-color:#fc7;color:#ffd;background:#241a08}
   #manual{width:min(96vw,1080px);font-size:13px;line-height:1.5;color:#cba;
           background:#0a0804}
 </style>
@@ -29,6 +35,13 @@
     itself, so one <b>ENTER</b> and you fly &middot; colour cards live on
     <a href="owlfly3.html">the other page</a></div>
   <div id="dos"></div>
+  <div class="phos">PHOSPHOR:
+    <button data-p="white">WHITE</button>
+    <button data-p="amber">AMBER</button>
+    <button data-p="green">GREEN</button>
+    <span>&mdash; the local DOSBox cycles this on its own hotkey; a
+    browser keeps those keys, so the page owns the tube instead</span>
+  </div>
   <div class="hint">720x348, one bit per dot: the 6845 programmed by hand, the world dithered by luminance, the cockpit drawn in densities &mdash; seams dark, plates half-tone, lamps burning. Pure 8086 assembly in DOSBox (WASM) via <a href="https://js-dos.com" target="_blank" rel="noopener">js-dos</a> &middot; <a href="https://github.com/KirinDenis/wire-city-2/tree/main/GAMES/OWLFLY3" target="_blank" rel="noopener">source</a> &middot; built by <a href="https://owlos.sk/" target="_blank" rel="noopener">Owlos</a></div>
 
   <div id="manual">
@@ -59,6 +72,32 @@
     imageRendering: "pixelated",
     scaleControls: 0.2
   });
+
+  // THE PHOSPHOR SWITCH. The emulator draws the Hercules screen in its
+  // near-white; the tube colour is a display property, so a CSS filter
+  // over the canvas recreates the local DOSBox palette hotkey without
+  // asking the emulator for anything. Sticky across visits.
+  (function () {
+    var TUBES = {
+      white: "none",
+      amber: "sepia(1) saturate(5) hue-rotate(-15deg) brightness(0.95)",
+      green: "sepia(1) saturate(5) hue-rotate(55deg) brightness(0.9)"
+    };
+    var dos = document.getElementById("dos");
+    var btns = document.querySelectorAll(".phos button");
+    function set(p) {
+      if (!TUBES[p]) p = "amber";
+      dos.style.filter = TUBES[p];
+      for (var i = 0; i < btns.length; i++)
+        btns[i].classList.toggle("on", btns[i].dataset.p === p);
+      try { localStorage.setItem("owlfly3h.phosphor", p); } catch (e) {}
+    }
+    for (var i = 0; i < btns.length; i++)
+      btns[i].addEventListener("click", function () { set(this.dataset.p); });
+    var want = "amber";
+    try { want = localStorage.getItem("owlfly3h.phosphor") || "amber"; } catch (e) {}
+    set(want);
+  })();
 </script>
 </body>
 </html>
