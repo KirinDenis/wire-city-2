@@ -80,8 +80,34 @@
     theme: "dark",
     renderAspect: "4/3",
     imageRendering: "pixelated",
-    scaleControls: 0.2
+    scaleControls: 0.2,
+    onEvent: function (e, ci) { if (e === "ci-ready") window.__ci = ci; }
   });
+
+  // ---- the '+' fix, inherited from the OWL FLY II page (2026-07-27):
+  // js-dos has KBD_equals/KBD_minus constants but its DOM-code table has
+  // no "Equal"/"Minus" entry at all, so the physical +/-/= keys are
+  // simply never delivered to DOSBox. They work in native DOSBox and die
+  // in the browser. We hand them to the emulator ourselves, press AND
+  // release, so the throttle ramps while the key is held - and Shift
+  // rides js-dos's own path, so '+' still slams the lever to the stop.
+  var KBDFIX = { Equal: 61, Minus: 45, NumpadAdd: 334, NumpadSubtract: 333 };
+  var kbdDown = {};
+  window.addEventListener("keydown", function (e) {
+    var k = KBDFIX[e.code];
+    if (!k || !window.__ci) return;
+    e.preventDefault();
+    if (kbdDown[e.code]) return;         // ignore auto-repeat
+    kbdDown[e.code] = true;
+    window.__ci.sendKeyEvent(k, true);
+  }, true);
+  window.addEventListener("keyup", function (e) {
+    var k = KBDFIX[e.code];
+    if (!k || !window.__ci) return;
+    e.preventDefault();
+    kbdDown[e.code] = false;
+    window.__ci.sendKeyEvent(k, false);
+  }, true);
 </script>
 </body>
 </html>
