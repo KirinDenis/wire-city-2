@@ -277,11 +277,15 @@ VSETMDF:
 .retro: cmp  al,VMCGA
         jne  .todo
         mov  ax,0004h           ; THE CLASSIC: mode 4, palette 1, intense
-        int  10h                ; - black, cyan, magenta, white. Mode 5's
-        mov  dx,3D9h            ; burst-off palette was tried and renders
-        mov  al,30h             ; unpredictably (the pilot's screenshot
-        out  dx,al              ; proved it); this one every player knows.
-        retf                     ; Bit 5 palette 1, bit 4 intense, bg black.
+        int  10h                ; - black, cyan, magenta, white. (Mode 5's
+                                ; burst-off palette was tried and renders
+                                ; unpredictably - the pilot's screenshot.)
+        test byte [cs:vcaps],6  ; a REAL CGA wants the intense set said
+        jnz  @f                  ; out loud on 3D9h; a VGA host boots the
+        mov  dx,3D9h            ; mode bright already - and ignores this
+        mov  al,30h             ; port entirely (proven with a probe:
+        out  dx,al              ; neither 3D9h nor INT 10h AH=0Bh moves
+@@:    retf                     ; a VGA's mode-4 colours)
 .todo: cmp  al,VMEGA
         jb   .herc              ; only Hercules sits below the EGA family
         mov  ah,0               ; the three 16-colour planar modes:
@@ -430,6 +434,12 @@ cscp    dw 0                    ; cpsseg, stashed for the transcoder
 ; 4-bit static mask -> 8-bit, two bits per pixel, MSB pixel first
 MEXP    db 000h,003h,00Ch,00Fh,030h,033h,03Ch,03Fh
         db 0C0h,0C3h,0CCh,0CFh,0F0h,0F3h,0FCh,0FFh
+; the two CGA palettes as ATTRIBUTE values for the VGA-host road,
+; registers 1..3. These are the EGA-style 6-bit codes (secondary bits
+; at 38h), NOT CGA colour numbers - 0Bh in a palette register comes out
+; teal, 3Bh is the light cyan you meant.
+VPATT1  db 3Bh,3Dh,3Fh          ; light cyan, light magenta, white
+VPATT0  db 3Ah,3Ch,3Eh          ; light green, light red, yellow
 ; the EGA packer's plane tables: entry index = first*16+second (two
 ; colours 0..15), TPHp gives the byte's high nibble (pixels 0-1, each
 ; DOUBLED to two bits), TPLp the low (pixels 2-3), one table per plane.
@@ -515,13 +525,39 @@ CGABLT:
         jne  .hdn
         mov  byte [cs:vpedge],1
         xor  byte [cs:vpal],1
-        mov  dx,3D9h
-        mov  al,30h             ; palette 1 intense: cyan/magenta/white
+        ; TWO ROADS TO THE SAME PALETTE, split by the hardware quiz. A
+        ; real CGA changes colours on its 3D9h port; a VGA playing this
+        ; mode IGNORES that port AND INT 10h AH=0Bh (proven with a
+        ; bands-probe, 2026-08-18) - there the four colours live in the
+        ; attribute registers, remapped through INT 10h AX=1000h.
+        test byte [cs:vcaps],6
+        jnz  .vgap
+        mov  dx,3D9h            ; the metal: one byte
+        mov  al,30h             ; palette 1 intense
         cmp  byte [cs:vpal],0
         je   @f
-        mov  al,10h             ; palette 0 intense: green/red/yellow
+        mov  al,10h             ; palette 0 intense
 @@:    out  dx,al
-        call VPALSW             ; ...and the lookup bank follows
+        jmp  .lut
+.vgap: mov  si,VPATT1          ; the VGA host: attribute regs 1..3
+        cmp  byte [cs:vpal],0
+        je   @f
+        mov  si,VPATT0
+@@:    mov  cx,3
+        mov  bl,1
+.vp:   push cx
+        push si
+        push bx
+        mov  bh,[cs:si]
+        mov  ax,1000h
+        int  10h
+        pop  bx
+        pop  si
+        pop  cx
+        inc  si
+        inc  bl
+        loop .vp
+.lut:  call VPALSW             ; ...and the lookup bank follows
         jmp  .hdn
 .hup:  mov  byte [cs:vpedge],0
 .hdn:
