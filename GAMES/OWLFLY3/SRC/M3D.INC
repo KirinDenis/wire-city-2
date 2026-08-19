@@ -14,16 +14,16 @@ DRAWEDGE3D:
 ; ----- near Z-plane clipping ------------------------------------------------
 NEARCLIP:
         mov  ax,[z0]
-        cmp  ax,NEARZ
+        cmp  ax,[nzmin]
         jge  .p0in
         mov  bx,[z1]
-        cmp  bx,NEARZ
+        cmp  bx,[nzmin]
         jl   .rej
         call CLIPP0
         clc
         ret
 .p0in: mov  bx,[z1]
-        cmp  bx,NEARZ
+        cmp  bx,[nzmin]
         jge  .both
         call CLIPP1
         clc
@@ -35,7 +35,7 @@ NEARCLIP:
 
 CLIPP0: mov  bx,[z1]
         sub  bx,[z0]
-        mov  ax,NEARZ
+        mov  ax,[nzmin]
         sub  ax,[z0]
         mov  [tnum],ax
         mov  [tden],bx
@@ -51,12 +51,13 @@ CLIPP0: mov  bx,[z1]
         idiv word [tden]
         add  ax,[y0]
         mov  [y0],ax
-        mov  word [z0],NEARZ
+        mov  ax,[nzmin]
+        mov  [z0],ax
         ret
 
 CLIPP1: mov  bx,[z0]
         sub  bx,[z1]
-        mov  ax,NEARZ
+        mov  ax,[nzmin]
         sub  ax,[z1]
         mov  [tnum],ax
         mov  [tden],bx
@@ -72,7 +73,8 @@ CLIPP1: mov  bx,[z0]
         idiv word [tden]
         add  ax,[y1]
         mov  [y1],ax
-        mov  word [z1],NEARZ
+        mov  ax,[nzmin]
+        mov  [z1],ax
         ret
 
 ; ----- project both points --------------------------------------------------

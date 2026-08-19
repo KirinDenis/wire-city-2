@@ -4,8 +4,86 @@
 ; room and this routine had no callers left. IF 0 hands the whole thing to
 ; the assembler's wastebasket - every line survives here, none of them ship.
 ; ----- ground grid: world-aligned lines around the camera (rotate with view)
-if 0
-GRID:   mov  byte [COLOR],6
+; BACK IN SERVICE FOR LOW, 2026-08-19. It sat under `if 0` for a year as a
+; keepsake; the quality ladder wants exactly what it does. In LOW the ground
+; is not relief at all - no heightmap, no 1600 quads, no per-node cache -
+; it is this flat lattice of world-aligned lines around the camera, which
+; is what WIRE CITY drew and what a slow machine can afford.
+;
+; GR is its reach in CELLS of 256 world units: 24 puts the far edge about
+; 6100 units out. Two lines per step, both ways, so the whole ground is
+; about a hundred clipped 3D edges.
+GR      = 12                    ; see the arithmetic in GRID below
+
+; ---- pitch one edge endpoint, the way PITCH4 pitches the polygons ----------
+;  THE GRID AND THE MESH MUST SHARE ONE CAMERA. The polygon path really
+;  rotates its points by pitch (PITCH4, inside FACEFILL's clip); this edge
+;  path did not - it came back from the flat-ground era, when the whole
+;  game faked pitch as a horizon shift. In the cockpit, where pitch stays
+;  small, nobody could tell. The spectator's orbit looks DOWN at up to
+;  eighty degrees, and there the two camera models tear apart - buildings
+;  pitched properly, grid not pitched at all, "the objects live their own
+;  life". Same rotation, same trig, and the two worlds are one again.
+;      in: SI -> the y word, DI -> the z word (already heading-rotated)
+PITCHP: mov  ax,[si]
+        imul word [pcos]
+        mov  bx,256
+        idiv bx
+        mov  cx,ax              ; y*pcos/256
+        mov  ax,[di]
+        imul word [psin]
+        mov  bx,256
+        idiv bx
+        sub  cx,ax              ; y' = (y*pcos - z*psin)/256
+        mov  ax,[si]
+        imul word [psin]
+        mov  bx,256
+        idiv bx
+        push ax
+        mov  ax,[di]
+        imul word [pcos]
+        mov  bx,256
+        idiv bx
+        pop  bx
+        add  ax,bx              ; z' = (y*psin + z*pcos)/256
+        mov  [di],ax
+        mov  [si],cx
+        ret
+GRID:   ; ---- WHY THE GRID CAME APART, IN ONE NUMBER --------------------------
+        ; CLAMPAX pins a projected coordinate at +-4000. With FOCAL 220 that
+        ; is reached when |x| / z passes 18.2 - and past that point PROJPT
+        ; stops dividing and SUBSTITUTES the coordinate. A filled polygon
+        ; does not mind: the span filler clips it either way. A LINE does:
+        ; move one endpoint and the whole segment swings, which is the mess
+        ; the splash screen showed the moment the camera turned. It has
+        ; nothing to do with how fast the machine is - it happens at 30000
+        ; cycles as readily as at 7000.
+        ;
+        ; So the grid has to keep its own corner inside that ratio:
+        ;
+        ;    worst lateral offset = GR * 256 * sqrt(2)
+        ;    needs   nzmin  >=  that / 18.2
+        ;
+        ;    GR=24 -> 8688 -> 478      GR=12 -> 4344 -> 239
+        ;
+        ; GR 24 with a near plane of 256 was still off by nearly double,
+        ; which is exactly why the first fix did not take. GR 12 and 288
+        ; clears it with room, and costs the nearest cell of grid.
+        ; The REAL cure is clipping the edge against the side planes in 3D
+        ; instead of clamping it in 2D - that is a job for the whole line
+        ; pipeline, and it wants the C# rig to check the geometry first.
+        ; Restored before we leave, or every model in the game loses its
+        ; nose at 288.
+        ; 2. Put the plane on the ground UNDER THE AIRCRAFT rather than on
+        ;    world zero, so the runway, the hangars and the block you are
+        ;    diving at stand on the grid instead of floating over it. Over
+        ;    hills it drifts, and that is the honest price of a flat ground
+        ;    in a game that has relief.
+        mov  word [nzmin],288
+        call TERRH              ; AX = ground height under the camera
+        sub  ax,[camy]
+        mov  [gndy],ax
+        mov  byte [COLOR],6
         ; lines parallel to world-Z (fixed X = gi)
         mov  ax,[camgi]
         sub  ax,GR
@@ -47,10 +125,15 @@ GRID:   mov  byte [COLOR],6
         mov  [x1],ax
         mov  ax,[rc_z]
         mov  [z1],ax
-        mov  ax,[camy]
-        neg  ax
-        mov  [y0],ax
-        mov  [y1],ax
+        mov  ax,[gndy]          ; the plane sits on the ground UNDER US, not
+        mov  [y0],ax            ;  on world zero - worked out once a frame
+        mov  [y1],ax            ;  at the top of GRID
+        mov  si,y0              ; and PITCH both ends, exactly as PITCH4
+        mov  di,z0              ;  pitches every polygon - one camera,
+        call PITCHP             ;  or the grid lives a life of its own
+        mov  si,y1
+        mov  di,z1
+        call PITCHP
         call DRAWEDGE3D
         mov  ax,[gi]
         inc  ax
@@ -95,10 +178,15 @@ GRID:   mov  byte [COLOR],6
         mov  [x1],ax
         mov  ax,[rc_z]
         mov  [z1],ax
-        mov  ax,[camy]
-        neg  ax
-        mov  [y0],ax
-        mov  [y1],ax
+        mov  ax,[gndy]          ; the plane sits on the ground UNDER US, not
+        mov  [y0],ax            ;  on world zero - worked out once a frame
+        mov  [y1],ax            ;  at the top of GRID
+        mov  si,y0              ; and PITCH both ends, exactly as PITCH4
+        mov  di,z0              ;  pitches every polygon - one camera,
+        call PITCHP             ;  or the grid lives a life of its own
+        mov  si,y1
+        mov  di,z1
+        call PITCHP
         call DRAWEDGE3D
         mov  ax,[gj]
         inc  ax
@@ -107,8 +195,8 @@ GRID:   mov  byte [COLOR],6
         add  bx,GR
         cmp  ax,bx
         jle  .gz
-        ret
-end if
+        mov  word [nzmin],NEARZ ; back to the models' near plane, or every
+        ret                     ;  nose in the game gets sliced at 256
 ; ----- buildings: one linear far->near walk of the BORD order table ---------
 ;  2401 cells to radius 24; empty cells drop out of RENDERCELL quickly, and
 ;  the clustered city keeps the populated count low. Real buildings all the
@@ -674,6 +762,9 @@ EDGEWIN:
         mov  al,[scol]          ; windows change COLOR - restore per face
         mov  [COLOR],al
         call FACESTROKE
+        cmp  byte [qual],2      ; LOW: boxes and nothing but boxes. The
+        je   .x                 ;  glass is a per-wall pass of its own and
+                                ;  the city has hundreds of walls in it.
         mov  ax,[NPOLY]         ; the wall never made it through the clip
         cmp  ax,3
         jl   .x

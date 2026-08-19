@@ -10,6 +10,41 @@ vcard   db 7                    ; the INTERNAL card code the front step
                                 ; picked (VID.INC): 1 Hercules, 2 CGA,
                                 ; 3 EGA 640x350, 4 EGA 320x200,
                                 ; 5 VGA 640x480x16, 6 MCGA, 7 VGA.
+
+; ---- how much of the picture the machine is asked to work out -------------
+;  Picked on the second front screen, beside the card. The levels are
+;  CONDITIONS THAT SKIP WORK, not other renderers: FULL is this program
+;  exactly as it has always been. Plan: Skill\QUALTASK.md.
+;
+;  What each one costs was measured before it was written: the bill is
+;  FILLED AREA, not effects. Smoke and trails are single-digit percentages
+;  against a terrain mesh that paints all 64000 pixels.
+qual    db 0                    ; 0 FULL, 1 MEDIUM, 2 LOW ("wire")
+
+; ---- the near plane the EDGE clipper uses, and why it is not a constant ----
+;  NEARZ (40) is right for models: a wing tip may pass a metre from the
+;  glass. It is WRONG for the ground grid, and the reason is in PROJPT: when
+;  rz is under 256 and the point is far to the side, the projection would
+;  overflow, so it CLAMPS the coordinate to +-4000 and keeps the sign. A
+;  filled polygon does not care - the span filler clips it. A LINE does:
+;  move one endpoint and the whole segment changes direction, which is
+;  exactly the "the grid falls apart after a bank" the Hercules take showed.
+;
+;  At rz >= 256 the guard can never fire (|rx| would have to pass 37888, and
+;  the grid's farthest corner is about 12000), so GRID clips at 256 instead.
+;  The cost is the nearest quarter-cell of grid, straight under the nose.
+nzmin   dw NEARZ
+gndy    dw 0                    ; where GRID's plane sits: the ground height
+                                ; under the aircraft, not world zero - so
+                                ; the runway, the hangars and the buildings
+                                ; you are actually near stand ON it.
+tstart  dw 0                    ; where the terrain walk BEGINS in TORD.
+                                ; TORD is sorted far -> near, so starting
+                                ; later draws a smaller world: 0 keeps all
+                                ; 1600 quads, TMED keeps the nearest 576 -
+                                ; radius 20 against radius 12, and the cost
+                                ; goes with the square.
+TMED    = 1600 - 576
                                 ; 6 and 7 are ONE path - mode 13h IS
                                 ; MCGA's mode. Everything below 6
                                 ; converts the frame in VIDSEG

@@ -36,7 +36,18 @@ CLEARBUF:
         cmp  word [sinr],0  ; banked: the grain must turn with the
         je   .lvl              ; world - per-pixel walk, not the tile
         mov  byte [wdith],1
-.lvl:  call SKYSEG:SKYFILL
+.lvl:  cmp  byte [qual],2      ; LOW: no sky ramp and no ground - one flat
+        je   .flat              ; field, and the stroked mesh draws the
+        call SKYSEG:SKYFILL     ; horizon itself. BGND paints all 64000
+        ret                     ; pixels every frame and walks them ONE BY
+                                ; ONE when the world is banked, which makes
+                                ; it the dearest thing in the frame on a
+                                ; slow machine. This is the cheapest fill
+                                ; there is: 32000 words and done.
+.flat: xor  di,di              ; ES is already bufseg (the caller's contract)
+        xor  ax,ax
+        mov  cx,32000
+        rep  stosw
         ret
 
 ; ============================================================================

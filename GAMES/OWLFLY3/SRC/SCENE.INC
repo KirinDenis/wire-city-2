@@ -45,11 +45,24 @@ RENDER: call SETHORIZ           ; where the glass is, before anything uses it
         cmp  byte [daymode],0
         jne  .day              ; stars only at night
         call STARS
-.day:  call SKYSEG:WCLOUDF   ; the weather next: over the stars,
+.day:  cmp  byte [qual],2     ; LOW: no weather. The clouds are FILLED
+        je   .nowx             ;  shapes, and on a flat field they would be
+                               ;  the dearest thing left on the screen -
+                               ;  skipped at the call site, so the far call
+                               ;  goes with them.
+        call SKYSEG:WCLOUDF   ; the weather next: over the stars,
                                 ; under the terrain - a cloud behind a
                                 ; ridge is painted over, as it should be
+.nowx: cmp  byte [qual],2     ; LOW: no relief at all. Not a stroked mesh -
+        je   .flat             ;  no mesh: no heightmap walk, no per-node
+                               ;  rotate-and-cache, no 1600 quads. A flat
+                               ;  lattice instead, about a hundred edges,
+                               ;  which is what WIRE CITY drew.
         call TERRPREP           ; rotate + cache the terrain nodes
         call TERRAIN            ; real 3D relief, far -> near
+        jmp  .grnd
+.flat: call GRID
+.grnd:
         call TOWNSEG:AFDRAWF   ; the aerodromes, paved onto it - before the
                                 ; buildings, so anything standing goes over
                                 ; the concrete rather than under it

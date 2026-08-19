@@ -334,8 +334,22 @@ FACEFILL:
         cmp  ax,3
         jl   .x
         call PROJPOLY
+if defined qual
+        ; THE QUALITY LADDER, AND IT IS ONE CONDITION. Everything that gets
+        ; filled in OWL FLY III comes through this door - seventeen call
+        ; sites and DRAWBOX on top of them - so LOW turns the whole world to
+        ; wire here, and not one caller knows. Programs that do not declare
+        ; `qual` (the examples, the older games) assemble the plain path:
+        ; this is the only place the engine asks.
+        cmp  byte [qual],2
+        je   .wire
+end if
         call SCANPOLY
 .x:    ret
+if defined qual
+.wire:  call STROKEPOLY
+        ret
+end if
 
 FACESTROKE:
         call CLIPNEAR

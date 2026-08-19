@@ -109,7 +109,10 @@ TERRPREP:
 ;  snow. Near quads also get a grid stroke. Buildings draw after this.
 ; ============================================================================
 TERRAIN:
-        mov  word [tidx],0
+        mov  ax,[tstart]        ; FULL starts at 0 and draws all 1600 quads.
+        mov  [tidx],ax          ; MEDIUM starts partway in - TORD runs far to
+                                ; near, so a later start is a NEARER horizon
+                                ; and nothing else changes. One word.
 .tl:   mov  si,[tidx]
         add  si,si
         mov  al,[TORD+si]       ; di (signed)

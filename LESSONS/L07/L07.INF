@@ -1,0 +1,8 @@
+.title  Memory is one line, the screen is not
+.what   Why a horizontal line is nearly free and a vertical one is not
+.tier   LESSON
+.main   LINE.ASM
+.needs  DRAW7.INC
+.build  FASM LINE.ASM LINE.COM
+.run    LINE.COM
+.uses   MUL ADD STOSW REP DIV INT

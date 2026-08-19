@@ -3587,13 +3587,15 @@ SWKEYS: xor  si,si              ; row index 0..SWNK-1
         add  bx,si              ; *3 bytes a row
         mov  bl,[cs:SWKTAB+bx]
         xor  bh,bh
-        mov  al,[KEYS+bx]       ; KEYS is at home, and DS points home
-        mov  bx,si
-        cmp  al,[cs:swprev+bx]
-        je   .kn
-        mov  [cs:swprev+bx],al
+        ; THE LATCH, not the live key. Comparing KEYS against last frame was
+        ; right while a frame was a fiftieth of a second; at one frame a
+        ; second the whole press happens between two looks and the switch
+        ; never throws. KHIT remembers the key-down until somebody takes it -
+        ; and taking it is the line below, so one tap is one throw.
+        mov  al,[KHIT+bx]       ; KHIT is at home, and DS points home
         test al,al
-        jz   .kn               ; key-up edge: nothing happens
+        jz   .kn
+        mov  byte [KHIT+bx],0   ; consumed
         mov  bx,si
         add  bx,bx
         add  bx,si
@@ -3616,12 +3618,9 @@ SWKEYS: xor  si,si              ; row index 0..SWNK-1
         ; per-tick routine that is NOT in the main segment, so an edge
         ; detector costs that segment nothing. Ctrl and not a bare D because
         ; a bare letter is a key a player finds by accident. ----
-        mov  al,[KEYS+SC_D]
-        cmp  al,[prevdb]
-        je   .dbx
-        mov  [prevdb],al
-        test al,al
-        jz   .dbx
+        cmp  byte [KHIT+SC_D],0   ; the LATCH, not the live key: a tap between
+        je   .dbx                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_D],0   ; consumed
         cmp  byte [KEYS+SC_CTL],0
         je   .dbx
         xor  byte [dbgm],1

@@ -19,7 +19,11 @@ KBINT:  push ax
         test ah,80h
         jnz  .brk
         mov  byte [di],1
-        jmp  .eoi
+        add  di,KHIT-KEYS       ; ...and LATCH it: the same scan code in the
+        mov  byte [di],1        ;  hit table, which nothing clears but the
+        jmp  .eoi               ;  code that acts on it. A tap between two
+                                ;  frames is invisible in KEYS and cannot be
+                                ;  lost here - see the note beside KHIT.
 .brk:  mov  byte [di],0
 .eoi:  mov  al,20h
         out  20h,al

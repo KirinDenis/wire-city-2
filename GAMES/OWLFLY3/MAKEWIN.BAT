@@ -34,7 +34,15 @@ REM three attempts before giving up.
 set ATTEMPT=0
 :build
 set /a ATTEMPT+=1
-"%DOSBOX%" -noautoexec -c "mount c %CD%" -c "c:" -c "cd GAMES\OWLFLY3" -c "..\..\TOOLS\CWSDPMI\CWSDPMI.EXE" -c "..\..\TOOLS\FASM\FASM.EXE SRC\RESDAT.ASM INSTALL\CITY.DAT" -c "..\..\TOOLS\CWSDPMI\CWSDPMI.EXE" -c "..\..\TOOLS\FASM\FASM.EXE SRC\SIDEDAT.ASM INSTALL\CPSIDE.DAT" -c "..\..\TOOLS\CWSDPMI\CWSDPMI.EXE" -c "..\..\TOOLS\FASM\FASM.EXE SRC\OWLFLY3.ASM INSTALL\OWLFLY3.NEW" -c "exit"
+REM EACH ASSEMBLER'S OUTPUT GOES TO A FILE, and that is not tidiness. With
+REM the three of them writing to the DOSBox console the third one - the big
+REM one, eight seconds of work - failed to land about three runs in four,
+REM silently, leaving no OWLFLY3.NEW and no message anyone could read.
+REM Redirected, the same ten -c lines have landed every time. It also means
+REM BUILD.LOG holds what the assembler actually said, which is the thing you
+REM want the moment a build starts arguing.
+if exist GAMES\OWLFLY3\BUILD.LOG del GAMES\OWLFLY3\BUILD.LOG
+"%DOSBOX%" -noautoexec -c "mount c %CD%" -c "c:" -c "cd GAMES\OWLFLY3" -c "..\..\TOOLS\CWSDPMI\CWSDPMI.EXE" -c "..\..\TOOLS\FASM\FASM.EXE SRC\RESDAT.ASM INSTALL\CITY.DAT > BUILD.LOG" -c "..\..\TOOLS\CWSDPMI\CWSDPMI.EXE" -c "..\..\TOOLS\FASM\FASM.EXE SRC\SIDEDAT.ASM INSTALL\CPSIDE.DAT >> BUILD.LOG" -c "..\..\TOOLS\CWSDPMI\CWSDPMI.EXE" -c "..\..\TOOLS\FASM\FASM.EXE SRC\OWLFLY3.ASM INSTALL\OWLFLY3.NEW >> BUILD.LOG" -c "exit"
 if not exist GAMES\OWLFLY3\INSTALL\OWLFLY3.NEW goto retry
 for %%A in (GAMES\OWLFLY3\INSTALL\OWLFLY3.NEW) do if %%~zA LSS 100000 goto retry
 del GAMES\OWLFLY3\INSTALL\OWLFLY3.EXE 2>nul

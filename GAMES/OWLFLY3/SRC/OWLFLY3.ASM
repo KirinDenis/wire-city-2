@@ -325,8 +325,14 @@ MAIN:
         ; VGA is the default and stays the untouched path; the retro
         ; cards convert the finished frame in VIDSEG (SRC\VID.INC,
         ; plan in Skill\VIDTASK.md).
-        call VIDSEG:VMENUF      ; -> AL = the internal card code (VID.INC)
-        mov  [vcard],al
+        call VIDSEG:VMENUF      ; -> AL = the internal card code (VID.INC),
+        mov  [vcard],al         ;    AH = the detail level from its second
+        mov  [qual],ah          ;    screen: 0 FULL, 1 MEDIUM, 2 LOW
+        mov  word [tstart],0    ; FULL and LOW both walk the whole mesh -
+        cmp  ah,1               ;  LOW strokes it instead of filling it.
+        jne  .qd                ;  MEDIUM starts the walk later, which is
+        mov  word [tstart],TMED ;  a nearer horizon and nothing else.
+.qd:
 
         ; back-buffer 64K above the image (maxalloc: we still own it all).
         ; SKYSEG gets a full 8K window (CS+1000h..CS+11FFh) with
@@ -540,7 +546,28 @@ MAIN:
         call VIDSEG:VCGLDF   ; CGA only: the baked cockpit page rides
                                 ; one page past the two minimap pages
         call DSTCLR             ; a new world stands up whole
-        call DSGEN              ; build the Diamond-Square world heightmap
+        ; ---- LOW: NO DIAMOND-SQUARE. The pilot's fix, and the right one:
+        ; flatten the MAP, not the readers. WORLDH was overridden first and
+        ; it was not enough, because the far segments carry their own inline
+        ; copies of its arithmetic - TOWNSEG's NODEH bends the roads onto
+        ; HMAP directly, comment "...WORLDH" and all - so the roads followed
+        ; a landscape the rest of LOW no longer had. One constant across the
+        ; whole heightmap and every reader agrees, including the copies
+        ; nobody remembers. 140 sits mid city band (120..167): towns still
+        ; zone (by hash alone now - the whole map is eligible), no water,
+        ; and AFINITF's plains clamp becomes a no-op, so the aerodromes sit
+        ; on the same plane as everything else. The world stands at
+        ; (140-88)*5 = 260 units, everywhere, for everyone.
+        cmp  byte [qual],2
+        jne  .dsg
+        mov  bx,HMAP
+        mov  cx,4096
+.dsf:  mov  byte [bx],140
+        inc  bx
+        loop .dsf
+        jmp  .dsd
+.dsg:  call DSGEN              ; build the Diamond-Square world heightmap
+.dsd:
         call UISEG:AFINITF   ; ...then IRON THE AERODROMES INTO IT, before
                                 ; anything is baked off it. The block table
                                 ; and the minimap below both read HMAP, and
@@ -551,6 +578,34 @@ MAIN:
         call TOWNSEG:BLKTABF   ; zone the 32x32 blocks off it, ONCE - the
                                 ; streets and the buildings both read that
                                 ; table and must not re-derive it per cell
+        ; ---- LOW, the second constant. AFINITF clamps the strips to
+        ; AFHLO..AFHHI (96..116) so no block can zone built-up on a runway -
+        ; which on the flat 140 map put the aerodromes at 140 world units
+        ; under a world at 260, and the pilot, taking off from one, watched
+        ; the whole city hover 120 units above the grid. "Two constants:
+        ; the grid-ground level and the generated map's" - exactly.
+        ;
+        ; The clamp cannot simply go: it is the ONLY thing keeping houses
+        ; off the strip. So the ORDER does the work instead - the block
+        ; table above was zoned while the aprons still read 116 and the
+        ; city land 140, so the runways are already refused for good. NOW
+        ; the map is flattened back to one number, aprons included, and
+        ; afy - the world height of each strip's concrete, measured off the
+        ; 116 ground a moment ago - is restamped to match. One plane,
+        ; 260 units, for absolutely everything.
+        cmp  byte [qual],2
+        jne  .nfl
+        mov  bx,HMAP
+        mov  cx,4096
+.rfl:  mov  byte [bx],140
+        inc  bx
+        loop .rfl
+        mov  bx,afy
+        mov  cx,NAF
+.rfy:  mov  word [bx],(140-88)*5
+        add  bx,2
+        loop .rfy
+.nfl:
         call SYMSEG:MMAPGENF   ; bake the minimap from it
         call BRDGEN             ; draw the front line on the war
         call SKYSEG:SKYBAKE   ; cut this run's sky: ramp + cloud coats
@@ -748,6 +803,21 @@ QUIT:
 ;  Key-state table (at the very end)
 ; ============================================================================
 KEYS    db 128 dup(0)
+
+; ---- and the LATCH, which is what makes the switches work on a slow machine
+;  KEYS says what is held RIGHT NOW, and that was enough while a frame took
+;  a fiftieth of a second. On a machine drawing at one frame a second - which
+;  is exactly what LOW exists for - a player presses the brake and lets go
+;  again BETWEEN two polls: KEYS is back to zero by the time SWKEYS looks,
+;  its compare against swprev never sees the 1, and the switch never throws.
+;  Reported from a Hercules take as "the keys hardly press at all, you cannot
+;  even get the brake off", and it was not the keyboard: it was the frame.
+;
+;  KHIT[scan] is set by the interrupt on every key-DOWN and cleared by
+;  whoever consumes it. A tap of any length survives until it is read.
+;  Held keys - the stick, the throttle - go on reading KEYS and are
+;  untouched by any of this.
+KHIT    db 128 dup(0)
 
 ; ---- BSS: buffers that live past the initialized image ---------------------
 ; Everything below is fully written before first read (DSGEN/MMAPGEN at

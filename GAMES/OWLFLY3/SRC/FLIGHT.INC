@@ -489,40 +489,28 @@ INPUT:
 .y2:   mov  [camy],ax
 
         ; --- N key: toggle day/night palette (on key-down edge only) ---
-        mov  al,[KEYS+SC_N]
-        cmp  al,[prevn]
-        je   .nn
-        mov  [prevn],al
-        test al,al
-        jz   .nn
+        cmp  byte [KHIT+SC_N],0   ; the LATCH, not the live key: a tap between
+        je   .nn                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_N],0   ; consumed
         xor  byte [daymode],1
         call UISEG:APPLYPALF
 .nn:
         ; --- V key: sound mode - all / effects only / silence (edge) ---
-        mov  al,[KEYS+SC_V]
-        cmp  al,[prevsk]
-        je   .nv
-        mov  [prevsk],al
-        test al,al
-        jz   .nv
+        cmp  byte [KHIT+SC_V],0   ; the LATCH, not the live key: a tap between
+        je   .nv                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_V],0   ; consumed
         call SNDTOG
 .nv:
         ; --- F2: cockpit panel on/off (edge-triggered; C is rudder now) ---
-        mov  al,[KEYS+SC_F2]
-        cmp  al,[prevc]
-        je   .ncp
-        mov  [prevc],al
-        test al,al
-        jz   .ncp
+        cmp  byte [KHIT+SC_F2],0   ; the LATCH, not the live key: a tap between
+        je   .ncp                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_F2],0   ; consumed
         xor  byte [cockpit],1
 .ncp:
         ; --- F3: chase camera (edge) ---
-        mov  al,[KEYS+SC_F3]
-        cmp  al,[prevv]
-        je   .nf3
-        mov  [prevv],al
-        test al,al
-        jz   .nf3
+        cmp  byte [KHIT+SC_F3],0   ; the LATCH, not the live key: a tap between
+        je   .nf3                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_F3],0   ; consumed
         xor  byte [chsview],1
 .nf3:
         ; --- Z / X: the scope zooms in and out, the manual's way - EXCEPT
@@ -557,21 +545,15 @@ INPUT:
         mov  ax,TGRMAX
 .nzk3: mov  [tgrad],ax
         jmp  .nzo
-.nzk:  mov  al,[KEYS+SC_Z]
-        cmp  al,[prevz]
-        je   .nzi
-        mov  [prevz],al
-        test al,al
-        jz   .nzi
+.nzk:        cmp  byte [KHIT+SC_Z],0   ; the LATCH, not the live key: a tap between
+        je   .nzi                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_Z],0   ; consumed
         cmp  byte [rzsh],6
         jbe  .nzi
         dec  byte [rzsh]
-.nzi:  mov  al,[KEYS+SC_X]
-        cmp  al,[prevxx]
-        je   .nzo
-        mov  [prevxx],al
-        test al,al
-        jz   .nzo
+.nzi:        cmp  byte [KHIT+SC_X],0   ; the LATCH, not the live key: a tap between
+        je   .nzo                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_X],0   ; consumed
         cmp  byte [rzsh],10
         jae  .nzo
         inc  byte [rzsh]
@@ -579,12 +561,9 @@ INPUT:
         ; --- K: the MAP zooms, 1 / 2 / 4 pixels to a world node, cycling.
         ; PROVISIONAL KEY - the whole keyboard is still to be laid out; K is
         ; simply free and next to M, which pages this same screen. ---
-        mov  al,[KEYS+SC_K]
-        cmp  al,[prevk2]
-        je   .nmz
-        mov  [prevk2],al
-        test al,al
-        jz   .nmz
+        cmp  byte [KHIT+SC_K],0   ; the LATCH, not the live key: a tap between
+        je   .nmz                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_K],0   ; consumed
         mov  al,[mmzs]
         inc  al
         cmp  al,MMZN
@@ -593,21 +572,15 @@ INPUT:
 .mzs:  mov  [mmzs],al
 .nmz:
         ; --- F5: arm/disarm the missile camera (edge) ---
-        mov  al,[KEYS+SC_F5]
-        cmp  al,[prevf5]
-        je   .nf5
-        mov  [prevf5],al
-        test al,al
-        jz   .nf5
+        cmp  byte [KHIT+SC_F5],0   ; the LATCH, not the live key: a tap between
+        je   .nf5                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_F5],0   ; consumed
         xor  byte [mslcam],1
 .nf5:
         ; --- F4: orbit camera around the locked target (edge) ---
-        mov  al,[KEYS+SC_F4]
-        cmp  al,[prevt4]
-        je   .nf4
-        mov  [prevt4],al
-        test al,al
-        jz   .nf4
+        cmp  byte [KHIT+SC_F4],0   ; the LATCH, not the live key: a tap between
+        je   .nf4                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_F4],0   ; consumed
         cmp  byte [tgtcam],0
         jne  .f4off
         mov  si,[locki]
@@ -684,12 +657,9 @@ INPUT:
 .tcd:  mov  [tgel],ax
 .ntc:
         ; --- M key: centre MFD page, MAP -> SIT -> TGT (edge) ---
-        mov  al,[KEYS+SC_M]
-        cmp  al,[prevm]
-        je   .nmfd
-        mov  [prevm],al
-        test al,al
-        jz   .nmfd
+        cmp  byte [KHIT+SC_M],0   ; the LATCH, not the live key: a tap between
+        je   .nmfd                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_M],0   ; consumed
         mov  al,[mfdmode]
         inc  al
         cmp  al,3
@@ -700,12 +670,9 @@ INPUT:
         ; --- Enter: lock the plane inside the aiming ring (edge). The
         ; nearest jet whose screen point is within 24 px of the ring
         ; centre (160,100) wins; nothing there = lock dropped.
-        mov  al,[KEYS+SC_ENT]
-        cmp  al,[prevt]
-        je   .nlk
-        mov  [prevt],al
-        test al,al
-        jz   .nlk
+        cmp  byte [KHIT+SC_ENT],0   ; the LATCH, not the live key: a tap between
+        je   .nlk                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_ENT],0   ; consumed
         mov  word [locki],0FFFFh
         mov  word [lockd],7FFFh
         ; The master mode used to gate this scan - A-A saw only aircraft,
@@ -888,12 +855,9 @@ INPUT:
         call UISEG:GNDSCHF
         ; --- Backspace: fire a missile (edge; sits right above Enter =
         ; lock). Homing on the lock, straight down the nose otherwise.
-        mov  al,[KEYS+SC_BS]
-        cmp  al,[prevf]
-        je   .nfr
-        mov  [prevf],al
-        test al,al
-        jz   .nfr
+        cmp  byte [KHIT+SC_BS],0   ; the LATCH, not the live key: a tap between
+        je   .nfr                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_BS],0   ; consumed
         ; ---- A FREE RAIL, not "the missile is not in flight". The gate used
         ; to be one airborne missile at a time, so a second launch was
         ; impossible for up to fifteen seconds - which is precisely the

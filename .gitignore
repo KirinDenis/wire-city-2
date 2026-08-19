@@ -126,3 +126,7 @@ LESSONS/L04/MATH.COM
 # manifests, boot-tested by TOOLS/RUNWB.BAT, packed into docs/workbench_v*.jsdos.
 # Always derived, never edited in place.
 DISK/
+LESSONS/L07/LINE.COM
+LESSONS/L07/LINEW.COM
+LESSONS/L07/RECON.ASM
+LESSONS/L07/RECON.COM

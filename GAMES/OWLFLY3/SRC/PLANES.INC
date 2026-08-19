@@ -418,6 +418,10 @@ PLANESDRAW:
         sub  ax,[camy]
         mov  [pdy],ax
         ; ---- contrail: TLN dots behind the jet (haze colour) ----
+        cmp  byte [qual],2      ; LOW: no contrails. Sixteen dots a jet, each
+        je   .trd               ;  one a rotate and a projection, on every
+                                ;  aircraft in the sky - and a machine that
+                                ;  needs LOW has better uses for them.
         mov  bx,si
         add  bx,bx
         add  bx,bx              ; si*4
@@ -461,7 +465,7 @@ PLANESDRAW:
 .trn:  add  word [tpi],2
         cmp  word [tpi],TLN*2
         jb   .tr
-        mov  si,[pidx]          ; PROJPT inside PPOINT clobbers SI
+.trd:  mov  si,[pidx]          ; PROJPT inside PPOINT clobbers SI
         ; model yaw relative to the camera: A = plane heading - heading
         mov  ax,[pah+si]
         sub  ax,[heading]
@@ -2052,6 +2056,8 @@ WRECKDRAW:
         ; ---- the glass goes first: a burst of window shards thrown
         ; out of the block in the opening second, bright against the
         ; smoke and gone by the time the fire settles.
+        cmp  byte [qual],2      ; LOW: no shards. The fireball says the
+        je   .wgd               ;  building died; the confetti is a luxury
         cmp  word [di],45
         jae  .wgd
         mov  bx,di
@@ -2256,7 +2262,11 @@ WRECKDRAW:
         jb   .wfl
         pop  di
         pop  bx
-.wfm:  ; smoke: the SMOKE.ASM lab's column, on the game's budget.
+.wfm:  cmp  byte [qual],2      ; LOW: no smoke column either. Four swaying
+        je   .wsn               ;  puffs per wreck, every frame, for as long
+                                ;  as fifty seconds - the dearest thing a
+                                ;  kill leaves behind.
+        ; smoke: the SMOKE.ASM lab's column, on the game's budget.
         ; Four puffs ride phases up a ~400-unit column above the piece,
         ; swaying wider the higher they climb (the lab's vortex, one
         ; SINQ), swelling as they cool through the stroke greys - and

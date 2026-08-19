@@ -70,6 +70,26 @@ VMTEXT  db 13,10
         db 13,10
         db '  PRESS 1..7, OR ARROWS AND ENTER',13,10,0
 
+; ---- the second screen: how much of it the machine is asked to work out ---
+;  Three levels, and they are conditions that SKIP WORK - not other
+;  renderers. FULL is this game exactly as it has always been.
+;  The three items sit on CONSECUTIVE rows, 5, 6 and 7 - so item n lands on
+;  row n+4, which is the card menu's own arithmetic, and VMMOVE/VMMARK drive
+;  the chevron here without a line of new drawing code.
+QMTEXT  db 13,10
+        db '  OWL FLY III',13,10
+        db 13,10
+        db '  GRAPHICS DETAIL',13,10
+        db 13,10
+        db '    1) FULL     everything, as the game was born',13,10
+        db '    2) MEDIUM   a nearer horizon: the world to 12 nodes, not 20',13,10
+        db '    3) LOW      WIRE: flat ground, no filled faces, no glass',13,10
+        db 13,10
+        db '  The physics, the war and every instrument are the same in all',13,10
+        db '  three. Only how much of the picture gets worked out changes.',13,10
+        db 13,10
+        db '  PRESS 1..3, OR ARROWS AND ENTER',13,10,0
+
 ; ============================================================================
 ;  VMENUF - the front step. Text mode, black, English, numbered - as the
 ;  retro players asked. Returns the pick in AL (1..5, menu order).
@@ -223,7 +243,61 @@ VMENUF:
 .take: mov  bl,[cs:vmsel]      ; the menu row picked...
         xor  bh,bh
         mov  al,[cs:VMPICK-1+bx] ; ...as the INTERNAL card code
+        push ax
+        call QMENU              ; ...and then the detail, on its own screen
+        mov  bl,al
+        pop  ax
+        mov  ah,bl              ; AL = card, AH = 0 FULL / 1 MEDIUM / 2 LOW
         retf
+
+; ---- QMENU: the detail screen. Digits only, and ENTER means FULL ----------
+;  No chevron and no quiz here: all three levels exist on every machine, so
+;  there is nothing to grey out and nothing to walk over. A player who does
+;  not care presses ENTER and gets the game as it has always been.
+QMENU:  mov  ah,0Fh             ; re-enter the mode: cleared, black, home
+        int  10h
+        xor  ah,ah
+        int  10h
+        mov  si,QMTEXT
+        call VMPUTS
+        mov  byte [cs:vmsel],1  ; the chevron starts on FULL, and vmsel is
+        call VMMARK             ;  free now - the card it was choosing has
+                                ;  already been taken
+.k:    xor  ah,ah
+        int  16h
+        cmp  al,0Dh             ; ENTER takes whatever the chevron is on
+        je   .take
+        cmp  al,'1'
+        jb   .ext
+        cmp  al,'3'
+        ja   .ext
+        sub  al,'0'             ; a digit moves the chevron AND takes it,
+        mov  bl,al              ;  so the eye sees what the key did
+        call VMMOVE
+        jmp  .take
+.ext:  or   al,al              ; extended keys: AL 0, or E0h from an
+        jz   .e1                ;  enhanced BIOS, with the scan code in AH
+        cmp  al,0E0h
+        jne  .k
+.e1:   cmp  ah,48h             ; up
+        je   .up
+        cmp  ah,50h             ; down
+        jne  .k
+        mov  bl,[cs:vmsel]
+        cmp  bl,3
+        jae  .k
+        inc  bl
+        call VMMOVE
+        jmp  .k
+.up:   mov  bl,[cs:vmsel]
+        cmp  bl,1
+        jbe  .k
+        dec  bl
+        call VMMOVE
+        jmp  .k
+.take: mov  al,[cs:vmsel]      ; row 1..3 -> level 0..2
+        dec  al
+        ret
 
 ; ---- VMMOVE: the chevron to item BL (erase old, mark new) ------------------
 ; VMPUTC trashes BX for the BIOS call, hence the push across the erase.
