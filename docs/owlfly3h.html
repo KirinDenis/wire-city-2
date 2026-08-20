@@ -50,10 +50,16 @@
       card gives you is RESOLUTION &mdash; 720x348, twice a CGA's dots
       &mdash; and this game spends all of it. The picture rides 640x300;
       brightness is dither density, and the cockpit ships pre-drawn in
-      those densities, baked offline. <b>L</b> still switches day and
+      those densities, baked offline. <b>N</b> still switches day and
       night: the night sky thins to sparse grain. The keys are OWL FLY
       II's, key for key &mdash; the full manual lives on the
       <a href="owlfly2.html">OWL FLY II page</a>. <b>Alt-Q</b> leaves.
+    </p>
+    <p>
+      On a touch screen the stick and the buttons you HOLD are drawn over
+      the picture; the switches you press once &mdash; GEAR, FLAP, IFF and
+      the rest, spelled out rather than lettered &mdash; are behind the
+      <b>keyboard button in the side menu</b>.
     </p>
   </div>
 </div>
@@ -63,7 +69,18 @@
 <script src="coi-serviceworker.js"></script>
 
 <script src="jsdos/js-dos.js"></script>
+<script src="owlcontrols.js"></script>
 <script>
+  // The stick, the buttons and the switch panel are OWL FLY II's, shared
+  // rather than copied - see owlcontrols.js. This page was forked from the
+  // GAME and shipped with none of them.
+  //
+  // The extra row is the front step: this machine IS a Hercules, so the
+  // card is already chosen, but the detail screen still asks FULL / MEDIUM
+  // / LOW. No PAL key here - there is no hardware palette on a mono tube,
+  // and the buttons under the picture own the phosphor instead.
+  var KB = OwlControls.keyboard([["1 2 3", "{enter}"]]);
+
   Dos(document.getElementById("dos"), {
     url: "owlfly3h_v4.jsdos",
     pathPrefix: "jsdos/emulators/",
@@ -71,29 +88,17 @@
     renderAspect: "4/3",
     imageRendering: "pixelated",
     scaleControls: 0.2,
-    onEvent: function (e, ci) { if (e === "ci-ready") window.__ci = ci; }
+    softKeyboardLayout: KB.layout,
+    softKeyboardSymbols: KB.symbols,
+    onEvent: function (e, ci) {
+      if (e !== "ci-ready") return;
+      window.__ci = ci;
+      OwlControls.mountTouch(ci);
+    }
   });
 
-  // the '+' fix, inherited from the OWL FLY II page: js-dos's DOM-code
-  // table has no Equal/Minus entries, so the throttle keys never reach
-  // DOSBox in a browser - the page hands them over itself
-  var KBDFIX = { Equal: 61, Minus: 45, NumpadAdd: 334, NumpadSubtract: 333 };
-  var kbdDown = {};
-  window.addEventListener("keydown", function (e) {
-    var k = KBDFIX[e.code];
-    if (!k || !window.__ci) return;
-    e.preventDefault();
-    if (kbdDown[e.code]) return;         // ignore auto-repeat
-    kbdDown[e.code] = true;
-    window.__ci.sendKeyEvent(k, true);
-  }, true);
-  window.addEventListener("keyup", function (e) {
-    var k = KBDFIX[e.code];
-    if (!k || !window.__ci) return;
-    e.preventDefault();
-    kbdDown[e.code] = false;
-    window.__ci.sendKeyEvent(k, false);
-  }, true);
+  OwlControls.fixPlusMinus(function () { return window.__ci; });
+  OwlControls.watchPanel();
 
   // THE PHOSPHOR SWITCH. The emulator draws the Hercules screen in its
   // near-white; the tube colour is a display property, so a CSS filter

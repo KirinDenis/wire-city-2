@@ -27,7 +27,10 @@
   function target() {
     var q = new URLSearchParams(location.search);
     var v = q.get("l");
-    if (v) return "LESSONS\\L" + (v.length < 2 ? "0" + v : v).toUpperCase();
+    // digits only: lesson 5B is the SECOND video about LESSONS\L05 -
+    // one folder, two lectures - so ?l=5b lands where its code lives.
+    if (v) { v = v.replace(/[^0-9]/g, ""); }
+    if (v) return "LESSONS\\L" + (v.length < 2 ? "0" + v : v);
     v = q.get("e"); if (v) return "EXAMPLES\\" + v.toUpperCase();
     v = q.get("g"); if (v) return "GAMES\\" + v.toUpperCase();
     return null;

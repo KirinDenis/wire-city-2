@@ -55,15 +55,25 @@
       machine has not got refuses the key. Every retro mode converts the
       same finished 256-colour frame; the cockpit on the retro cards is its
       own drawn artwork, baked offline &mdash; not a per-pixel conversion.
-      <b>L</b> switches day and night on every card.
+      <b>N</b> switches day and night on every card.
     </p>
     <h2>THE KEYS</h2>
     <p>
       The aeroplane is OWL FLY II's, key for key: arrows fly, Shift+W/S gate
       the throttle, <b>A</b> lights the burner, Enter locks, Backspace fires
       a missile, Space holds the cannon, F2&ndash;F7 are the views,
-      <b>Alt-Q</b> leaves. The full manual lives on the
-      <a href="owlfly2.html">OWL FLY II page</a>.
+      <b>L</b> is the landing gear, <b>Alt-Q</b> leaves. The full manual
+      lives on the <a href="owlfly2.html">OWL FLY II page</a>.
+    </p>
+    <h2>ON A PHONE</h2>
+    <p>
+      A touch screen gets a stick and eight buttons drawn over the picture:
+      what you HOLD &mdash; stick, throttle, trigger. What you press ONCE
+      &mdash; gear, flaps, radios, cameras &mdash; is on the panel behind
+      the <b>keyboard button in the side menu</b>, spelled out: GEAR, FLAP,
+      IFF rather than L, F, I. The last row of that panel is this edition's
+      own: the digits the front step asks for, ENTER, and <b>PAL</b> for the
+      CGA palette swap.
     </p>
   </div>
 </div>
@@ -73,7 +83,20 @@
 <script src="coi-serviceworker.js"></script>
 
 <script src="jsdos/js-dos.js"></script>
+<script src="owlcontrols.js"></script>
 <script>
+  // The stick, the buttons and the switch panel are OWL FLY II's, shared
+  // rather than copied - this page was forked from the GAME and shipped
+  // without any of them. See owlcontrols.js.
+  //
+  // ONE ROW IS THIS GAME'S OWN: the front step asks for a digit, so a
+  // pilot with no keyboard needs the digits somewhere. (The stick walks
+  // the same menu with up/down and ENTER, but a card is one key away and
+  // should stay that way.) H swaps the CGA hardware palette in flight.
+  var KB = OwlControls.keyboard(
+    [["1 2 3 4 5 6 7", "{enter} h"]],
+    { h: "PAL" });
+
   Dos(document.getElementById("dos"), {
     url: "owlfly3_v4.jsdos",
     pathPrefix: "jsdos/emulators/",
@@ -81,33 +104,17 @@
     renderAspect: "4/3",
     imageRendering: "pixelated",
     scaleControls: 0.2,
-    onEvent: function (e, ci) { if (e === "ci-ready") window.__ci = ci; }
+    softKeyboardLayout: KB.layout,
+    softKeyboardSymbols: KB.symbols,
+    onEvent: function (e, ci) {
+      if (e !== "ci-ready") return;
+      window.__ci = ci;
+      OwlControls.mountTouch(ci);
+    }
   });
 
-  // ---- the '+' fix, inherited from the OWL FLY II page (2026-07-27):
-  // js-dos has KBD_equals/KBD_minus constants but its DOM-code table has
-  // no "Equal"/"Minus" entry at all, so the physical +/-/= keys are
-  // simply never delivered to DOSBox. They work in native DOSBox and die
-  // in the browser. We hand them to the emulator ourselves, press AND
-  // release, so the throttle ramps while the key is held - and Shift
-  // rides js-dos's own path, so '+' still slams the lever to the stop.
-  var KBDFIX = { Equal: 61, Minus: 45, NumpadAdd: 334, NumpadSubtract: 333 };
-  var kbdDown = {};
-  window.addEventListener("keydown", function (e) {
-    var k = KBDFIX[e.code];
-    if (!k || !window.__ci) return;
-    e.preventDefault();
-    if (kbdDown[e.code]) return;         // ignore auto-repeat
-    kbdDown[e.code] = true;
-    window.__ci.sendKeyEvent(k, true);
-  }, true);
-  window.addEventListener("keyup", function (e) {
-    var k = KBDFIX[e.code];
-    if (!k || !window.__ci) return;
-    e.preventDefault();
-    kbdDown[e.code] = false;
-    window.__ci.sendKeyEvent(k, false);
-  }, true);
+  OwlControls.fixPlusMinus(function () { return window.__ci; });
+  OwlControls.watchPanel();
 </script>
 </body>
 </html>
