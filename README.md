@@ -3,9 +3,9 @@
 ### ▶ Play: https://kirindenis.github.io/wire-city-2/
 ### 💬 Community: [facebook.com/groups/OWLOS](https://www.facebook.com/groups/OWLOS)
 
-Real games in real **8086 assembly** (VGA mode 13h, integer maths, no
-libraries), running in the browser through DOSBox-WASM — and readable to the
-last byte. The assembler ships with them, so you can rebuild any of it
+Real games in real **8086 assembly** (VGA mode 13h — and, in the newest one,
+everything back to Hercules — integer maths, no libraries), running in the
+browser through DOSBox-WASM, and readable to the last byte. The assembler ships with them, so you can rebuild any of it
 yourself without buying or installing a thing. Built by the team behind **[Owlos](https://owlos.sk/)**:
 keeping legacy systems alive is our day job; writing new software for
 MS-DOS is how we relax.
@@ -55,6 +55,7 @@ what it looks like applied.
 
 | Game | What it is | |
 |---|---|---|
+| ![owlfly3](docs/shots/owlfly3.png) **[OWL FLY III](GAMES/OWLFLY3/)** | **The one that runs on the card you actually have.** OWL FLY II's sky, opened up to **seven video systems** — Hercules 720×348 mono, CGA, EGA at 320×200 and 640×350, MCGA, VGA, and VGA 640×480 — and **three detail levels**, from the full game down to a wireframe world with a flat grid for ground. There is still only ONE renderer: every mode converts the same finished 320×200×256 frame through a baked lookup at blit time, and each retro cockpit is its own artwork, drawn offline the 1988 way. The detail levels are conditions inside that renderer, never a second one — LOW turns the whole world to wire with a single branch, and it flies on hardware two generations below the target. | [▶ play](https://kirindenis.github.io/wire-city-2/owlfly3.html) · [Hercules](https://kirindenis.github.io/wire-city-2/owlfly3h.html) |
 | ![owlfly2](res/owlfly2.png) **[OWL FLY II](GAMES/OWLFLY2/)** | **The multiplayer successor**, 105 KB of code and 162 KB of data: one shared sky over IPX-through-WebSocket, and no menu — you arrive as a spectator over the bot war, an orbit camera on whoever has a missile on his tail, and **Enter takes a jet**, stopped on your own runway with the brakes set. An F-15 SE II cockpit with NATO-shape radar symbology, three MFD pages (MAP / SIT / TGT), a ground school (rotation speed, wheel brakes, nose-wheel steering), a recorded sound bank mixed through one DMA ring, and an afterburner worth four dry engines. The data is the painted cockpit (63 KB front, 47 KB side views) and the sounds (52 KB). | [▶ play](https://kirindenis.github.io/wire-city-2/owlfly2.html) |
 | ![owlfly](res/owlfly.png) **[OWL FLY](GAMES/OWLFLY/)** | The combat flight simulator, 40 KB: procedural island, destructible city, two air forces of five aircraft types, missiles, a photo cockpit with a working radar, a real jet engine in one Sound Blaster channel. *Fly, owl!* | [▶ play](https://kirindenis.github.io/wire-city-2/owlfly.html) |
 | ![wirecity](res/wirecity.png) **[WIRE CITY](GAMES/WIRECITY/)** | The one that named the arcade, 5.5 KB in a single source file: a wireframe night-flight over a procedural megacity. Where the rest of it started. | [▶ play](https://kirindenis.github.io/wire-city-2/play.html?g=wirecity) |
@@ -83,15 +84,24 @@ RUN JET
 ## The lessons
 
 A video series that builds a DOS game from nothing, one constraint at a time —
-[LESSONS/](LESSONS/). Two of them come with a workbench rather than a video of
-one: a DOS prompt in your browser tab with the assembler already on the disk.
-Type `MAKE` and you have built what the lesson builds. Nothing is installed and
-nothing is downloaded — reload the page and the machine is clean again.
+[LESSONS/](LESSONS/). Every lesson is one small program you can read in an
+evening, and each one is built to hand over **one fact about the machine**.
 
-- **[▶ Lesson 2 — the file *is* the program](https://kirindenis.github.io/wire-city-2/l02.html)**
-  · eighteen bytes, and you can take them apart and change five of them
-- **[▶ Lesson 3 — the screen, one byte at a time](https://kirindenis.github.io/wire-city-2/l03.html)**
-  · a dot, then every colour there is — and why that picture comes out slanted
+The ones marked ▶ come with a workbench instead of a video of one: a DOS prompt
+in your browser tab with the assembler already on the disk. Type `MAKE` and you
+have built what the lesson builds. Nothing is installed and nothing is
+downloaded — reload the page and the machine is clean again.
+
+| Lesson | The fact it hands over |
+|---|---|
+| **1 — the screen is memory** | Two addresses — `B800` for text, `A000` for pixels — and why `far` exists. Written in C and Pascal: the only one that is not assembly, and the only one that needs a compiler you install yourself. |
+| **[▶ 2 — the file *is* the program](https://kirindenis.github.io/wire-city-2/l02.html)** | COM against EXE: eighteen bytes, one source line decides which file comes out — and you can patch those bytes by hand and watch the program change its mind. |
+| **[▶ 3 — the screen, one byte at a time](https://kirindenis.github.io/wire-city-2/l03.html)** | Mode 13h from assembly: a dot, then every colour there is — and why that picture comes out slanted. |
+| **4 — the arithmetic underneath everything** | A program cannot even show you a number until it can divide. Fixed point, and why `MUL` and `DIV` are the instructions you cannot afford. |
+| **[▶ 5 — sixty-five numbers, and what they are for](https://kirindenis.github.io/wire-city-2/l05.html)** | A sine table instead of floating point: a circle is 256 steps, an angle wraps with `AND`, and a quarter of the table is the whole of it. |
+| **5B — a ring with no multiply in it** | Lesson 4's debt, paid: 70 is three shifts and two adds. Both rings are drawn on one screen and every coordinate compared, so the claim is checked rather than asserted. |
+| **6 — ten clocks, and one formula** | The radius vector. Hold the length and turn the angle — that is a circle. Hold the angle and grow the length — that is a clock hand. Ten live clocks, one formula, and the formula 3D is built on. |
+| **7 — memory is one line, the screen is not** | Where that line folds is the whole difference: across, the bytes are neighbours and one instruction writes them all; down, they never are. |
 
 ## Reading
 
@@ -104,6 +114,7 @@ whole machine · [3D graphics](docs/GRAPHICS.md) (and
 ## Repository layout
 
 ```
+GAMES/OWLFLY3/    OWL FLY III, seven video systems and three detail levels
 GAMES/OWLFLY2/    OWL FLY II, the multiplayer successor (EXE, far segments)
 GAMES/OWLFLY/     the flight simulator: SRC/, res/, INSTALL/, its README
 GAMES/WIRECITY/   the wireframe night-flight: one CITY.ASM, its README
@@ -208,6 +219,24 @@ now carries `LOOP` and `JCXZ`, which reach 127 bytes and have no long form on
 any processor at all.
 
 ## What is in the workshop
+
+**One disk instead of eleven downloads.** Today every lesson ships as its own
+browser bundle, and each one carries its own copy of the assembler — six
+lessons is about 985 KB, of which some 930 KB is the same three files six
+times over. So the whole course is being put on **one bootable disk**:
+`TOOLS\` (the assembler, the editor, the listing tool), `LESSONS\`,
+`EXAMPLES\`, `GAMES\`, and `WORK\` — which is yours, and which nothing else
+on the disk writes to. It boots into a catalogue, `MENU.COM`, written in
+8086 like everything else here: it offers **open it, build it, run it**, and
+every one of those prints the command before running it, because the point
+is that you could have typed it yourself.
+
+Nothing in that catalogue is hand-maintained. Each lesson, example and game
+carries a small `.INF` file describing itself, and the same file feeds the
+menu on the disk, the course page on the web and the packer that builds the
+bundle — one description, three readers, so the list cannot disagree with
+the disk. It stands at **26 entries** and it is built and tested in DOS
+already (`TOOLS\RUNWB.BAT`); the browser page for it is the next thing.
 
 Multiplayer over IPX tunneled through WebSocket is **live in OWL FLY II**
 (browser pilots meet through the relay; native DOSBoxes over `ipxnet`).
