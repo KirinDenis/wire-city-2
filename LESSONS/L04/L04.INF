@@ -5,3 +5,4 @@
 .build  FASM MATH.ASM MATH.COM
 .run    MATH.COM
 .uses   DIV MUL LODSB STOSW PUSH POP
+.video  https://www.youtube.com/watch?v=l2u1JP2zqoE

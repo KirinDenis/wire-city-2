@@ -9,3 +9,4 @@
 .run    CLOCK.COM
 .uses   IMUL SAR SHL DIV MUL NEG PUSH POP
 .engine ENGINE\E_MATH.INC
+.video  https://www.youtube.com/watch?v=alGTDwpsHFI

@@ -1,0 +1,60 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>workbench deep link test</title>
+<link rel="stylesheet" href="jsdos/js-dos.css">
+<style>
+  body { background:#111; color:#ccc; font:13px monospace; margin:0; padding:8px }
+  #dos { width:100%; height:80vh; background:#000 }
+  #log { white-space:pre-wrap; padding:4px 0 }
+  a { color:#6cf }
+</style>
+<div id="log">starting...</div>
+<div><a href="?l=7">?l=7</a> · <a href="?l=5b">?l=5b</a> · <a href="?g=owlfly3">?g=owlfly3</a> · <a href="?e=jet">?e=jet</a> · <a href="?">no target</a></div>
+<div id="dos"></div>
+<script src="coi-serviceworker.js"></script>
+<script src="jsdos/js-dos.js"></script>
+<script src="wbzip.js"></script>
+<script>
+// THE DEEP LINK, end to end. The page turns ?l=7 into the disk entry's own
+// directory, appends it to the bundle as GOTO.TXT, and hands the result to
+// js-dos as a blob: URL - the ordinary `url` path every page here uses.
+// MENU.COM reads GOTO.TXT at startup and opens that entry's screen.
+(function () {
+  var log = document.getElementById("log");
+  function say(s) { log.textContent += "\n" + s; }
+
+  // ?l=7 -> LESSONS\L07 · ?e=jet -> EXAMPLES\JET · ?g=owlfly3 -> GAMES\OWLFLY3
+  function target() {
+    var q = new URLSearchParams(location.search);
+    var v = q.get("l");
+    if (v) return "LESSONS\\L" + (v.length < 2 ? "0" + v : v).toUpperCase();
+    v = q.get("e"); if (v) return "EXAMPLES\\" + v.toUpperCase();
+    v = q.get("g"); if (v) return "GAMES\\" + v.toUpperCase();
+    return null;
+  }
+
+  var want = target();
+  say(want ? "target: " + want : "no target - the catalogue opens at the top");
+  say("fetching workbench_v1.jsdos ...");
+
+  fetch("workbench_v1.jsdos", { cache: "no-store" })
+    .then(function (r) { if (r.status !== 200) throw new Error("bundle " + r.status); return r.arrayBuffer(); })
+    .then(function (buf) {
+      var bytes = new Uint8Array(buf);
+      if (want) {
+        bytes = WBZip.addFile(bytes, "GOTO.TXT", want + "\r\n");
+        say("appended GOTO.TXT: " + buf.byteLength + " -> " + bytes.length + " bytes");
+      }
+      var url = URL.createObjectURL(new Blob([bytes], { type: "application/zip" }));
+      say("handing js-dos a blob: url (the ordinary url path)");
+      Dos(document.getElementById("dos"), {
+        url: url,
+        pathPrefix: "jsdos/emulators/",
+        theme: "dark",
+        imageRendering: "pixelated",
+        onEvent: function (e) { say("js-dos: " + e); }
+      });
+    })
+    .catch(function (e) { say("FAILED: " + e.message); });
+})();
+</script>

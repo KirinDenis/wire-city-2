@@ -49,6 +49,189 @@ start:
         call    scan_all        ; walk the manifests once; WORK is
                                 ; rescanned every time its screen opens,
                                 ; because N and MAKE change it
+        call    deep_link       ; ...and if somebody asked for one entry by
+                                ; name, open it instead of the top screen
+        jmp     top_screen      ; and past the routine itself - it sits here,
+                                ; right where it is read, so falling into it
+                                ; a second time was the whole bug: a miss ran
+                                ; deep_link again and its RET left DOS a prompt
+
+; ---------------------------------------------------------------------------
+; THE DEEP LINK - how a URL points at ONE lesson.
+;
+;  Two ways in, one lookup. From DOS:
+;
+;      MENU LESSONS\L07
+;
+;  and from the web, where a page cannot pass a command line: a file called
+;  GOTO.TXT holding the same string. The page fetches the disk, appends that
+;  one file to the bundle and hands it over as a blob - see docs\wbzip.js
+;  for why that is the only door js-dos leaves open.
+;
+;  It OPENS the entry's screen with the cursor on it. It does not build and
+;  it does not run: somebody arriving at lesson seven should still see the
+;  three verbs and choose. The menu prints the command before running it,
+;  and a link is not a reason to skip that.
+; ---------------------------------------------------------------------------
+deep_link:
+        mov     si, 81h         ; the command tail, as DOS left it in the PSP
+        mov     cl, [80h]
+        xor     ch, ch
+        jcxz    .file           ; nothing typed: try the file instead
+        mov     di, gobuf
+.sk:    lodsb                   ; skip the leading blanks DOS keeps
+        cmp     al, ' '
+        jne     .cp
+        loop    .sk
+        jmp     .file
+.cp:    cmp     al, 13
+        je      .done
+        cmp     al, ' '
+        je      .done
+        call    upcase
+        stosb
+        lodsb
+        loop    .cp
+.done:  mov     byte [di], 0
+        cmp     byte [gobuf], 0
+        jne     .look
+.file:  mov     ax, 3D00h       ; \GOTO.TXT - one line, the same string
+        mov     dx, x_goto
+        int     21h
+        jc      .no
+        mov     bx, ax
+        mov     ah, 3Fh
+        mov     cx, DIRSZ-1
+        mov     dx, gobuf
+        int     21h
+        push    ax
+        mov     ah, 3Eh
+        int     21h
+        pop     cx
+        jcxz    .no
+        mov     di, gobuf       ; cut it at the end of the first line
+        add     di, cx
+        mov     byte [di], 0
+        mov     di, gobuf
+.tr:    mov     al, [di]
+        or      al, al
+        jz      .look
+        cmp     al, 13
+        je      .cut
+        cmp     al, 10
+        je      .cut
+        call    upcase
+        mov     [di], al
+        inc     di
+        jmp     .tr
+.cut:   mov     byte [di], 0
+
+; ---- find the entry whose directory matches, and open its tier ------------
+.look:  mov     word [gidx], 0
+.e:     mov     ax, [gidx]
+        cmp     ax, [entcnt]
+        jae     .no
+        call    entptrs
+        mov     si, [pdir]
+        inc     si              ; the manifest keeps "\LESSONS\L07"; the
+        mov     di, gobuf       ;  asked-for name has no leading slash
+        call    samestr
+        jc      .nx
+        ; which tier holds this entry?
+        xor     cx, cx
+.t:     mov     bx, cx
+        shl     bx, 1
+        mov     ax, [gidx]
+        sub     ax, [secstart+bx]
+        js      .tn
+        cmp     ax, [seccnt2+bx]
+        jae     .tn
+        mov     [gosel], ax     ; its place inside the tier...
+        mov     bx, cx
+        call    section_screen  ; ...and the tier's own screen, opened
+        ret
+.tn:    inc     cx
+        cmp     cx, 3
+        jb      .t
+        ret                     ; found, but not in a tier (WORK) - top screen
+.nx:    inc     word [gidx]
+        jmp     .e
+.no:    ret
+
+; ---- do the asciiz strings at SI and DI match? CF set = no ---------------
+;  Case has already been folded on the way in, so this is a plain compare.
+samestr:
+        push    si
+        push    di
+.c:     mov     al, [si]
+        mov     ah, [di]
+        cmp     al, ah
+        jne     .diff
+        or      al, al
+        jz      .same
+        inc     si
+        inc     di
+        jmp     .c
+.same:  pop     di
+        pop     si
+        clc
+        ret
+.diff:  pop     di
+        pop     si
+        stc
+        ret
+
+; ---------------------------------------------------------------------------
+; MAKE and RUN take the entry's own name when its directory holds more than
+; one entry. EXAMPLES is thirteen programs in a single folder, and there a
+; bare RUN can only print a list - but R on this screen means run THIS one.
+; So the command becomes RUN JET, which is also exactly what the student
+; would type, which is the whole point of printing it first.
+;
+; DI arrives on the terminator strcpy left, and the walk needs the entry
+; table, so the selected entry's pointers are rebuilt afterwards.
+; ---------------------------------------------------------------------------
+add_name:
+        push    bx              ; the caller's selection
+        push    di
+        mov     ax, [pdir]
+        mov     [nd_dir], ax
+        xor     cx, cx          ; CX = entries living in this directory
+        xor     bx, bx
+.e:     cmp     bx, [entcnt]
+        jae     .done
+        push    bx
+        push    cx
+        mov     ax, bx
+        call    entptrs
+        mov     si, [pdir]
+        mov     di, [nd_dir]
+        call    samestr
+        pop     cx
+        pop     bx
+        jc      .nx
+        inc     cx
+.nx:    inc     bx
+        jmp     .e
+.done:  pop     di
+        pop     bx
+        push    cx
+        call    sel_entptrs     ; the selection's pointers, back as they were
+        pop     cx
+        cmp     cx, 2
+        jb      .alone
+        mov     al, ' '
+        stosb
+        mov     si, [pmain]     ; "JET.ASM" -> JET: the name, not the file
+.c:     lodsb
+        or      al, al
+        jz      .end
+        cmp     al, '.'
+        je      .end
+        stosb
+        jmp     .c
+.end:   mov     byte [di], 0
+.alone: ret
 
 ; ---------------------------------------------------------------------------
 ; The top screen: four sections. The three tiers ARE the curriculum, and
@@ -168,12 +351,13 @@ section_screen:
         mov     si, [secnames+bx]
         mov     di, 0*160+2
         mov     ah, 70h
-        call    puts
-        mov     si, [secdescs+bx]
+        call    puts_pad16      ; padded, like the top screen's column -
+        mov     si, [secdescs+bx]   ; unpadded it read LESSONSone idea
         mov     ah, 70h
         call    puts
 
-        xor     bx, bx          ; BX = selected entry inside the section
+        mov     bx, [gosel]     ; normally 0 - the top of the tier. A deep
+        mov     word [gosel], 0 ;  link sets it once, and only once
 .draw:
         call    draw_entries
         call    draw_what
@@ -222,6 +406,7 @@ section_screen:
         mov     si, vb_make
         mov     di, vbuf
         call    strcpy
+        call    add_name
         call    exec_entry
         jmp     .again
 .run:   call    sel_entptrs
@@ -231,6 +416,7 @@ section_screen:
         mov     si, vb_run
         mov     di, vbuf
         call    strcpy
+        call    add_name
         call    exec_entry
         jmp     .again
 .ro:    ; nothing to build or run - the entry is for reading
@@ -1263,6 +1449,7 @@ x_games      db 'GAMES',0
 x_examplesd  db '\EXAMPLES',0
 x_star       db '\*',0
 x_inf        db '\*.INF',0
+x_goto       db '\GOTO.TXT',0   ; the deep link the page appends to the bundle
 x_workpat    db '\WORK\*.ASM',0
 x_workdir    db '\WORK',0
 x_workpre    db '\WORK\',0
@@ -1302,6 +1489,9 @@ seccnt       db 0, 0, 0         ; byte counts for the top screen
 seccnt2      dw 0, 0, 0         ; word copies for arithmetic
 secstart     dw 0, 0, 0
 workcnt      db 0
+gosel        dw 0                ; which entry a deep link opens on
+gidx         dw 0                ; ...and the walk that finds it
+nd_dir       dw 0                ; the directory add_name counts entries in
 
 ptitle       dw 0
 pwhat        dw 0
@@ -1334,6 +1524,7 @@ ent_what     rb MAXENT*WHATSZ
 ent_main     rb MAXENT*MAINSZ
 ent_dir      rb MAXENT*DIRSZ
 ent_flag     rb MAXENT
+gobuf        rb DIRSZ            ; the entry a deep link asked for, upper-cased
 worknames    rb MAXWORK*MAINSZ
 
              rb 256             ; the stack

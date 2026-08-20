@@ -14,7 +14,10 @@ cd /d %~dp0..
 if exist LOCAL.BAT call .\LOCAL.BAT
 if "%DOSBOX%"=="" set DOSBOX=dosbox.exe
 if not exist DISK\BOOT.BAT goto nostage
-"%DOSBOX%" -noautoexec -c "mount c %CD%\DISK" -c "c:" -c "BOOT.BAT"
+REM   RUNWB                     the catalogue, top screen
+REM   RUNWB LESSONS\L07         straight to one entry - the same deep link
+REM                             the web page makes, minus the browser
+"%DOSBOX%" -noautoexec -c "mount c %CD%\DISK" -c "c:" -c "BOOT.BAT %~1"
 goto end
 :nostage
 echo DISK\ is not staged. Run:  powershell -ExecutionPolicy Bypass -File TOOLS\packwb.ps1

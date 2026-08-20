@@ -5,3 +5,4 @@
 .build  FASM PIXEL.ASM PIXEL.COM
 .run    PIXEL.COM
 .uses   STOSB STOSW LOOP INT
+.video  https://www.youtube.com/watch?v=2-bmdJWxBUM

@@ -6,3 +6,4 @@
 .build  FASM LINE.ASM LINE.COM
 .run    LINE.COM
 .uses   MUL ADD STOSW REP DIV INT
+.video  https://www.youtube.com/watch?v=dVpH3NbW6d0

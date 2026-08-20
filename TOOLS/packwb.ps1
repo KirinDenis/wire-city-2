@@ -231,17 +231,42 @@ foreach ($grp in $byDir) {
   # exactly the command MAKE just showed.
   if ($built.Count -gt 0) {
     $mk = "@echo off`n"
+    # A directory of many programs - EXAMPLES - takes a name: MAKE JET
+    # builds the one you asked for instead of all thirteen. Only when every
+    # entry in it is built by the same one-line shape, so the shortcut is
+    # still the manifest's own command and not a guess. %1 goes straight to
+    # FASM, so nothing here compares strings and case never enters into it.
+    $oneShape = $built.Count -gt 1
+    foreach ($e in $built) {
+      if ($e.build.Count -ne 1 -or $e.build[0] -ne "FASM $($e.name).ASM $($e.name).COM") { $oneShape = $false }
+    }
+    if ($oneShape) {
+      $mk += "if `"%1`"==`"`" goto all`n"
+      $mk += "if not exist %1.ASM goto nosuch`n"
+      $mk += "echo FASM %1.ASM %1.COM`n"
+      $mk += "FASM %1.ASM %1.COM`n"
+      $mk += "if not exist %1.COM echo BUILD FAILED for %1 - %1.COM was not written; the reason is printed above.`n"
+      $mk += "goto end`n"
+      $mk += ":nosuch`necho There is no %1.ASM here.  Type MAKE on its own to build them all.`n"
+      $mk += "goto end`n"
+      $mk += ":all`n"
+    }
     foreach ($e in $built) {
       foreach ($cmd in $e.build) {
         $mk += "echo $cmd`n$cmd`n"
       }
       if ($e.run) {
+        # where the build actually PUT it, not where it is run from: a game
+        # assembles into INSTALL\ and runs from inside it, so checking the
+        # bare name here called every good build of OWL FLY a failure.
         $bin = ($e.run -split '\s+')[0]
+        if ($e.rundir) { $bin = "$($e.rundir)\$bin" }
         $mk += "if not exist $bin echo BUILD FAILED for $($e.name) - $bin was not written; the reason is printed above.`n"
       }
     }
     $names = ($built | ForEach-Object { $_.name }) -join ", "
     $mk += "echo.`necho Done: $names.  Type RUN to see what runs.`n"
+    if ($oneShape) { $mk += ":end`n" }
     Put (Join-Path $dirRel "MAKE.BAT") $mk
   }
 
@@ -261,11 +286,25 @@ foreach ($grp in $byDir) {
     $rn += "echo never the program. Type MAKE first; the first binary you own is one you made.`n:end`n"
     Put (Join-Path $dirRel "RUN.BAT") $rn
   } elseif ($runnable.Count -gt 1) {
-    # several programs share this directory: RUN lists them; typing a name
-    # runs it, which is how DOS already works and worth saying out loud
-    $rn = "@echo off`necho These run from here - type the name itself:`n"
+    # Several programs share this directory. Bare RUN lists them - typing a
+    # name is how DOS already works and is worth saying out loud - but RUN
+    # takes that name too, because the menu's R means "run THIS one" and a
+    # list is not a program. No IF that compares strings: %1 goes to DOS,
+    # which matches file names without caring about case.
+    $rn = "@echo off`n"
+    $rn += "if `"%1`"==`"`" goto list`n"
+    $rn += "if exist %1 goto go`n"
+    $rn += "if not exist %1.COM goto nothing`n"
+    $rn += "echo %1.COM`n%1.COM`ngoto end`n"
+    $rn += ":go`necho %1`n%1`ngoto end`n"
+    $rn += ":list`necho These run from here - type the name itself:`n"
     foreach ($e in $runnable) { $rn += "echo   $($e.run)`n" }
     $rn += "echo (not built yet? type MAKE first - the source ships, the program never does)`n"
+    $rn += "goto end`n"
+    $rn += ":nothing`n"
+    $rn += "echo %1 is not built yet - type MAKE first; the first binary you own`n"
+    $rn += "echo is one you made.`n"
+    $rn += ":end`n"
     Put (Join-Path $dirRel "RUN.BAT") $rn
   }
 }
@@ -275,7 +314,7 @@ Put "BOOT.BAT" @"
 @echo off
 set PATH=C:\TOOLS;Z:\
 C:\TOOLS\CWSDPMI.EXE -p
-MENU
+MENU %1
 "@
 
 # SELFTEST.BAT - the automated half of "test it in DOS before packing":
@@ -391,6 +430,28 @@ $out = Join-Path $root "docs\$name"
 if (Test-Path $out) { Remove-Item -Force $out }
 $fs  = [System.IO.File]::Open($out, [System.IO.FileMode]::CreateNew)
 $zip = New-Object System.IO.Compression.ZipArchive($fs, [System.IO.Compression.ZipArchiveMode]::Create)
+# ---- directories FIRST, parents before children ----------------------------
+# js-dos unpacks with libzip's zip_to_fs, and that creates a file's IMMEDIATE
+# parent only - one level deep. A zip that carries GAMES/NEWTON/MAKE.BAT and
+# no directory entries dies on the first two-deep path with
+#     GAMES/NEWTON: No such file or directory
+# and the page sits at a black screen (measured in the browser, 2026-08-20 -
+# the flat single-directory bundles every other page here uses never hit it).
+# So each directory gets its own empty entry, shortest path first, and every
+# mkdir finds the parent it needs already there.
+$dirs = @{}
+foreach ($f in Get-ChildItem $disk -Recurse -File) {
+  $rel   = $f.FullName.Substring($disk.Length + 1) -replace "\\", "/"
+  $parts = $rel.Split("/")
+  for ($i = 0; $i -lt $parts.Length - 1; $i++) {
+    $dirs[(($parts[0..$i]) -join "/") + "/"] = $true
+  }
+}
+# by length: a parent is a prefix of its children, so shorter is always first
+foreach ($d in ($dirs.Keys | Sort-Object { $_.Length })) {
+  $zip.CreateEntry($d, [System.IO.Compression.CompressionLevel]::NoCompression).Open().Close()
+}
+
 foreach ($f in Get-ChildItem $disk -Recurse -File) {
   if ($f.Name -eq ".STAGED") { continue }
   if ($f.Name -eq "SELFTEST.BAT") { continue }   # the test rig, not the disk

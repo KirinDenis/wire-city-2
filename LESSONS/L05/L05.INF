@@ -9,3 +9,5 @@
 .run    TURN.COM
 .uses   AND SHR NEG MUL SHL SAR IMUL LOOP
 .engine ENGINE\E_MATH.INC
+.video  https://www.youtube.com/watch?v=mLUMi9wG0bU
+.video  https://www.youtube.com/watch?v=vebo-_sgv18   (lesson 5B, the same TURN.ASM)

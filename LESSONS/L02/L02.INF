@@ -8,3 +8,4 @@
 .build  FASM HEX.ASM HEX.COM
 .run    HELLO.COM
 .uses   MOV INT
+.video  https://www.youtube.com/watch?v=G_GIAm2QHFk

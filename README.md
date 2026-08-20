@@ -87,21 +87,23 @@ A video series that builds a DOS game from nothing, one constraint at a time —
 [LESSONS/](LESSONS/). Every lesson is one small program you can read in an
 evening, and each one is built to hand over **one fact about the machine**.
 
-The ones marked ▶ come with a workbench instead of a video of one: a DOS prompt
-in your browser tab with the assembler already on the disk. Type `MAKE` and you
-have built what the lesson builds. Nothing is installed and nothing is
-downloaded — reload the page and the machine is clean again.
+**▶ Watch** is the video. **⌨ Build it** is a workbench instead of a video of
+one: a DOS prompt in your browser tab with the assembler already on the disk —
+type `MAKE` and you have built what the lesson builds. Nothing is installed and
+nothing is downloaded; reload the page and the machine is clean again.
 
-| Lesson | The fact it hands over |
-|---|---|
-| **1 — the screen is memory** | Two addresses — `B800` for text, `A000` for pixels — and why `far` exists. Written in C and Pascal: the only one that is not assembly, and the only one that needs a compiler you install yourself. |
-| **[▶ 2 — the file *is* the program](https://kirindenis.github.io/wire-city-2/l02.html)** | COM against EXE: eighteen bytes, one source line decides which file comes out — and you can patch those bytes by hand and watch the program change its mind. |
-| **[▶ 3 — the screen, one byte at a time](https://kirindenis.github.io/wire-city-2/l03.html)** | Mode 13h from assembly: a dot, then every colour there is — and why that picture comes out slanted. |
-| **4 — the arithmetic underneath everything** | A program cannot even show you a number until it can divide. Fixed point, and why `MUL` and `DIV` are the instructions you cannot afford. |
-| **[▶ 5 — sixty-five numbers, and what they are for](https://kirindenis.github.io/wire-city-2/l05.html)** | A sine table instead of floating point: a circle is 256 steps, an angle wraps with `AND`, and a quarter of the table is the whole of it. |
-| **5B — a ring with no multiply in it** | Lesson 4's debt, paid: 70 is three shifts and two adds. Both rings are drawn on one screen and every coordinate compared, so the claim is checked rather than asserted. |
-| **6 — ten clocks, and one formula** | The radius vector. Hold the length and turn the angle — that is a circle. Hold the angle and grow the length — that is a clock hand. Ten live clocks, one formula, and the formula 3D is built on. |
-| **7 — memory is one line, the screen is not** | Where that line folds is the whole difference: across, the bytes are neighbours and one instruction writes them all; down, they never are. |
+**[▶ The whole series as a playlist](https://www.youtube.com/playlist?list=PLYAv8-EdgIF8)**
+
+| Lesson | The fact it hands over | |
+|---|---|---|
+| **1 — the screen is memory** | Two addresses — `B800` for text, `A000` for pixels — and why `far` exists. Written in C and Pascal: the only one that is not assembly, and the only one that needs a compiler you install yourself. | [▶ watch](https://www.youtube.com/watch?v=bi9Kjp8gQ8I) |
+| **2 — the file *is* the program** | COM against EXE: eighteen bytes, one source line decides which file comes out — and you can patch those bytes by hand and watch the program change its mind. | [▶ watch](https://www.youtube.com/watch?v=G_GIAm2QHFk) · [⌨ build it](https://kirindenis.github.io/wire-city-2/l02.html) |
+| **3 — the screen, one byte at a time** | Mode 13h from assembly: a dot, then every colour there is — and why that picture comes out slanted. | [▶ watch](https://www.youtube.com/watch?v=2-bmdJWxBUM) · [⌨ build it](https://kirindenis.github.io/wire-city-2/l03.html) |
+| **4 — the arithmetic underneath everything** | A program cannot even show you a number until it can divide. Fixed point, and why `MUL` and `DIV` are the instructions you cannot afford. | [▶ watch](https://www.youtube.com/watch?v=l2u1JP2zqoE) |
+| **5 — sixty-five numbers, and what they are for** | A sine table instead of floating point: a circle is 256 steps, an angle wraps with `AND`, and a quarter of the table is the whole of it. | [▶ watch](https://www.youtube.com/watch?v=mLUMi9wG0bU) · [⌨ build it](https://kirindenis.github.io/wire-city-2/l05.html) |
+| **5B — a ring with no multiply in it** | Lesson 4's debt, paid: 70 is three shifts and two adds. Both rings are drawn on one screen and every coordinate compared, so the claim is checked rather than asserted. | [▶ watch](https://www.youtube.com/watch?v=vebo-_sgv18) |
+| **6 — ten clocks, and one formula** | The radius vector. Hold the length and turn the angle — that is a circle. Hold the angle and grow the length — that is a clock hand. Ten live clocks, one formula, and the formula 3D is built on. | [▶ watch](https://www.youtube.com/watch?v=alGTDwpsHFI) |
+| **7 — memory is one line, the screen is not** | Where that line folds is the whole difference: across, the bytes are neighbours and one instruction writes them all; down, they never are. | [▶ watch](https://www.youtube.com/watch?v=dVpH3NbW6d0) |
 
 ## Reading
 
