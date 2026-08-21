@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OWL FLY III</title>
+<link rel="stylesheet" href="jsdos/js-dos.css">
+<style>
+  html{background:#04060f}
+  body{margin:0;min-height:100vh;background:#04060f;color:#bcd;
+       font-family:monospace}
+  #wrap{display:flex;flex-direction:column;align-items:center;
+        justify-content:flex-start;gap:10px;padding:12px;box-sizing:border-box}
+  h1{font-weight:bold;letter-spacing:3px;color:#bcf;margin:4px;
+     text-shadow:0 0 8px #46c}
+  h2{color:#9bf;letter-spacing:2px;margin:14px 0 6px;font-size:15px}
+  #dos{width:min(96vw,1080px);aspect-ratio:16/10;background:#000;
+       box-shadow:0 0 24px #1330}
+  /* The flight controls - the touch stick, the buttons and the room the
+     switch panel needs - moved to owlcontrols.js, which injects their CSS
+     and is shared with both OWL FLY III pages. It went out as one copy per
+     page and the third page was forked from the GAME, so it shipped with
+     no controls at all. */
+  .hint{font-size:13px;color:#89b;text-align:center}
+  a{color:#9bf}
+  #manual{width:min(96vw,1080px);font-size:13px;line-height:1.5;color:#abc;
+          background:#04060f}
+  table{border-collapse:collapse;width:100%;background:#04060f}
+  td{padding:2px 8px;border-bottom:1px solid #123;vertical-align:top;
+     background:#04060f;color:#abc}
+  td.k{color:#dfe;white-space:nowrap;width:14em}
+  .grn{color:#5f5}.yel{color:#ff5}.red{color:#f66}.amb{color:#fb4}
+  .wht{color:#fff}
+  .stat{color:#5f7;font-size:12px}
+  /* ---- the labelled cockpit. The SVG viewBox carries the game's own
+     320x200 screen at x=100, so every leader line is anchored on the SAME
+     coordinate the source uses (PANELZON.INC, WLMPX, SWX, OSBX). ---- */
+  .diagram{width:100%;margin:8px 0 4px}
+  .diagram svg{width:100%;height:auto;display:block}
+  .diagram image{image-rendering:pixelated}
+  .diagram .ln path{stroke:#5b8fbf;stroke-width:.5;fill:none}
+  .diagram .dot circle{fill:#8df}
+  .diagram .plate rect{fill:#eef2f7;stroke:#8ab;stroke-width:.4}
+  .diagram .plate text{fill:#123;font:4.6px monospace}
+  .diagram .plate .t{font-weight:700;fill:#024}
+  .diagram .cap{fill:#89b;font:5px monospace;text-anchor:middle}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>O W L&nbsp;&nbsp;F L Y&nbsp;&nbsp;I I I</h1>
+  <div id="manual">
+
+    <h2>WHAT THIS IS</h2>
+    <p>
+      A multiplayer combat flight sim in 8086 assembly. Two squadrons fight
+      an attrition war over a procedural island minted from a two-byte seed
+       which is why joining a sky is instant: the advertisement
+      carries the seed, your machine builds the same island, the same city
+      and the same clouds, and you are there. You fly an F-15 with a real
+      instrument panel, a radar that has to transmit to see, flak that
+      shoots at what you tell it to, and an aeroplane that does not refill
+      itself. <b>Four missiles, 250 rounds and eleven minutes of fuel.</b>
+      The sortie ends when one of them does.
+    </p>
+
+    <h2>THE FRONT DOOR</h2>
+    <p>
+      <b>There is no menu, and there is one sky.</b> The game listens to the
+      wire for a couple of seconds — every sky advertises itself once a
+      second — and joins whatever it hears. Hears nothing, and it mints
+      the sky itself. You press nothing.
+    </p>
+    <p>
+      Then <b>you arrive as a spectator, into somebody else's fight</b>: the
+      orbit camera stands off a jet with a missile on its tail, because the
+      war is running before anyone gets here. <b>Space</b> moves to the next
+      one, and it moves on by itself after fifteen seconds if you don't.
+      <b>Arrows</b> swing the camera, <b>Z</b>/<b>X</b> pull in and back off.
+      <b>Enter</b> takes a jet — and you start it stopped on your own
+      concrete, so the first thing your flight contains is a takeoff.
+    </p>
+
+    <h2>THE COCKPIT</h2>
+    <p class="hint" style="text-align:left">every instrument, and the key that moves it</p>
+
+    <div class="diagram">
+    <svg viewBox="0 0 520 212" preserveAspectRatio="xMidYMid meet">
+      <image href="cockpit.png" x="100" y="0" width="320" height="200"></image>
+
+      <g class="ln">
+        <path d="M94 14 L255 11"></path>
+        <path d="M94 52 L150 145"></path>
+        <path d="M94 100 L110 150"></path>
+        <path d="M94 136 L134 168"></path>
+        <path d="M94 172 L142 187"></path>
+        <path d="M426 16 L258 130"></path>
+        <path d="M426 62 L369 145"></path>
+        <path d="M426 110 L409 150"></path>
+        <path d="M426 146 L291 150"></path>
+        <path d="M426 178 L378 187"></path>
+      </g>
+      <g class="dot">
+        <circle cx="255" cy="11" r="1.6"></circle><circle cx="150" cy="145" r="1.6"></circle>
+        <circle cx="110" cy="150" r="1.6"></circle><circle cx="134" cy="168" r="1.6"></circle>
+        <circle cx="142" cy="187" r="1.6"></circle><circle cx="258" cy="130" r="1.6"></circle>
+        <circle cx="369" cy="145" r="1.6"></circle><circle cx="409" cy="150" r="1.6"></circle>
+        <circle cx="291" cy="150" r="1.6"></circle><circle cx="378" cy="187" r="1.6"></circle>
+      </g>
+
+      <g class="plate">
+        <rect x="2" y="2" width="92" height="26" rx="2"></rect>
+        <text x="6" y="10"><tspan class="t">CAUTION STRIP</tspan><tspan x="6" dy="8">MC MW AA DM FU FR GD</tspan><tspan x="6" dy="7.5">amber sits, red flashes</tspan></text>
+
+        <rect x="2" y="38" width="92" height="34" rx="2"></rect>
+        <text x="6" y="46"><tspan class="t">RADAR — left screen</tspan><tspan x="6" dy="8">heading-up: your nose is up</tspan><tspan x="6" dy="7.5">Z / X — zoom in / out</tspan><tspan x="6" dy="7.5">R — stop transmitting</tspan></text>
+
+        <rect x="2" y="86" width="92" height="26" rx="2"></rect>
+        <text x="6" y="94"><tspan class="t">WHAT YOU HUNG OUT</tspan><tspan x="6" dy="8">F flaps · L gear</tspan><tspan x="6" dy="7.5">B airbrake · A burner</tspan></text>
+
+        <rect x="2" y="124" width="92" height="19" rx="2"></rect>
+        <text x="6" y="132"><tspan class="t">THROTTLE — W / S</tspan><tspan x="6" dy="8">red at idle and at burner</tspan></text>
+
+        <rect x="2" y="158" width="92" height="26" rx="2"></rect>
+        <text x="6" y="166"><tspan class="t">RADIOS &amp; TRANSPONDER</tspan><tspan x="6" dy="8">G ground net · U air net</tspan><tspan x="6" dy="7.5">I — IFF, read this one</tspan></text>
+      </g>
+
+      <g class="plate">
+        <rect x="426" y="2" width="92" height="34" rx="2"></rect>
+        <text x="430" y="10"><tspan class="t">CENTRE MFD — M pages it</tspan><tspan x="430" dy="8">MAP — north-up island</tspan><tspan x="430" dy="7.5">SIT — close-in scope</tspan><tspan x="430" dy="7.5">TGT — the locked target</tspan></text>
+
+        <rect x="426" y="46" width="92" height="34" rx="2"></rect>
+        <text x="430" y="54"><tspan class="t">STORES &amp; SCORE</tspan><tspan x="430" dy="8">GUN rounds · MSL rails</tspan><tspan x="430" dy="7.5">DAM damage · FUEL mins</tspan><tspan x="430" dy="7.5">nothing here reloads</tspan></text>
+
+        <rect x="426" y="96" width="92" height="26" rx="2"></rect>
+        <text x="430" y="104"><tspan class="t">WHAT THE JET SAYS</tspan><tspan x="430" dy="8">STALL · FUEL · TERR</tspan><tspan x="430" dy="7.5">FIRE · LOCK: you are had</tspan></text>
+
+        <rect x="426" y="134" width="92" height="19" rx="2"></rect>
+        <text x="430" y="142"><tspan class="t">OPTION LAMPS</tspan><tspan x="430" dy="8">bars beside each screen</tspan></text>
+
+        <rect x="426" y="166" width="92" height="26" rx="2"></rect>
+        <text x="430" y="174"><tspan class="t">SELF-PROTECTION</tspan><tspan x="430" dy="8">A-P ECM JMR CHF FLR</tspan><tspan x="430" dy="7.5">plates only — for now</tspan></text>
+      </g>
+
+      <text class="cap" x="260" y="208">SPD speed · ALT altitude · NAV heading · HDG climb rate</text>
+    </svg>
+    </div>
+
+    <h2>ON A PHONE</h2>
+    <p>
+      There is a <b>stick at the bottom left</b> — put a thumb on it and
+      fly. The nine buttons on the right read left to right, top to bottom:
+      <b>THR+</b> <b>ENTER</b> <b>BURN</b> / <b>THR-</b> <b>MSL</b>
+      <b>SPACE</b> / <b>RUD&lt;</b> <b>RUD&gt;</b>.
+    </p>
+    <p>
+      <b>SPACE is the cannon</b> and <b>ENTER is the lock</b> — they are
+      labelled with the keys rather than the jobs on purpose, because the game
+      itself asks for them by name: <i>PRESS ENTER TO JOIN</i> when you are
+      watching somebody else's fight, and <i>PRESS SPACE</i> over your own
+      wreckage. Those two prompts now point at a button you can see.
+    </p>
+    <p>
+      Everything you press <i>once</i> — gear, flaps, airbrake, the
+      radios, the transponder, the cameras — is on the
+      <b>keyboard button in the side menu</b>, spelled out: GEAR, FLAP, IFF,
+      CPIT. It opens under the picture and shuts again; it does not cover the
+      sky. <b>Turn the phone sideways first.</b> The game is 320 by 200 and
+      upright it gets a third of your screen.
+    </p>
+    <p class="hint" style="text-align:left">
+      Every switch below is still there and still does what it says —
+      the phone panel is a shortlist, not a different aeroplane.
+    </p>
+
+    <h2>CONTROLS — all of them</h2>
+    <table>
+      <tbody><tr><td class="k">‹ / ›</td><td>bank left / right. Roll goes through 360° — loops and barrel rolls work (numpad 4/6)</td></tr>
+      <tr><td class="k">^ / ¡</td><td>push the nose down / pull it up, flight-sim yoke (numpad 8/2)</td></tr>
+      <tr><td class="k">1 / 3</td><td>rudder pedals — a flat turn without dropping a wing (numpad 7/9). This is how you line up on a runway or hold a gun run</td></tr>
+      <tr><td class="k">W / S</td><td>throttle up / down — idle to the stop in about a second. The numpad <b>+</b> / <b>-</b> and the main-row <b>=</b> ramp the same way</td></tr>
+      <tr><td class="k">Shift</td><td>with any throttle key, <b>slams</b> the lever — Shift+W to full military, Shift+S to idle. The main-row <b>+</b> <i>is</i> Shift+= on a keyboard, so + always slams and = always ramps: the loud symbol does the loud thing</td></tr>
+      <tr><td class="k">A</td><td>afterburner — <b>four times</b> dry thrust, and eight times the fuel. It is what takes you off the runway and what wins a climb; leave it lit and you have about eighty seconds of it</td></tr>
+      <tr><td class="k">F / L / B</td><td>flaps / landing gear / airbrake. Nothing is interlocked and nothing is refused: put the gear down at six hundred knots if you like, and wear the drag</td></tr>
+      <tr><td class="k">hands off</td><td>the aeroplane rights itself and trims to level</td></tr>
+      <tr><td class="k">Enter</td><td>lock whatever is inside the aiming ring. Enter on empty sky drops the lock</td></tr>
+      <tr><td class="k">Space (hold)</td><td>cannon. Real tracer with a real time of flight — you lead the target, the game does not do it for you</td></tr>
+      <tr><td class="k">Backspace</td><td>missile. Homes on the lock; without one it flies straight ahead and hits whatever is unlucky</td></tr>
+      <tr><td class="k">Z / X</td><td>radar zoom in / out. In the F4 camera the same two keys pull the view in and out</td></tr>
+      <tr><td class="k">M</td><td>centre screen: MAP › SIT › TGT</td></tr>
+      <tr><td class="k">G / U</td><td>ground net / air net — your lock is broadcast to your own flak and your own aeroplanes</td></tr>
+      <tr><td class="k">I</td><td>IFF transponder. Up, your flak leaves you alone. Down, it does not</td></tr>
+      <tr><td class="k">R</td><td>radar emissions on / off</td></tr>
+      <tr><td class="k">T / O / P / J / Y</td><td>TACAN, master mode, autopilot, ECM, jammer — the plates toggle; only the master mode lamp does anything yet</td></tr>
+      <tr><td class="k">F2</td><td>cockpit on / off (the HUD tapes stay)</td></tr>
+      <tr><td class="k">F3</td><td>chase view — your own jet from behind, banking for real. The only place you can see your own landing gear</td></tr>
+      <tr><td class="k">F4</td><td>orbit the locked target. The arrows steer the camera, Z / X the distance</td></tr>
+      <tr><td class="k">F5</td><td>arm the missile camera: the next launch is ridden all the way to impact</td></tr>
+      <tr><td class="k">F6 / F7</td><td>turn your head ninety degrees left / right, and you are looking at a painted side console with the world going past it. Press the same key again to face forward</td></tr>
+      <tr><td class="k">Ctrl + ‹ / ›</td><td>the same head turn on the arrows — hold Ctrl and look. Let Ctrl go and the arrows fly the aeroplane again</td></tr>
+      <tr><td class="k">N</td><td>day / night. The stars are a real celestial sphere — they turn with your heading, pitch and bank</td></tr>
+      <tr><td class="k">V</td><td>sound, cycling: everything › effects only › silence › everything. "Effects only" flattens the engine bed and keeps the guns and the blasts; "silence" throws the hardware speaker switch, and the loop keeps spinning underneath so any mode is one keypress away</td></tr>
+      <tr><td class="k">Ctrl+D</td><td>the diagnostic marks, off by default — a coloured square top left for the stage of the frame, and a bar of blocks top centre for how far the render got. For catching a freeze; nothing a flight needs</td></tr>
+      <tr><td class="k">Space</td><td>after GAME OVER: take a fresh jet</td></tr>
+      <tr><td class="k">Alt&nbsp;+&nbsp;Q</td><td>quit to DOS. ESC is deliberately dead — no more sorties lost to a stray key</td></tr>
+    </tbody></table>
+
+    <h2>HOW TO FIGHT</h2>
+    <p>
+      <b>Find him.</b> The left screen is a heading-up PPI: your own nose
+      points up the glass, so everything on it is measured against where you
+      are looking. <span class="grn">Green is ours</span>,
+      <span class="red">red is theirs</span>, and a
+      <span class="wht">white pip with a letter</span> is a real pilot. Each
+      blip is an aeroplane symbol swung to its own heading — a
+      bandit's heading is the first thing worth reading off a scope —
+      with a tick above or below for higher or lower than you. Z and X
+      change the range.
+    </p>
+    <p>
+      <b>Look for him.</b> A fight does not stay in front of you.
+      <b>F6</b> and <b>F7</b> turn your head ninety degrees left and right
+      — or hold <b>Ctrl</b> and use the arrows — and you are
+      looking out of the side of a real cockpit, past a painted console,
+      with the world going by. The head turn is an honest rotation of the
+      camera about your own spine, so it stays right inverted, in a loop and
+      at any bank; it is not a swap of two angles that only works straight
+      and level. There is no glass HUD out of the side, because a head-up
+      display is bolted to the front of the aeroplane. Same key again to
+      face forward.
+    </p>
+    <p>
+      <b>Point at him.</b> The aiming ring on the HUD is the lock gate. Fly
+      until he is inside it and press <b>Enter</b>. The ring becomes a lock
+      pointer that keeps showing where he is when he leaves the glass, the
+      TGT page fills in with his callsign, type, range and altitude, and the
+      missile now has somewhere to go. Enter on empty sky lets him go.
+    </p>
+    <p>
+      <b>Kill him.</b> The cannon is 250 rounds of real tracer with a real
+      time of flight: aim where he will be, not where he is, and fire in
+      short bursts. The missile is smarter and there are only four —
+      it wants a lock, and it wants him in front of you and not on the deck.
+      A jet takes 5 hits; so do you, and the fifth replays your last five
+      seconds before GAME OVER.
+    </p>
+    <p>
+      <b>Do not get killed.</b> The <span class="amb">LOCK</span> lamp and
+      the missile warning on the overhead strip mean somebody has done to
+      you what you just did to him. There is no chaff and no flare yet, so
+      the answer is the aeroplane: unload, get the nose down, and put a hill
+      between you and the thing that is guiding.
+    </p>
+    <p>
+      <b>The ground has opinions.</b> Two radar stations and twenty flak
+      vehicles hold the line, and the flak leads its shots. With the
+      <b>G</b> net up they shoot at what you have locked instead of what is
+      nearest their barrel — one pilot's eyes become the battery's.
+      With the <b>I</b> transponder down they shoot at <em>you</em>, and
+      they are right to.
+    </p>
+    <p>
+      <b>Being invisible costs you your eyes.</b> <b>R</b> stops your radar
+      transmitting. You stop painting yourself on other people's scopes, and
+      your own screen goes to snow — a radar that is not transmitting
+      has nothing to receive. That is the whole trade, and knocking down the
+      enemy's ground station does the same to him.
+    </p>
+
+    <h2>THE SWITCH PANEL</h2>
+    <p>
+      Twelve plates along the bottom: the up-front panel on the left, the
+      self-protection suite on the right. The rule they are built on is
+      <b>a switch changes what OTHERS do, never what you are allowed to
+      do</b> — nothing here takes your eyes away or refuses you a
+      control.
+    </p>
+    <table>
+      <tbody><tr><td class="k grn">GND &nbsp;(G)</td><td>your lock goes out to your own flak batteries and they shoot at what you designate. The range gate still applies — a radio carries a designation, not a longer barrel</td></tr>
+      <tr><td class="k grn">AIR &nbsp;(U)</td><td>the same for your own aeroplanes: your side attacks what you are locked onto instead of whoever they noticed first</td></tr>
+      <tr><td class="k grn">IFF &nbsp;(I)</td><td>the transponder, and the most dangerous switch on the panel. Up, your own flak leaves you alone. Down, it does not</td></tr>
+      <tr><td class="k amb">T-R &nbsp;(R)</td><td>emissions: unseen, and blind. See above</td></tr>
+      <tr><td class="k grn">A-A / A-G &nbsp;(O)</td><td>master mode, one lamp or the other. It reports the mode; the weapons do not care which way it is set yet</td></tr>
+      <tr><td class="k" style="color:#567">TAC A-P ECM<br>JMR CHF FLR</td><td>TACAN, autopilot, countermeasures, jammer, chaff, flares. The plates toggle and that is all they do so far. An unlit plate is an honest way to say "not yet"</td></tr>
+    </tbody></table>
+
+    <h2>THE AERODROMES</h2>
+    <p>
+      Four strips, two a side, standing back from the line with a radar mast
+      on the front pair — a station belongs to an air base. The ground
+      under a runway is ironed flat into the heightmap before the world is
+      baked, so the terrain, the collision test and the streets all agree
+      about the concrete with no special case anywhere, and nothing is ever
+      built on it. Grey slab, dashed centreline, a threshold bar at each end.
+      Three hangars and a control tower stand on the apron; they are scenery,
+      and you can fly straight through the tower.
+    </p>
+    <h3>Getting off it</h3>
+    <p>
+      <b>A sortie starts stopped on your own concrete</b> — fuelled,
+      towed out, made ready, flaps set, gear down, engine running and standing
+      on the brakes — the aeroplane says so on the glass until it is no
+      longer true. So does every life after a death. The first thing any
+      flight contains is a takeoff, and it goes like this:
+    </p>
+    <p>
+      <b>B</b> to release the brakes · <b>W</b> (or Shift+W to slam the
+      lever to the stop) · <b>A</b> for the burner · hold the
+      stick back, and she rotates and flies. Steer with the arrows — the
+      nose wheel bites harder the faster you are rolling, which is why the
+      first attempt wanders. Clean up with <b>L</b> and <b>F</b> once you are
+      climbing.
+    </p>
+    <p>
+      <b>You will not get airborne dry.</b> On full dry thrust with the gear
+      and flaps out this jet settles at a speed below the one it needs to fly;
+      the nose comes up, the speed stops climbing, and nothing happens. That
+      is not a fault, it is the aeroplane telling you what it wants. Light the
+      burner.
+    </p>
+    <p>
+      Landing is the work in progress: flaps down or it is not a landing,
+      gear too, and a belly arrival refuels nobody. Your own field gives you
+      fuel and rails back. Theirs gives you nothing — but you can put
+      down on it and work the place over, which is a different kind of
+      sortie altogether.
+    </p>
+
+    <h2>THE WAR</h2>
+    <p>
+      Buildings fall and stay ruins. Wreckage chains — a jet that comes
+      apart over a city takes part of the city with it. Ramming works. Once.
+    </p>
+  </div>
+</div>
+
+<!-- Enables cross-origin isolation (SharedArrayBuffer) on static hosts like
+     GitHub Pages, which can't send COOP/COEP headers. Must load FIRST. -->
+<script src="coi-serviceworker.js"></script>
+
+<script src="jsdos/js-dos.js"></script>
+<script src="owlcontrols.js"></script>
+<script>
+  // The wire: IPX tunneled through WebSocket into the relay. Local dev =
+  // the IpxRelay on :1900; anywhere else - the production ViewOwl pipe.
+  // ?relay= overrides both, ?room= picks a private wire.
+  const params = new URLSearchParams(location.search);
+  const RELAY = params.get("relay")
+             || (location.hostname === "localhost" || location.hostname === "127.0.0.1"
+                 ? "ws://localhost:1900"
+                 : "wss://view.owlos.sk");
+  const ROOM  = params.get("room") || "owlfly2";
+  // ?t= tags the window title so test rigs can tell two pilots apart
+  if (params.get("t")) document.title = "OWL FLY III " + params.get("t");
+
+
+  // ---- key probe (?keylog=1): what does THIS keyboard actually send?
+  // '+' works in native DOSBox but not in js-dos, so the browser must be
+  // handing the emulator a different key than we think. Capture phase,
+  // so we see the event before js-dos does.
+  if (params.get("keylog")) {
+    const box = document.createElement("div");
+    box.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;" +
+      "background:#111;color:#5f7;font:14px monospace;padding:8px;white-space:pre";
+    box.textContent = "KEY PROBE: click the game, then press the key. Waiting...";
+    document.body.appendChild(box);
+    window.addEventListener("keydown", (e) => {
+      const rec = { key: e.key, code: e.code, keyCode: e.keyCode,
+                    shift: e.shiftKey, ctrl: e.ctrlKey, alt: e.altKey };
+      box.textContent = "KEY PROBE  " + JSON.stringify(rec);
+      try { fetch("/key", { method: "POST", body: JSON.stringify(rec) }); } catch (err) {}
+    }, true);
+  }
+
+
+  // ---- the flight controls: the touch stick and buttons over the picture,
+  // and the switch panel behind js-dos's keyboard button. They live in
+  // owlcontrols.js now, shared with both OWL FLY III pages - this page had
+  // the only copy, OWL FLY III was forked from the GAME, and the third one
+  // went out with no controls at all. One copy, three aeroplanes.
+  const KB = OwlControls.keyboard();
+
+  // Worker mode, minimal options - the one config where real typing
+  // provably works (the BBS lesson, 2026-07-19). Networking is wired
+  // AFTER boot via networkConnect; no ipx:/room: page options.
+
+  OwlControls.fixPlusMinus(function () { return window.__ci; });
+  OwlControls.watchPanel();
+</script>
+
+
+</body>
+</html>
