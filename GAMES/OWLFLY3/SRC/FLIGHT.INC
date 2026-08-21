@@ -1156,6 +1156,12 @@ CRASHHANDLE:
 ;  throttle, the switches - and V, because sound is muted on pause anyway.
 ; ---------------------------------------------------------------------------
 UIKEYS:
+        cmp  byte [spect],0    ; WATCHING or falling: these keys were
+        jne  .off              ;  never alive outside the pilot's seat.
+        cmp  byte [dying],0    ;  The spectator camera OWNS tgtcam, and
+        je   .on               ;  the F4 machine below fought it for the
+.off:  ret                     ;  glass, one flip a frame - the violent
+.on:                           ;  PRESS-ENTER shake of v7 (2026-08-21)
         ; --- N key: toggle day/night palette (on key-down edge only) ---
         cmp  byte [KHIT+SC_N],0   ; the LATCH, not the live key: a tap between
         je   .nn                 ;  two frames must not vanish (see KHIT)
