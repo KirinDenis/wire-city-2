@@ -459,7 +459,9 @@ SNDTOG: cmp  byte [sbok],0
 .r:    ret
 
 ; ---- SNDENG: once per frame - one knob, the pitch --------------------------
-SNDENG: cmp  byte [sbok],0
+SNDENG: cmp  byte [paused],0    ; a frozen world holds its breath -
+        jne  .r0                ;  PAUSND shut the voice at the door
+        cmp  byte [sbok],0
         jne  .sb
         cmp  byte [spkon],0
         je   .r0
@@ -697,3 +699,26 @@ SPKGOFF:in   al,61h
         and  al,0FCh
         out  61h,al
         ret
+
+; ---- PAUSND: the pause crossing - quiet going in, the voice back out ------
+;  Called ONCE from the ESC latch, not per frame. In: the Blaster's DSP
+;  speaker switch (the DMA loop spins silently underneath, as SNDTOG's
+;  silence always worked) and the PIT gate shut. Out: the switch back on -
+;  unless V had already chosen silence - and the speaker side needs
+;  nothing at all: SPKENG re-opens the gate on the next live frame.
+PAUSND: cmp  byte [paused],0
+        je   .back
+        cmp  byte [sbok],0
+        je   .pk
+        mov  ah,0D3h
+        call SBWR
+.pk:   cmp  byte [spkon],0
+        je   .r
+        jmp  SPKGOFF
+.back: cmp  byte [sbok],0
+        je   .r
+        cmp  byte [sndmod],0
+        je   .r
+        mov  ah,0D1h
+        call SBWR
+.r:    ret

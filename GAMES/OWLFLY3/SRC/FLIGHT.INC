@@ -488,185 +488,12 @@ INPUT:
         mov  ax,CEIL
 .y2:   mov  [camy],ax
 
-        ; --- N key: toggle day/night palette (on key-down edge only) ---
-        cmp  byte [KHIT+SC_N],0   ; the LATCH, not the live key: a tap between
-        je   .nn                 ;  two frames must not vanish (see KHIT)
-        mov  byte [KHIT+SC_N],0   ; consumed
-        xor  byte [daymode],1
-        call UISEG:APPLYPALF
-.nn:
         ; --- V key: sound mode - all / effects only / silence (edge) ---
         cmp  byte [KHIT+SC_V],0   ; the LATCH, not the live key: a tap between
         je   .nv                 ;  two frames must not vanish (see KHIT)
         mov  byte [KHIT+SC_V],0   ; consumed
         call SNDTOG
 .nv:
-        ; --- F2: cockpit panel on/off (edge-triggered; C is rudder now) ---
-        cmp  byte [KHIT+SC_F2],0   ; the LATCH, not the live key: a tap between
-        je   .ncp                 ;  two frames must not vanish (see KHIT)
-        mov  byte [KHIT+SC_F2],0   ; consumed
-        xor  byte [cockpit],1
-.ncp:
-        ; --- F3: chase camera (edge) ---
-        cmp  byte [KHIT+SC_F3],0   ; the LATCH, not the live key: a tap between
-        je   .nf3                 ;  two frames must not vanish (see KHIT)
-        mov  byte [KHIT+SC_F3],0   ; consumed
-        xor  byte [chsview],1
-.nf3:
-        ; --- Z / X: the scope zooms in and out, the manual's way - EXCEPT
-        ; while the orbit camera is up, when they walk the camera in and
-        ; out instead. Same two fingers, and the scope is not on the glass
-        ; in that view anyway, so nothing is taken away. Held, not tapped:
-        ; a camera dolly wants a continuous pull, not an edge.
-        cmp  byte [tgtcam],0
-        je   .nzk
-        cmp  byte [KEYS+SC_Z],0
-        je   .nzk1
-        mov  ax,[tgrad]         ; in, by a twelfth a tick: smooth at any
-        mov  bx,ax              ; distance, and it never crawls when far
-        mov  cl,4
-        shr  bx,cl
-        inc  bx
-        sub  ax,bx
-        cmp  ax,TGRMIN
-        jge  .nzk2
-        mov  ax,TGRMIN
-.nzk2: mov  [tgrad],ax
-.nzk1: cmp  byte [KEYS+SC_X],0
-        je   .nzo
-        mov  ax,[tgrad]         ; ...and out
-        mov  bx,ax
-        mov  cl,4
-        shr  bx,cl
-        inc  bx
-        add  ax,bx
-        cmp  ax,TGRMAX
-        jle  .nzk3
-        mov  ax,TGRMAX
-.nzk3: mov  [tgrad],ax
-        jmp  .nzo
-.nzk:        cmp  byte [KHIT+SC_Z],0   ; the LATCH, not the live key: a tap between
-        je   .nzi                 ;  two frames must not vanish (see KHIT)
-        mov  byte [KHIT+SC_Z],0   ; consumed
-        cmp  byte [rzsh],6
-        jbe  .nzi
-        dec  byte [rzsh]
-.nzi:        cmp  byte [KHIT+SC_X],0   ; the LATCH, not the live key: a tap between
-        je   .nzo                 ;  two frames must not vanish (see KHIT)
-        mov  byte [KHIT+SC_X],0   ; consumed
-        cmp  byte [rzsh],10
-        jae  .nzo
-        inc  byte [rzsh]
-.nzo:
-        ; --- K: the MAP zooms, 1 / 2 / 4 pixels to a world node, cycling.
-        ; PROVISIONAL KEY - the whole keyboard is still to be laid out; K is
-        ; simply free and next to M, which pages this same screen. ---
-        cmp  byte [KHIT+SC_K],0   ; the LATCH, not the live key: a tap between
-        je   .nmz                 ;  two frames must not vanish (see KHIT)
-        mov  byte [KHIT+SC_K],0   ; consumed
-        mov  al,[mmzs]
-        inc  al
-        cmp  al,MMZN
-        jb   .mzs
-        xor  al,al
-.mzs:  mov  [mmzs],al
-.nmz:
-        ; --- F5: arm/disarm the missile camera (edge) ---
-        cmp  byte [KHIT+SC_F5],0   ; the LATCH, not the live key: a tap between
-        je   .nf5                 ;  two frames must not vanish (see KHIT)
-        mov  byte [KHIT+SC_F5],0   ; consumed
-        xor  byte [mslcam],1
-.nf5:
-        ; --- F4: orbit camera around the locked target (edge) ---
-        cmp  byte [KHIT+SC_F4],0   ; the LATCH, not the live key: a tap between
-        je   .nf4                 ;  two frames must not vanish (see KHIT)
-        mov  byte [KHIT+SC_F4],0   ; consumed
-        cmp  byte [tgtcam],0
-        jne  .f4off
-        mov  si,[locki]
-        cmp  si,0FFFFh
-        je   .nf4              ; nothing locked: nothing to orbit
-        mov  [tgti],si          ; remember the star of the show
-        ; How far to stand off depends on WHAT is being orbited, and the
-        ; old flat 100 was a jet's number. A Shilka is 100 units long by
-        ; itself and a radar mast is 190 tall, so the camera was born
-        ; INSIDE them - that was "the camera appears somewhere odd". One
-        ; threshold buys both, and Z/X trims from there. Written this
-        ; tight (BX, one compare) because the main segment had 21 bytes
-        ; of stack-guard headroom left and the readable ladder cost 28.
-        xor  ax,ax              ; ground targets have no heading to sit behind
-        mov  bx,100             ; a jet is small: four wingspans out
-        cmp  si,SHKLK
-        jb   .f4pl
-        mov  bx,450             ; a Shilka or a mast: clear of the thing
-        jmp  .f4rd
-.f4pl: mov  ax,[pah+si]
-.f4rd: mov  [tgrad],bx
-.f4az: mov  [tgaz],ax          ; start right behind the target
-        mov  word [tgel],12
-        mov  byte [tgtcam],1
-        jmp  .nf4
-.f4off:
-        mov  byte [tgtcam],0
-.nf4:  cmp  byte [tgtcam],1
-        jne  .wchk
-        cmp  word [locki],0FFFFh
-        jne  .lkok             ; lock alive: keep orbiting the jet
-        mov  byte [tgtcam],2 ; target died: stay with the debris -
-        mov  ax,[wnext]         ; the freshest wreck slot is the show
-        sub  ax,WRKSZ
-        jns  .wok
-        add  ax,WRKSZ*4
-.wok:  add  ax,WRK
-        mov  [tcws],ax
-        jmp  .lkok
-.wchk: cmp  byte [tgtcam],2
-        jne  .lkok
-        cmp  word [locki],0FFFFh
-        je   .lkok             ; still at the funeral
-        mov  byte [tgtcam],1 ; a new lock: swing to the new target
-        mov  ax,[locki]
-        mov  [tgti],ax
-.lkok:
-        ; --- F4 active: the arrows steer the camera, not the jet ---
-        cmp  byte [tgtcam],0
-        je   .ntc
-        cmp  byte [KEYS+SC_LF],0
-        je   .tc1
-        sub  word [tgaz],2
-        and  word [tgaz],255
-.tc1:  cmp  byte [KEYS+SC_RT],0
-        je   .tc2
-        add  word [tgaz],2
-        and  word [tgaz],255
-.tc2:  cmp  byte [KEYS+SC_UP],0
-        je   .tc3
-        mov  ax,[tgel]
-        inc  ax
-        cmp  ax,56
-        jle  .tcu
-        mov  ax,56
-.tcu:  mov  [tgel],ax
-.tc3:  cmp  byte [KEYS+SC_DN],0
-        je   .ntc
-        mov  ax,[tgel]
-        dec  ax
-        cmp  ax,-30
-        jge  .tcd
-        mov  ax,-30
-.tcd:  mov  [tgel],ax
-.ntc:
-        ; --- M key: centre MFD page, MAP -> SIT -> TGT (edge) ---
-        cmp  byte [KHIT+SC_M],0   ; the LATCH, not the live key: a tap between
-        je   .nmfd                 ;  two frames must not vanish (see KHIT)
-        mov  byte [KHIT+SC_M],0   ; consumed
-        mov  al,[mfdmode]
-        inc  al
-        cmp  al,3
-        jb   .mfs
-        xor  al,al
-.mfs:  mov  [mfdmode],al
-.nmfd:
         ; --- Enter: lock the plane inside the aiming ring (edge). The
         ; nearest jet whose screen point is within 24 px of the ring
         ; centre (160,100) wins; nothing there = lock dropped.
@@ -1316,3 +1143,190 @@ CRASHHANDLE:
 ; UI.INC (UISEG) - see the note at its head. It ran once per death and
 ; cost this segment about 150 bytes, which is what the ground school is
 ; standing on.
+
+; ---------------------------------------------------------------------------
+;  UIKEYS - the GLASS: cameras, zooms, pages, the palette. Moved out of
+;  INPUT (2026-08-20) and called once per FRAME from GAMELOOP, because
+;  pause froze physics and took every view key down with it. The pilot's
+;  ruling: on pause the world stands still but the glass stays alive -
+;  views, radar zoom, map zoom and the MFD keep answering. These are all
+;  edge-triggered latches (or camera dollies that WANT frame rate), so
+;  per-frame instead of per-tick changes nothing in ordinary flight.
+;  What stays in INPUT is what CHANGES THE WORLD: lock, missile, cannon,
+;  throttle, the switches - and V, because sound is muted on pause anyway.
+; ---------------------------------------------------------------------------
+UIKEYS:
+        ; --- N key: toggle day/night palette (on key-down edge only) ---
+        cmp  byte [KHIT+SC_N],0   ; the LATCH, not the live key: a tap between
+        je   .nn                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_N],0   ; consumed
+        xor  byte [daymode],1
+        call UISEG:APPLYPALF
+.nn:
+        ; --- F2: cockpit panel on/off (edge-triggered; C is rudder now) ---
+        cmp  byte [KHIT+SC_F2],0   ; the LATCH, not the live key: a tap between
+        je   .ncp                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_F2],0   ; consumed
+        xor  byte [cockpit],1
+.ncp:
+        ; --- F3: chase camera (edge) ---
+        cmp  byte [KHIT+SC_F3],0   ; the LATCH, not the live key: a tap between
+        je   .nf3                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_F3],0   ; consumed
+        xor  byte [chsview],1
+.nf3:
+        ; --- Z / X: the scope zooms in and out, the manual's way - EXCEPT
+        ; while the orbit camera is up, when they walk the camera in and
+        ; out instead. Same two fingers, and the scope is not on the glass
+        ; in that view anyway, so nothing is taken away. Held, not tapped:
+        ; a camera dolly wants a continuous pull, not an edge.
+        cmp  byte [tgtcam],0
+        je   .nzk
+        cmp  byte [KEYS+SC_Z],0
+        je   .nzk1
+        mov  ax,[tgrad]         ; in, by a twelfth a tick: smooth at any
+        mov  bx,ax              ; distance, and it never crawls when far
+        mov  cl,4
+        shr  bx,cl
+        inc  bx
+        sub  ax,bx
+        cmp  ax,TGRMIN
+        jge  .nzk2
+        mov  ax,TGRMIN
+.nzk2: mov  [tgrad],ax
+.nzk1: cmp  byte [KEYS+SC_X],0
+        je   .nzo
+        mov  ax,[tgrad]         ; ...and out
+        mov  bx,ax
+        mov  cl,4
+        shr  bx,cl
+        inc  bx
+        add  ax,bx
+        cmp  ax,TGRMAX
+        jle  .nzk3
+        mov  ax,TGRMAX
+.nzk3: mov  [tgrad],ax
+        jmp  .nzo
+.nzk:        cmp  byte [KHIT+SC_Z],0   ; the LATCH, not the live key: a tap between
+        je   .nzi                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_Z],0   ; consumed
+        cmp  byte [rzsh],6
+        jbe  .nzi
+        dec  byte [rzsh]
+.nzi:        cmp  byte [KHIT+SC_X],0   ; the LATCH, not the live key: a tap between
+        je   .nzo                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_X],0   ; consumed
+        cmp  byte [rzsh],10
+        jae  .nzo
+        inc  byte [rzsh]
+.nzo:
+        ; --- K: the MAP zooms, 1 / 2 / 4 pixels to a world node, cycling.
+        ; PROVISIONAL KEY - the whole keyboard is still to be laid out; K is
+        ; simply free and next to M, which pages this same screen. ---
+        cmp  byte [KHIT+SC_K],0   ; the LATCH, not the live key: a tap between
+        je   .nmz                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_K],0   ; consumed
+        mov  al,[mmzs]
+        inc  al
+        cmp  al,MMZN
+        jb   .mzs
+        xor  al,al
+.mzs:  mov  [mmzs],al
+.nmz:
+        ; --- F5: arm/disarm the missile camera (edge) ---
+        cmp  byte [KHIT+SC_F5],0   ; the LATCH, not the live key: a tap between
+        je   .nf5                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_F5],0   ; consumed
+        xor  byte [mslcam],1
+.nf5:
+        ; --- F4: orbit camera around the locked target (edge) ---
+        cmp  byte [KHIT+SC_F4],0   ; the LATCH, not the live key: a tap between
+        je   .nf4                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_F4],0   ; consumed
+        cmp  byte [tgtcam],0
+        jne  .f4off
+        mov  si,[locki]
+        cmp  si,0FFFFh
+        je   .nf4              ; nothing locked: nothing to orbit
+        mov  [tgti],si          ; remember the star of the show
+        ; How far to stand off depends on WHAT is being orbited, and the
+        ; old flat 100 was a jet's number. A Shilka is 100 units long by
+        ; itself and a radar mast is 190 tall, so the camera was born
+        ; INSIDE them - that was "the camera appears somewhere odd". One
+        ; threshold buys both, and Z/X trims from there. Written this
+        ; tight (BX, one compare) because the main segment had 21 bytes
+        ; of stack-guard headroom left and the readable ladder cost 28.
+        xor  ax,ax              ; ground targets have no heading to sit behind
+        mov  bx,100             ; a jet is small: four wingspans out
+        cmp  si,SHKLK
+        jb   .f4pl
+        mov  bx,450             ; a Shilka or a mast: clear of the thing
+        jmp  .f4rd
+.f4pl: mov  ax,[pah+si]
+.f4rd: mov  [tgrad],bx
+.f4az: mov  [tgaz],ax          ; start right behind the target
+        mov  word [tgel],12
+        mov  byte [tgtcam],1
+        jmp  .nf4
+.f4off:
+        mov  byte [tgtcam],0
+.nf4:  cmp  byte [tgtcam],1
+        jne  .wchk
+        cmp  word [locki],0FFFFh
+        jne  .lkok             ; lock alive: keep orbiting the jet
+        mov  byte [tgtcam],2 ; target died: stay with the debris -
+        mov  ax,[wnext]         ; the freshest wreck slot is the show
+        sub  ax,WRKSZ
+        jns  .wok
+        add  ax,WRKSZ*4
+.wok:  add  ax,WRK
+        mov  [tcws],ax
+        jmp  .lkok
+.wchk: cmp  byte [tgtcam],2
+        jne  .lkok
+        cmp  word [locki],0FFFFh
+        je   .lkok             ; still at the funeral
+        mov  byte [tgtcam],1 ; a new lock: swing to the new target
+        mov  ax,[locki]
+        mov  [tgti],ax
+.lkok:
+        ; --- F4 active: the arrows steer the camera, not the jet ---
+        cmp  byte [tgtcam],0
+        je   .ntc
+        cmp  byte [KEYS+SC_LF],0
+        je   .tc1
+        sub  word [tgaz],2
+        and  word [tgaz],255
+.tc1:  cmp  byte [KEYS+SC_RT],0
+        je   .tc2
+        add  word [tgaz],2
+        and  word [tgaz],255
+.tc2:  cmp  byte [KEYS+SC_UP],0
+        je   .tc3
+        mov  ax,[tgel]
+        inc  ax
+        cmp  ax,56
+        jle  .tcu
+        mov  ax,56
+.tcu:  mov  [tgel],ax
+.tc3:  cmp  byte [KEYS+SC_DN],0
+        je   .ntc
+        mov  ax,[tgel]
+        dec  ax
+        cmp  ax,-30
+        jge  .tcd
+        mov  ax,-30
+.tcd:  mov  [tgel],ax
+.ntc:
+        ; --- M key: centre MFD page, MAP -> SIT -> TGT (edge) ---
+        cmp  byte [KHIT+SC_M],0   ; the LATCH, not the live key: a tap between
+        je   .nmfd                 ;  two frames must not vanish (see KHIT)
+        mov  byte [KHIT+SC_M],0   ; consumed
+        mov  al,[mfdmode]
+        inc  al
+        cmp  al,3
+        jb   .mfs
+        xor  al,al
+.mfs:  mov  [mfdmode],al
+.nmfd:
+        ret

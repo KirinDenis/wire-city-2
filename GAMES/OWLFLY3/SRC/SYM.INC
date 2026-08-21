@@ -281,7 +281,14 @@ TOPSTRIP:
         mov  word [fty],2
         mov  si,MSGS3
         call CODE:FDRAWF
-.tss:  ret
+.tss:  cmp  byte [paused],0  ; the pause letter: red, the leftmost
+        je   .tsp              ;  slot - a frozen world says so
+        mov  byte [COLOR],19
+        mov  word [ftx],206
+        mov  word [fty],2
+        mov  si,MSGP2
+        call CODE:FDRAWF
+.tsp:  ret
 
 BOTSTRIP:
         mov  byte [COLOR],97
@@ -826,28 +833,36 @@ RMARKF:
 .on:   push es
         push di
         push cx
+        push bx
+        push dx
         mov  cx,0A000h
         mov  es,cx
-        mov  di,160
+        mov  di,120             ; clear of the corner square, wide of centre
         xor  ch,ch
         mov  cl,al
         jcxz .d
 .blk:  push cx
         push di
-        mov  cx,6               ; six lit pixels...
-.px:   mov  byte [es:di],19
-        mov  byte [es:di+320],19
+        mov  dx,8               ; eight rows tall now - the 2px original
+.rw:   mov  cx,6               ;  could not be counted off a screenshot
+        push di
+.px:   mov  byte [es:di],19   ; 19: the red the 2px original used
         inc  di
         loop .px
         pop  di
-        add  di,8               ; ...and two dark, so they can be counted
+        add  di,320
+        dec  dx
+        jnz  .rw
+        pop  di
+        add  di,10              ; six lit, four dark: countable
         pop  cx
         loop .blk
-.d:    pop  cx
+.d:    pop  dx
+        pop  bx
+        pop  cx
         pop  di
         pop  es
         retf
-
 ; ============================================================================
 ;  HITFLSHF - the world flares red and yellow when something hits you.
 ;
@@ -2128,21 +2143,26 @@ RAMPTXTF:
 ;  had to spare - the stage number is baked into the door, not passed.
 ;  REMOVE ME once it is caught.
 ; ============================================================================
-STGMARK:                        ; AL = colour, a 8x2 block at the top left
-        cmp  byte [dbgm],0
-        jne  .on
-        ret                     ; gated with the render bar, on the same key
+STGMARK:                        ; AL = colour, a 10x10 SQUARE at the top left
+        cmp  byte [dbgm],0     ;  - it was 8x2 and a frozen screenshot could
+        jne  .on                ;  not name the hue; a square you can see
+        ret                     ;  answers at a glance
 .on:   push es
         push di
         push cx
+        push bx
         mov  cx,0A000h
         mov  es,cx
         xor  di,di
-        mov  cx,8
+        mov  bx,10              ; ten rows...
+.rw:   mov  cx,10              ; ...of ten pixels
 .m:    mov  [es:di],al
-        mov  [es:di+320],al
         inc  di
         loop .m
+        add  di,320-10
+        dec  bx
+        jnz  .rw
+        pop  bx
         pop  cx
         pop  di
         pop  es

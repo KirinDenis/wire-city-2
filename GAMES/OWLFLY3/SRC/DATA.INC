@@ -981,6 +981,9 @@ spkfn   db 0                    ; ...frames it has left to run
 spkdv   dw 0                    ; ...its current PIT divisor
 spklc   dw 7                    ; the noise generator (a small LCG): the
                                 ;  square wave's only way to sound broken
+paused  db 0                    ; ESC: the world stands still, the glass
+                                ;  stays alive - views, radar, map, MFD
+MSGP2   db 'P',0                ; the pause letter on the panel
 sbmsk   db 0                    ; saved IRQ7 mask bit
 sbtc    dw 0                    ; current DSP time constant
 mlvl    dw 0                    ; manoeuvre loading (smoothed, 0..48)

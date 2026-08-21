@@ -655,6 +655,16 @@ MAIN:
         mov  [lasttk],ax
 
 GAMELOOP:
+        ; --- the pause latch, frame-side. ESC was deliberately DEAD
+        ; (players kept quitting sorties with it, 2026-07-23); now the
+        ; reflex key does the SAFE thing: the world stands still. The
+        ; glass stays alive - UIKEYS below runs paused or not.
+        cmp  byte [KHIT+SC_ESC],0
+        je   .npz
+        mov  byte [KHIT+SC_ESC],0
+        xor  byte [paused],1
+        call PAUSND             ; quiet going in, the voice back out
+.npz:  call UIKEYS             ; cameras, zooms, pages - every frame
         ; --- physics: one INPUT step per BIOS tick elapsed since last frame ---
         push es
         mov  ax,40h
@@ -664,6 +674,11 @@ GAMELOOP:
         mov  bx,ax
         sub  bx,[lasttk]        ; bx = ticks elapsed since last render frame
         mov  [lasttk],ax
+        cmp  byte [paused],0    ; frozen: no steps, and fcnt pinned
+        je   .nfz               ;  past fprev so LERPSET shows the
+        xor  bx,bx              ;  real state - no wrap, no drift.
+        mov  word [fcnt],8      ;  lasttk kept fresh above = no
+.nfz:                           ;  catch-up burst on resume
         cmp  bx,MAXSTEP         ; clamp catch-up (anti-spiral)
         jbe  .pcl
         mov  bx,MAXSTEP
@@ -705,8 +720,12 @@ GAMELOOP:
         ; --- render (runs as fast as it can; speed no longer tied to it) ---
         call LERPSET            ; draw BETWEEN the ticks: silk, not jerks
         call CHASESET           ; F3: swap in the chase camera
-        call TOWNSEG:CCLOCKF   ; advance the traffic clock: the lights run
-                                ; on TIME, not on how fast we are drawing
+        cmp  byte [paused],0    ; a frozen world: the lights hold and
+        jne  .nck               ;  the wrecks stop burning - lasttk is
+        call TOWNSEG:CCLOCKF   ;  kept fresh through a pause, so left
+                                ;  alone the traffic drove on through it
+.nck:                           ; advance the traffic clock: the lights
+                                ; run on TIME, not on how fast we draw
         call SYMSEG:SVIEWF   ; F6/F7 and Ctrl+arrows: look 90 left/right,
                                 ; which is a turn of [heading] and nothing
                                 ; more - taken back below, before physics
