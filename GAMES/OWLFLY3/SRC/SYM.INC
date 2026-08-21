@@ -266,8 +266,10 @@ TOPSTRIP:
         call CODE:FDRAWF
 .tsm:
         cmp  byte [sbok],0  ; sound-mode letter: amber = all sounds,
-        je   .tss              ; white = effects only, red = silence
-        mov  byte [COLOR],97
+        jne  .tsy              ; white = effects only, red = silence
+        cmp  byte [spkon],0 ;  - the speaker earns the letter too
+        je   .tss
+.tsy:  mov  byte [COLOR],97
         mov  al,[sndmod]
         cmp  al,2
         je   .tsc

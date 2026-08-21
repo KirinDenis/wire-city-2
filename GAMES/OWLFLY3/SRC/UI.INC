@@ -482,7 +482,33 @@ XSPLASH:
 .nt:   call UBLIT
         ; ---- the roar climbs with them ----
         cmp  byte [sbok],0
+        jne  .sb2
+        cmp  byte [spkon],0
         je   .nsb
+        mov  ax,[cs:sptick]     ; the same climb, on the one wave
+        and  ax,3               ;  the speaker has
+        jnz  .nsb
+        inc  word [cs:sptc]
+        cmp  word [cs:sptc],150
+        jg   .nsb
+        mov  ax,[cs:sptc]
+        mov  bx,ax
+        mov  cl,6               ; divisor 21500 - climb*64: a 55 Hz
+        shl  bx,cl              ;  mutter spooling toward 100 Hz
+        mov  ax,21500
+        sub  ax,bx
+        mov  bx,ax              ; PIT channel 2, inline: UISEG has
+        mov  al,0B6h            ;  no near road to SPKOUT
+        out  43h,al
+        mov  al,bl
+        out  42h,al
+        mov  al,bh
+        out  42h,al
+        in   al,61h
+        or   al,3
+        out  61h,al
+        jmp  .nsb
+.sb2:
         mov  ax,[cs:sptick]
         and  ax,3
         jnz  .nsb

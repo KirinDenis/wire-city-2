@@ -90,6 +90,27 @@ QMTEXT  db 13,10
         db 13,10
         db '  PRESS 1..3, OR ARROWS AND ENTER',13,10,0
 
+; ---- the third screen: what the machine is asked to sound like ------------
+;  The same manners as the other two: digits, arrows, ENTER takes the
+;  chevron. The Blaster row is QUIZZED like the video cards are - a DSP
+;  that does not answer 220h is listed, marked and refuses the key, and
+;  the chevron then starts on the speaker: an ancient machine should get
+;  a voice by default, not silence.
+SMOKT   rb 3                    ; which of the three THIS machine offers
+SMTEXT  db 13,10
+        db '  OWL FLY III',13,10
+        db 13,10
+        db '  SELECT SOUND SYSTEM',13,10
+        db 13,10
+        db '    1) SOUND BLASTER  the recorded turbine, effects mixed in',13,10
+        db '    2) PC SPEAKER     one square wave, 1981 style',13,10
+        db '    3) NO SOUND       instruments only',13,10
+        db 13,10
+        db '  The speaker bends one tone: the engine is a drone that spools',13,10
+        db '  with the lever, guns clatter, and a warning is a plain beep.',13,10
+        db 13,10
+        db '  PRESS 1..3, OR ARROWS AND ENTER',13,10,0
+
 ; ============================================================================
 ;  VMENUF - the front step. Text mode, black, English, numbered - as the
 ;  retro players asked. Returns the pick in AL (1..5, menu order).
@@ -244,11 +265,14 @@ VMENUF:
         xor  bh,bh
         mov  al,[cs:VMPICK-1+bx] ; ...as the INTERNAL card code
         push ax
-        call QMENU              ; ...and then the detail, on its own screen
-        mov  bl,al
+        call QMENU              ; ...then the detail, on its own screen...
+        push ax
+        call SMENU              ; ...then the sound, on its own screen too
+        mov  dl,al
+        pop  bx
         pop  ax
-        mov  ah,bl              ; AL = card, AH = 0 FULL / 1 MEDIUM / 2 LOW
-        retf
+        mov  ah,bl              ; AL = card, AH = 0 FULL / 1 MEDIUM / 2 LOW,
+        retf                    ;  DL = 0 BLASTER / 1 SPEAKER / 2 NO SOUND
 
 ; ---- QMENU: the detail screen. Digits only, and ENTER means FULL ----------
 ;  No chevron and no quiz here: all three levels exist on every machine, so
@@ -297,6 +321,103 @@ QMENU:  mov  ah,0Fh             ; re-enter the mode: cleared, black, home
         jmp  .k
 .take: mov  al,[cs:vmsel]      ; row 1..3 -> level 0..2
         dec  al
+        ret
+
+; ---- SMENU: the sound screen. Returns AL = 0 Blaster / 1 speaker / 2 none -
+;  The quiz first: the DSP reset dance from SBINIT, and its answer fills
+;  SMOKT the way VMENUF's quiz fills VMOKT. The speaker and silence are
+;  never refused - every PC since the first one has both.
+SMENU:  mov  byte [cs:SMOKT+1],1
+        mov  byte [cs:SMOKT+2],1
+        call SPROBE
+        mov  [cs:SMOKT],al
+        mov  ah,0Fh             ; re-enter the mode: cleared, black, home
+        int  10h
+        xor  ah,ah
+        int  10h
+        mov  si,SMTEXT
+        call VMPUTS
+        mov  bl,1               ; the chevron: the Blaster when it answered,
+        cmp  byte [cs:SMOKT],0  ;  the speaker when it did not - an old
+        jne  .df                ;  machine gets a voice by default
+        mov  dh,5               ; ...and the absent row wears the mark
+        mov  dl,44
+        call VMAT
+        mov  si,VMNONE
+        call VMPUTS
+        mov  bl,2
+.df:   mov  [cs:vmsel],bl
+        call VMMARK
+.k:    xor  ah,ah
+        int  16h
+        cmp  al,0Dh             ; ENTER takes whatever the chevron is on
+        je   .take
+        cmp  al,'1'
+        jb   .ext
+        cmp  al,'3'
+        ja   .ext
+        sub  al,'0'
+        mov  bl,al
+        xor  bh,bh
+        cmp  byte [cs:SMOKT-1+bx],0
+        je   .k                ; this machine has not got it: no key
+        call VMMOVE
+        jmp  .take
+.ext:  or   al,al              ; extended keys: AL 0, or E0h from an
+        jz   .e1                ;  enhanced BIOS, with the scan code in AH
+        cmp  al,0E0h
+        jne  .k
+.e1:   cmp  ah,48h             ; up
+        je   .up
+        cmp  ah,50h             ; down
+        jne  .k
+        mov  bl,[cs:vmsel]
+.dn1:  inc  bl
+        cmp  bl,3
+        ja   .k
+        xor  bh,bh
+        cmp  byte [cs:SMOKT-1+bx],0
+        je   .dn1
+        call VMMOVE
+        jmp  .k
+.up:   mov  bl,[cs:vmsel]
+.up1:  dec  bl
+        jz   .k
+        xor  bh,bh
+        cmp  byte [cs:SMOKT-1+bx],0
+        je   .up1
+        call VMMOVE
+        jmp  .k
+.take: mov  al,[cs:vmsel]      ; row 1..3 -> choice 0..2
+        dec  al
+        ret
+
+; ---- SPROBE: is a DSP listening at 220h? AL = 1 yes / 0 no ----------------
+;  SBINIT's own reset pulse, asked a boot earlier: reset, then wait for
+;  the 0AAh hello. Nothing is left running - SBINIT will do it all again
+;  for real if the pilot picks the Blaster.
+SPROBE: mov  dx,226h
+        mov  al,1
+        out  dx,al
+        in   al,dx
+        in   al,dx
+        in   al,dx
+        in   al,dx
+        xor  al,al
+        out  dx,al
+        mov  cx,4000
+.w:    mov  dx,22Eh
+        in   al,dx
+        test al,80h
+        jz   .nx
+        mov  dx,22Ah
+        in   al,dx
+        cmp  al,0AAh
+        je   .yes
+.nx:   loop .w
+        xor  al,al
+        ret
+.yes:  mov  al,1
         ret
 
 ; ---- VMMOVE: the chevron to item BL (erase old, mark new) ------------------

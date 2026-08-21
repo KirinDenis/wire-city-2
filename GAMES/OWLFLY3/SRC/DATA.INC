@@ -972,6 +972,15 @@ mimy    dw 0
 mimz    dw 0
 MSGM2   db 'M',0
 sbok    db 0                    ; Blaster found AND ENGINE.RAW loaded?
+sndsel  db 0                    ; the third front-step screen: 0 Blaster,
+                                ;  1 PC speaker, 2 no sound at all
+spkon   db 0                    ; the speaker path is live (sndsel said 1)
+spkfx   db 0                    ; speaker effect playing now - 0 none, else
+                                ;  its id, and the id IS its priority
+spkfn   db 0                    ; ...frames it has left to run
+spkdv   dw 0                    ; ...its current PIT divisor
+spklc   dw 7                    ; the noise generator (a small LCG): the
+                                ;  square wave's only way to sound broken
 sbmsk   db 0                    ; saved IRQ7 mask bit
 sbtc    dw 0                    ; current DSP time constant
 mlvl    dw 0                    ; manoeuvre loading (smoothed, 0..48)

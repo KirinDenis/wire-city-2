@@ -328,6 +328,8 @@ MAIN:
         call VIDSEG:VMENUF      ; -> AL = the internal card code (VID.INC),
         mov  [vcard],al         ;    AH = the detail level from its second
         mov  [qual],ah          ;    screen: 0 FULL, 1 MEDIUM, 2 LOW
+        mov  [sndsel],dl        ;    DL = its third screen: 0 BLASTER,
+                                ;    1 PC SPEAKER, 2 NO SOUND - SBINIT reads it
         mov  word [tstart],0    ; FULL and LOW both walk the whole mesh -
         cmp  ah,1               ;  LOW strokes it instead of filling it.
         jne  .qd                ;  MEDIUM starts the walk later, which is
