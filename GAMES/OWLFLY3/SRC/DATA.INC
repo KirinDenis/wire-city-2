@@ -992,6 +992,12 @@ tapw    db 0                    ;  grants it exactly ONE physics tick
 tapsd   db 0                    ;  through these six (W and S too)
 tapsp   db 0                    ; ...and SPACE: the death screen said
                                 ;  PRESS SPACE and a tap said nothing
+TAPSC   db 48h,50h,4Bh,4Dh,11h,1Fh,39h
+                                ; their scancodes, GAMELOOP walks both
+pvk     db 7 dup(0)             ; was each held at the LAST frame's look?
+                                ;  typematic re-arms KHIT the whole hold,
+                                ;  so a release left a phantom tap that
+                                ;  kept qramp alive - the v10 jerk
 fpsn    dw 0                    ; frames counted this second...
 fpst    dw 0                    ; ...since this BIOS tick...
 fpsv    dw 0                    ; ...and the number the glass shows

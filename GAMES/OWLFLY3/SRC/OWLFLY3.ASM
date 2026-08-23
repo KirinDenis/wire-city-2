@@ -694,31 +694,34 @@ GAMELOOP:
         mov  bx,MAXSTEP
 .pcl:  test bx,bx
         jz   .pdone
-        ; ---- the tap rescue (the 486 report, 2026-08-22): a flight
-        ; key pressed AND released between two frames never shows in
-        ; KEYS - at real-iron frame rates that was every quick tap.
-        ; KHIT caught it; grant it here, exactly one tick's worth.
-        mov  al,[KHIT+SC_UP]
-        mov  [tapup],al
-        mov  byte [KHIT+SC_UP],0
-        mov  al,[KHIT+SC_DN]
-        mov  [tapdn],al
-        mov  byte [KHIT+SC_DN],0
-        mov  al,[KHIT+SC_LF]
-        mov  [taplf],al
-        mov  byte [KHIT+SC_LF],0
-        mov  al,[KHIT+SC_RT]
-        mov  [taprt],al
-        mov  byte [KHIT+SC_RT],0
-        mov  al,[KHIT+SC_W]
-        mov  [tapw],al
-        mov  byte [KHIT+SC_W],0
-        mov  al,[KHIT+SC_S]
-        mov  [tapsd],al
-        mov  byte [KHIT+SC_S],0
-        mov  al,[KHIT+SC_SP]
-        mov  [tapsp],al
-        mov  byte [KHIT+SC_SP],0
+        ; ---- the tap rescue (the 486 report, 2026-08-22; refined
+        ; 2026-08-23): a flight key pressed AND released between two
+        ; frames never shows in KEYS - at real-iron frame rates that
+        ; was every quick tap. KHIT caught it; grant it exactly one
+        ; tick. BUT ONLY a true between-frames tap: typematic re-arms
+        ; KHIT for the whole length of a hold, so a plain KHIT grant
+        ; fired a phantom tick at every RELEASE - it kept qramp alive
+        ; between stick pulses and the fine touch went with it (the
+        ; pilot: the smoothness is broken, worst in yaw). A tap is
+        ; KHIT with no hold in sight: not held NOW, not held at the
+        ; last frame either.
+        push bx                 ; BX carries the burst count
+        xor  si,si
+.tg:   mov  bl,[TAPSC+si]
+        xor  bh,bh
+        mov  al,[KHIT+bx]       ; the latch...
+        mov  byte [KHIT+bx],0   ; ...taken either way
+        mov  ah,[KEYS+bx]
+        mov  cl,ah              ; the live state, kept for pvk
+        or   ah,[pvk+si]        ; held now, or held a frame ago?
+        jz   .tg1
+        xor  al,al              ; ...then the latch is typematic
+.tg1:  mov  [tapup+si],al      ;  echo, not a tap - swallow it
+        mov  [pvk+si],cl
+        inc  si
+        cmp  si,7
+        jb   .tg
+        pop  bx
         mov  ax,[camx]          ; interpolation: keep the pre-burst state
         mov  [ocx],ax
         mov  ax,[camy]
