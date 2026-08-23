@@ -131,6 +131,30 @@ RENDER: call SETHORIZ           ; where the glass is, before anything uses it
 .pdone:
         mov  al,9
         call SYMSEG:RMARKF   ; *** TEMP: the panel and the map done
+        ; ---- the pause letter and the debug dial, HERE because every
+        ; view runs this tail. They lived on TOPSTRIP first - and
+        ; TOPSTRIP is the no-cockpit view's strip alone, so the pilot
+        ; flew the photo cockpit and saw neither the P nor the number
+        ; (2026-08-23).
+        cmp  byte [paused],0
+        je   .npl
+        mov  byte [COLOR],19
+        mov  word [ftx],206
+        mov  word [fty],2
+        mov  si,MSGP2
+        call CODE:FDRAWF
+.npl:  cmp  byte [dbgm],0     ; Ctrl+D: the frame counter, top right -
+        je   .nfd              ;  the 486 asked for a number, not an
+        mov  byte [COLOR],8    ;  adjective
+        mov  word [ftx],296
+        mov  word [fty],2
+        mov  ax,[fpsv]
+        cmp  ax,99             ; two digits is what the corner holds
+        jbe  .nf1
+        mov  ax,99
+.nf1:  mov  cx,2
+        call CODE:FNUMZF
+.nfd:
         call DEATHTXT           ; CRASH - PRESS SPACE while falling
         call SYMSEG:RAMPTXTF   ; ...and what is holding her, while parked
         call UISEG:SPECTXTF   ; ...and the invitation, while watching

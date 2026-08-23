@@ -281,25 +281,7 @@ TOPSTRIP:
         mov  word [fty],2
         mov  si,MSGS3
         call CODE:FDRAWF
-.tss:  cmp  byte [paused],0  ; the pause letter: red, the leftmost
-        je   .tsp              ;  slot - a frozen world says so
-        mov  byte [COLOR],19
-        mov  word [ftx],206
-        mov  word [fty],2
-        mov  si,MSGP2
-        call CODE:FDRAWF
-.tsp:  cmp  byte [dbgm],0     ; the frame counter, Ctrl+D gated:
-        je   .tfp              ;  the 486 report asked for a number
-        mov  byte [COLOR],8
-        mov  word [ftx],296
-        mov  word [fty],2
-        mov  ax,[fpsv]
-        cmp  ax,99             ; two digits is what the corner holds
-        jbe  .tf1
-        mov  ax,99
-.tf1:  mov  cx,2
-        call CODE:FNUMZF
-.tfp:  ret
+.tss:  ret
 
 BOTSTRIP:
         mov  byte [COLOR],97
@@ -740,6 +722,7 @@ SPECTUPF:
         retf                     ;  (AFSPAWN is UISEG's - this is SYMSEG)
 .nj:   mov  byte [tgtcam],1 ; hold the orbit camera up, whatever else
         mov  al,[KEYS+SC_SP]    ; ---- Space: the next one down the list
+        or   al,[tapsp]         ;  (or its rescued tap - low fps, see KHIT)
         cmp  al,[prevsp]
         je   .nsp
         mov  [prevsp],al

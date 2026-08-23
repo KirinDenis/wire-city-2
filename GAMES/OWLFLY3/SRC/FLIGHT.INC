@@ -21,7 +21,8 @@ INPUT:
         inc  word [dytick]
         cmp  word [dytick],18
         jb   .dwar             ; ignore Space for the first second
-        cmp  byte [KEYS+SC_SP],0
+        mov  al,[KEYS+SC_SP]    ; held, or the tap the latch rescued -
+        or   al,[tapsp]         ;  a lost SPACE here read as a dead key
         je   .dwar
         call UISEG:PLAYERRESETF   ; EVICTED to UISEG, beside the landing code
                                 ;  it now has to talk to. Once per death, and
@@ -793,7 +794,8 @@ INPUT:
         cmp  word [phit],0
         je   .gt1
         dec  word [phit]
-.gt1:  cmp  byte [KEYS+SC_SP],0
+.gt1:  mov  al,[KEYS+SC_SP]    ; the trigger - a rescued tap is one shell
+        or   al,[tapsp]
         je   .gnr
         cmp  word [gunam],0
         je   .gnf
@@ -1356,4 +1358,5 @@ TapClr: xor  al,al
         mov  [taprt],al
         mov  [tapw],al
         mov  [tapsd],al
+        mov  [tapsp],al
         ret

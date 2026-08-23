@@ -990,6 +990,8 @@ taplf   db 0                    ;  between two frames never shows in
 taprt   db 0                    ;  KEYS - KHIT catches it, GAMELOOP
 tapw    db 0                    ;  grants it exactly ONE physics tick
 tapsd   db 0                    ;  through these six (W and S too)
+tapsp   db 0                    ; ...and SPACE: the death screen said
+                                ;  PRESS SPACE and a tap said nothing
 fpsn    dw 0                    ; frames counted this second...
 fpst    dw 0                    ; ...since this BIOS tick...
 fpsv    dw 0                    ; ...and the number the glass shows

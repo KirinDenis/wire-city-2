@@ -716,6 +716,9 @@ GAMELOOP:
         mov  al,[KHIT+SC_S]
         mov  [tapsd],al
         mov  byte [KHIT+SC_S],0
+        mov  al,[KHIT+SC_SP]
+        mov  [tapsp],al
+        mov  byte [KHIT+SC_SP],0
         mov  ax,[camx]          ; interpolation: keep the pre-burst state
         mov  [ocx],ax
         mov  ax,[camy]
