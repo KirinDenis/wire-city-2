@@ -674,6 +674,16 @@ GAMELOOP:
         mov  bx,ax
         sub  bx,[lasttk]        ; bx = ticks elapsed since last render frame
         mov  [lasttk],ax
+        inc  word [fpsn]        ; the debug frame counter: frames
+        mov  dx,ax              ;  per BIOS second, shown by the
+        sub  dx,[fpst]          ;  glass when Ctrl+D is up - the
+        cmp  dx,18              ;  486 report asked for a number,
+        jb   .nfps              ;  not an adjective
+        mov  [fpst],ax
+        mov  dx,[fpsn]
+        mov  [fpsv],dx
+        mov  word [fpsn],0
+.nfps:
         cmp  byte [paused],0    ; frozen: no steps, and fcnt pinned
         je   .nfz               ;  past fprev so LERPSET shows the
         xor  bx,bx              ;  real state - no wrap, no drift.
@@ -684,6 +694,28 @@ GAMELOOP:
         mov  bx,MAXSTEP
 .pcl:  test bx,bx
         jz   .pdone
+        ; ---- the tap rescue (the 486 report, 2026-08-22): a flight
+        ; key pressed AND released between two frames never shows in
+        ; KEYS - at real-iron frame rates that was every quick tap.
+        ; KHIT caught it; grant it here, exactly one tick's worth.
+        mov  al,[KHIT+SC_UP]
+        mov  [tapup],al
+        mov  byte [KHIT+SC_UP],0
+        mov  al,[KHIT+SC_DN]
+        mov  [tapdn],al
+        mov  byte [KHIT+SC_DN],0
+        mov  al,[KHIT+SC_LF]
+        mov  [taplf],al
+        mov  byte [KHIT+SC_LF],0
+        mov  al,[KHIT+SC_RT]
+        mov  [taprt],al
+        mov  byte [KHIT+SC_RT],0
+        mov  al,[KHIT+SC_W]
+        mov  [tapw],al
+        mov  byte [KHIT+SC_W],0
+        mov  al,[KHIT+SC_S]
+        mov  [tapsd],al
+        mov  byte [KHIT+SC_S],0
         mov  ax,[camx]          ; interpolation: keep the pre-burst state
         mov  [ocx],ax
         mov  ax,[camy]
@@ -705,6 +737,7 @@ GAMELOOP:
 .ploop:
         push bx                 ; INPUT clobbers BX (leaves BX=256 from idiv)
         call INPUT              ; one fixed physics step
+        call TapClr             ; the taps are one-tick coin: spent
         pop  bx
         dec  bx
         jnz  .ploop

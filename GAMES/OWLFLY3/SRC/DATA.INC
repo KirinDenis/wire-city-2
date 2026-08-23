@@ -984,6 +984,15 @@ spklc   dw 7                    ; the noise generator (a small LCG): the
 paused  db 0                    ; ESC: the world stands still, the glass
                                 ;  stays alive - views, radar, map, MFD
 MSGP2   db 'P',0                ; the pause letter on the panel
+tapup   db 0                    ; the tap rescue (the 486 report): a
+tapdn   db 0                    ;  flight key pressed AND released
+taplf   db 0                    ;  between two frames never shows in
+taprt   db 0                    ;  KEYS - KHIT catches it, GAMELOOP
+tapw    db 0                    ;  grants it exactly ONE physics tick
+tapsd   db 0                    ;  through these six (W and S too)
+fpsn    dw 0                    ; frames counted this second...
+fpst    dw 0                    ; ...since this BIOS tick...
+fpsv    dw 0                    ; ...and the number the glass shows
 sbmsk   db 0                    ; saved IRQ7 mask bit
 sbtc    dw 0                    ; current DSP time constant
 mlvl    dw 0                    ; manoeuvre loading (smoothed, 0..48)

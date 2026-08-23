@@ -288,7 +288,18 @@ TOPSTRIP:
         mov  word [fty],2
         mov  si,MSGP2
         call CODE:FDRAWF
-.tsp:  ret
+.tsp:  cmp  byte [dbgm],0     ; the frame counter, Ctrl+D gated:
+        je   .tfp              ;  the 486 report asked for a number
+        mov  byte [COLOR],8
+        mov  word [ftx],296
+        mov  word [fty],2
+        mov  ax,[fpsv]
+        cmp  ax,99             ; two digits is what the corner holds
+        jbe  .tf1
+        mov  ax,99
+.tf1:  mov  cx,2
+        call CODE:FNUMZF
+.tfp:  ret
 
 BOTSTRIP:
         mov  byte [COLOR],97

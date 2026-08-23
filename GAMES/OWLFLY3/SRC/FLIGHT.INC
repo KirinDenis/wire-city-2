@@ -61,7 +61,8 @@ INPUT:
         ; --- throttle: W up, S down; A holds the afterburner. The
         ; F-15 SE II gates joined in OWL FLY II: Shift+plus slams the
         ; lever to the stop, Shift+minus chops it to idle ---
-        cmp  byte [KEYS+SC_W],0
+        mov  al,[KEYS+SC_W]     ; held...
+        or   al,[tapw]          ; ...or the tap the latch rescued
         jne  .tup
         cmp  byte [KEYS+SC_NPP],0
         jne  .tup
@@ -102,7 +103,8 @@ INPUT:
         jle  .tw1
         mov  ax,64
 .tw1:  mov  [throt],ax
-.tw:   cmp  byte [KEYS+SC_S],0
+.tw:   mov  al,[KEYS+SC_S]
+        or   al,[tapsd]         ; the rescued tap counts too
         jne  .tdn
         cmp  byte [KEYS+SC_NPM],0
         jne  .tdn
@@ -249,14 +251,16 @@ INPUT:
         jne  .nr               ; Ctrl+arrow is a LOOK, not a roll - the whole
                                 ; point of putting it there is that the hand
                                 ; never leaves the stick, so it must not bank
-        cmp  byte [KEYS+SC_LF],0
+        mov  al,[KEYS+SC_LF]
+        or   al,[taplf]         ; a rescued tap rolls one tick
         je   .nl
         mov  ax,[roll]
         sub  ax,3               ; roll rate: full barrel roll in ~4.7 s
         and  ax,255
         mov  [roll],ax
         mov  word [tmpi],1
-.nl:   cmp  byte [KEYS+SC_RT],0
+.nl:   mov  al,[KEYS+SC_RT]
+        or   al,[taprt]
         je   .nr
         mov  ax,[roll]
         add  ax,3
@@ -346,10 +350,12 @@ INPUT:
         xor  cx,cx              ; q = elevator direction
         cmp  byte [tgtcam],0
         jne  .nopq             ; F4: the stick is centred
-        cmp  byte [KEYS+SC_DN],0
+        mov  al,[KEYS+SC_DN]
+        or   al,[tapdn]         ; a rescued tap pulls one tick
         je   .q1
         mov  cx,1               ; pull: nose up
-.q1:   cmp  byte [KEYS+SC_UP],0
+.q1:   mov  al,[KEYS+SC_UP]
+        or   al,[tapup]
         je   .q2
         sub  cx,1               ; push: nose down
 .q2:   jcxz .nopq
@@ -1335,4 +1341,19 @@ UIKEYS:
         xor  al,al
 .mfs:  mov  [mfdmode],al
 .nmfd:
+        ret
+
+; ---------------------------------------------------------------------------
+;  TapClr - the rescued taps are spent. GAMELOOP grants them before a
+;  burst; the burst's FIRST step reads them (the OR sites above), then
+;  this runs after every step, so steps two to six of a catch-up burst
+;  fly clean. One tick per tap - never nought, never six.
+; ---------------------------------------------------------------------------
+TapClr: xor  al,al
+        mov  [tapup],al
+        mov  [tapdn],al
+        mov  [taplf],al
+        mov  [taprt],al
+        mov  [tapw],al
+        mov  [tapsd],al
         ret
