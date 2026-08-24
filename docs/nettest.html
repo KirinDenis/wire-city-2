@@ -59,6 +59,16 @@ window.grab = async () => {
     L("bundle " + bundle.length + " bytes");
     const ci = await emulators.dosboxDirect(bundle);
     window.ci = ci;
+    const delay = +params.get("delay") || 0;   // seconds: fake a slow wire,
+    if (delay) {                                // the game boots meanwhile -
+      L("delaying connect " + delay + "s..."); // this is how the address
+      await new Promise((r) => setTimeout(r, delay * 1000));
+    }                                           // race of 2026-08-25 was
+                                                // reproduced and the XMENU
+                                                // gate proven. (ci.pause()
+                                                // is NOT a fix: it pauses
+                                                // networkConnect too and
+                                                // deadlocks.)
     L("ci ready, connecting to room " + room + "...");
     await ci.networkConnect(0, relay + "/ipx/" + room);
     L("networkConnect RESOLVED - connected");

@@ -190,6 +190,60 @@ NETINIT:
         pop  es
         ret
 
+; ---- NETADDRF: has the wire handed us an ADDRESS yet? ----------------------
+;  The browser race (2026-08-25): the page's websocket is still DIALING
+;  the relay while a practiced pilot walks the front step. IPX answers,
+;  but the node the relay grants is not there yet - the address query
+;  returns ten zeros, mypid falls back to 1, and EVERY fast starter
+;  becomes "pilot 1, sky 1": each drops the other's packets as his own
+;  echo, and no order of starting can save them. So the sky menu asks
+;  again, through here, until the node fills in. Real iron never waits:
+;  a real driver knows its MAC before the first query.
+;  out: AL=1 done (no IPX to wait for, or address known - mypid is
+;          reminted from the real tail), DX = mypid
+;       AL=0 still dialing: ask again next tick
+NETADDRF:
+        call NETADDR
+        retf
+NETADDR:
+        cmp  byte [cs:netok],0
+        jne  .ask
+        mov  al,1               ; no IPX at all: nothing to wait for
+        mov  dx,[cs:mypid]
+        ret
+.ask:  push es
+        push si
+        mov  bx,9               ; our internetwork address -> mynode
+        mov  ax,SKYSEG
+        mov  es,ax
+        mov  si,mynode
+        int  7Ah
+        sti                     ; the driver may hand IF back OFF - and
+                                ; a frozen BIOS tick starves every wait
+        pop  si
+        pop  es
+        push si
+        mov  si,4               ; the NODE's six bytes only: before the
+        xor  al,al              ;  relay answers, the query already
+.z:    or   al,[cs:mynode+si]  ;  returns a network NUMBER - the node
+        inc  si                 ;  is what the grant fills in, and a
+        cmp  si,10              ;  real MAC is never all-zero
+        jb   .z
+        pop  si
+        or   al,al
+        jz   .dial              ; zeros: the relay has not answered yet
+        mov  ax,word [cs:mynode+8]
+        mov  [cs:mypid],ax      ; remint our name from the real tail
+        or   ax,ax
+        jnz  .nm
+        inc  ax
+        mov  [cs:mypid],ax
+.nm:   mov  dx,[cs:mypid]
+        mov  al,1
+        ret
+.dial: xor  al,al
+        ret
+
 ; ---- NETLSTN: arm listen ECB si (0..NLSTN-1) -------------------------------
 NETLSTN:
         push es

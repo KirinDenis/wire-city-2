@@ -521,6 +521,9 @@ MAIN:
         ; else is already flying" made it impossible to see alone, which is
         ; a poor way to build a thing that has to be judged by eye.
         mov  byte [spect],1
+        mov  byte [KHIT+SC_ENT],0 ; the splash's Enter latched KHIT, and
+                                ;  SPECTUPF now reads that latch - stale
+                                ;  history must not take a jet by itself
         mov  byte [tgtcam],1 ; UP FROM HERE, not from the first physics
                                 ;  tick. SPECTUPF raises it, but INPUT runs
                                 ;  AFTER the first frame is drawn - so the

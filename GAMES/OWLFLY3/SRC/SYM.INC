@@ -712,8 +712,11 @@ GNDMARK:
 ;  takes you through the war in order instead of dealing you a new hand.
 ; ============================================================================
 SPECTUPF:
-        cmp  byte [KEYS+SC_ENT],0
-        je   .nj
+        mov  al,[KEYS+SC_ENT]   ; held right now...
+        or   al,[KHIT+SC_ENT]   ; ...or tapped between two frames: at
+        mov  byte [KHIT+SC_ENT],0  ; real-iron rates a tap never shows
+        or   al,al                 ; in KEYS (the 486 report) and the
+        je   .nj                   ; join key must not need luck
         ; ---- ENTER: take a jet. From here on this is an ordinary sortie.
         mov  byte [spect],0
         mov  byte [tgtcam],0
