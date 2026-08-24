@@ -74,8 +74,11 @@
      GitHub Pages, which can't send COOP/COEP headers. Must load FIRST. -->
 <script src="coi-serviceworker.js"></script>
 
-<script src="jsdos/js-dos.js"></script>
+<!-- owlcontrols.js FIRST: its heartbeat shim must wrap rAF before the
+     minified js-dos captures it - a hidden tab otherwise freezes the
+     jet and the wire watches it vanish. -->
 <script src="owlcontrols.js"></script>
+<script src="jsdos/js-dos.js"></script>
 <script>
   // ---- the wire: the SAME room as the colour page, "owlfly3" - the mono
   // edition runs the same EXE and the same protocol, so a Hercules pilot

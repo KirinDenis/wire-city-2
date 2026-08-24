@@ -102,8 +102,11 @@
      GitHub Pages, which can't send COOP/COEP headers. Must load FIRST. -->
 <script src="coi-serviceworker.js"></script>
 
-<script src="jsdos/js-dos.js"></script>
+<!-- owlcontrols.js FIRST: its heartbeat shim must wrap rAF before the
+     minified js-dos captures it - a hidden tab otherwise freezes the
+     jet and the wire watches it vanish. -->
 <script src="owlcontrols.js"></script>
+<script src="jsdos/js-dos.js"></script>
 <script>
   // ---- the wire: IPX through WebSocket into the relay, exactly OWL FLY
   // II's plumbing - but its OWN room, "owlfly3": the protocol is byte-

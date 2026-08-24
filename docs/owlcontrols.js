@@ -13,6 +13,47 @@
 // declares its own short names there - a plain `const K` collided with one,
 // the whole page script failed to parse, and the emulator never started at
 // all. One name leaves here: OwlControls.
+
+// ---- the heartbeat shim (2026-08-25). js-dos paces the emulator on
+// requestAnimationFrame, and a hidden or fully covered tab stops rAF
+// COLD: the jet freezes, its position broadcasts stop, and five silent
+// seconds later every other pilot watches it vanish - then reappear on
+// refocus (the "planes flap in and out" report; the squadron was
+// alt-tabbing to the messenger between passes). This wraps rAF in a
+// race against a plain timer: on a visible page rAF wins every frame
+// and NOTHING changes; hidden, the browser throttles the timer to
+// about one fire a second - a slideshow, but one position a second
+// keeps the pilot on the wire (the ghost sweep needs five of silence).
+// This file must load BEFORE js-dos.js, and the pages do so.
+(function () {
+  var raf = window.requestAnimationFrame.bind(window);
+  var caf = window.cancelAnimationFrame.bind(window);
+  var seq = 1, live = {};
+  window.requestAnimationFrame = function (cb) {
+    var key = seq++;
+    var fire = function (ts) {
+      var e = live[key];
+      if (!e) return;
+      delete live[key];
+      caf(e.r); clearTimeout(e.t);
+      cb(ts);
+    };
+    live[key] = {
+      r: raf(fire),
+      t: setTimeout(function () { fire(performance.now()); }, 250)
+    };
+    return -key;              // negative: never collides with a real rAF id
+  };
+  window.cancelAnimationFrame = function (id) {
+    if (id < 0) {
+      var e = live[-id];
+      if (e) { delete live[-id]; caf(e.r); clearTimeout(e.t); }
+      return;
+    }
+    caf(id);
+  };
+})();
+
 (function (root) {
 
   // ---- the layer's own CSS, injected rather than copied into three pages.
