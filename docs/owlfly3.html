@@ -25,12 +25,15 @@
      background:#04060f;color:#abc}
   td.k{color:#dfe;white-space:nowrap;width:14em}
   .cyn{color:#5ff}.mag{color:#f5f}.amb{color:#fb4}
+  .stat{color:#5f7;font-size:12px}
 </style>
 </head>
 <body>
 <div id="wrap">
   <h1>O W L&nbsp;&nbsp;F L Y&nbsp;&nbsp;I I I</h1>
   <div class="hint">click the screen first to grab the keyboard &middot;
+    keep this window visible &mdash; a hidden tab freezes your jet &middot;
+    <span class="stat" id="stat">wire: connecting&hellip;</span> &middot;
     the game opens with SELECT VIDEO SYSTEM &mdash; press
     <b>2</b> for <span class="cyn">C</span><span class="mag">G</span>A,
     <b>3</b> or <b>4</b> for EGA, <b>6</b> or <b>7</b> for VGA &middot;
@@ -102,6 +105,17 @@
 <script src="jsdos/js-dos.js"></script>
 <script src="owlcontrols.js"></script>
 <script>
+  // ---- the wire: IPX through WebSocket into the relay, exactly OWL FLY
+  // II's plumbing - but its OWN room, "owlfly3": the protocol is byte-
+  // identical to v2's, and the ROOM is what keeps the two wars apart.
+  // ?relay= overrides the relay, ?room= picks a private sky.
+  var params = new URLSearchParams(location.search);
+  var RELAY = params.get("relay")
+           || (location.hostname === "localhost" || location.hostname === "127.0.0.1"
+               ? "ws://localhost:1900"
+               : "wss://view.owlos.sk");
+  var ROOM = params.get("room") || "owlfly3";
+
   // The stick, the buttons and the switch panel are OWL FLY II's, shared
   // rather than copied - this page was forked from the GAME and shipped
   // without any of them. See owlcontrols.js.
@@ -115,7 +129,7 @@
     { h: "PAL" });
 
   Dos(document.getElementById("dos"), {
-    url: "owlfly3_v14.jsdos",
+    url: "owlfly3_v15.jsdos",
     pathPrefix: "jsdos/emulators/",
     theme: "dark",
     renderAspect: "4/3",
@@ -123,10 +137,18 @@
     scaleControls: 0.2,
     softKeyboardLayout: KB.layout,
     softKeyboardSymbols: KB.symbols,
+    noNetworking: false,
     onEvent: function (e, ci) {
       if (e !== "ci-ready") return;
       window.__ci = ci;
       OwlControls.mountTouch(ci);
+      var st = document.getElementById("stat");
+      ci.networkConnect(0, RELAY + "/ipx/" + ROOM)
+        .then(function () { st.textContent = "wire: LIVE - sky \"" + ROOM + "\""; })
+        .catch(function (err) {
+          var why = (err && err.message) ? err.message : "no answer";
+          st.textContent = "wire: dark (" + why + ") - solo flight";
+        });
     }
   });
 
@@ -135,6 +157,7 @@
 </script>
 </body>
 </html>
+
 
 
 

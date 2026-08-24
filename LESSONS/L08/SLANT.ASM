@@ -16,7 +16,7 @@
 ;  live in the same memory as your data. A program can READ its own code -
 ;  frame 1 does - and it can WRITE it. Today that idea wears the name JIT:
 ;  a program writing, at run time, the exact instructions the moment needs.
-;  In 1986 it was called self-modifying code, and it was how a line drawer
+;  Its old name is self-modifying code, and it was how a line drawer
 ;  earned its speed: decide the direction ONCE, write it into the ADD, and
 ;  the inner loop runs with no questions left inside it.
 ;
@@ -137,7 +137,7 @@ t_c1    db 'An instruction is bytes. Here is ADD DI,320 - read out of THIS',0
 t_c2    db 'program, by this program, while it runs:',0
 t_c3    db 'It lives in the same memory as your data. So a program can also',0
 t_c4    db 'WRITE its own instructions. Today that is called JIT.',0
-t_c5    db 'In 1986 it was called self-modifying code.',0
+t_c5    db 'Its old name is self-modifying code.',0
 t_x1    db 'Next: two crosses. The LEFT one asks "up or down?" at EVERY',0
 t_x2    db 'pixel - 480 questions with the same answer. The RIGHT one was',0
 t_x3    db 'asked ONCE: the answer was written into its ADD before the loop.',0

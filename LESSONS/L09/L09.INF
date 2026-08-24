@@ -1,0 +1,9 @@
+.title  Self-modifying code
+.what   The titles' program run for real: patched live, the word on the glass
+.tier   LESSON
+.main   SMC.ASM
+.needs  DRAW9.INC
+.reads  INFOGR.PAS
+.build  FASM SMC.ASM SMC.COM
+.run    SMC.COM
+.uses   CALL RET MOV JMP XCHG DB INT

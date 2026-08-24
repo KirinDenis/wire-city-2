@@ -77,13 +77,13 @@ $MAP = @{
       @{ p = "GAMES\OWLFLY3\INSTALL\CPSHGC.DAT";  n = "CPSHGC.DAT" }
     )
     ignore = @("ENGINE.RAW")
-    # NO [ipx] HERE, DELIBERATELY: OWL FLY III still speaks OWL FLY II's
-    # wire protocol byte for byte, so a browser v3 with the wire up would
-    # walk into v2's public relay skies. The wire comes back the day the
-    # protocol (or the port) diverges - Skill\VIDTASK.md, the open item.
+    # THE WIRE IS BACK (2026-08-25): v3 flies its OWN relay room - owlfly3,
+    # not owlfly2 - so the byte-identical protocol can never walk into v2's
+    # skies. The separation lives in the relay URL (the page's business);
+    # ipx=true here only wakes the driver.
     strings = @(
-      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`nOWLFLY3`n" },
-      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`nOWLFLY3`n" }
+      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[ipx]`nipx=true`n[autoexec]`necho off`nmount c .`nc:`nOWLFLY3`n" },
+      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[ipx]`nipx=true`n[autoexec]`necho off`nmount c .`nc:`nOWLFLY3`n" }
     )
   }
   OWLFLY3H = @{
@@ -107,8 +107,8 @@ $MAP = @{
     )
     ignore = @("ENGINE.RAW")
     strings = @(
-      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=hercules`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`nOWLFLY3`n" },
-      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=hercules`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`nOWLFLY3`n" }
+      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=hercules`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[ipx]`nipx=true`n[autoexec]`necho off`nmount c .`nc:`nOWLFLY3`n" },
+      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=hercules`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[ipx]`nipx=true`n[autoexec]`necho off`nmount c .`nc:`nOWLFLY3`n" }
     )
   }
   OWLFLY = @{

@@ -1,5 +1,5 @@
 .title  The program that rewrites itself
-.what   Slanted lines - and the JIT of 1986: rewrite the ADD, drop the questions
+.what   Slanted lines - and JIT by its old name: rewrite the ADD, drop the questions
 .tier   LESSON
 .main   SLANT.ASM
 .needs  DRAW8.INC
