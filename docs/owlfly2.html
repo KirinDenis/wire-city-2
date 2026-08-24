@@ -356,6 +356,14 @@
                  ? "ws://localhost:1900"
                  : "wss://view.owlos.sk");
   const ROOM  = params.get("room") || "owlfly2";
+
+  // The bundle, NAMED ONCE - version shown on the status line. A
+  // browser-cached page quietly serves a STALE bundle, and two pilots
+  // on different builds fly separate skies while every packet still
+  // "arrives". The number on the glass is the one-glance check.
+  const BUNDLE = "owlfly2_v53.jsdos";
+  const VER = "v" + (BUNDLE.match(/_v(\d+)/) || [0, "?"])[1];
+  document.getElementById("stat").textContent = "wire: connecting??? " + VER;
   // ?t= tags the window title so test rigs can tell two pilots apart
   if (params.get("t")) document.title = "OWL FLY II " + params.get("t");
 
@@ -390,7 +398,7 @@
   // provably works (the BBS lesson, 2026-07-19). Networking is wired
   // AFTER boot via networkConnect; no ipx:/room: page options.
   Dos(document.getElementById("dos"), {
-    url: "owlfly2_v51.jsdos",
+    url: BUNDLE,
     pathPrefix: "jsdos/emulators/",
     theme: "dark",
     renderAspect: "16/10",
@@ -407,14 +415,14 @@
       OwlControls.mountTouch(ci);
       const st = document.getElementById("stat");
       ci.networkConnect(0, RELAY + "/ipx/" + ROOM)
-        .then(() => { st.textContent = "wire: LIVE - sky \"" + ROOM + "\""; })
+        .then(() => { st.textContent = "wire: LIVE - sky \"" + ROOM + "\" - " + VER; })
         // js-dos rejects this one with undefined when the socket simply
         // never opens, so err.message threw and the status line was left
         // saying "connecting..." for ever. Caught while measuring the
         // phone controls, 2026-08-15.
         .catch((err) => {
           const why = (err && err.message) ? err.message : "no answer";
-          st.textContent = "wire: dark (" + why + ") - solo flight";
+          st.textContent = "wire: dark (" + why + ") - solo flight - " + VER;
         });
     }
   });
@@ -424,6 +432,8 @@
 </script>
 </body>
 </html>
+
+
 
 
 

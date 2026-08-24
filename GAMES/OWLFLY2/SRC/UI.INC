@@ -136,6 +136,7 @@ SHKPZ   dw  -2500,  2500, -2500, 2500, -2500, 2500, -2500, 2500
 UWIRE0  db 'NO IPX',0
 UWIRE1  db 'WIRE DARK - RUN NETHOST OR NETJOIN',0
 UWIRE2  db 'WIRE LIVE',0
+UWDIAL  db 'WIRE: DIALING',0    ; the address gate's wait, 13 -> 134
 UTITLE  db 'OWL FLY II',0
 USUB    db 'WIRE CITY SQUADRON',0
 UHDR    db 'SKIES ON THE WIRE:',0
@@ -667,8 +668,54 @@ SPECTXTF:
 ;  sky with nothing to watch is the thing this whole change exists to kill.
 ; ============================================================================
 XLISTEN = 36                  ; BIOS ticks: two seconds, and ads are 1/s
+WIREWT  = 270                 ; 15 s: how long a browser page may still be
+                              ;  dialing the relay while we stand here
 
 XMENU:  push es
+        ; ---- THE ADDRESS GATE (2026-08-25, same fix as OWL FLY III).
+        ; Wait for the wire to hand out our node BEFORE minting a name
+        ; or listening for ads: the page's websocket races the pilot
+        ; through the front step, and the loser of that race used to
+        ; become "pilot 1, sky 1" - invisible to every other fast
+        ; starter, who was also pilot 1, and deaf through a listen
+        ; window that closed on a dark wire. NETADDRF answers instantly
+        ; on real iron and on a wire that is already up.
+        push cx
+        call SKYSEG:NETADDRF
+        or   al,al
+        jnz  .up0              ; the common case: no gate at all
+        push es                 ; the wait is real: say so on the glass
+        mov  ax,0A000h          ; (mode 13h under the splash; a retro
+        mov  es,ax              ;  card ignores the write - real iron
+        mov  byte [COLOR],8     ;  never reaches this line anyway)
+        mov  word [ftx],134
+        mov  word [fty],190
+        mov  si,UWDIAL
+        call UFDRAW
+        pop  es
+        mov  cx,WIREWT
+.adr:  push cx
+        call SKYSEG:NETADDRF
+        pop  cx
+        or   al,al
+        jnz  .up               ; the node is real: mypid is reminted
+        push cx
+        push es                 ; one-tick nap, the file's own idiom
+        mov  ax,40h
+        mov  es,ax
+        mov  ax,[es:6Ch]
+.np:   cmp  ax,[es:6Ch]
+        je   .np
+        pop  es
+        pop  cx
+        loop .adr
+        jmp  .gap              ; capped out: the wire stays dark, solo
+.up0:
+.up:   mov  [netpid],dx        ; the caller's boot copy was minted
+                                ;  BEFORE the wire answered - refresh
+                                ;  it, or a created sky still flies
+                                ;  under gid 1
+.gap:  pop  cx
         push es                 ; when to stop listening
         mov  ax,40h
         mov  es,ax

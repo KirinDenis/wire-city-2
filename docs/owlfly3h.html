@@ -87,6 +87,13 @@
                : "wss://view.owlos.sk");
   var ROOM = params.get("room") || "owlfly3";
 
+  // The bundle, NAMED ONCE - version on the status line, same reason as
+  // the colour page: a cached page serving a stale bundle is invisible
+  // any other way, and stale-vs-fresh pilots fly separate skies.
+  var BUNDLE = "owlfly3h_v17.jsdos";
+  var VER = "v" + (BUNDLE.match(/_v(\d+)/) || [0, "?"])[1];
+  document.getElementById("stat").textContent = "wire: connecting… " + VER;
+
   // The stick, the buttons and the switch panel are OWL FLY II's, shared
   // rather than copied - see owlcontrols.js. This page was forked from the
   // GAME and shipped with none of them.
@@ -98,7 +105,7 @@
   var KB = OwlControls.keyboard([["1 2 3", "{enter}"]]);
 
   Dos(document.getElementById("dos"), {
-    url: "owlfly3h_v17.jsdos",
+    url: BUNDLE,
     pathPrefix: "jsdos/emulators/",
     theme: "dark",
     renderAspect: "4/3",
@@ -113,10 +120,10 @@
       OwlControls.mountTouch(ci);
       var st = document.getElementById("stat");
       ci.networkConnect(0, RELAY + "/ipx/" + ROOM)
-        .then(function () { st.textContent = "wire: LIVE - sky \"" + ROOM + "\""; })
+        .then(function () { st.textContent = "wire: LIVE - sky \"" + ROOM + "\" - " + VER; })
         .catch(function (err) {
           var why = (err && err.message) ? err.message : "no answer";
-          st.textContent = "wire: dark (" + why + ") - solo flight";
+          st.textContent = "wire: dark (" + why + ") - solo flight - " + VER;
         });
     }
   });
