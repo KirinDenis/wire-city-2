@@ -192,6 +192,7 @@ tt      db 0                    ; the wander clock: translate and scale
 vx      dw 0                    ; VecXY's answer
 vy      dw 0
 vlist   dw 8 dup (0)            ; the four tips: x,y  x,y  x,y  x,y
+shvec   db 1                    ; the spin frames: draw the vectors, or not
 
 include 'SINTAB.INC'
 include 'DRAW10.INC'
@@ -382,9 +383,7 @@ Boot:   cld
         call Bottom
         call Key
 
-        mov  ax, 0003h          ; a clean screen back to DOS
+Bye:    mov  ax, 0003h          ; a clean screen back to DOS
         int  10h
         mov  ax, 4C00h
         int  21h
-
-shvec   db 1                    ; the spin frames: draw the vectors, or not

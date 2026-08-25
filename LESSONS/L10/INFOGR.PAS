@@ -48,7 +48,8 @@ const
 
   HomeX  = 240;  HomeY = 260;        { the centre's home                 }
   HomeR  = 110;                      { the vectors' home length          }
-  LegX   = 484;                      { the legend column                 }
+  LegX   = 500;                      { the legend column                 }
+  LegY   = 108;                      { ...and where it starts            }
 
 var
   CenX, CenY : Integer;              { where the centre stands NOW       }
@@ -81,10 +82,12 @@ end;
 
 procedure Headline;
 begin
-  SetTextStyle(DefaultFont, HorizDir, 3);
+  { size 2, not 3: at size 3 this line is 672 pixels and BGI silently
+    refuses to draw what does not fit - the title simply vanished }
+  SetTextStyle(DefaultFont, HorizDir, 2);
   SetTextJustify(CenterText, TopText);
   SetColor(White);
-  OutTextXY(320, 8, 'THE SQUARE THAT IS NOT THERE');
+  OutTextXY(320, 10, 'THE SQUARE THAT IS NOT THERE');
   SetTextStyle(DefaultFont, HorizDir, 1);
   SetColor(LightCyan);
   OutTextXY(320, 36, 'vertices, edges, faces  -  lesson 10');
@@ -151,9 +154,9 @@ begin
   SetTextStyle(DefaultFont, HorizDir, 1);
   SetTextJustify(LeftText, TopText);
   SetColor(White);
-  OutTextXY(LegX, 84, 'THE NAMES');
-  Line(LegX, 96, 628, 96);
-  Y := 108;
+  OutTextXY(LegX, LegY, 'THE NAMES');
+  Line(LegX, LegY + 12, 632, LegY + 12);
+  Y := LegY + 24;
   if HasVtx then begin
     SetFillStyle(SolidFill, VtxCol);
     FillEllipse(LegX + 6, Y + 4, 4, 4);
@@ -178,14 +181,14 @@ begin
     SetColor(White);
     OutTextXY(LegX + 18, Y, 'FACE');
     SetColor(LightCyan);
-    OutTextXY(LegX + 18, Y + 12, 'filled between edges');
+    OutTextXY(LegX + 18, Y + 12, 'filled inside');
     Y := Y + 34;
   end;
   if HasT or HasR or HasS then begin
     SetColor(White);
-    OutTextXY(LegX, Y + 4, 'TRANSFORMATIONS');
-    Line(LegX, Y + 16, 628, Y + 16);
-    Y := Y + 26;
+    OutTextXY(LegX, Y + 6, 'TRANSFORMATIONS');
+    Line(LegX, Y + 18, 632, Y + 18);
+    Y := Y + 30;
   end;
   if HasT then begin
     SetColor(White);
@@ -205,7 +208,7 @@ begin
     SetColor(White);
     OutTextXY(LegX, Y, 'SCALE');
     SetColor(LightCyan);
-    OutTextXY(LegX, Y + 12, 'change the lengths');
+    OutTextXY(LegX, Y + 12, 'grow and shrink');
   end;
 end;
 

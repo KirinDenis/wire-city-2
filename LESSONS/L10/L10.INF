@@ -1,0 +1,10 @@
+.title  The square that is not there
+.what   Four radius vectors become vertices, edges, a turning wireframe - and the three transformations
+.tier   LESSON
+.main   SQUARE.ASM
+.needs  DRAW10.INC SINTAB.INC
+.reads  INFOGR.PAS
+.build  FASM SQUARE.ASM SQUARE.COM
+.run    SQUARE.COM
+.uses   XLATB IMUL SAR CMP LOOP CALL INT
+.ignore MAKEINFO.BAT
