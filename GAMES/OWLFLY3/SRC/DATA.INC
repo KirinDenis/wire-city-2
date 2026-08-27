@@ -455,6 +455,47 @@ SHKELMX = 56                  ; ...and no higher than about 78 degrees:
                                 ;  finds that out has earned the pass
 SHKTRNY = 10                  ; the TRUNNION, in model units: where the
 SHKTRNZ = 5                   ;  barrels are bolted to the drum
+; ---- THE GUNNER'S SEAT ----------------------------------------------------
+SHKEYE  = 13                  ; his eye, in engine units above the tracks.
+                                ;  The drum's roof is 12 and the radar mast
+                                ;  reaches 19, so 13 is a head at the hatch.
+                                ;  It was SHKTOP+10 = 28 - two metres above
+                                ;  the dish, a seat floating over its own
+                                ;  vehicle
+SHCABHZ = 58                  ; ...and where the horizon belongs on his
+                                ;  glass. The cabin artwork's window runs
+                                ;  rows 10..106, so its middle is 58 - the
+                                ;  same rule PZGLASSC follows for the jet.
+                                ;  The seat held 100, which is the bottom
+                                ;  EDGE of that window: the whole cabin was
+                                ;  sky
+; ---- and the short lens the barrels are drawn through ---------------------
+; NEARZ is 40 units and the whole vehicle is 34 long, so every face of the
+; Shilka a gunner sits in - hull, drum, dish, barrels - lies inside the near
+; plane and is clipped away before it is ever projected. The guns cannot be
+; rendered by the world's lens at all. SHKBRL projects the SBARR model on
+; its own instead: no yaw (the drum's bearing IS the way the camera looks),
+; no near clip (nothing here can reach the eye), and an eye of its own.
+BRLEYD  = 24                  ; how far behind the trunnion that eye sits
+BRLEYH  = 6                   ; ...and how far above it. The pair is chosen
+                                ;  so the muzzles cross the window from row
+                                ;  89 at zero elevation to row 23 at the
+                                ;  mount's stop: the whole sweep is IN the
+                                ;  frame, which is the point of the exercise
+BRLEX   = 3                   ; and on the GUNS' axis, not the hull's: the
+                                ;  mount stands three units right of the
+                                ;  centreline (a real Shilka's does), and
+                                ;  0.6 m of parallax is under a pixel at any
+                                ;  range worth firing at. Drawn on the hull's
+                                ;  axis the guns would sit off to one side of
+                                ;  the very shells they fire
+BRLNZ   = 4                   ; the divide's floor. This geometry cannot get
+                                ;  nearer than about twenty, but a fixed-point
+                                ;  divide that COULD is a hang, not a glitch
+BRLFLIP = 20                  ; past this elevation the muzzles are above the
+                                ;  eye and the six faces are painted the other
+                                ;  way about - about 28 degrees, where the
+                                ;  barrel axis crosses the lens
 ; ---- driving and shooting -------------------------------------------------
 SHKSPD  = 3                   ; world units a tick: a crawl, on purpose.
                                 ;  It is not the war, it is scenery that
@@ -1018,6 +1059,12 @@ rsvz    dw 0                    ;  LERPRST only restores on the frames it
 rsvh    dw 0                    ;  interpolated, so the borrow keeps its
 rsvp    dw 0                    ;  own copy
 rsvr    dw 0
+brlel   dw 0                    ; the crewed barrels' elevation, handed from
+                                ;  SHKEYEF (UISEG) to SHKBRL (SYMSEG) on the
+                                ;  frames the seat owns the camera. Two far
+                                ;  segments cannot read each other, and this
+                                ;  is the only word of the seat the gun
+                                ;  overlay needs
 MSGP2   db 'P',0                ; the pause letter on the panel
 tapup   db 0                    ; the tap rescue (the 486 report): a
 tapdn   db 0                    ;  flight key pressed AND released

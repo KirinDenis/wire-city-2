@@ -149,6 +149,12 @@ UWIRE0  db 'NO IPX',0
 UWIRE1  db 'WIRE DARK - RUN NETHOST OR NETJOIN',0
 UWIRE2  db 'WIRE LIVE',0
 UWDIAL  db 'WIRE: DIALING',0    ; the address gate's wait, 13 -> 134
+uwsp    dw 0                    ; the spinner's phase, 0..3
+uwst    dw 0                    ; ...and its stroke, as a buffer step
+UWSPD   db  0, 1                ; | / - \ : the direction of each stroke,
+        db  1,-1                ;  a quarter turn clockwise at a time.
+        db  1, 0                ;  Screen y grows DOWNWARD, which is why
+        db  1, 1                ;  the slash's dy is the negative one
 UTITLE  db 'OWL FLY III',0
 USUB    db 'WIRE CITY SQUADRON',0
 UHDR    db 'SKIES ON THE WIRE:',0
@@ -713,6 +719,77 @@ XLISTEN = 36                  ; BIOS ticks: two seconds, and ads are 1/s
 WIREWT  = 270                 ; 15 s: how long a browser page may still be
                               ;  dialing the relay while we stand here
 
+; ---------------------------------------------------------------------------
+;  UWWAIT - THE WAITING LINE, AND THE ONE THING IT HAS TO DO IS MOVE.
+;
+;  After the splash this game can stand still for up to seventeen seconds:
+;  fifteen at the address gate (WIREWT) while the wire hands out a node,
+;  two more listening for a sky's advertisement (XLISTEN). Both are honest
+;  waits and neither had anything alive on the glass. Worse, the one static
+;  line the gate did print was written STRAIGHT AT 0A000h - so on a CGA,
+;  EGA or Hercules card there was no line either, and a healthy boot was
+;  indistinguishable from a hang. It was reported as one.
+;
+;  So: through the BACK BUFFER and UBLIT, like everything else the front
+;  door draws, which makes it appear on every card the game supports; and
+;  with the spinner every DOS program that ever waited for something had -
+;  | / - \, a stroke turning a quarter clockwise a frame. A moving picture
+;  is the whole message: this is working, keep sitting there.
+;
+;  One line for both waits on purpose. To the pilot they are one wait, and
+;  a caption that changes halfway reads as something having gone wrong.
+;  ES is preserved; AX/BX/CX/SI/DI are not.
+; ---------------------------------------------------------------------------
+UWPLX   = 128                 ; the plate: the words are 13 glyphs of 4
+UWPLW   = 72                  ;  from 134, the spinner turns at 192
+UWPLY   = 184                 ; four rows of headroom over the glyphs: the
+UWPLH   = 14                  ;  splash's wireframe reaches down to here,
+                                ;  and two stray dots left standing over the
+                                ;  word read as dirt on the screen
+UWSPC   = 192*320+192         ; the spinner's centre, as a buffer offset
+
+UWWAIT: push es
+        mov  ax,[bufseg]
+        mov  es,ax
+        mov  di,UWPLY*320+UWPLX ; blank the line's own plate first: the
+        mov  bx,UWPLH           ;  stroke turns IN PLACE, and one drawn
+        cld                     ;  over the last is a star, not a spinner
+.rw:   mov  cx,UWPLW
+        mov  al,UBLACK
+        rep  stosb
+        add  di,320-UWPLW
+        dec  bx
+        jnz  .rw
+        mov  byte [COLOR],8
+        mov  word [ftx],134
+        mov  word [fty],190
+        mov  si,UWDIAL
+        call UFDRAW
+        mov  si,[cs:uwsp]       ; the stroke: five dots along this
+        inc  word [cs:uwsp]     ;  phase's direction, through the centre
+        and  si,3
+        add  si,si              ; two bytes a phase
+        mov  al,[cs:UWSPD+si+1] ; dy first - a row is 320 bytes
+        cbw
+        mov  cx,320
+        imul cx
+        mov  bx,ax
+        mov  al,[cs:UWSPD+si]   ; ...then dx
+        cbw
+        add  ax,bx
+        mov  [cs:uwst],ax       ; one step of the stroke
+        mov  di,UWSPC
+        sub  di,ax              ; back up two steps: the dots run -2..+2
+        sub  di,ax
+        mov  cx,5
+        mov  al,[COLOR]
+.dt:   mov  [es:di],al
+        add  di,[cs:uwst]
+        loop .dt
+        pop  es
+        call UBLIT              ; ...and onto the glass, whatever card
+        ret                     ;  this pilot picked
+
 XMENU:  push es
         ; ---- THE ADDRESS GATE (2026-08-25). Wait for the wire to hand
         ; out our node BEFORE minting a name or listening for ads: the
@@ -726,22 +803,20 @@ XMENU:  push es
         call SKYSEG:NETADDRF
         or   al,al
         jnz  .up0              ; the common case: no gate at all
-        push es                 ; the wait is real: say so on the glass
-        mov  ax,0A000h          ; (mode 13h under the splash; a retro
-        mov  es,ax              ;  card ignores the write - real iron
-        mov  byte [COLOR],8     ;  never reaches this line anyway)
-        mov  word [ftx],134
-        mov  word [fty],190
-        mov  si,UWDIAL
-        call UFDRAW
-        pop  es
-        mov  cx,WIREWT
+        mov  word [cs:uwsp],0   ; the wait is real: say so on the glass,
+        mov  cx,WIREWT          ;  and say it MOVING - see UWWAIT
 .adr:  push cx
         call SKYSEG:NETADDRF
         pop  cx
         or   al,al
         jnz  .up               ; the node is real: mypid is reminted
-        push cx
+        mov  ax,cx
+        and  ax,3               ; the spinner steps four times a second.
+        jnz  .anp              ;  Faster is a blur; slower is a thing
+        push cx                ;  the pilot waits for, which is the one
+        call UWWAIT            ;  feeling this screen must not create
+        pop  cx
+.anp:  push cx
         push es                 ; one-tick nap, the file's own idiom
         mov  ax,40h
         mov  es,ax
@@ -771,7 +846,15 @@ XMENU:  push es
         mov  es,ax
         mov  ax,[es:6Ch]
         pop  es
-        sub  ax,[uidl]
+        cmp  ax,[cs:uitick]     ; the same spinner keeps turning through
+        je   .lsn              ;  the listen window - to a pilot these
+        mov  [cs:uitick],ax    ;  two seconds are the same wait, and a
+        push ax                ;  caption that changed halfway would
+        and  ax,3              ;  read as something going wrong
+        jnz  .lsp
+        call UWWAIT
+.lsp:  pop  ax
+.lsn:  sub  ax,[uidl]
         js   .lis              ; still listening
         ; ---- who answered? the first live row wins ----
         xor  si,si
@@ -3073,16 +3156,23 @@ SHKEYEF:
         mov  al,[cs:shkt+bx]    ; looking down the drum...
         xor  ah,ah
         mov  [heading],ax
-        mov  al,[cs:shkel+bx]   ; ...pitched with the barrels, at HALF
-        xor  ah,ah              ;  their angle: the sight follows the
-        sar  ax,1               ;  guns, the horizon stays in the glass
-        mov  [pitch],ax
+        mov  word [pitch],0     ; ...and LEVEL. The camera used to ride at
+                                ;  HALF the barrels' angle - which put the
+                                ;  window in the sky and still showed the
+                                ;  gunner nothing that moved. The guns are
+                                ;  on the glass themselves now (SHKBRL, in
+                                ;  SYMSEG), so the head stays where a head is
+        mov  al,[cs:shkel+bx]   ; ...and THAT is the one word the gun
+        xor  ah,ah              ;  overlay needs from in here. It is drawn
+        mov  [brlel],ax         ;  from a far segment that cannot see this
+                                ;  one's data, and this routine already runs
+                                ;  on exactly the frames it is drawn on
         mov  word [roll],0      ; tracks do not bank
         add  bx,bx
         mov  ax,[cs:shkx+bx]
         mov  [camx],ax
         mov  ax,[cs:shky+bx]
-        add  ax,SHKTOP+10       ; the eye rides just above the drum
+        add  ax,SHKEYE          ; a head at the hatch, not a mast
         mov  [camy],ax
         mov  ax,[cs:shkz+bx]
         mov  [camz],ax
@@ -6023,7 +6113,28 @@ TGTVIEW:
 ; The marker is BSSMARK's trick, spread to the far segments: the linker map
 ; then prints how full each window actually is, so "will this fit" is a
 ; number instead of a build that either passes or explodes.
+;
+; And this build has no linker map, so the window SAYS how full it is, every
+; time, into BUILD.LOG. A ladder and not a printed number because FASM has no
+; number-to-text of its own and the macro that fakes one - two assemble-time
+; `while` loops - span the assembler at 100% CPU for five minutes and killed
+; two builds before it was caught (2026-08-27). A bracket is enough: what a
+; reader needs to know is whether the next routine fits, not the exact byte.
 label UIEND byte
+UIFREE = 16368 - ($-GLIST)
+if UIFREE < 64
+        display "UISEG free: under 64 - EVICT before you add",13,10
+else if UIFREE < 128
+        display "UISEG free: 64..127",13,10
+else if UIFREE < 256
+        display "UISEG free: 128..255",13,10
+else if UIFREE < 512
+        display "UISEG free: 256..511",13,10
+else if UIFREE < 1024
+        display "UISEG free: 512..1023",13,10
+else
+        display "UISEG free: 1024 or more",13,10
+end if
 if ($-GLIST) > 16368
         %OUT *** UISEG overflows its 16K window before the buffer ***
         .ERR

@@ -1,0 +1,10 @@
+.title  The keyboard is a computer
+.what   Scan codes at port 60h, the BIOS pair and its 16-cell buffer, the DOS line - and a square driving on our own INT 9
+.tier   LESSON
+.main   KEYS.ASM
+.needs  DRAW11.INC
+.reads  INFOGR.PAS
+.build  FASM KEYS.ASM KEYS.COM
+.run    KEYS.COM
+.uses   IN OUT ROL CLI STI IRET INT
+.ignore MAKEINFO.BAT

@@ -2184,8 +2184,156 @@ STG3F:
         call STGMARK
         retf
 
+; ---------------------------------------------------------------------------
+;  SHKBRL - THE SHILKA'S GUNS, SEEN FROM ITS OWN SEAT (2026-08-27).
+;
+;  The engine cannot draw them, and that is not an oversight. NEARZ is 40
+;  units and the whole vehicle is 34 long, so every face of the Shilka a
+;  gunner sits in - hull, drum, dish, barrels - lies inside the near plane
+;  and is clipped away before it is ever projected. The seat has always
+;  looked out over an empty bonnet, and the camera was being tilted at HALF
+;  the barrels' angle to fake the feeling of them moving, which is a picture
+;  with nothing in it that moves.
+;
+;  So the barrels get a lens of their own, and only they do. The same SBARR
+;  model, pitched about the same trunnion by the same angle the world's copy
+;  uses, projected straight onto the glass from an eye at BRLEYD/BRLEYH/
+;  BRLEX: no yaw (the drum's bearing IS the way the camera looks), no near
+;  clip (nothing here can reach that eye), no depth sort. Six faces in a
+;  fixed order - the only thing the angle changes is whether we are looking
+;  down on the guns or up at them, and that is one table swap.
+;
+;  It lives out here because UISEG is full and this is the cleanest kind of
+;  tenant: its one input from the seat is [brlel], the word SHKEYEF leaves
+;  behind every frame it borrows the camera. Everything else it touches -
+;  SBARRVT, SBARRFC, the vertex cache, PX/PY - is main-segment data, and
+;  DS is the main segment out here.
+;
+;  Called after the world and before the cabin, so the panel covers the
+;  barrels' roots the way the real one does. ES = the back buffer.
+; ---------------------------------------------------------------------------
+SHKBRLF:
+        mov  ax,[brlel]         ; the joint, once for all twelve vertices
+        push ax
+        call CODE:SINQF         ; sin * 256
+        mov  [mpsn],ax
+        pop  ax
+        push ax
+        add  ax,64              ; cos: the same table a quarter on
+        call CODE:SINQF
+        mov  [mpcs],ax
+        pop  ax
+        mov  bp,BRLORD          ; looking down on them...
+        cmp  ax,BRLFLIP
+        jl   .ord
+        mov  bp,BRLORDU         ; ...or up at them, past the crossover
+.ord:  xor  si,si              ; the model, six bytes a vertex
+        xor  di,di              ; the screen cache, two
+.v:    mov  ax,[SBARRVT+si+2]  ; about the trunnion, exactly the way
+        sub  ax,SHKTRNY         ;  MODELDRAW turns this model in the world
+        mov  [trnvy2],ax
+        mov  ax,[SBARRVT+si+4]
+        sub  ax,SHKTRNZ
+        mov  [trnvz2],ax
+        mov  ax,[trnvy2]        ; y' = (dy*cos + dz*sin)/256
+        imul word [mpcs]
+        mov  cx,ax
+        mov  ax,[trnvz2]
+        imul word [mpsn]
+        add  ax,cx
+        cwd
+        mov  bx,256
+        idiv bx
+        sub  ax,BRLEYH          ; ...and the lens rides above the trunnion
+        mov  [trnvy],ax
+        mov  ax,[trnvy2]        ; z' = (dz*cos - dy*sin)/256
+        imul word [mpsn]
+        mov  cx,ax
+        mov  ax,[trnvz2]
+        imul word [mpcs]
+        sub  ax,cx
+        cwd
+        mov  bx,256
+        idiv bx
+        add  ax,BRLEYD          ; ...and behind it
+        cmp  ax,BRLNZ
+        jge  .zk
+        mov  ax,BRLNZ           ; the floor - see BRLNZ in DATA.INC
+.zk:   mov  cx,ax              ; the depth, for both of the divides
+        mov  ax,[SBARRVT+si]    ; sx = 160 + (x-BRLEX)*FOCAL/z
+        sub  ax,BRLEX
+        mov  bx,FOCAL
+        imul bx
+        idiv cx
+        add  ax,160
+        mov  [PVX+di],ax
+        mov  ax,[trnvy]         ; sy = horiz - y*FOCAL/z
+        mov  bx,FOCAL
+        imul bx
+        idiv cx
+        neg  ax
+        add  ax,[horiz]
+        mov  [PVY+di],ax
+        add  si,6
+        add  di,2
+        cmp  si,SBARRNV*6
+        jb   .v
+        mov  cx,SBARRNF         ; ...and paint them, far to near
+.f:    push cx
+        push bp
+        mov  bx,bp
+        mov  al,[cs:bx]         ; which face this pass draws
+        xor  ah,ah
+        mov  bx,ax              ; a face record is five bytes
+        add  ax,ax
+        add  ax,ax
+        add  ax,bx
+        mov  bx,SBARRFC
+        add  bx,ax
+        xor  si,si
+.c:    mov  al,[bx+si]         ; its four corners, off the screen cache
+        xor  ah,ah
+        add  ax,ax
+        mov  di,ax
+        mov  ax,[PVX+di]
+        mov  dx,[PVY+di]
+        mov  di,si
+        add  di,di
+        mov  [PX+di],ax
+        mov  [PY+di],dx
+        inc  si
+        cmp  si,4
+        jb   .c
+        mov  al,[bx+4]          ; the model's own paint
+        mov  [COLOR],al
+        mov  word [NPOLY],4
+        call CODE:SCANPLYF      ; screen space already: nothing to clip
+        pop  bp
+        inc  bp
+        pop  cx
+        loop .f
+        retf
+
+BRLORD  db 0,1,4,5,2,3          ; from above: the low pair of barrels, the
+                                ;  cradle cheeks, the top pair nearest
+BRLORDU db 2,3,4,5,0,1          ; ...and the other way about from below
+
 ; ---- THE WINDOW GUARD ------------------------------------------------------
 label SYMEND byte
+SYFREE = 8176 - ($-SYMBASE)     ; the same report UISEG's guard prints
+if SYFREE < 64
+        display "SYMSEG free: under 64 - EVICT before you add",13,10
+else if SYFREE < 128
+        display "SYMSEG free: 64..127",13,10
+else if SYFREE < 256
+        display "SYMSEG free: 128..255",13,10
+else if SYFREE < 512
+        display "SYMSEG free: 256..511",13,10
+else if SYFREE < 1024
+        display "SYMSEG free: 512..1023",13,10
+else
+        display "SYMSEG free: 1024 or more",13,10
+end if
 if ($-SYMBASE) > 8176
         %OUT *** SYMSEG overflows its 8K window ***
         .ERR

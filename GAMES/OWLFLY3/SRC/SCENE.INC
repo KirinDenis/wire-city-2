@@ -15,10 +15,6 @@
 ; ---------------------------------------------------------------------------
 SETHORIZ:
         mov  word [horiz],100
-        cmp  word [pimgo],0
-        je   .shd              ; no cockpit bitmap: nothing covers the view
-        cmp  byte [cockpit],0
-        je   .shd
         cmp  byte [dying],0
         jne  .shd
         cmp  byte [mcact],0
@@ -27,8 +23,16 @@ SETHORIZ:
         jne  .shd
         cmp  byte [chsview],0
         jne  .shd
-        cmp  byte [ride],0      ; the turret seat: no glass line yet -
-        jne  .shd              ;  the cabin artwork brings its own
+        cmp  byte [ride],0      ; the turret seat brings its OWN glass, and
+        je   .jet              ;  it is not the jet's: the cabin's window
+        cmp  byte [rdext],0     ;  runs rows 10..106, so its middle is 58.
+        jne  .shd              ;  It held 100 - the bottom edge - and the
+        mov  word [horiz],SHCABHZ  ; whole seat was sky. Walking around
+        ret                     ;  her is cinema and keeps the screen's own
+.jet:  cmp  word [pimgo],0
+        je   .shd              ; no cockpit bitmap: nothing covers the view
+        cmp  byte [cockpit],0
+        je   .shd
         mov  word [horiz],PZGLASSC
 .shd:  ret
 
@@ -133,8 +137,12 @@ RENDER: call SETHORIZ           ; where the glass is, before anything uses it
                                 ; the head-up display, and a head-up display
                                 ; is bolted to the front of the cockpit
         cmp  byte [ride],0      ; the turret seat: the jet's HUD stays in
-        je   .hudjet           ;  the jet - only the tracers are drawn,
-        call GUNDRAW            ;  and they are the gun's own sight
+        je   .hudjet           ;  the jet - the GUNS are the sight here
+        cmp  byte [rdext],0     ; from the seat, the barrels on the glass:
+        jne  .rdgun            ;  outside, SHKDRAW already draws the real
+        call SYMSEG:SHKBRLF   ;  ones on the real vehicle
+.rdgun:
+        call GUNDRAW            ; ...and the tracers over them
         jmp  .sideview
 .hudjet:
         call LOCKHUD            ; aiming ring, lock pointer, callsign
