@@ -422,6 +422,8 @@ PLANESDRAW:
         je   .trd               ;  one a rotate and a projection, on every
                                 ;  aircraft in the sky - and a machine that
                                 ;  needs LOW has better uses for them.
+        cmp  word [pidx],NPLANE*2   ; the ghost slot has no ring in BSS -
+        jae  .trd                  ;  a parked jet trails nothing anyway
         mov  bx,si
         add  bx,bx
         add  bx,bx              ; si*4
@@ -734,7 +736,8 @@ PLANESDRAW:
 .nomk:
 .skip:
         add  word [pidx],2
-        cmp  word [pidx],NPLANE*2
+        mov  ax,[pdlim]            ; the render's bound, not the war's:
+        cmp  [pidx],ax             ;  the ghost slot lives one past it
         jb   .pd
         ret
 
@@ -3775,6 +3778,9 @@ PLAYERDRAW:
 DEATHTXT:
         cmp  byte [dying],0
         je   .no
+        cmp  byte [ride],0      ; the turret seat: the wreck's prompt is
+        jne  .no               ;  not painted over another vehicle's
+                                ;  glass - it waits for the pilot's return
         mov  ax,[lasttk]
         test ax,4
         jz   .ps

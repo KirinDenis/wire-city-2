@@ -37,25 +37,32 @@ REM median cut has to see all three. Run the front alone and the sides go
 REM stale against a palette they never voted in.
 dotnet run --project TOOLS\Panel2Inc -c Release -- %PANELSRC% -o GAMES\OWLFLY3\SRC -bmp GAMES\OWLFLY3\res -left GAMES\OWLFLY3\res\cockpit_left.png -right GAMES\OWLFLY3\res\cockpit_right.png
 if errorlevel 1 goto err
-dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY3\res\F15.OBJ -o GAMES\OWLFLY3\SRC\F15M.INC -n F15 -s 2
+REM The Shilka's cabin rides the palette the run above just minted
+REM (PALPNL.INC): the DAC lends 63 panel slots and a fourth picture has
+REM to live in the same lease. So Cab2Dat runs AFTER Panel2Inc, always.
+dotnet run --project TOOLS\Cab2Dat -c Release -- GAMES\OWLFLY3\res\shilka.png -pal GAMES\OWLFLY3\SRC\PALPNL.INC -o GAMES\OWLFLY3\INSTALL\SHCAB.DAT -bmp GAMES\OWLFLY3\res\shilka_art.bmp
 if errorlevel 1 goto err
-dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY3\res\RBASE.OBJ -o GAMES\OWLFLY3\SRC\RBASEM.INC -n RBASE -s 6
+dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY3\res\F15.OBJ -o GAMES\OWLFLY3\SRC\F15M.INC -n F15 -s 2 -fasm
 if errorlevel 1 goto err
-dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY3\res\RDISH.OBJ -o GAMES\OWLFLY3\SRC\RDISHM.INC -n RDISH -s 6
+dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY3\res\RBASE.OBJ -o GAMES\OWLFLY3\SRC\RBASEM.INC -n RBASE -s 6 -fasm
 if errorlevel 1 goto err
-REM the Shilka: chassis and turret, ONE scale between them (-s 3 = 15
-REM engine units per metre). Change both or the turret leaves the hull.
-dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY3\res\SHULL.OBJ -o GAMES\OWLFLY3\SRC\SHULLM.INC -n SHULL -s 3
+dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY3\res\RDISH.OBJ -o GAMES\OWLFLY3\SRC\RDISHM.INC -n RDISH -s 6 -fasm
 if errorlevel 1 goto err
-dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY3\res\STURR.OBJ -o GAMES\OWLFLY3\SRC\STURRM.INC -n STURR -s 3
+REM the Shilka: chassis and turret, ONE scale between them (-s 1: the
+REM world metre is about seven units, so a 6.5m hull comes out ~44 long -
+REM the -s 3 first cut towered over its own city, 2026-08-26). Change
+REM all four together or the turret leaves the hull.
+dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY3\res\SHULL.OBJ -o GAMES\OWLFLY3\SRC\SHULLM.INC -n SHULL -s 1 -fasm
+if errorlevel 1 goto err
+dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY3\res\STURR.OBJ -o GAMES\OWLFLY3\SRC\STURRM.INC -n STURR -s 1 -fasm
 if errorlevel 1 goto err
 REM the Gun Dish is a THIRD model: it sweeps while the guns hold still, and
 REM one model can only carry one yaw. Same scale as the other two.
-dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY3\res\SDISH.OBJ -o GAMES\OWLFLY3\SRC\SDISHM.INC -n SDISH -s 3
+dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY3\res\SDISH.OBJ -o GAMES\OWLFLY3\SRC\SDISHM.INC -n SDISH -s 1 -fasm
 if errorlevel 1 goto err
 REM ...and a FOURTH: the barrels, which pitch at their trunnion as well as
 REM riding the turret round. Three motions, three models.
-dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY3\res\SBARR.OBJ -o GAMES\OWLFLY3\SRC\SBARRM.INC -n SBARR -s 3
+dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY3\res\SBARR.OBJ -o GAMES\OWLFLY3\SRC\SBARRM.INC -n SBARR -s 1 -fasm
 if errorlevel 1 goto err
 REM ---- THE SOUND BANK. Ordinary WAVs in res\snd, cut to signed 8-bit mono
 REM at 11025 Hz - the rate the engine ring already spins at - and packed with

@@ -104,6 +104,18 @@ mprow   dw 0                    ; the map row a mark landed on. MMPTY hands
                                 ;  to keep it
 shkst   db NSHILK dup(0)        ; 0 = fighting, 1 = burning
 shkhp   db NSHILK dup(SHKHITS)  ; what it has left in it
+; ---- THE CREWED SEAT (2026-08-26). One vehicle can carry the pilot: his
+; hands write the same demand cells SHKAI writes, and SHKMOVE never learns
+; the difference - which is what the control layer was built for.
+shkrd   dw 0FFFFh               ; the vehicle he crews, 0FFFFh = nobody's
+shktd   db NSHILK dup(0)        ; turret bearing DEMAND (AI: SHKAIM's answer;
+shked   db NSHILK dup(0)        ;  crewed: the hands) - and the barrels' too
+shkgo   db NSHILK dup(SHKSPD)   ; speed demand, units a tick, SIGNED: the AI
+                                ;  always crawls at SHKSPD, the pilot has a
+                                ;  pedal (PSHKMAX forward, PSHKREV back)
+shkfire db 0                    ; the crewed trigger: Space, this tick
+PSHKMAX = 8                   ; the pedal's stop, forward...
+PSHKREV = -3                  ; ...and reverse - tracks, not a gearbox
 shki    dw 0                    ; the vehicle being planted, ticked or drawn
 shkp    dw 0                    ; SHKGND: probe counter...
 shkb    dw 0                    ;  ...the nominal site...
@@ -2322,6 +2334,761 @@ SHKDRAWF:
         retf
 
 ; ---------------------------------------------------------------------------
+;  THE CREWED SEAT's doors (2026-08-26).
+;
+;  SHKPICKF - the pilot asks for a vehicle: the nearest LIVING vehicle on
+;      his own side (even slot - the parity rule). Its demands are parked
+;      on its current state so nothing snaps, its pedal is zeroed (you
+;      take over a stopped vehicle, not a runaway), its gun goes MANUAL.
+;      out: AX = the slot, 0FFFFh if his whole side is burning.
+;  SHKDROPF - he leaves: the vehicle picks its own life back up.
+;  SHKHANDF - his hands, once a physics tick:
+;      AL hull turn (-1/0/1), AH pedal (-1/0/1), DL turret traverse,
+;      DH barrels, CL trigger.
+;  SHKEYEF  - the render borrows the camera: eye at the turret ring,
+;      looking down the drum, pitched with the barrels.
+; ---------------------------------------------------------------------------
+; ---------------------------------------------------------------------------
+;  THE SHILKA'S CABIN (2026-08-26). res\shilka.png through TOOLS\Cab2Dat:
+;  a span STREAM - dw count, then per span (dw dest, dw len, len pixels,
+;  interleaved) - so the draw is LODSW/LODSW/REP MOVSB with SI never once
+;  recomputed. White in the art became absence: no span, the world stays.
+;  SHCABLDF loads it once at boot into the top page of the far map
+;  (scrseg+3000h - past the minimap, the side views and the sample bank);
+;  SHCABF blits it over the rendered world, ES = the back buffer.
+; ---------------------------------------------------------------------------
+shcabsg dw 0                    ; where the cabin blob sits (0 = none)
+SHCABNM db 'SHCAB.DAT',0
+
+SHCABLDF:
+        call SHCABLD
+        retf
+SHCABF:
+        call SHCABDRW
+        retf
+
+SHCABLD:
+        mov  ax,ds              ; the MAIN segment (cs in here is UISEG):
+        add  ax,5FFFh           ;  scrseg's own arithmetic, never a
+        and  ax,0F000h          ;  hand-typed paragraph...
+        add  ax,3000h           ; ...then past the minimap page, the side
+        mov  [cs:shcabsg],ax    ;  views and the sample bank
+        push ds
+        mov  ax,cs
+        mov  ds,ax
+        mov  dx,SHCABNM
+        mov  ax,3D00h           ; open read-only
+        int  21h
+        pop  ds
+        jnc  .op
+        mov  word [cs:shcabsg],0   ; no file: the naked turret view stays
+        ret
+.op:   mov  bx,ax
+        push ds
+        mov  ax,[cs:shcabsg]
+        mov  ds,ax
+        xor  dx,dx
+        mov  cx,0FFF0h          ; one read: the blob is ~42K
+        mov  ah,3Fh
+        int  21h
+        pop  ds
+        mov  ah,3Eh             ; close
+        int  21h
+        ret
+
+SHCABDRW:                        ; ES = the back buffer
+        mov  ax,[cs:shcabsg]
+        or   ax,ax
+        jz   .cx
+        push ds
+        cld
+        mov  ds,ax
+        xor  si,si
+        lodsw                   ; span count
+        mov  cx,ax
+        jcxz .cd
+.cs:   lodsw                   ; where this run lands on the glass
+        mov  di,ax
+        lodsw                   ; ...and how long it is
+        push cx
+        mov  cx,ax
+        rep  movsb              ; the pixels ride right behind their span
+        pop  cx
+        loop .cs
+.cd:   pop  ds
+.cx:   ret
+
+; ---------------------------------------------------------------------------
+;  THE CABIN'S INSTRUMENTS (2026-08-27). Drawn OVER the blitted artwork,
+;  ES = the back buffer. The zones were measured off shilka_art.bmp once -
+;  the cabin is committed art, the numbers move with it if it ever does:
+;    red screen    39..84  x 122..159   the tactical map (a 46x38 node
+;                                       window of the baked 64x64 world)
+;    green screen 125..194 x 108..167   the ROUND RADAR: a sweeping beam
+;                                       off the dish bearing, blips for
+;                                       every living aircraft
+;    grey screen  235..278 x 122..159   status: fuel, ammo, magazines,
+;                                       damage - the vehicle's own
+;    digit plates y179..187             AZIMUTH / ELEVATION / RANGE
+;    lamp strip   y9..11, 4px each      PWR RADAR READY FIRE  TRACK WARN
+;                                       LOCK ENG
+; ---------------------------------------------------------------------------
+SZMAPX  = 39                  ; the red screen
+SZMAPY  = 122
+SZMAPW  = 46
+SZMAPH  = 38
+SZRDCX  = 159                 ; the green scope's centre and radius
+SZRDCY  = 137
+SZRDR   = 27
+SZSTX   = 238                 ; the status screen's text column
+SZSTY   = 125
+RDRRNG  = 9                   ; blip scale: world units >> 9 = pixels,
+                                ;  so the 27-px radius reads ~13800 units -
+                                ;  SHKGRNG sits a third of the way out
+LMPY    = 9                   ; the lamp strip
+LMPON   = 110                 ; a green system speaking (PNLGRN)
+LMPRED  = 19                  ; a red one
+LMPOFF  = 33                  ; a lamp with nothing to say
+
+shkfu   dw 999                  ; the crewed vehicle: fuel...
+shkam   dw 500                  ; ...rounds in the working magazine...
+shkmg   db 4                    ; ...and full magazines on the racks
+                                ;  (consumption is the next phase; the
+                                ;  glass learns to read before it counts)
+
+SHINSTF:
+        call SHINST
+        retf
+
+SHINST:
+        mov  bx,[cs:shkrd]
+        cmp  bx,0FFFFh
+        je   .done
+        ; ==== the RED screen: a node window of the baked world ==============
+        ; centred on the vehicle, clamped to the map's edge. One byte a
+        ; node, straight out of the far scratch page the minimap bakes in.
+        add  bx,bx
+        mov  ax,[cs:shkx+bx]    ; our node column, 0..63
+        add  ax,BIAS
+        mov  cl,10
+        shr  ax,cl
+        sub  ax,SZMAPW/2        ; half a window to the left...
+        jns  .mc1
+        xor  ax,ax
+.mc1:  cmp  ax,64-SZMAPW       ; ...clamped inside the 64-node world
+        jle  .mc2
+        mov  ax,64-SZMAPW
+.mc2:  mov  [cs:shkb],ax       ; col0 (SHKAIM's scratch, free here)
+        mov  ax,[cs:shkz+bx]
+        add  ax,BIAS
+        mov  cl,10
+        shr  ax,cl
+        sub  ax,SZMAPH/2
+        jns  .mr1
+        xor  ax,ax
+.mr1:  cmp  ax,64-SZMAPH
+        jle  .mr2
+        mov  ax,64-SZMAPH
+.mr2:  mov  [cs:shkc],ax       ; row0
+        push ds
+        mov  ax,[scrseg]
+        mov  ds,ax              ; DS = the baked map's page
+        cld
+        xor  dx,dx              ; dest row
+.mrow: mov  ax,[cs:shkc]
+        add  ax,dx
+        mov  cl,6
+        shl  ax,cl              ; row*64: the bake is 64 bytes a row
+        add  ax,[cs:shkb]
+        mov  si,ax
+        mov  ax,SZMAPY
+        add  ax,dx
+        mov  bx,ax
+        mov  cl,6
+        shl  ax,cl              ; y*64
+        shl  bx,cl
+        shl  bx,1
+        shl  bx,1               ; y*256
+        add  ax,bx              ; y*320
+        add  ax,SZMAPX
+        mov  di,ax
+        mov  cx,SZMAPW
+        rep  movsb
+        inc  dx
+        cmp  dx,SZMAPH
+        jb   .mrow
+        pop  ds
+        ; the vehicle itself, a bright dot where the window put it
+        mov  bx,[cs:shkrd]
+        add  bx,bx
+        mov  ax,[cs:shkx+bx]
+        add  ax,BIAS
+        mov  cl,10
+        shr  ax,cl
+        sub  ax,[cs:shkb]
+        add  ax,SZMAPX
+        mov  cx,ax              ; screen x
+        mov  ax,[cs:shkz+bx]
+        add  ax,BIAS
+        mov  cl,10
+        shr  ax,cl
+        sub  ax,[cs:shkc]
+        add  ax,SZMAPY
+        mov  bx,ax
+        mov  cl,6
+        shl  ax,cl
+        shl  bx,cl
+        shl  bx,1
+        shl  bx,1
+        add  ax,bx
+        add  ax,cx
+        mov  di,ax
+        mov  al,15
+        mov  [es:di],al
+        mov  [es:di+1],al
+        mov  [es:di+320],al
+        mov  [es:di+321],al
+        ; ==== the GREEN screen: the round radar =============================
+        ; The BEAM first: the dish's own bearing, a line walked out from
+        ; the centre - the part of the vehicle that always turns.
+        mov  bx,[cs:shkrd]
+        mov  al,[cs:shkd+bx]    ; the dish, not the drum
+        xor  ah,ah
+        push ax
+        call CODE:SINQF
+        mov  [cs:shkq],ax       ; sin, +-256
+        pop  ax
+        add  ax,64
+        call CODE:SINQF
+        mov  [cs:shkv],ax       ; cos
+        xor  bp,bp              ; t: 0..SZRDR
+.beam: mov  ax,[cs:shkq]
+        imul bp
+        mov  cx,256
+        idiv cx
+        add  ax,SZRDCX
+        mov  cx,ax              ; px
+        mov  ax,[cs:shkv]
+        imul bp
+        push cx
+        mov  cx,256
+        idiv cx
+        pop  cx
+        mov  bx,SZRDCY
+        sub  bx,ax              ; py: the minus, as everywhere
+        mov  ax,bx
+        mov  dx,bx
+        push cx                 ; px rides the stack while CL shifts
+        mov  cl,6
+        shl  ax,cl
+        shl  dx,cl
+        shl  dx,1
+        shl  dx,1
+        add  ax,dx
+        pop  cx
+        add  ax,cx
+        mov  di,ax
+        mov  byte [es:di],15    ; the beam burns WHITE: panel green sank
+        inc  bp                 ;  into the tube's own phosphor
+        cmp  bp,SZRDR
+        jb   .beam
+        ; the BLIPS: every living aircraft inside the scale. Friends are a
+        ; quiet dot, hostiles two-by-two - and the pilot's own jet rides
+        ; the scope too, off the camera the render parked in rsv*.
+        mov  bx,[cs:shkrd]
+        add  bx,bx
+        mov  ax,[cs:shkx+bx]
+        mov  [cs:shkb],ax       ; our place again
+        mov  ax,[cs:shkz+bx]
+        mov  [cs:shkc],ax
+        xor  si,si              ; plane slot
+.blip: mov  bx,si
+        cmp  byte [pst+bx],0
+        jne  .bn               ; not flying
+        add  bx,bx
+        mov  ax,[pax+bx]
+        mov  dx,[paz+bx]
+        call RDPLOT
+.bn:   inc  si
+        cmp  si,NPLANE
+        jb   .blip
+        mov  ax,[rsvx]          ; the jet, waiting somewhere out there
+        mov  dx,[rsvz]
+        or   si,si              ; SI is NPLANE: even, so it plots as a
+        call RDPLOT             ;  friend - which it is
+        ; ==== the STATUS screen =============================================
+        mov  byte [COLOR],LMPON
+        mov  word [ftx],SZSTX
+        mov  word [fty],SZSTY
+        mov  si,SHFUEL
+        call CODE:FDRAWF
+        mov  ax,[cs:shkfu]
+        mov  word [ftx],SZSTX+24
+        call SHNUM3
+        mov  byte [COLOR],LMPON
+        mov  word [ftx],SZSTX
+        mov  word [fty],SZSTY+9
+        mov  si,SHAMMO
+        call CODE:FDRAWF
+        mov  ax,[cs:shkam]
+        mov  word [ftx],SZSTX+24
+        call SHNUM3
+        mov  byte [COLOR],LMPON
+        mov  word [ftx],SZSTX
+        mov  word [fty],SZSTY+18
+        mov  si,SHMAG
+        call CODE:FDRAWF
+        mov  al,[cs:shkmg]
+        xor  ah,ah
+        mov  word [ftx],SZSTX+24
+        call SHNUM3
+        mov  bx,[cs:shkrd]      ; damage: green words until it is TRUE
+        mov  al,SHKHITS
+        sub  al,[cs:shkhp+bx]
+        mov  ah,0
+        push ax
+        mov  byte [COLOR],LMPON
+        or   al,al
+        jz   .dmok
+        mov  byte [COLOR],LMPRED
+.dmok: mov  word [ftx],SZSTX
+        mov  word [fty],SZSTY+27
+        mov  si,SHDAM
+        call CODE:FDRAWF
+        pop  ax
+        mov  word [ftx],SZSTX+24
+        call SHNUM3
+        ; ==== the digit plates ==============================================
+        mov  bx,[cs:shkrd]      ; AZIMUTH: the drum, in degrees
+        mov  al,[cs:shkt+bx]
+        xor  ah,ah
+        mov  cx,45
+        imul cx
+        mov  cl,5
+        shr  ax,cl              ; *45/32 = *360/256
+        push ax
+        mov  al,0
+        mov  cx,113
+        mov  dx,180
+        call SHPLATE
+        pop  ax
+        mov  byte [COLOR],LMPON
+        mov  word [ftx],119
+        mov  word [fty],181
+        call SHNUM3
+        mov  bx,[cs:shkrd]      ; ELEVATION: the barrels
+        mov  al,[cs:shkel+bx]
+        xor  ah,ah
+        mov  cx,45
+        imul cx
+        mov  cl,5
+        shr  ax,cl
+        push ax
+        mov  cx,153
+        mov  dx,180
+        call SHPLATE
+        pop  ax
+        mov  byte [COLOR],LMPON
+        mov  word [ftx],159
+        mov  word [fty],181
+        call SHNUM3
+        ; RANGE: the nearest hostile aircraft, in tenths of a kilometre
+        mov  word [cs:shkp],32767
+        xor  si,si
+.rgs:  mov  bx,si
+        cmp  byte [pst+bx],0
+        jne  .rgn
+        test bx,1
+        jz   .rgn              ; even slot: a friend is not a range
+        add  bx,bx
+        mov  ax,[pax+bx]
+        sub  ax,[cs:shkb]
+        jns  .rg1
+        neg  ax
+.rg1:  push ax
+        mov  ax,[paz+bx]
+        sub  ax,[cs:shkc]
+        jns  .rg2
+        neg  ax
+.rg2:  pop  cx
+        add  ax,cx
+        jc   .rgn
+        cmp  ax,[cs:shkp]
+        jae  .rgn
+        mov  [cs:shkp],ax
+.rgn:  inc  si
+        cmp  si,NPLANE
+        jb   .rgs
+        mov  cx,193
+        mov  dx,180
+        call SHPLATE
+        mov  ax,[cs:shkp]
+        cmp  ax,32767
+        je   .rnone
+        mov  cl,7
+        shr  ax,cl              ; units/128 ~ tenths of a km (1 km ~ 1280)
+        cmp  ax,999
+        jbe  .rcap
+.rnone:
+        mov  ax,999
+.rcap: mov  byte [COLOR],LMPON
+        mov  word [ftx],199
+        mov  word [fty],181
+        call SHNUM3
+        ; ==== the lamp strip ================================================
+        mov  bx,[cs:shkrd]
+        mov  al,LMPON           ; PWR: somebody is in the seat
+        mov  cx,109
+        call SHLAMP
+        mov  al,LMPON           ; RADAR: the dish never stops
+        mov  cx,123
+        call SHLAMP
+        mov  al,LMPON           ; READY: the gun is fed...
+        cmp  byte [cs:shkft+bx],0
+        je   .rdy
+        mov  al,LMPOFF          ; ...or still feeding
+.rdy:  mov  cx,138
+        call SHLAMP
+        mov  al,LMPOFF          ; FIRE: red only while the burst leaves
+        cmp  byte [cs:shktrg+bx],0
+        je   .fir
+        mov  al,LMPRED
+.fir:  mov  cx,152
+        call SHLAMP
+        mov  al,LMPOFF          ; TRACK and LOCK wait for the lock phase
+        mov  cx,182
+        call SHLAMP
+        mov  al,LMPOFF
+        mov  cx,210
+        call SHLAMP
+        mov  al,LMPOFF          ; WARN: red once the armour has given
+        cmp  byte [cs:shkhp+bx],SHKHITS
+        jae  .wrn
+        mov  al,LMPRED
+.wrn:  mov  cx,196
+        call SHLAMP
+        mov  al,LMPON           ; ENG: fuel in the tank
+        cmp  word [cs:shkfu],0
+        jne  .eng
+        mov  al,LMPOFF
+.eng:  mov  cx,224
+        call SHLAMP
+.done: ret
+
+; ---- RDPLOT: a radar blip. AX = world x, DX = world z, SI = slot -----------
+;  (parity says the side); clipped to the scope's square.
+RDPLOT: sub  ax,[cs:shkb]
+        mov  cl,RDRRNG
+        sar  ax,cl
+        cmp  ax,SZRDR-2
+        jg   .no
+        cmp  ax,2-SZRDR
+        jl   .no
+        add  ax,SZRDCX
+        mov  cx,ax              ; px
+        mov  ax,dx
+        sub  ax,[cs:shkc]
+        push cx
+        mov  cl,RDRRNG
+        sar  ax,cl
+        pop  cx
+        cmp  ax,SZRDR-2
+        jg   .no
+        cmp  ax,2-SZRDR
+        jl   .no
+        add  ax,SZRDCY
+        mov  bx,ax
+        mov  ax,bx
+        push cx
+        mov  cl,6
+        shl  ax,cl
+        shl  bx,cl
+        shl  bx,1
+        shl  bx,1
+        pop  cx
+        add  ax,bx
+        add  ax,cx
+        mov  di,ax
+        test si,1
+        jnz  .foe
+        mov  byte [es:di],LMPON ; a friend: one quiet dot
+        ret
+.foe:  mov  al,LMPRED          ; a hostile: red, two by two
+        mov  [es:di],al
+        mov  [es:di+1],al
+        mov  [es:di+320],al
+        mov  [es:di+321],al
+.no:   ret
+
+; ---- SHPLATE: black out a digit window. CX = x, DX = y, 30 x 8 -------------
+SHPLATE:
+        push ax
+        mov  ax,dx
+        mov  bx,dx
+        push cx
+        mov  cl,6
+        shl  ax,cl
+        shl  bx,cl
+        shl  bx,1
+        shl  bx,1
+        pop  cx
+        add  ax,bx
+        add  ax,cx
+        mov  di,ax
+        mov  dx,8               ; rows
+.pr:   push di
+        mov  cx,30
+        xor  al,al
+        rep  stosb
+        pop  di
+        add  di,320
+        dec  dx
+        jnz  .pr
+        pop  ax
+        ret
+
+; ---- SHNUM3: AX (0..999) in three digits at ftx/fty, COLOR set -------------
+;  The digits land in NBSH (main data) and FDRAW reads them from there.
+SHNUM3: cmp  ax,999             ; three windows, three digits: the glass
+        jbe  .fit              ;  saturates rather than talk nonsense
+        mov  ax,999             ;  ('D00' was 2000's hundreds digit
+.fit:  mov  cx,100             ;  walking off the end of the font)
+        xor  dx,dx
+        div  cx
+        add  al,'0'
+        mov  [NBSH],al
+        mov  ax,dx
+        mov  cl,10
+        div  cl
+        add  al,'0'
+        add  ah,'0'
+        mov  [NBSH+1],al
+        mov  [NBSH+2],ah
+        mov  byte [NBSH+3],0
+        mov  si,NBSH
+        call CODE:FDRAWF
+        ret
+
+; ---- SHLAMP: one 4x3 lamp at column CX, colour AL --------------------------
+SHLAMP: push bx
+        mov  di,LMPY*320
+        add  di,cx
+        mov  [es:di],al
+        mov  [es:di+1],al
+        mov  [es:di+2],al
+        mov  [es:di+3],al
+        mov  [es:di+320],al
+        mov  [es:di+321],al
+        mov  [es:di+322],al
+        mov  [es:di+323],al
+        mov  [es:di+640],al
+        mov  [es:di+641],al
+        mov  [es:di+642],al
+        mov  [es:di+643],al
+        pop  bx
+        ret
+
+SHKPICKF:
+        mov  word [cs:shkrd],0FFFFh
+        ; THE SIXTEENTH SCALE, and it is not a nicety: world coordinates
+        ; run to 49152 and a signed 16-bit difference of two of them can
+        ; wrap, which turns "nearest" into a lottery. At /16 the whole
+        ; map is 3072 tall and every difference fits with room to spare.
+        mov  ax,[camx]
+        mov  cl,4
+        shr  ax,cl
+        mov  [cs:shkb],ax       ; our own place, in sixteenths
+        mov  ax,[camz]
+        shr  ax,cl
+        mov  [cs:shkc],ax
+        mov  dx,32767           ; best range so far
+        xor  si,si              ; the even slots are ours
+.p:    mov  bx,si
+        cmp  byte [cs:shkst+bx],0
+        jne  .pn               ; burning: not a seat any more
+        add  bx,bx
+        mov  ax,[cs:shkx+bx]
+        mov  cl,4
+        shr  ax,cl
+        sub  ax,[cs:shkb]
+        jns  .p1
+        neg  ax
+.p1:   push ax
+        mov  ax,[cs:shkz+bx]
+        shr  ax,cl
+        sub  ax,[cs:shkc]
+        jns  .p2
+        neg  ax
+.p2:   pop  cx
+        add  ax,cx              ; taxicab is a choice, not a solution
+        cmp  ax,dx
+        jae  .pn
+        mov  dx,ax
+        mov  [cs:shkrd],si
+.pn:   add  si,2               ; even slots only: the parity rule
+        cmp  si,NSHILK
+        jb   .p
+        mov  ax,[cs:shkrd]
+        cmp  ax,0FFFFh
+        je   .px
+        mov  bx,ax              ; park the demands on the present state:
+        mov  al,[cs:shkh+bx]    ;  the vehicle must not twitch when the
+        mov  [cs:shkhd+bx],al   ;  pilot's hands close on it
+        mov  al,[cs:shkt+bx]
+        mov  [cs:shktd+bx],al
+        mov  byte [cs:shked+bx],0   ; the barrels ROLL DOWN as you settle
+                                ;  in: the AI may have left them at the
+                                ;  sky, and a gunner who arrives staring
+                                ;  at the zenith cannot even find the war
+        mov  byte [cs:shkgo+bx],0
+        mov  byte [cs:shkfire],0
+        add  bx,bx
+        mov  word [cs:shktgt+bx],0FFFEh
+        mov  ax,[cs:shkrd]
+.px:   retf
+
+SHKDROPF:
+        mov  bx,[cs:shkrd]
+        cmp  bx,0FFFFh
+        je   .dx
+        mov  byte [cs:shkgo+bx],SHKSPD  ; its own crawl again...
+        add  bx,bx
+        mov  word [cs:shktgt+bx],0      ; ...and its own war
+        mov  word [cs:shkrd],0FFFFh
+.dx:   retf
+
+SHKHANDF:
+        mov  bx,[cs:shkrd]
+        cmp  bx,0FFFFh
+        je   .hx
+        mov  [cs:shkfire],cl
+        push ax
+        add  al,al              ; the hull demand walks 2 a tick held -
+        add  [cs:shkhd+bx],al   ;  SHKSTR still decides how fast it comes
+        pop  ax
+        mov  al,ah              ; the pedal ramps 1 a tick...
+        add  al,[cs:shkgo+bx]
+        cmp  al,PSHKMAX         ; ...to the stop
+        jle  .h1
+        mov  al,PSHKMAX
+.h1:   cmp  al,PSHKREV         ; ...or hard astern
+        jge  .h2
+        mov  al,PSHKREV
+.h2:   mov  [cs:shkgo+bx],al
+        mov  al,dl              ; the turret ask walks 3 a tick held -
+        add  al,al              ;  faster than the drum (SHKTRAV 4 wins
+        add  al,dl              ;  barely), so the mount is always
+        add  [cs:shktd+bx],al   ;  chasing the hands, never parked
+        mov  al,[cs:shked+bx]   ; the barrels' ask, clamped to the mount
+        add  al,dh
+        jns  .h3
+        xor  al,al
+.h3:   cmp  al,SHKELMX
+        jle  .h4
+        mov  al,SHKELMX
+.h4:   mov  [cs:shked+bx],al
+.hx:   retf
+
+; ---- SHKCAM0F: park the walk-around orbit behind the hull ------------------
+SHKCAM0F:
+        mov  bx,[cs:shkrd]
+        cmp  bx,0FFFFh
+        je   .cx
+        mov  al,[cs:shkh+bx]    ; behind: the hull's heading plus a half
+        add  al,128
+        xor  ah,ah
+        mov  [tgaz],ax
+        mov  word [tgel],16
+        mov  word [tgrad],160  ; the hull is true-scale now: 260 parked
+.cx:   retf                    ;  her in the next street
+
+; ---- SHKEXTF: the walk-around camera - orbit at tgaz/tgel/tgrad, looking
+;  at the vehicle. The hands stay on the tracks and the drum: you WATCH
+;  the turret chase your own asks.
+SHKEXTF:
+        mov  bx,[cs:shkrd]
+        cmp  bx,0FFFFh
+        je   .ex
+        cmp  byte [rdext],1
+        jne  .free
+        mov  al,[cs:shkh+bx]    ; FOLLOW: the camera lives at the stern
+        add  al,128             ;  and comes round WITH the hull - three
+        xor  ah,ah              ;  a frame of lag, the vehicle's manner
+        mov  dx,ax
+        sub  dx,[tgaz]
+        and  dx,255
+        cmp  dx,128
+        jb   .fw
+        sub  dx,256
+.fw:   cmp  dx,3
+        jle  .fq
+        mov  dx,3
+.fq:   cmp  dx,-3
+        jge  .fr
+        mov  dx,-3
+.fr:   add  dx,[tgaz]
+        and  dx,255
+        mov  [tgaz],dx
+.free: mov  ax,[tgaz]
+        push ax
+        call CODE:SINQF         ; sin * 256
+        imul word [tgrad]
+        mov  cx,256
+        idiv cx
+        mov  bx,[cs:shkrd]
+        add  bx,bx
+        add  ax,[cs:shkx+bx]
+        mov  [camx],ax
+        pop  ax
+        add  ax,64              ; cos, the same table a quarter on
+        call CODE:SINQF
+        imul word [tgrad]
+        mov  cx,256
+        idiv cx
+        mov  bx,[cs:shkrd]
+        add  bx,bx
+        add  ax,[cs:shkz+bx]
+        mov  [camz],ax
+        mov  ax,[cs:shky+bx]
+        add  ax,30
+        mov  cx,[tgel]          ; height rides the orbit's elevation
+        add  cx,cx
+        add  ax,cx
+        mov  [camy],ax
+        mov  ax,[tgaz]          ; look BACK along the spoke, at the hull
+        add  ax,128
+        and  ax,255
+        mov  [heading],ax
+        mov  ax,[tgel]          ; and slightly down when standing high
+        sar  ax,1
+        neg  ax
+        mov  [pitch],ax
+        mov  word [roll],0
+.ex:   retf
+
+SHKEYEF:
+        mov  bx,[cs:shkrd]
+        cmp  bx,0FFFFh
+        je   .ex
+        mov  al,[cs:shkt+bx]    ; looking down the drum...
+        xor  ah,ah
+        mov  [heading],ax
+        mov  al,[cs:shkel+bx]   ; ...pitched with the barrels, at HALF
+        xor  ah,ah              ;  their angle: the sight follows the
+        sar  ax,1               ;  guns, the horizon stays in the glass
+        mov  [pitch],ax
+        mov  word [roll],0      ; tracks do not bank
+        add  bx,bx
+        mov  ax,[cs:shkx+bx]
+        mov  [camx],ax
+        mov  ax,[cs:shky+bx]
+        add  ax,SHKTOP+10       ; the eye rides just above the drum
+        mov  [camy],ax
+        mov  ax,[cs:shkz+bx]
+        mov  [camz],ax
+.ex:   retf
+
+; ---------------------------------------------------------------------------
 ;  SHKINIT - park the six. Site from SHKPX/SHKPZ, ground from SHKGND, and
 ;  a hull heading and turret bearing fanned out by index so that no two of
 ;  them stand at the same angle: six identical vehicles all pointing north
@@ -2497,13 +3264,28 @@ SHKTICK:
         mov  al,[cs:shkd+bx]    ; THE RADAR sweeps, steadily, always. This
         add  al,SHKDSPN         ; is the part that spins - it was the guns
         mov  [cs:shkd+bx],al    ; doing it, which read as a nervous tic
-        call SHKAI              ; decide where to drive
+        ; whose hands? the AI's - unless this is the crewed vehicle, in
+        ; which case the demand cells already hold the pilot's asks and
+        ; SHKAI/SHKAIM must keep their hands in their lap
+        cmp  byte [ride],0
+        je   .tai
+        cmp  bx,[cs:shkrd]
+        jne  .tai
+        call SHKMOVE            ; drive on his heading and his pedal
+        mov  bx,[cs:shki]
+        mov  byte [cs:shktrg+bx],0
+        mov  cl,[cs:shktd+bx]   ; his turret ask...
+        xor  ch,ch
+        mov  dl,[cs:shked+bx]   ; ...and his barrels' - the slew below
+        xor  dh,dh              ;  keeps SHKTRAV/SHKELEV: the lag IS the
+        jmp  .slw               ;  vehicle, whoever's hands are on it
+.tai:  call SHKAI              ; decide where to drive
         call SHKMOVE            ; ...and drive there
         mov  bx,[cs:shki]
         mov  byte [cs:shktrg+bx],0
         call SHKAIM             ; in reach? -> CX bearing, DX elevation
         jc   .tn               ; nothing: the guns hold where they are
-        push cx
+.slw:  push cx
         mov  bx,[cs:shki]       ; the barrels rise or fall toward it, and
         mov  al,[cs:shkel+bx]   ; no faster than SHKELEV either
         xor  ah,ah
@@ -2539,7 +3321,14 @@ SHKTICK:
         mov  dx,-SHKTRAV
 .ta:   add  ax,dx
         mov  [cs:shkt+bx],al
-        call SHKGUN             ; on the mark? then fire
+        ; the crewed gun waits for the TRIGGER; the AI's fires itself
+        cmp  byte [ride],0
+        je   .tgun
+        cmp  bx,[cs:shkrd]
+        jne  .tgun
+        cmp  byte [cs:shkfire],0
+        je   .tn
+.tgun: call SHKGUN             ; on the mark? then fire
 .tn:   inc  word [cs:shki]
         cmp  word [cs:shki],NSHILK
         jb   .t
@@ -2695,19 +3484,20 @@ SHKAIM: mov  bx,[cs:shki]
         xchg ax,bx
 .ah3:  shr  bx,1
         add  ax,bx
-        mov  bx,ax
-        mov  bx,[cs:shki]       ; remember him for the gun
-        add  bx,bx
-        mov  [cs:shktgt+bx],si
-        cmp  si,0FFFFh
-        jne  .ahp
+        mov  di,ax              ; the ground range, PARKED: the shktgt
+        mov  bx,[cs:shki]       ;  bookkeeping below borrows BX, and the
+        add  bx,bx              ;  first cut lost the range to it - every
+        mov  [cs:shktgt+bx],si  ;  battery aimed at range shki*2, near
+        cmp  si,0FFFFh          ;  enough zero, so the guns stood at the
+        jne  .ahp               ;  zenith whatever flew past (2026-08-26)
         mov  ax,[camy]
         jmp  .ahq
 .ahp:  mov  ax,[pay+si]        ; how far above our own roof he is
 .ahq:  sub  ax,[cs:shkv]
         jg   .ah4
         xor  ax,ax              ; at or below us: the guns come down flat
-.ah4:  call SHKPITCH           ; -> AX = 0..64
+.ah4:  mov  bx,di              ; the range back where SHKPITCH reads it
+        call SHKPITCH           ; -> AX = 0..64
         mov  dx,ax
         mov  cx,[cs:shkq]
         clc
@@ -2830,7 +3620,12 @@ SHKMOVE:
         and  ax,255             ; forward, along the hull's own nose
         push ax
         call CODE:SINQF
-        mov  cx,SHKSPD
+        mov  bx,[cs:shki]       ; the PEDAL, not a constant: the AI asks
+        push ax                 ;  SHKSPD for ever, the pilot asks what
+        mov  al,[cs:shkgo+bx]   ;  his foot says - signed, reverse and all
+        cbw
+        mov  cx,ax
+        pop  ax
         imul cx
         mov  cx,256
         idiv cx
@@ -2840,7 +3635,12 @@ SHKMOVE:
         pop  ax
         add  ax,64
         call CODE:SINQF
-        mov  cx,SHKSPD
+        mov  bx,[cs:shki]
+        push ax
+        mov  al,[cs:shkgo+bx]
+        cbw
+        mov  cx,ax
+        pop  ax
         imul cx
         mov  cx,256
         idiv cx
@@ -2889,6 +3689,8 @@ SHKGUN: mov  bx,[cs:shki]
         jg   .gno
         add  bx,bx              ; shktgt is words
         mov  si,[cs:shktgt+bx]  ; where to send them
+        cmp  si,0FFFEh          ; MANUAL: the crewed gun has no target -
+        je   .gman              ;  the rounds fly where the drum points
         cmp  si,0FFFFh
         jne  .gai
         mov  ax,[camx]
@@ -2922,6 +3724,47 @@ SHKGUN: mov  bx,[cs:shki]
         mov  ax,[ctz]
         sub  ax,[cs:shkc]
         mov  [ctz],ax
+        jmp  .gnorm
+        ; ---- MANUAL AIM: the crewed vehicle. No target to subtract - the
+        ; direction is built straight off the mount: bearing from the DRUM,
+        ; height from the BARRELS. sin(t)*cos(e), sin(e), cos(t)*cos(e),
+        ; each in 256ths - any scale serves, the unit vector below eats it.
+.gman: mov  bx,[cs:shki]       ; the muzzle, same as any burst
+        add  bx,bx
+        mov  ax,[cs:shkx+bx]
+        mov  [cs:shkb],ax
+        mov  ax,[cs:shky+bx]
+        add  ax,SHKTOP
+        mov  [cs:shkv],ax
+        mov  ax,[cs:shkz+bx]
+        mov  [cs:shkc],ax
+        mov  bx,[cs:shki]
+        mov  al,[cs:shkel+bx]
+        xor  ah,ah
+        push ax
+        add  ax,64              ; cos(e)...
+        call CODE:SINQF
+        mov  [cs:shkp],ax       ; ...parked in SHKAIM's scratch - SHKAIM
+        pop  ax                 ;  never ran for the crewed gun
+        call CODE:SINQF         ; sin(e): the climb of the burst
+        mov  [cty],ax
+        mov  bx,[cs:shki]
+        mov  al,[cs:shkt+bx]
+        xor  ah,ah
+        push ax
+        call CODE:SINQF         ; sin(t) * cos(e)
+        imul word [cs:shkp]
+        mov  cx,256
+        idiv cx
+        mov  [ctx],ax
+        pop  ax
+        add  ax,64
+        call CODE:SINQF         ; cos(t) * cos(e)
+        imul word [cs:shkp]
+        mov  cx,256
+        idiv cx
+        mov  [ctz],ax
+.gnorm:
         mov  bx,[ctx]           ; m = the largest leg, for the unit vector
         or   bx,bx
         jns  .gm1
@@ -3020,6 +3863,12 @@ SHKGUN: mov  bx,[cs:shki]
         mov  bx,[cs:shki]
         add  bx,bx
         mov  si,[cs:shktgt+bx]
+        cmp  si,0FFFEh          ; MANUAL: no lottery. The rounds are real
+        je   .gno               ;  and judge themselves - and 0FFFEh>>1
+                                ;  fed the health poke a wild offset:
+                                ;  dec [php+7FFFh], a byte minced 32K past
+                                ;  the array on every other burst. That
+                                ;  was the black screen (2026-08-26).
         cmp  si,0FFFFh
         jne  .ghai
         cmp  byte [dying],0

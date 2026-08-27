@@ -19,7 +19,11 @@ INPUT:
         je   .alive2
         ; the fall: the world keeps turning, we just watch the wreck
         inc  word [dytick]
-        cmp  word [dytick],18
+        cmp  byte [ride],0      ; riding: the pilot's SPACE is the
+        je   .dyspc            ;  Shilka's TRIGGER, not the answer to
+        call RIDEHANDS          ;  the prompt - his hands keep working,
+        jmp  .dwar              ;  and the wreck waits for his return
+.dyspc: cmp  word [dytick],18
         jb   .dwar             ; ignore Space for the first second
         mov  al,[KEYS+SC_SP]    ; held, or the tap the latch rescued -
         or   al,[tapsp]         ;  a lost SPACE here read as a dead key
@@ -47,6 +51,13 @@ INPUT:
         call WRECKUPD
         ret
 .alive2:
+        ; --- the crewed seat: the pilot's hands are on the Shilka. Hand
+        ; them over ONCE a tick, then fly the jet below hands-off - every
+        ; stick and pedal read gates on [ride], the physics does not.
+        cmp  byte [ride],0
+        je   .own2
+        call RIDEHANDS
+.own2:
         ; --- air density: rho = 256 - camy/8, clamped to 64..256 ---
         mov  ax,[camy]
         mov  bx,ax
@@ -58,7 +69,11 @@ INPUT:
         jge  .r1
         mov  ax,64
 .r1:   mov  [rho],ax
-
+        cmp  byte [ride],0      ; riding: W and S are the BARRELS now -
+        je   .thok              ;  the throttle holds where he left it,
+        mov  byte [abon],0      ;  and nobody's hand is on the burner
+        jmp  .ab0
+.thok:
         ; --- throttle: W up, S down; A holds the afterburner. The
         ; F-15 SE II gates joined in OWL FLY II: Shift+plus slams the
         ; lever to the stop, Shift+minus chops it to idle ---
@@ -248,6 +263,8 @@ INPUT:
         mov  word [tmpi],0
         cmp  byte [tgtcam],0
         jne  .nr               ; F4: hands off, dihedral takes over
+        cmp  byte [ride],0
+        jne  .nr               ; riding: the arrows drive the TRACKS
         cmp  byte [KEYS+SC_CTL],0
         jne  .nr               ; Ctrl+arrow is a LOOK, not a roll - the whole
                                 ; point of putting it there is that the hand
@@ -270,11 +287,13 @@ INPUT:
         mov  word [tmpi],1
 .nr:   cmp  word [tmpi],0  ; hands off: the jet HOLDS its bank in free
         jne  .rlp              ; air (real handling at the big scale) - only
+        cmp  byte [ride],0      ; ...unless the pilot is in the Shilka:
+        jne  .rlq              ;  the autopilot rights the wings anywhere
         mov  ax,[camy]          ; the ground cushion rights the wings, and at
         sub  ax,[lgnd]          ; 2/tick it cannot save a heavy bank in time
         cmp  ax,90
         jge  .rlp
-        mov  ax,[roll]
+.rlq:  mov  ax,[roll]
         test ax,ax
         jz   .rlp
         cmp  ax,128
@@ -298,6 +317,8 @@ INPUT:
         ; rudder: 1 unit/tick = a full circle in ~14 s. Good for lining
         ; up a runway or a gun run without dropping a wing.
         xor  cx,cx              ; r = rudder input, in eighths
+        cmp  byte [ride],0
+        jne  .rde              ; riding: no feet on these pedals
         cmp  byte [KEYS+SC_1],0 ; the F-15 pedals: top-row 1 and 3
         jne  .rdl              ; (numpad 7/9 as aliases; Z/C left the
         cmp  byte [KEYS+SC_NP7],0 ; pedals for the radar zoom -
@@ -351,6 +372,8 @@ INPUT:
         xor  cx,cx              ; q = elevator direction
         cmp  byte [tgtcam],0
         jne  .nopq             ; F4: the stick is centred
+        cmp  byte [ride],0
+        jne  .nopq             ; riding: centred too - hands-off trim
         mov  al,[KEYS+SC_DN]
         or   al,[tapdn]         ; a rescued tap pulls one tick
         je   .q1
@@ -410,6 +433,17 @@ INPUT:
         mov  [heading],ax
         jmp  .gflip            ; active stick: skip the self-trim
 .nopq: mov  word [qramp],0 ; stick centred: the ramp lets go
+        cmp  byte [ride],0      ; the autopilot trims for LEVEL: one unit
+        je   .apl              ;  a tick toward the horizon, so the jet
+        mov  ax,[pitch]         ;  left climbing does not bleed into the
+        or   ax,ax              ;  stall while its pilot mans the guns
+        jz   .apl
+        jns  .apd
+        inc  ax
+        jmp  .apw
+.apd:  dec  ax
+.apw:  mov  [pitch],ax
+.apl:
         mov  word [gq],0    ; hands off: one G on the meter
         ; no auto-trim in free air - the attitude holds.
         ; Near the ground the cushion pushes a dropped nose back level,
@@ -794,7 +828,9 @@ INPUT:
         cmp  word [phit],0
         je   .gt1
         dec  word [phit]
-.gt1:  mov  al,[KEYS+SC_SP]    ; the trigger - a rescued tap is one shell
+.gt1:  cmp  byte [ride],0      ; riding: Space is the SHILKA's trigger -
+        jne  .gnr              ;  the jet's cannon stays cold
+        mov  al,[KEYS+SC_SP]    ; the trigger - a rescued tap is one shell
         or   al,[tapsp]
         je   .gnr
         cmp  word [gunam],0
@@ -1181,12 +1217,25 @@ UIKEYS:
         cmp  byte [KHIT+SC_F2],0   ; the LATCH, not the live key: a tap between
         je   .ncp                 ;  two frames must not vanish (see KHIT)
         mov  byte [KHIT+SC_F2],0   ; consumed
+        cmp  byte [ride],0         ; the turret seat: the jet's panel is
+        jne  .ncp                  ;  the JET's - F2 must not reach it
         xor  byte [cockpit],1
 .ncp:
         ; --- F3: chase camera (edge) ---
         cmp  byte [KHIT+SC_F3],0   ; the LATCH, not the live key: a tap between
         je   .nf3                 ;  two frames must not vanish (see KHIT)
         mov  byte [KHIT+SC_F3],0   ; consumed
+        cmp  byte [ride],0
+        je   .f3jet
+        inc  byte [rdext]          ; the seat's views CYCLE: cabin ->
+        cmp  byte [rdext],3        ;  FOLLOW (tied to the stern, comes
+        jb   .f3v                  ;  round with the hull) -> ORBIT
+        mov  byte [rdext],0        ;  (Q/E walk around her) -> cabin.
+.f3v:  cmp  byte [rdext],1        ;  The hands never leave the controls.
+        jne  .nf3
+        call UISEG:SHKCAM0F  ; stepping out: park behind the hull
+        jmp  .nf3
+.f3jet:
         xor  byte [chsview],1
 .nf3:
         ; --- Z / X: the scope zooms in and out, the manual's way - EXCEPT
@@ -1221,7 +1270,12 @@ UIKEYS:
         mov  ax,TGRMAX
 .nzk3: mov  [tgrad],ax
         jmp  .nzo
-.nzk:        cmp  byte [KHIT+SC_Z],0   ; the LATCH, not the live key: a tap between
+.nzk:  cmp  byte [ride],0      ; riding: Z and X are the walk-around
+        je   .nzk0             ;  DOLLY - the jet's radar zoom must not
+        mov  byte [KHIT+SC_Z],0    ;  swallow (or answer) the taps
+        mov  byte [KHIT+SC_X],0
+        jmp  .nzo
+.nzk0:        cmp  byte [KHIT+SC_Z],0   ; the LATCH, not the live key: a tap between
         je   .nzi                 ;  two frames must not vanish (see KHIT)
         mov  byte [KHIT+SC_Z],0   ; consumed
         cmp  byte [rzsh],6
@@ -1251,12 +1305,16 @@ UIKEYS:
         cmp  byte [KHIT+SC_F5],0   ; the LATCH, not the live key: a tap between
         je   .nf5                 ;  two frames must not vanish (see KHIT)
         mov  byte [KHIT+SC_F5],0   ; consumed
+        cmp  byte [ride],0         ; the missile rail is the jet's too
+        jne  .nf5
         xor  byte [mslcam],1
 .nf5:
         ; --- F4: orbit camera around the locked target (edge) ---
         cmp  byte [KHIT+SC_F4],0   ; the LATCH, not the live key: a tap between
         je   .nf4                 ;  two frames must not vanish (see KHIT)
         mov  byte [KHIT+SC_F4],0   ; consumed
+        cmp  byte [ride],0         ; and the orbit rig orbits the jet's
+        jne  .nf4                  ;  locks - not the turret's, not yet
         cmp  byte [tgtcam],0
         jne  .f4off
         mov  si,[locki]
@@ -1360,3 +1418,90 @@ TapClr: xor  al,al
         mov  [tapsd],al
         mov  [tapsp],al
         ret
+
+; ---------------------------------------------------------------------------
+;  RIDEHANDS - the pilot's hands, handed to the Shilka once a physics tick.
+;  Two axes, two hands: the ARROWS drive the tracks (left/right steer the
+;  hull, up/down work the pedal), W A S D lays the gun (A/D traverse the
+;  drum, W/S raise and drop the barrels) - and Space is the trigger. The
+;  rescued taps ride along: at real-iron frame rates a tap between two
+;  frames must still steer (the 486 report; same OR sites as the jet's).
+; ---------------------------------------------------------------------------
+RIDEHANDS:
+        xor  ax,ax              ; AL hull turn, AH pedal
+        mov  cl,[KEYS+SC_LF]
+        or   cl,[taplf]
+        jz   .h1
+        dec  al
+.h1:   mov  cl,[KEYS+SC_RT]
+        or   cl,[taprt]
+        jz   .h2
+        inc  al
+.h2:   mov  cl,[KEYS+SC_UP]
+        or   cl,[tapup]
+        jz   .h3
+        inc  ah
+.h3:   mov  cl,[KEYS+SC_DN]
+        or   cl,[tapdn]
+        jz   .h4
+        dec  ah
+.h4:   xor  dx,dx              ; DL traverse, DH barrels
+        cmp  byte [KEYS+SC_A],0
+        je   .h5
+        dec  dl
+.h5:   cmp  byte [KEYS+SC_D],0
+        je   .h6
+        inc  dl
+.h6:   mov  cl,[KEYS+SC_W]
+        or   cl,[tapw]
+        jz   .h7
+        inc  dh
+.h7:   mov  cl,[KEYS+SC_S]
+        or   cl,[tapsd]
+        jz   .h8
+        dec  dh
+.h8:   xor  cx,cx
+        mov  cl,[KEYS+SC_SP]
+        or   cl,[tapsp]
+        jz   .h9
+        mov  cl,1
+.h9:   call UISEG:SHKHANDF
+        ; ---- the walk-around camera's own hands: Q/E swing the orbit,
+        ; Z/X dolly it. Held, not tapped - a camera wants a pull.
+        cmp  byte [rdext],0
+        je   .hx
+        cmp  byte [rdext],2     ; Q/E belong to the free orbit alone -
+        jne  .e2               ;  the follow view steers itself
+        cmp  byte [KEYS+SC_Q],0
+        je   .e1
+        sub  word [tgaz],2
+        and  word [tgaz],255
+.e1:   cmp  byte [KEYS+SC_E],0
+        je   .e2
+        add  word [tgaz],2
+        and  word [tgaz],255
+.e2:   cmp  byte [KEYS+SC_Z],0
+        je   .e3
+        mov  ax,[tgrad]         ; in, a sixteenth a tick: smooth close,
+        mov  bx,ax              ;  never a crawl from far out
+        mov  cl,4
+        shr  bx,cl
+        inc  bx
+        sub  ax,bx
+        cmp  ax,90
+        jge  .e3a
+        mov  ax,90              ; no closer: the hull is 100 long
+.e3a:  mov  [tgrad],ax
+.e3:   cmp  byte [KEYS+SC_X],0
+        je   .hx
+        mov  ax,[tgrad]
+        mov  bx,ax
+        mov  cl,4
+        shr  bx,cl
+        inc  bx
+        add  ax,bx
+        cmp  ax,800
+        jle  .e4
+        mov  ax,800
+.e4:   mov  [tgrad],ax
+.hx:   ret

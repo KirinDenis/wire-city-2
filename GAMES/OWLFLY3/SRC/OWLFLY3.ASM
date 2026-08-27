@@ -224,6 +224,13 @@ UBLACK  = 107                 ; the front door's true black
 
 ; ---- keyboard scan codes ---------------------------------------------------
 SC_ESC  = 01h
+SC_TAB  = 0Fh                 ; Tab: change seats - the jet or the Shilka
+SC_F8   = 42h                 ; F8: change seats too - F2..F7 are the
+                                ;  views, F8 is the next SEAT; and the
+                                ;  browser's key map swallows Tab whole,
+                                ;  so the F-row carries the day there
+SC_0    = 0Bh                 ; 0: the seat's third door - the one key
+                                ;  measured to arrive in EVERY browser
 SC_UP   = 48h
 SC_DN   = 50h
 SC_LF   = 4Bh
@@ -492,6 +499,9 @@ MAIN:
                                 ; page of their own. It runs once and it is
                                 ; all file handling, so it lives in SYMSEG
                                 ; next to the code that reads it.
+        call UISEG:SHCABLDF  ; SHCAB.DAT: the Shilka's cabin, into the top
+                                ; page of the far map. Optional the same way:
+                                ; no file, the turret seat stays open-air.
 
         ; ---- THE FRONT DOOR: video and sound up FIRST, then the wire,
         ; then the splash and the sky list. The world is minted only
@@ -667,7 +677,42 @@ GAMELOOP:
         mov  byte [KHIT+SC_ESC],0
         xor  byte [paused],1
         call PAUSND             ; quiet going in, the voice back out
-.npz:  call UIKEYS             ; cameras, zooms, pages - every frame
+.npz:
+        ; --- TAB: change seats. Two units, one pilot: the jet flies its
+        ; hands-off trim while you crew the Shilka, and the Shilka goes
+        ; back to its own AI the moment you leave it. The latch, like
+        ; ESC above: a tap between frames must not vanish.
+        mov  al,[KHIT+SC_TAB]
+        or   al,[KHIT+SC_F8]    ; three doors, one seat: Tab on iron, F8
+        or   al,[KHIT+SC_0]     ;  beside the view keys - and '0', because
+        jz   .nrd               ;  a browser's key map was measured to
+        mov  byte [KHIT+SC_TAB],0   ;  swallow whole rows of specials and
+        mov  byte [KHIT+SC_F8],0    ;  the digits were the row that always
+        mov  byte [KHIT+SC_0],0     ;  arrived
+        cmp  byte [spect],0     ; not from the watching seat,
+        jne  .nrd
+        cmp  byte [paused],0    ;  and not while the world stands still
+        jne  .nrd
+        cmp  byte [ride],0
+        je   .rdgate
+        mov  byte [ride],0      ; back to the jet: ALWAYS allowed - even
+        mov  byte [rdext],0     ;  back to a wreck (the vehicle reverts to
+        call UISEG:SHKDROPF  ;  its own AI, mid-stride; the walk-around
+        jmp  .nrd               ;  folds with the seat)
+.rdgate:
+        cmp  byte [dying],0     ; ENTERING is the gated door: never out
+        jne  .nrd               ;  of a falling jet,
+        cmp  byte [mcact],0     ;  and not off the back of a missile
+        jne  .nrd
+        call UISEG:SHKPICKF  ; the nearest living friendly vehicle
+        cmp  ax,0FFFFh
+        je   .nrd               ; nobody to crew: stay in the jet
+        mov  byte [ride],1
+        mov  byte [rdext],0     ; the cabin first, always
+        mov  byte [chsview],0   ; the cinema rigs are the JET's: fold
+        mov  byte [tgtcam],0    ;  them away before the turret camera
+        mov  byte [mslcam],0    ;  borrows the six
+.nrd:  call UIKEYS             ; cameras, zooms, pages - every frame
         ; --- physics: one INPUT step per BIOS tick elapsed since last frame ---
         push es
         mov  ax,40h
@@ -761,13 +806,41 @@ GAMELOOP:
 
         ; --- render (runs as fast as it can; speed no longer tied to it) ---
         call LERPSET            ; draw BETWEEN the ticks: silk, not jerks
+        cmp  byte [ride],0      ; the chase rig is the jet's: while the
+        jne  .nchs              ;  turret owns the camera it stays folded
         call CHASESET           ; F3: swap in the chase camera
+.nchs:
         cmp  byte [paused],0    ; a frozen world: the lights hold and
         jne  .nck               ;  the wrecks stop burning - lasttk is
         call TOWNSEG:CCLOCKF   ;  kept fresh through a pause, so left
                                 ;  alone the traffic drove on through it
 .nck:                           ; advance the traffic clock: the lights
                                 ; run on TIME, not on how fast we draw
+        ; --- the turret seat: the render borrows the camera. The jet's
+        ; six are parked in rsv* and handed back right after CHASERST -
+        ; LERPRST cannot be trusted with it, it only restores on the
+        ; frames it interpolated. SVIEWF comes AFTER the borrow, so
+        ; F6/F7 turn the TURRET's head, exactly as they turn the jet's.
+        cmp  byte [ride],0
+        je   .ncam
+        mov  ax,[camx]
+        mov  [rsvx],ax
+        mov  ax,[camy]
+        mov  [rsvy],ax
+        mov  ax,[camz]
+        mov  [rsvz],ax
+        mov  ax,[heading]
+        mov  [rsvh],ax
+        mov  ax,[pitch]
+        mov  [rsvp],ax
+        mov  ax,[roll]
+        mov  [rsvr],ax
+        cmp  byte [rdext],0     ; inside, or walking around her?
+        je   .rcin
+        call UISEG:SHKEXTF   ; the orbit: you drive what you look at
+        jmp  .ncam
+.rcin: call UISEG:SHKEYEF   ; the crewed vehicle's turret, looking out
+.ncam:
         call SYMSEG:SVIEWF   ; F6/F7 and Ctrl+arrows: look 90 left/right,
                                 ; which is a turn of [heading] and nothing
                                 ; more - taken back below, before physics
@@ -777,7 +850,25 @@ GAMELOOP:
         call CLEARBUF
         call RENDER
         call SYMSEG:SVRSTF   ; nose back down the centreline
+        cmp  byte [ride],0      ; CHASESET was folded away above, so its
+        jne  .nchr              ;  restore must stay folded too
         call CHASERST           ; give the pilot's world back to physics
+.nchr:
+        cmp  byte [ride],0
+        je   .ncam2
+        mov  ax,[rsvx]          ; the jet takes its camera back
+        mov  [camx],ax
+        mov  ax,[rsvy]
+        mov  [camy],ax
+        mov  ax,[rsvz]
+        mov  [camz],ax
+        mov  ax,[rsvh]
+        mov  [heading],ax
+        mov  ax,[rsvp]
+        mov  [pitch],ax
+        mov  ax,[rsvr]
+        mov  [roll],ax
+.ncam2:
         call LERPRST            ; ...and the true un-lerped state too
         call SETTRIG            ; ...AND THE TRIG THAT GOES WITH IT. INPUT
                                 ; integrates the flight path straight off

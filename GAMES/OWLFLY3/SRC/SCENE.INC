@@ -27,6 +27,8 @@ SETHORIZ:
         jne  .shd
         cmp  byte [chsview],0
         jne  .shd
+        cmp  byte [ride],0      ; the turret seat: no glass line yet -
+        jne  .shd              ;  the cabin artwork brings its own
         mov  word [horiz],PZGLASSC
 .shd:  ret
 
@@ -78,7 +80,33 @@ RENDER: call SETHORIZ           ; where the glass is, before anything uses it
         call WRECKDRAW          ; fallen jets burn on the ground
         mov  al,4
         call SYMSEG:RMARKF   ; *** TEMP: the wreck pool done
-        call PLANESDRAW         ; AI jets own the sky
+        ; ---- the GHOST: the pilot's own jet, drawn as a world object
+        ; while he crews the Shilka - it stands (or flies its trim)
+        ; exactly where rsv* says the render borrowed the camera from.
+        mov  word [pdlim],NPLANE*2
+        cmp  byte [ride],0
+        je   .ngh
+        cmp  byte [dying],0     ; a wreck already draws itself
+        jne  .ngh
+        mov  ax,[rsvx]
+        mov  [ghpax],ax
+        mov  ax,[rsvy]
+        mov  [ghpay],ax
+        mov  ax,[rsvz]
+        mov  [ghpaz],ax
+        mov  ax,[rsvh]
+        mov  [ghpah],ax
+        mov  ax,[netpid]        ; the nameplate wears the pilot's own
+        xor  dx,dx              ;  callsign letter
+        mov  bx,26
+        div  bx
+        add  dl,'A'
+        mov  [ghplt],dl
+        mov  byte [ghpst],0     ; alive for the DRAW alone
+        mov  word [pdlim],NPLANE*2+2
+        jmp  .ghd
+.ngh:  mov  byte [ghpst],1
+.ghd:  call PLANESDRAW         ; AI jets own the sky (and the ghost)
         mov  al,5
         call SYMSEG:RMARKF   ; *** TEMP: the AI jets done
         cmp  byte [chsview],0
@@ -104,6 +132,11 @@ RENDER: call SETHORIZ           ; where the glass is, before anything uses it
                                 ; ring, the gunsight and the strips belong to
                                 ; the head-up display, and a head-up display
                                 ; is bolted to the front of the cockpit
+        cmp  byte [ride],0      ; the turret seat: the jet's HUD stays in
+        je   .hudjet           ;  the jet - only the tracers are drawn,
+        call GUNDRAW            ;  and they are the gun's own sight
+        jmp  .sideview
+.hudjet:
         call LOCKHUD            ; aiming ring, lock pointer, callsign
         call GUNDRAW            ; cannon tracers
         call HUDBARS            ; glass HUD: compass, speed, altitude
@@ -120,6 +153,15 @@ RENDER: call SETHORIZ           ; where the glass is, before anything uses it
         jne  .pdone            ; orbit view: cinema too
         cmp  byte [chsview],0
         jne  .pdone            ; chase view: clean cinema, no panel
+        cmp  byte [ride],0
+        je   .njcab
+        cmp  byte [rdext],0     ; walking around her: clean cinema, the
+        jne  .pdone            ;  cabin stays inside the vehicle
+        call UISEG:SHCABF   ; the turret seat: the SHILKA'S cabin in the
+        call UISEG:SHINSTF  ;  jet-panel slot, and the instruments live
+        jmp  .pdone            ;  on top of it - map, scope, status,
+                                ;  plates and lamps
+.njcab:
         cmp  byte [cockpit],0
         je   .nopan
         call PANEL              ; instrument panel over the bottom rows

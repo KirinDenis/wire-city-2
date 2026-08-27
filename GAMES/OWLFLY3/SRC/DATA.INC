@@ -163,16 +163,29 @@ swayy   dw 0                    ; sway: this tick's Y shift (screen px)
 ; ---- AI traffic: low-poly jets (see PLANES.INC) ----------------------------
 NPLANE  = 40                  ; 20 v 20 (slot 0 never flies: that seat
                                 ; is the player's - green team = you + 19)
+; THE GHOST SLOT rides at index NPLANE on each of these arrays: the
+; pilot's own jet, standing where he left her while he crews the Shilka.
+; It exists for PLANESDRAW ALONE - the draw loop's bound is [pdlim], and
+; only the render ever raises it past NPLANE; every AI walk, every
+; missile and every gun stops at NPLANE and cannot so much as see it.
 pax     dw NPLANE dup(0)        ; world position
+ghpax   dw 0
 pay     dw NPLANE dup(0)
+ghpay   dw 0
 paz     dw NPLANE dup(0)
+ghpaz   dw 0
 pah     dw NPLANE dup(0)        ; heading 0..255
+ghpah   dw 0
 ptype   db NPLANE dup(0)        ; 0 fighter / 1 bomber / 2 radar /
-                                ;  3 transport / 4 tanker (FORMATION)
+ghptp   db 0                    ;  3 transport / 4 tanker (FORMATION)
 premote db NPLANE dup(0)        ; 1 = a REAL pilot flies this slot over
-                                ;  the wire: the AI keeps its hands off
+ghprm   db 1                    ;  the wire: the AI keeps its hands off
+                                ;  (the ghost IS a human's jet: it gets
+                                ;  the nameplate box at any range)
 pltr    db NPLANE dup(0)        ; callsign letter of the human in the
-                                ;  slot (ASCII, from pid; 0 = none)
+ghplt   db 0                    ;  slot (ASCII, from pid; 0 = none)
+pdlim   dw NPLANE*2             ; PLANESDRAW's bound: the render raises
+                                ;  it by one slot while the pilot rides
 ; ---- owner authority over life and death (the immortal-pilot fix) ----------
 ; A real pilot dies on HIS machine and nowhere else: our guns only send the
 ; hit over the wire, and his own POS packet says whether he is still flying.
@@ -413,7 +426,7 @@ if (SHKLK AND 2) <> 0
         %OUT *** SHKLK must be even-parity: the IFF reads bit 1 of the lock ***
         .ERR
 end if
-SHKTOP  = 54                  ; how high the vehicle stands, in engine
+SHKTOP  = 18                  ; how high the vehicle stands, in engine
                                 ;  units - aim at half of it, the turret
 SHKHITS = 4                   ; cannon shells it soaks before it burns
 SHKMDMG = 4                   ; and a missile is worth all four
@@ -440,8 +453,8 @@ SHKELMX = 56                  ; ...and no higher than about 78 degrees:
                                 ;  straight overhead is the one place a
                                 ;  Shilka cannot reach, and a pilot who
                                 ;  finds that out has earned the pass
-SHKTRNY = 29                  ; the TRUNNION, in model units: where the
-SHKTRNZ = 15                  ;  barrels are bolted to the drum
+SHKTRNY = 10                  ; the TRUNNION, in model units: where the
+SHKTRNZ = 5                   ;  barrels are bolted to the drum
 ; ---- driving and shooting -------------------------------------------------
 SHKSPD  = 3                   ; world units a tick: a crawl, on purpose.
                                 ;  It is not the war, it is scenery that
@@ -895,6 +908,9 @@ WEDG    db 0,1, 0,2, 0,3, 0,4, 1,2, 3,4, 1,3, 2,4
 NWEDG   = 17
 ; ---- missiles and wrecks ----------------------------------------------------
 pst     db NPLANE dup(0)        ; plane state: 0 = flying, else respawn timer
+ghpst   db 1                    ; the ghost slot's state: dead until the
+                                ;  render arms it (see pdlim in the pax
+                                ;  block - only PLANESDRAW looks here)
 pammo   db 4                    ; player missiles on the rails
 mrel    dw 0                    ; reload timer (one missile per ~20 s)
 prevf   db 0                    ; fire key edge detector
@@ -983,6 +999,25 @@ spklc   dw 7                    ; the noise generator (a small LCG): the
                                 ;  square wave's only way to sound broken
 paused  db 0                    ; ESC: the world stands still, the glass
                                 ;  stays alive - views, radar, map, MFD
+rdext   db 0                    ; F3 while riding: the WALK-AROUND view -
+                                ;  camera orbits the vehicle (Q/E swing,
+                                ;  Z/X dolly) and the hands stay on the
+                                ;  controls: you drive what you look at
+ride    db 0                    ; TAB: 0 = the jet, 1 = crewing the Shilka.
+                                ;  Two units, one pilot: the one without a
+                                ;  human keeps itself (hands-off trim in the
+                                ;  air, the vehicle's own AI on the ground)
+SHFUEL  db 'FUEL',0             ; the Shilka's status screen speaks in
+SHAMMO  db 'AMMO',0             ;  the panel font, and the panel font
+SHMAG   db 'MAG',0              ;  reads its words from THIS segment
+SHDAM   db 'DAM',0
+NBSH    db 6 dup(0)             ; where its numbers are typeset
+rsvx    dw 0                    ; the jet's camera, parked while the render
+rsvy    dw 0                    ;  borrows the six for the turret seat -
+rsvz    dw 0                    ;  LERPRST only restores on the frames it
+rsvh    dw 0                    ;  interpolated, so the borrow keeps its
+rsvp    dw 0                    ;  own copy
+rsvr    dw 0
 MSGP2   db 'P',0                ; the pause letter on the panel
 tapup   db 0                    ; the tap rescue (the 486 report): a
 tapdn   db 0                    ;  flight key pressed AND released

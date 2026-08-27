@@ -55,7 +55,10 @@ window.grab = async () => {
     const relay = params.get("relay") || "ws://localhost:1900";
     emulators.pathPrefix = "jsdos/emulators/";
     const name = params.get("bundle") || "chat_v3.jsdos";
-    const bundle = new Uint8Array(await (await fetch(name)).arrayBuffer());
+    // no-store, and it was bought with an afternoon: a WIP bundle updated
+    // on disk kept arriving from the HTTP cache, so every test after the
+    // first ran a RANDOM OLD BUILD and the results read as haunted keys.
+    const bundle = new Uint8Array(await (await fetch(name, { cache: "no-store" })).arrayBuffer());
     L("bundle " + bundle.length + " bytes");
     const ci = await emulators.dosboxDirect(bundle);
     window.ci = ci;

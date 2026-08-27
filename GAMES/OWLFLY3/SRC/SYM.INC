@@ -2089,6 +2089,9 @@ RAMPTXTF:
                                 ;  the brakes set, and this would say so over
                                 ;  somebody else's dogfight. A prompt is only
                                 ;  true in the cockpit it belongs to.
+        cmp  byte [ride],0      ; ...and the turret seat is somebody
+        jne  .rx               ;  else's cockpit too: the jet's parking
+                                ;  hint stays in the jet
         cmp  byte [dying],0
         jne  .rx
         cmp  byte [onrwy],0

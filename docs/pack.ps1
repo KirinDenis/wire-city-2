@@ -66,6 +66,7 @@ $MAP = @{
       @{ p = "GAMES\OWLFLY3\INSTALL\CITY.DAT";    n = "CITY.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\CPSIDE.DAT";  n = "CPSIDE.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\SFX.DAT";     n = "SFX.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHCAB.DAT";   n = "SHCAB.DAT" },
       # the retro cards' baked cockpits and side-console marker maps
       # (TOOLS\VidRig emit) - miss one and that card flies on the plain
       # lookup, silently, which is exactly the SFX.DAT shape of failure
@@ -98,6 +99,7 @@ $MAP = @{
       @{ p = "GAMES\OWLFLY3\INSTALL\CITY.DAT";    n = "CITY.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\CPSIDE.DAT";  n = "CPSIDE.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\SFX.DAT";     n = "SFX.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHCAB.DAT";   n = "SHCAB.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\CPCGA.DAT";   n = "CPCGA.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\CPEGA.DAT";   n = "CPEGA.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\CPHGC.DAT";   n = "CPHGC.DAT" },
