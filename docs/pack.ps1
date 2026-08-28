@@ -67,15 +67,19 @@ $MAP = @{
       @{ p = "GAMES\OWLFLY3\INSTALL\CPSIDE.DAT";  n = "CPSIDE.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\SFX.DAT";     n = "SFX.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\SHCAB.DAT";   n = "SHCAB.DAT" },
-      # the retro cards' baked cockpits and side-console marker maps
-      # (TOOLS\VidRig emit) - miss one and that card flies on the plain
-      # lookup, silently, which is exactly the SFX.DAT shape of failure
+      # the retro cards' baked cockpits, side-console marker maps
+      # (TOOLS\VidRig emit) and the Shilka's retro cabins (TOOLS\Cab2Dat) -
+      # miss one and that card flies on the plain lookup, silently, which
+      # is exactly the SFX.DAT shape of failure
       @{ p = "GAMES\OWLFLY3\INSTALL\CPCGA.DAT";   n = "CPCGA.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\CPEGA.DAT";   n = "CPEGA.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\CPHGC.DAT";   n = "CPHGC.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\CPSCGA.DAT";  n = "CPSCGA.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\CPSEGA.DAT";  n = "CPSEGA.DAT" },
-      @{ p = "GAMES\OWLFLY3\INSTALL\CPSHGC.DAT";  n = "CPSHGC.DAT" }
+      @{ p = "GAMES\OWLFLY3\INSTALL\CPSHGC.DAT";  n = "CPSHGC.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHCCGA.DAT";  n = "SHCCGA.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHCEGA.DAT";  n = "SHCEGA.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHCHGC.DAT";  n = "SHCHGC.DAT" }
     )
     ignore = @("ENGINE.RAW")
     # THE WIRE IS BACK (2026-08-25): v3 flies its OWN relay room - owlfly3,
@@ -105,7 +109,10 @@ $MAP = @{
       @{ p = "GAMES\OWLFLY3\INSTALL\CPHGC.DAT";   n = "CPHGC.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\CPSCGA.DAT";  n = "CPSCGA.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\CPSEGA.DAT";  n = "CPSEGA.DAT" },
-      @{ p = "GAMES\OWLFLY3\INSTALL\CPSHGC.DAT";  n = "CPSHGC.DAT" }
+      @{ p = "GAMES\OWLFLY3\INSTALL\CPSHGC.DAT";  n = "CPSHGC.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHCCGA.DAT";  n = "SHCCGA.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHCEGA.DAT";  n = "SHCEGA.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHCHGC.DAT";  n = "SHCHGC.DAT" }
     )
     ignore = @("ENGINE.RAW")
     strings = @(

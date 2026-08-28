@@ -1059,6 +1059,11 @@ rsvz    dw 0                    ;  LERPRST only restores on the frames it
 rsvh    dw 0                    ;  interpolated, so the borrow keeps its
 rsvp    dw 0                    ;  own copy
 rsvr    dw 0
+shcabsg dw 0                    ; where the Shilka cabin blob sits (0 =
+                                ;  none). In the MAIN segment because two
+                                ;  far segments share it: SYMSEG loads it
+                                ;  (SHCABLDF picks the file by card),
+                                ;  UISEG draws it (SHCABDRW)
 brlel   dw 0                    ; the crewed barrels' elevation, handed from
                                 ;  SHKEYEF (UISEG) to SHKBRL (SYMSEG) on the
                                 ;  frames the seat owns the camera. Two far

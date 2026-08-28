@@ -2440,47 +2440,16 @@ SHKDRAWF:
 ;  (scrseg+3000h - past the minimap, the side views and the sample bank);
 ;  SHCABF blits it over the rendered world, ES = the back buffer.
 ; ---------------------------------------------------------------------------
-shcabsg dw 0                    ; where the cabin blob sits (0 = none)
-SHCABNM db 'SHCAB.DAT',0
-
-SHCABLDF:
-        call SHCABLD
-        retf
+; The LOADER moved out to SYMSEG 2026-08-27 (SHCABLDF there): UISEG is
+; down to its last hundred bytes, and a loader that runs once at boot is
+; the coldest code there is. shcabsg went with it - to the MAIN segment
+; (DATA.INC), where both segments reach it through DS.
 SHCABF:
         call SHCABDRW
         retf
 
-SHCABLD:
-        mov  ax,ds              ; the MAIN segment (cs in here is UISEG):
-        add  ax,5FFFh           ;  scrseg's own arithmetic, never a
-        and  ax,0F000h          ;  hand-typed paragraph...
-        add  ax,3000h           ; ...then past the minimap page, the side
-        mov  [cs:shcabsg],ax    ;  views and the sample bank
-        push ds
-        mov  ax,cs
-        mov  ds,ax
-        mov  dx,SHCABNM
-        mov  ax,3D00h           ; open read-only
-        int  21h
-        pop  ds
-        jnc  .op
-        mov  word [cs:shcabsg],0   ; no file: the naked turret view stays
-        ret
-.op:   mov  bx,ax
-        push ds
-        mov  ax,[cs:shcabsg]
-        mov  ds,ax
-        xor  dx,dx
-        mov  cx,0FFF0h          ; one read: the blob is ~42K
-        mov  ah,3Fh
-        int  21h
-        pop  ds
-        mov  ah,3Eh             ; close
-        int  21h
-        ret
-
 SHCABDRW:                        ; ES = the back buffer
-        mov  ax,[cs:shcabsg]
+        mov  ax,[shcabsg]
         or   ax,ax
         jz   .cx
         push ds

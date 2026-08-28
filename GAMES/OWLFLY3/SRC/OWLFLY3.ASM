@@ -499,9 +499,10 @@ MAIN:
                                 ; page of their own. It runs once and it is
                                 ; all file handling, so it lives in SYMSEG
                                 ; next to the code that reads it.
-        call UISEG:SHCABLDF  ; SHCAB.DAT: the Shilka's cabin, into the top
-                                ; page of the far map. Optional the same way:
-                                ; no file, the turret seat stays open-air.
+        call SYMSEG:SHCABLDF  ; the Shilka's cabin, into the top page of
+                                ; the far map - SHCAB.DAT or the retro
+                                ; marker bake this card wears. Optional the
+                                ; same way: no file, the seat stays open-air.
 
         ; ---- THE FRONT DOOR: video and sound up FIRST, then the wire,
         ; then the splash and the sky list. The world is minted only

@@ -40,6 +40,9 @@ if errorlevel 1 goto err
 REM The Shilka's cabin rides the palette the run above just minted
 REM (PALPNL.INC): the DAC lends 63 panel slots and a fourth picture has
 REM to live in the same lease. So Cab2Dat runs AFTER Panel2Inc, always.
+REM It also bakes the RETRO cabins (SHCCGA/SHCEGA/SHCHGC.DAT) - the same
+REM span skeleton carrying marker bytes, drawn by bands the way VidRig
+REM draws the jet's panel - and previews them in res\shilka_art_*.bmp.
 dotnet run --project TOOLS\Cab2Dat -c Release -- GAMES\OWLFLY3\res\shilka.png -pal GAMES\OWLFLY3\SRC\PALPNL.INC -o GAMES\OWLFLY3\INSTALL\SHCAB.DAT -bmp GAMES\OWLFLY3\res\shilka_art.bmp
 if errorlevel 1 goto err
 dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY3\res\F15.OBJ -o GAMES\OWLFLY3\SRC\F15M.INC -n F15 -s 2 -fasm

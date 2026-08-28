@@ -2318,6 +2318,72 @@ BRLORD  db 0,1,4,5,2,3          ; from above: the low pair of barrels, the
                                 ;  cradle cheeks, the top pair nearest
 BRLORDU db 2,3,4,5,0,1          ; ...and the other way about from below
 
+; ---------------------------------------------------------------------------
+;  SHCABLDF - the Shilka's cabin into the top page of the far map, once at
+;  boot. Moved here from UISEG 2026-08-27 (that window is down to its last
+;  hundred bytes, and a loader that runs once is the coldest code there is),
+;  and it learned to pick WHICH cabin by the card the pilot chose:
+;
+;    SHCAB.DAT   the painted cabin, for the straight 256-colour modes
+;    SHCCGA.DAT  markers for CGA        - the same span skeleton carrying
+;    SHCEGA.DAT  markers for EGA/16-col   200+colour bytes, drawn offline
+;    SHCHGC.DAT  markers for Hercules     by TOOLS\Cab2Dat the way VidRig
+;                                         draws the jet's own panel
+;
+;  The retro blits' lookup tables already know the markers (the side
+;  consoles taught them), so SHCABDRW never changes: it keeps copying
+;  bytes, the bytes just mean better. A missing retro file falls back to
+;  the painted cabin and the plain dithered lookup - worse to look at,
+;  never a hole in the game.
+; ---------------------------------------------------------------------------
+SHCABNM db 'SHCAB.DAT',0
+SHCBCG  db 'SHCCGA.DAT',0
+SHCBEG  db 'SHCEGA.DAT',0
+SHCBHG  db 'SHCHGC.DAT',0
+
+SHCABLDF:
+        mov  ax,ds              ; scrseg's own arithmetic, then past the
+        add  ax,5FFFh           ;  minimap, the side views and the samples
+        and  ax,0F000h
+        add  ax,3000h
+        mov  [shcabsg],ax
+        mov  dx,SHCBHG          ; densities for the mono card...
+        mov  al,[vcard]
+        cmp  al,VMHERC
+        je   .try
+        mov  dx,SHCBCG          ; ...inks for CGA...
+        cmp  al,VMCGA
+        je   .try
+        mov  dx,SHCBEG          ; ...one drawn cabin for the whole
+        cmp  al,VMMCGA          ;  16-colour family...
+        jb   .try
+        mov  dx,SHCABNM         ; ...and the paint for the straight modes
+.try:  push ds
+        mov  ax,cs
+        mov  ds,ax
+        mov  ax,3D00h           ; open read-only
+        int  21h
+        pop  ds
+        jnc  .rd
+        cmp  dx,SHCABNM         ; a missing bake: fall back to the paint -
+        je   .none              ;  the plain lookup still converts it
+        mov  dx,SHCABNM
+        jmp  .try
+.none: mov  word [shcabsg],0   ; no file at all: the open-air seat stays
+        retf
+.rd:   mov  bx,ax
+        mov  ax,[shcabsg]
+        push ds
+        mov  ds,ax
+        xor  dx,dx
+        mov  cx,0FFF0h          ; one read: the blob is ~42K
+        mov  ah,3Fh
+        int  21h
+        pop  ds
+        mov  ah,3Eh             ; close
+        int  21h
+        retf
+
 ; ---- THE WINDOW GUARD ------------------------------------------------------
 label SYMEND byte
 SYFREE = 8176 - ($-SYMBASE)     ; the same report UISEG's guard prints
