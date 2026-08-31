@@ -1018,9 +1018,20 @@ CPSLOADF:
         retf
 
 SVIEWF:
+        cmp  byte [ride],0      ; each seat's keys die with its own art:
+        je   .jgate            ;  the turret wants the Shilka consoles,
+        cmp  byte [rdext],0     ;  and the WALK-AROUND folds the neck the
+        jne  .fwd              ;  way every cinema camera below does -
+                                ;  left on, it twisted the orbit 90 off
+                                ;  the vehicle and read as "the camera is
+                                ;  lost somewhere" (pilot, 2026-08-30)
+        cmp  byte [shsok],0     ;  the jet wants CPSIDE.DAT - a head that
+        je   .nokeys           ;  turns onto a missing picture is a bug
+        jmp  .live             ;  report, not a feature
+.jgate:
         cmp  word [cpsseg],0
         je   .nokeys           ; no artwork loaded: the keys do nothing
-        cmp  byte [dying],0
+.live: cmp  byte [dying],0
         jne  .fwd
         cmp  byte [chsview],0
         jne  .fwd
@@ -1239,6 +1250,8 @@ SVRSTF:
 ;  ES = bufseg on entry.
 ; ============================================================================
 SIDEBMPF:
+        cmp  byte [ride],0      ; the turret seat brings its OWN consoles -
+        jne  .shk              ;  same grammar, different shelves
         cmp  word [cpsseg],0
         je   .r
         cld
@@ -1246,8 +1259,8 @@ SIDEBMPF:
         cmp  byte [sview],1
         je   .go
         mov  si,[cpro]
-.go:   push ds
-        mov  ax,[cpsseg]
+.go:   mov  ax,[cpsseg]
+.ld:   push ds
         mov  ds,ax              ; DS:SI = the stream, ES:DI = the screen
         xor  di,di
 .t:    lodsb
@@ -1275,6 +1288,31 @@ SIDEBMPF:
         jmp  .t
 .d:    pop  ds
 .r:    retf
+.shk:  cmp  byte [shsok],0     ; the Shilka's consoles: left below the
+        je   .r                ;  phosphor on the cabin page, right in
+        cld                    ;  scrseg's tail - see SHSLOFF/SHSROFF
+        mov  si,SHSLOFF
+        mov  ax,[shcabsg]
+        cmp  byte [sview],1
+        je   .ld
+        mov  si,SHSROFF
+        mov  ax,[scrseg]
+        jmp  .ld
+
+; ---------------------------------------------------------------------------
+;  SHPNLF - the turret seat's panel slot, one far call from RENDER: the
+;  front cabin with its instruments, or - head turned on F6/F7 - her side
+;  console and nothing else (the screens and plates are on the front
+;  panel, out of shot: the jet's own rule). It lives HERE so the sview
+;  test costs the main segment nothing - RENDER's two far calls became
+;  one, and five bytes CAME BACK.
+; ---------------------------------------------------------------------------
+SHPNLF:
+        cmp  byte [sview],0
+        jne  SIDEBMPF          ; near jump: its RETF answers RENDER's call
+        call UISEG:SHCABF
+        call UISEG:SHINSTF
+        retf
 
 ; ============================================================================
 ;  MMTCOL - the colour of one node's GROUND.  in: BX = node i, DX = node j
@@ -2340,6 +2378,11 @@ SHCABNM db 'SHCAB.DAT',0
 SHCBCG  db 'SHCCGA.DAT',0
 SHCBEG  db 'SHCEGA.DAT',0
 SHCBHG  db 'SHCHGC.DAT',0
+SHSNM   db 'SHSIDE.DAT',0       ; ...and her SIDE consoles, same choir
+SHSBCG  db 'SHSCGA.DAT',0
+SHSBEG  db 'SHSEGA.DAT',0
+SHSBHG  db 'SHSHGC.DAT',0
+SHSHDR  dw 0,0,0                ; 'SS', left length, right length land here
 
 SHCABLDF:
         mov  ax,ds              ; scrseg's own arithmetic, then past the
@@ -2376,13 +2419,284 @@ SHCABLDF:
         push ds
         mov  ds,ax
         xor  dx,dx
-        mov  cx,0FFF0h          ; one read: the blob is ~42K
+        mov  cx,RDRMAP          ; one read: the blob is ~42K, and the cap
+        mov  ah,3Fh             ;  stops BELOW the phosphor shelf - a blob
+        int  21h                ;  that ever grew that far would have
+        pop  ds                 ;  loaded itself over the radar's memory
+        mov  ah,3Eh             ; close
+        int  21h
+        push es                 ; ...and the tube starts DARK: this is the
+        mov  es,[shcabsg]      ;  one place that runs before the first
+        mov  di,RDRMAP          ;  frame could read the map
+        xor  ax,ax
+        mov  cx,2048
+        cld
+        rep  stosw
+        pop  es
+        ; ---- and the seat's SIDE CONSOLES (F6/F7), same manners: pick
+        ; the bake by card, fall back to the paint. The left stream lands
+        ; on THIS page below the phosphor shelf, the right in scrseg past
+        ; the retro card bake - the two tails this memory map still has
+        ; (there is no fourth page: the cabin's is the last 64K under the
+        ; 640K ceiling). scrseg itself is not minted until after the
+        ; front door, so its arithmetic is done by hand here, the way
+        ; every loader on this shelf does it.
+        mov  dx,SHSBHG
+        mov  al,[vcard]
+        cmp  al,VMHERC
+        je   .st
+        mov  dx,SHSBCG
+        cmp  al,VMCGA
+        je   .st
+        mov  dx,SHSBEG
+        cmp  al,VMMCGA
+        jb   .st
+        mov  dx,SHSNM
+.st:   push ds
+        mov  ax,cs
+        mov  ds,ax
+        mov  ax,3D00h
+        int  21h
+        pop  ds
+        jnc  .sh
+        cmp  dx,SHSNM           ; a missing bake: fall back to the paint
+        je   .sq
+        mov  dx,SHSNM
+        jmp  .st
+.sh:   mov  bx,ax              ; ---- the header: magic and two lengths
+        push ds
+        mov  ax,cs
+        mov  ds,ax
+        mov  dx,SHSHDR
+        mov  cx,6
         mov  ah,3Fh
         int  21h
         pop  ds
-        mov  ah,3Eh             ; close
+        cmp  word [cs:SHSHDR],5353h     ; 'SS'
+        jne  .sc
+        mov  cx,[cs:SHSHDR+2]   ; ---- the left stream, under the phosphor
+        cmp  cx,RDRMAP-SHSLOFF  ; a fat stream would load itself over the
+        ja   .sc               ;  radar's memory - go without instead
+        mov  ax,[shcabsg]
+        push ds
+        mov  ds,ax
+        mov  dx,SHSLOFF
+        mov  ah,3Fh
         int  21h
+        pop  ds
+        mov  cx,[cs:SHSHDR+4]   ; ---- the right stream, in scrseg's tail
+        cmp  cx,10000h-SHSROFF  ; past the page end lies the jet's own
+        ja   .sc               ;  side art - same refusal
+        mov  ax,ds
+        add  ax,5FFFh           ; scrseg's own arithmetic
+        and  ax,0F000h
+        push ds
+        mov  ds,ax
+        mov  dx,SHSROFF
+        mov  ah,3Fh
+        int  21h
+        pop  ds
+        mov  ah,3Eh
+        int  21h
+        mov  byte [shsok],1
         retf
+.sc:   mov  ah,3Eh             ; a wrong or fat file: close and go without
+        int  21h
+.sq:   retf
+
+; ---------------------------------------------------------------------------
+;  RDRPHOSF - THE TUBE ITSELF (2026-08-28). The Shilka's scope stopped
+;  being a drawing and became PHOSPHOR: a 64x64 charge map on the cabin
+;  page's top shelf (RDRMAP). UI.INC writes charge - the beam down the
+;  dish's bearing at 15, the returns under the wedge - and this, once a
+;  frame after the cabin art, does what the glass of a real tube does:
+;
+;    GRAIN  a dozen random cells a frame get a whisper of charge (2) -
+;           the noise floor of a receiver turned all the way up. Never
+;           on top of a real echo, and never off the disc: the same
+;           span table that shapes the glass gates the speckle.
+;    DECAY  every other TICK each lit cell loses one step, so a full
+;           charge dies in ~30 ticks - about one sweep of the dish.
+;           The tail behind the beam and the slow death of a blip are
+;           both exactly this number. Gated on the tick, not the frame:
+;           a fast machine must not burn the phosphor faster.
+;    GLASS  the disc repainted from the map through a 16-step ladder of
+;           the panel's own greens - the head white, the tail sinking
+;           back into the dark. The flat art green under it is simply
+;           covered: an unlit tube face is nearly black.
+;
+;  ES = the back buffer (the caller's), DS = main in and out.
+; ---------------------------------------------------------------------------
+RDRLAD  db 107,113,113,128,128,117,117,110,110,127,127,95,95,95,8,8
+RDRSPAN db 27,26,26,26,26,26,26,26,25,25,25,24,24,23,23,22,21,20
+        db 20,19,18,16,15,14,12,10,7,0  ; half-width of the disc, per |dy|
+rdms    dw 0                    ; the map's segment while we work
+rdtko   dw 0                    ; the tick the last grain pass saw
+rdtkc   db 0                    ; ...and the decay divider, 0..RDRDIV-1
+rdsn    dw 0                    ; the turret rotation's sin/cos...
+rdcs    dw 256
+rdrow   dw 0                    ; ...and the rotated walk's row state:
+rdy     dw 0                    ;  screen row base, row index, half-width,
+rdhw    dw 0                    ;  where this row's pixels end
+rdend   dw 0
+RDRDIV  = 5                   ; a decay step every FIFTH tick: an echo
+                                ;  born white dies in 75 ticks - just
+                                ;  under one turn of the slowed dish, so
+                                ;  a blip burns bright when struck and
+                                ;  is fading out as the beam comes round
+                                ;  again. Exactly the pilot's sentence.
+
+RDRPHOSF:
+        mov  ax,[shcabsg]
+        or   ax,ax
+        jz   .x
+        mov  [cs:rdms],ax
+        cld
+        mov  dx,[lasttk]        ; read the clock while DS is still main
+        cmp  dx,[cs:rdtko]
+        je   .rend             ; same tick: the frame repeats, no state
+        mov  [cs:rdtko],dx
+        ; ---- GRAIN, six whispers a TICK (per frame buried the glass
+        ; once the decay slowed: a dot lives ten ticks now) -----------
+        mov  cx,6
+.g:    push cx
+        call CODE:RND16F        ; AX = sixteen random bits
+        mov  bx,ax
+        and  bx,63              ; mx
+        mov  cl,8
+        shr  ax,cl
+        and  ax,63              ; my
+        mov  dx,ax
+        sub  ax,32
+        jns  .g1
+        neg  ax
+.g1:   cmp  ax,27
+        jg   .gn               ; off the tube face
+        mov  si,ax
+        mov  al,[cs:RDRSPAN+si]
+        xor  ah,ah
+        mov  si,bx
+        sub  si,32
+        jns  .g2
+        neg  si
+.g2:   cmp  si,ax
+        jg   .gn               ; outside this row of the disc
+        mov  di,dx              ; cell = my*64 + mx
+        mov  cl,6
+        shl  di,cl
+        add  di,bx
+        push ds
+        mov  ds,[cs:rdms]
+        cmp  byte [di+RDRMAP],0
+        jne  .gs               ; the grain never brightens a real echo
+        mov  byte [di+RDRMAP],2
+.gs:   pop  ds
+.gn:   pop  cx
+        loop .g
+        ; ---- DECAY, one step every RDRDIV ticks ----------------------
+        inc  byte [cs:rdtkc]
+        cmp  byte [cs:rdtkc],RDRDIV
+        jb   .rend
+        mov  byte [cs:rdtkc],0
+        push ds
+        mov  ds,[cs:rdms]
+        mov  si,RDRMAP
+        mov  cx,4096
+.d:    cmp  byte [si],0
+        je   .dn
+        dec  byte [si]
+.dn:   inc  si
+        loop .d
+        pop  ds
+        ; ---- the GLASS: first the WELL the tube sits in - the art's
+        ; green face painted over in true black (the pilot: the square
+        ; under the disc is black on a real set, not green) ------------
+.rend: mov  di,108*320+125     ; the green screen's window, 70 x 60
+        mov  bx,60
+        mov  al,107             ; true black
+.w:    mov  cx,70
+        rep  stosb
+        add  di,320-70
+        dec  bx
+        jnz  .w
+        ; ---- ...then the disc itself, ROTATED to the turret ----------
+        ; The map is north-up (phosphor is memory, and memory cannot be
+        ; rotated without smearing); the GLASS is turret-up. So every
+        ; screen row walks a straight line across the rotated map: the
+        ; four multiplies happen once a row, the walk itself is two adds
+        ; a pixel, 8.8 fixed point. Turn the drum and the afterglow of
+        ; every echo comes round with the picture - which is the point.
+        mov  ax,[rdrot]         ; the turret's bearing (main DS still)
+        push ax
+        call CODE:SINQF
+        mov  [cs:rdsn],ax
+        pop  ax
+        add  ax,64
+        call CODE:SINQF
+        mov  [cs:rdcs],ax
+        push ds
+        mov  ds,[cs:rdms]
+        mov  word [cs:rdrow],(SZRDCY-27)*320+SZRDCX
+        mov  word [cs:rdy],0    ; row 0..54
+.r:    mov  bx,[cs:rdy]
+        sub  bx,27              ; ey: rows below the centre positive
+        mov  ax,bx
+        jns  .r1
+        neg  ax
+.r1:   mov  si,ax
+        mov  al,[cs:RDRSPAN+si]
+        xor  ah,ah
+        mov  [cs:rdhw],ax       ; hw: this row's half-width
+        neg  ax                 ; the row starts at ex = -hw, and the
+        dec  ax                 ;  loop adds BEFORE sampling: pre-step 1
+        imul word [cs:rdcs]    ; u = 8320 + ex*cos - ey*sin (8.8, +128
+        mov  si,ax              ;  so the >>8 truncation rounds)
+        add  si,8320
+        mov  ax,bx
+        imul word [cs:rdsn]
+        sub  si,ax
+        mov  ax,[cs:rdhw]
+        neg  ax
+        dec  ax
+        imul word [cs:rdsn]    ; v = 8320 + ex*sin + ey*cos
+        mov  bp,ax
+        add  bp,8320
+        mov  ax,bx
+        imul word [cs:rdcs]
+        add  bp,ax
+        mov  di,[cs:rdrow]
+        sub  di,[cs:rdhw]
+        mov  ax,[cs:rdhw]
+        add  ax,ax
+        inc  ax                 ; hw*2+1 pixels across
+        add  ax,di
+        mov  [cs:rdend],ax
+        mov  cx,[cs:rdcs]       ; the per-pixel steps live in registers
+        mov  dx,[cs:rdsn]
+.p:    add  si,cx              ; u += cos
+        add  bp,dx              ; v += sin
+        mov  bx,bp
+        and  bx,3F00h
+        shr  bx,1
+        shr  bx,1               ; (v>>8)*64...
+        mov  ax,si
+        mov  al,ah
+        xor  ah,ah
+        add  bx,ax              ; ...+ u>>8: the map cell
+        mov  al,[bx+RDRMAP]     ; its charge (AH stays 0)
+        mov  bx,ax
+        mov  al,[cs:RDRLAD+bx]  ; the green it glows
+        stosb
+        cmp  di,[cs:rdend]
+        jb   .p
+        mov  ax,[cs:rdrow]
+        add  ax,320
+        mov  [cs:rdrow],ax
+        inc  word [cs:rdy]
+        cmp  word [cs:rdy],55
+        jb   .r
+        pop  ds
+.x:    retf
 
 ; ---- THE WINDOW GUARD ------------------------------------------------------
 label SYMEND byte

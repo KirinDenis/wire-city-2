@@ -445,9 +445,11 @@ SHKTRAV = 4                   ; turret slew, of 256 a tick - about seven
                                 ;  seconds for a full turn. THE LAG IS THE
                                 ;  CHARACTER: a mount that snaps onto you is
                                 ;  a turret, one you can out-turn is a Shilka
-SHKDSPN = 7                   ; and the RADAR turns steadily on its own,
-                                ;  a full sweep in two seconds - that is the
-                                ;  part that spins, not the guns
+SHKDSPN = 3                   ; and the RADAR turns steadily on its own,
+                                ;  a full sweep in about five seconds - that
+                                ;  is the part that spins, not the guns.
+                                ;  (7 - two seconds a turn - read as FRANTIC
+                                ;  on the phosphor scope, 2026-08-28)
 SHKELEV = 3                   ; barrels rise this fast, of 256 a tick
 SHKELMX = 56                  ; ...and no higher than about 78 degrees:
                                 ;  straight overhead is the one place a
@@ -1064,6 +1066,34 @@ shcabsg dw 0                    ; where the Shilka cabin blob sits (0 =
                                 ;  far segments share it: SYMSEG loads it
                                 ;  (SHCABLDF picks the file by card),
                                 ;  UISEG draws it (SHCABDRW)
+RDRMAP  = 0F000h              ; the radar tube's PHOSPHOR: a 64x64 charge
+                                ;  map (4K) on the top shelf of the cabin's
+                                ;  far page. The art blob is ~42K and the
+                                ;  loader's read is capped below this, so
+                                ;  the shelf cannot be loaded over. Charge
+                                ;  15 = the beam's head, 0 = dark glass;
+                                ;  UI.INC writes it, SYMSEG:RDRPHOSF decays
+                                ;  and paints it
+; ---- the Shilka's OWN side consoles (F6/F7 from the seat, 2026-08-30) ----
+; Two RLE streams in SIDEBMPF's grammar, baked by TOOLS\Cab2Dat from
+; res\shilka_left/right.png (SHSIDE.DAT, or the marker bake the card
+; wears). There is no free 64K page left - the cabin page is the last one
+; under the 640K ceiling - so each stream rides a TAIL somebody else's
+; page was not using: the left below the phosphor shelf on the cabin page
+; (the blob ends at 0A466h), the right in scrseg past the retro card bake
+; (which ends at 9D00h). Cab2Dat measures both and refuses to emit a
+; stream its shelf cannot hold, because a loader trusting a fat file
+; would write over the phosphor or the jet's own side art.
+SHSLOFF = 0A800h              ; the LEFT stream, on the cabin page
+SHSROFF = 0A000h              ; the RIGHT stream, in scrseg
+shsok   db 0                    ; 1 = both streams landed (SHCABLDF's tail
+                                ;  loads them; SYMSEG draws, so the flag
+                                ;  lives here where both segments can see)
+rdrot   dw 0                    ; the crewed TURRET's bearing, handed from
+                                ;  SHINST (UISEG) to RDRPHOSF (SYMSEG) the
+                                ;  same way brlel travels: the scope is
+                                ;  turret-up, so the render rotates the
+                                ;  north-up phosphor map by this much
 brlel   dw 0                    ; the crewed barrels' elevation, handed from
                                 ;  SHKEYEF (UISEG) to SHKBRL (SYMSEG) on the
                                 ;  frames the seat owns the camera. Two far

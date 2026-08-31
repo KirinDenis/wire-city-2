@@ -1107,16 +1107,20 @@ COLLIDE:
         call BCHK
         jnz  .nocol            ; a ruin: fly through the smoke
         ; --- building: inside footprint AND below rooftop (base+height)? ---
+        ; The plot centre is the PAIR's centre, +256 - the buildings were
+        ; doubled onto 2x2 plots 2026-08-03 and this test kept the old
+        ; one-cell +128: the collision box stood half a cell north-west of
+        ; the picture it was guarding (found 2026-08-31)
         mov  ax,[gi]
         mov  cl,8
         shl  ax,cl
-        add  ax,128
+        add  ax,256
         sub  ax,BIAS
         mov  [wcx],ax
         mov  ax,[gj]
         mov  cl,8
         shl  ax,cl
-        add  ax,128
+        add  ax,256
         sub  ax,BIAS
         mov  [wcz],ax
         mov  ax,[camx]
@@ -1133,11 +1137,8 @@ COLLIDE:
         neg  ax
 .a2:   cmp  ax,[bhd]
         jge  .nocol
-        mov  ax,[gi]            ; rooftop = terrain base + building height
-        mov  bx,[gj]
-        call GETH
-        call WORLDH
-        add  ax,[bhgt2]
+        call TOWNSEG:CELLYF   ; rooftop = the drawn foundation + height -
+        add  ax,[bhgt2]         ;  the same door the draw walk opens
         cmp  [camy],ax
         jge  .nocol            ; above roof -> safe
         call BSET               ; the building comes down with us

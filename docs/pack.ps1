@@ -79,7 +79,13 @@ $MAP = @{
       @{ p = "GAMES\OWLFLY3\INSTALL\CPSHGC.DAT";  n = "CPSHGC.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\SHCCGA.DAT";  n = "SHCCGA.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\SHCEGA.DAT";  n = "SHCEGA.DAT" },
-      @{ p = "GAMES\OWLFLY3\INSTALL\SHCHGC.DAT";  n = "SHCHGC.DAT" }
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHCHGC.DAT";  n = "SHCHGC.DAT" },
+      # the Shilka's F6/F7 side consoles (Cab2Dat -left/-right): the VGA
+      # paint and the three marker bakes, same optional-but-silent shape
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHSIDE.DAT";  n = "SHSIDE.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHSCGA.DAT";  n = "SHSCGA.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHSEGA.DAT";  n = "SHSEGA.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHSHGC.DAT";  n = "SHSHGC.DAT" }
     )
     ignore = @("ENGINE.RAW")
     # THE WIRE IS BACK (2026-08-25): v3 flies its OWN relay room - owlfly3,
@@ -112,7 +118,11 @@ $MAP = @{
       @{ p = "GAMES\OWLFLY3\INSTALL\CPSHGC.DAT";  n = "CPSHGC.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\SHCCGA.DAT";  n = "SHCCGA.DAT" },
       @{ p = "GAMES\OWLFLY3\INSTALL\SHCEGA.DAT";  n = "SHCEGA.DAT" },
-      @{ p = "GAMES\OWLFLY3\INSTALL\SHCHGC.DAT";  n = "SHCHGC.DAT" }
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHCHGC.DAT";  n = "SHCHGC.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHSIDE.DAT";  n = "SHSIDE.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHSCGA.DAT";  n = "SHSCGA.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHSEGA.DAT";  n = "SHSEGA.DAT" },
+      @{ p = "GAMES\OWLFLY3\INSTALL\SHSHGC.DAT";  n = "SHSHGC.DAT" }
     )
     ignore = @("ENGINE.RAW")
     strings = @(

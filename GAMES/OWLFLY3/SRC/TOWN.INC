@@ -1177,9 +1177,10 @@ ROADYF:
         mov  si,ax
         and  ax,3
         mov  [cs:RYA],ax
-        mov  ax,[bhw]           ; 128 -> one cell wide, 256 -> two
-        mov  cl,7
-        shr  ax,cl
+        mov  ax,[bhw]           ; 128 -> one cell wide, 256 -> two; the
+        add  ax,127             ;  flat patches ride this door too now,
+        mov  cl,7               ;  and their 116 must round UP to the
+        shr  ax,cl              ;  quarter it covers, not down to nothing
         add  ax,[cs:RYA]
         mov  [cs:RYA1],ax       ; the east edge, 1..4 quarters along
         mov  ax,[bwz0]
@@ -1190,6 +1191,7 @@ ROADYF:
         and  ax,3
         mov  [cs:RYB],ax
         mov  ax,[bhd]
+        add  ax,127             ; the same rounding on the other axis
         mov  cl,7
         shr  ax,cl
         add  ax,[cs:RYB]
@@ -1263,7 +1265,16 @@ NODEH:  and  ax,63
 
 ; RYLERP - bilinear the four node heights at (AX=a, BX=b), a and b being
 ; QUARTERS of a node, 0..4.  out: AX, camera-relative and lifted.
-RYLERP: mov  [cs:RYTA],ax
+RYLERP: call RYLERPR
+        add  ax,ROADLIFT
+        sub  ax,[camy]
+        ret
+
+; RYLERPR - the same bilinear in plain WORLD height: what a foundation
+; wants. CELLYF sums four of these, and sums of the lifted camera-relative
+; answers would overflow a word at altitude.
+RYLERPR:
+        mov  [cs:RYTA],ax
         mov  [cs:RYTB],bx
         mov  ax,[cs:RYH+2]      ; ha = h00 + (h10-h00)*a/4
         sub  ax,[cs:RYH]
@@ -1283,9 +1294,121 @@ RYLERP: mov  [cs:RYTA],ax
         mov  cl,2
         sar  ax,cl
         add  ax,[cs:RYTH]
-        add  ax,ROADLIFT
-        sub  ax,[camy]
         ret
+
+; ============================================================================
+;  CELLYF - the ground a BUILDING stands on, and the ONE answer every
+;  reader shares. The draw walk and all five collision tests used to take
+;  GETH at the cell - the height NODE the cell happens to fall in, one
+;  flat height across a whole 4x4-cell group - so on any slope a house
+;  hovered at one end of its node and buried at the other, which is what
+;  the pilot photographed (2026-08-31). The roads were already bent
+;  (ROADYF above, 2026-08); this is the same four nodes and the same
+;  bilinear, read at the corners of the building's own footprint.
+;
+;   in:  gi/gj - the cell; [bstreet] 0 = the 2x2 plot (buildings anchor
+;        on even/even cells, so a plot never leans past its node - the
+;        clamp below is armour, not policy)
+;   out: AX = the LOWEST corner, world height - the FOUNDATION: the walls
+;             reach the ground on the downhill side, and the uphill spare
+;             hides behind the terrain quad painted before us
+;        DX = the height at the footprint's CENTRE (the mean of four
+;             corners IS the centre of a bilinear) - what a VEHICLE
+;             stands on: sunk to the min it would read buried in tarmac
+;
+;  CELLY1F is the same answer for ONE CELL regardless of bstreet: the
+;  road walk asks it for the traffic, and bstreet is stale out there.
+;  Preserves SI,DI; clobbers AX,BX,CX,DX - the GETH+WORLDH contract
+;  every call site already believes.
+; ============================================================================
+CELLY1F:
+        mov  cx,1
+        jmp  CLYGO
+CELLYF:
+        mov  cx,1               ; one cell...
+        cmp  word [bstreet],0
+        jne  CLYGO
+        inc  cx                 ; ...or the solid building's 2x2 plot
+CLYGO:
+        push si
+        push di
+        mov  ax,[gi]
+        mov  si,ax
+        and  ax,3
+        mov  [cs:RYA],ax
+        add  ax,cx
+        cmp  ax,4
+        jle  .ca
+        mov  ax,4               ; leaning past the node: take its edge,
+.ca:   mov  [cs:RYA1],ax       ;  never the mirrored hill beyond it
+        mov  ax,[gj]
+        mov  di,ax
+        and  ax,3
+        mov  [cs:RYB],ax
+        add  ax,cx
+        cmp  ax,4
+        jle  .cb
+        mov  ax,4
+.cb:   mov  [cs:RYB1],ax
+        mov  cl,2
+        shr  si,cl              ; node x = cell >> 2
+        shr  di,cl              ; node z
+        mov  ax,si              ; ---- the four node heights, once
+        mov  bx,di
+        call NODEH
+        mov  [cs:RYH],ax
+        mov  ax,si
+        inc  ax
+        mov  bx,di
+        call NODEH
+        mov  [cs:RYH+2],ax
+        mov  ax,si
+        mov  bx,di
+        inc  bx
+        call NODEH
+        mov  [cs:RYH+4],ax
+        mov  ax,si
+        inc  ax
+        mov  bx,di
+        inc  bx
+        call NODEH
+        mov  [cs:RYH+6],ax
+        ; ---- the four corners, raw: the lowest, and the sum for the mean
+        mov  ax,[cs:RYA]
+        mov  bx,[cs:RYB]
+        call RYLERPR
+        mov  si,ax              ; the min so far...
+        mov  di,ax              ; ...and the sum (world heights: no overflow)
+        mov  ax,[cs:RYA1]
+        mov  bx,[cs:RYB]
+        call RYLERPR
+        add  di,ax
+        cmp  ax,si
+        jge  .m1
+        mov  si,ax
+.m1:   mov  ax,[cs:RYA1]
+        mov  bx,[cs:RYB1]
+        call RYLERPR
+        add  di,ax
+        cmp  ax,si
+        jge  .m2
+        mov  si,ax
+.m2:   mov  ax,[cs:RYA]
+        mov  bx,[cs:RYB1]
+        call RYLERPR
+        add  di,ax
+        cmp  ax,si
+        jge  .m3
+        mov  si,ax
+.m3:   mov  ax,di
+        add  ax,2               ; the centre: the rounded mean of four
+        mov  cl,2
+        shr  ax,cl
+        mov  dx,ax
+        mov  ax,si              ; the foundation
+        pop  di
+        pop  si
+        retf
 
 RYH     dw 4 dup(0)             ; h00 h10 h01 h11 of the node cell
 RYA     dw 0                    ; the quad's corners, in quarters of a node

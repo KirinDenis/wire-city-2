@@ -2502,6 +2502,8 @@ LMPON   = 110                 ; a green system speaking (PNLGRN)
 LMPRED  = 19                  ; a red one
 LMPOFF  = 33                  ; a lamp with nothing to say
 
+rdbs    dw 0                    ; the beam line's sin/cos - the dish's
+rdbc    dw 256                  ;  bearing in the TURRET's frame
 shkfu   dw 999                  ; the crewed vehicle: fuel...
 shkam   dw 500                  ; ...rounds in the working magazine...
 shkmg   db 4                    ; ...and full magazines on the racks
@@ -2601,11 +2603,25 @@ SHINST:
         mov  [es:di+320],al
         mov  [es:di+321],al
         ; ==== the GREEN screen: the round radar =============================
-        ; The BEAM first: the dish's own bearing, a line walked out from
-        ; the centre - the part of the vehicle that always turns.
+        ; A real TUBE now (2026-08-28): nothing in this section draws a
+        ; pixel any more. The beam and the returns write CHARGE into a
+        ; 64x64 phosphor map on the cabin page's top shelf (RDRMAP), and
+        ; SYMSEG:RDRPHOSF - the last call of the section - decays it,
+        ; seeds the receiver grain and repaints the glass through a
+        ; ladder of greens. The afterglow the pilot asked for IS the
+        ; decay: a full-charge cell dies in about one sweep of the dish.
+        mov  ax,[shcabsg]
+        or   ax,ax
+        jz   .nord             ; no cabin page: no tube to charge
+        mov  [cs:shkp],ax       ; the map's segment, for RDPLOT too
+        ; The beam leaves NO charge (2026-08-28, the pilot's second
+        ; look): a fan of afterglow behind the line read as a searchlight
+        ; wiping the tube. The phosphor belongs to the RETURNS and the
+        ; grain alone; the beam itself is one white line, drawn straight
+        ; onto the glass after the map is painted - see below.
         mov  bx,[cs:shkrd]
-        mov  al,[cs:shkd+bx]    ; the dish, not the drum
-        xor  ah,ah
+        mov  al,[cs:shkd+bx]    ; the dish, not the drum: WORLD bearing,
+        xor  ah,ah              ;  for the wedge the returns answer to
         push ax
         call CODE:SINQF
         mov  [cs:shkq],ax       ; sin, +-256
@@ -2613,40 +2629,31 @@ SHINST:
         add  ax,64
         call CODE:SINQF
         mov  [cs:shkv],ax       ; cos
-        xor  bp,bp              ; t: 0..SZRDR
-.beam: mov  ax,[cs:shkq]
-        imul bp
-        mov  cx,256
-        idiv cx
-        add  ax,SZRDCX
-        mov  cx,ax              ; px
-        mov  ax,[cs:shkv]
-        imul bp
-        push cx
-        mov  cx,256
-        idiv cx
-        pop  cx
-        mov  bx,SZRDCY
-        sub  bx,ax              ; py: the minus, as everywhere
-        mov  ax,bx
-        mov  dx,bx
-        push cx                 ; px rides the stack while CL shifts
-        mov  cl,6
-        shl  ax,cl
-        shl  dx,cl
-        shl  dx,1
-        shl  dx,1
-        add  ax,dx
-        pop  cx
-        add  ax,cx
-        mov  di,ax
-        mov  byte [es:di],15    ; the beam burns WHITE: panel green sank
-        inc  bp                 ;  into the tube's own phosphor
-        cmp  bp,SZRDR
-        jb   .beam
-        ; the BLIPS: every living aircraft inside the scale. Friends are a
-        ; quiet dot, hostiles two-by-two - and the pilot's own jet rides
-        ; the scope too, off the camera the render parked in rsv*.
+        ; The scope is TURRET-UP (2026-08-28, the pilot): turn the drum
+        ; and the whole picture comes round with it, the way a gunner's
+        ; set is bolted to his own mount. The phosphor map itself stays
+        ; north-up - memory cannot be rotated without smearing it - so
+        ; the RENDER rotates (rdrot, read by SYMSEG:RDRPHOSF), and the
+        ; beam line is drawn at the dish's bearing IN THE TURRET'S frame.
+        mov  bx,[cs:shkrd]
+        mov  al,[cs:shkt+bx]
+        xor  ah,ah
+        mov  [rdrot],ax         ; the turret, for the rotated render
+        mov  cl,al
+        mov  al,[cs:shkd+bx]
+        sub  al,cl              ; the dish, relative to the drum
+        xor  ah,ah
+        push ax
+        call CODE:SINQF
+        mov  [cs:rdbs],ax       ; the beam line's sin...
+        pop  ax
+        add  ax,64
+        call CODE:SINQF
+        mov  [cs:rdbc],ax       ; ...and cos, in the turret's frame
+        ; the RETURNS: every living aircraft inside the scale - but a
+        ; target only ANSWERS while the dish faces it (the wedge test in
+        ; RDPLOT). What it leaves on the tube, the phosphor keeps: the
+        ; blip the pilot reads is mostly afterglow between two sweeps.
         mov  bx,[cs:shkrd]
         add  bx,bx
         mov  ax,[cs:shkx+bx]
@@ -2666,8 +2673,45 @@ SHINST:
         jb   .blip
         mov  ax,[rsvx]          ; the jet, waiting somewhere out there
         mov  dx,[rsvz]
-        or   si,si              ; SI is NPLANE: even, so it plots as a
-        call RDPLOT             ;  friend - which it is
+        or   si,si              ; SI is NPLANE: even, a friend's echo
+        call RDPLOT
+        call SYMSEG:RDRPHOSF   ; decay, grain, and the glass itself
+        ; ---- the BEAM, over the finished glass: one white line down
+        ; the dish's bearing, a single azimuth wide. It is the only
+        ; thing on this screen drawn as pixels - everything else is
+        ; charge - because a beam is NOW, and phosphor is memory.
+        xor  bp,bp              ; t: 0..SZRDR
+.beam: mov  ax,[cs:rdbs]
+        imul bp
+        mov  cx,256
+        idiv cx
+        add  ax,SZRDCX
+        mov  cx,ax              ; px
+        mov  ax,[cs:rdbc]
+        imul bp
+        push cx
+        mov  cx,256
+        idiv cx
+        pop  cx
+        mov  bx,SZRDCY
+        sub  bx,ax              ; py: the minus, as everywhere
+        mov  ax,bx
+        mov  dx,bx
+        push cx                 ; px rides the stack while CL shifts
+        mov  cl,6
+        shl  ax,cl
+        shl  dx,cl
+        shl  dx,1
+        shl  dx,1
+        add  ax,dx
+        pop  cx
+        add  ax,cx
+        mov  di,ax
+        mov  byte [es:di],8     ; white: the one thing brighter than
+        inc  bp                 ;  any afterglow
+        cmp  bp,SZRDR
+        jb   .beam
+.nord:
         ; ==== the STATUS screen =============================================
         mov  byte [COLOR],LMPON
         mov  word [ftx],SZSTX
@@ -2827,8 +2871,17 @@ SHINST:
         call SHLAMP
 .done: ret
 
-; ---- RDPLOT: a radar blip. AX = world x, DX = world z, SI = slot -----------
-;  (parity says the side); clipped to the scope's square.
+; ---- RDPLOT: one radar RETURN. AX = world x, DX = world z, SI = slot -------
+;  A target answers only while the DISH faces it: cross and dot against
+;  the beam's own sin/cos, and the wedge is |cross| <= dot/4 - about 14
+;  degrees a side, wide enough that a sweep stepping SHKDSPN a tick can
+;  never jump clean over anybody. Parity still tells the sides apart, by
+;  SIZE now (a hostile answers two-by-two, a friend one cell): phosphor
+;  is green, which is all a tube knows how to say.
+;  North is UP on the map (my = 32 - dz), matching the beam. The old
+;  pixel plotter added dz DOWNWARD and disagreed with its own beam -
+;  invisible while the blips burned regardless of where the dish looked,
+;  fatal the moment a return had to happen under the beam.
 RDPLOT: sub  ax,[cs:shkb]
         mov  cl,RDRRNG
         sar  ax,cl
@@ -2836,40 +2889,61 @@ RDPLOT: sub  ax,[cs:shkb]
         jg   .no
         cmp  ax,2-SZRDR
         jl   .no
-        add  ax,SZRDCX
-        mov  cx,ax              ; px
+        mov  bx,ax              ; dx: scope cells east
         mov  ax,dx
         sub  ax,[cs:shkc]
-        push cx
-        mov  cl,RDRRNG
-        sar  ax,cl
-        pop  cx
+        sar  ax,cl              ; dz: scope cells north
         cmp  ax,SZRDR-2
         jg   .no
         cmp  ax,2-SZRDR
         jl   .no
-        add  ax,SZRDCY
-        mov  bx,ax
+        ; dz SLEEPS ON THE STACK through the wedge: IMUL writes DX:AX,
+        ; so a dz parked in DX came out of the multiplies as the sign
+        ; word of the last product - 0 or -1 - and every echo stamped
+        ; onto the map's CENTRE ROW. On the rotated glass that row is
+        ; one line at the turret's angle: "все объекты легли на один
+        ; вектор", the pilot said, and that was exactly it (2026-08-29).
+        push ax
+        imul word [cs:shkv]     ; dz*cos...
+        mov  cx,ax
         mov  ax,bx
-        push cx
+        imul word [cs:shkq]     ; ...+ dx*sin
+        add  cx,ax              ; = dot: how far out ALONG the beam
+        jle  .nop              ; behind the dish, or right on top of us
+        mov  ax,bx
+        imul word [cs:shkv]     ; dx*cos...
+        mov  di,ax
+        pop  ax                 ; dz wakes for its own multiply...
+        push ax
+        imul word [cs:shkq]     ; ...- dz*sin
+        sub  di,ax              ; = cross: how far OFF it
+        mov  ax,di
+        or   ax,ax              ; (MOV sets no flags - the sign needs OR)
+        jns  .cw
+        neg  ax
+.cw:   sar  cx,1
+        sar  cx,1               ; dot/4: the tangent of the half-wedge
+        cmp  ax,cx
+        jg   .nop
+        pop  dx                 ; dz, at last, for the plot itself
+        mov  ax,32              ; my = 32 - dz: north UP
+        sub  ax,dx
         mov  cl,6
         shl  ax,cl
-        shl  bx,cl
-        shl  bx,1
-        shl  bx,1
-        pop  cx
-        add  ax,bx
-        add  ax,cx
+        add  ax,bx              ; + dx...
+        add  ax,32+RDRMAP       ; ...from the centre, on the map's shelf
         mov  di,ax
+        mov  al,15              ; a hostile answers WHITE-hot...
         test si,1
-        jnz  .foe
-        mov  byte [es:di],LMPON ; a friend: one quiet dot
-        ret
-.foe:  mov  al,LMPRED          ; a hostile: red, two by two
-        mov  [es:di],al
-        mov  [es:di+1],al
-        mov  [es:di+320],al
-        mov  [es:di+321],al
+        jnz  .st
+        mov  al,11              ; ...a friend quieter: born green, no
+.st:   push ds                 ;  white flash - the tube's own IFF.
+        mov  ds,[cs:shkp]      ;  One cell each: with every echo on the
+        mov  [di],al            ;  centre row (the DX bug above) the 2x2
+        pop  ds                 ;  stamps had merged into a solid strip,
+        ret                     ;  which got blamed on the war flying a
+                                ;  lane. The war was innocent.
+.nop:  pop  ax                 ; the parked dz comes off on every exit
 .no:   ret
 
 ; ---- SHPLATE: black out a digit window. CX = x, DX = y, 30 x 8 -------------

@@ -43,7 +43,11 @@ REM to live in the same lease. So Cab2Dat runs AFTER Panel2Inc, always.
 REM It also bakes the RETRO cabins (SHCCGA/SHCEGA/SHCHGC.DAT) - the same
 REM span skeleton carrying marker bytes, drawn by bands the way VidRig
 REM draws the jet's panel - and previews them in res\shilka_art_*.bmp.
-dotnet run --project TOOLS\Cab2Dat -c Release -- GAMES\OWLFLY3\res\shilka.png -pal GAMES\OWLFLY3\SRC\PALPNL.INC -o GAMES\OWLFLY3\INSTALL\SHCAB.DAT -bmp GAMES\OWLFLY3\res\shilka_art.bmp
+REM The -left/-right pair are her F6/F7 SIDE consoles: RLE streams in
+REM SIDEBMPF's own grammar (SHSIDE.DAT + the three marker bakes), each
+REM measured against the memory shelf it must fit - the tool refuses a
+REM stream its shelf cannot hold. Previews: res\shilka_left_art*.bmp etc.
+dotnet run --project TOOLS\Cab2Dat -c Release -- GAMES\OWLFLY3\res\shilka.png -pal GAMES\OWLFLY3\SRC\PALPNL.INC -o GAMES\OWLFLY3\INSTALL\SHCAB.DAT -bmp GAMES\OWLFLY3\res\shilka_art.bmp -left GAMES\OWLFLY3\res\shilka_left.png -right GAMES\OWLFLY3\res\shilka_right.png -so GAMES\OWLFLY3\INSTALL\SHSIDE.DAT
 if errorlevel 1 goto err
 dotnet run --project TOOLS\Obj2Inc -c Release -- GAMES\OWLFLY3\res\F15.OBJ -o GAMES\OWLFLY3\SRC\F15M.INC -n F15 -s 2 -fasm
 if errorlevel 1 goto err

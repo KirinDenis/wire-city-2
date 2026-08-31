@@ -165,10 +165,11 @@ RENDER: call SETHORIZ           ; where the glass is, before anything uses it
         je   .njcab
         cmp  byte [rdext],0     ; walking around her: clean cinema, the
         jne  .pdone            ;  cabin stays inside the vehicle
-        call UISEG:SHCABF   ; the turret seat: the SHILKA'S cabin in the
-        call UISEG:SHINSTF  ;  jet-panel slot, and the instruments live
-        jmp  .pdone            ;  on top of it - map, scope, status,
-                                ;  plates and lamps
+        call SYMSEG:SHPNLF  ; the turret seat: the SHILKA'S cabin and its
+        jmp  .pdone            ;  instruments in the jet-panel slot - or,
+                                ;  head turned on F6/F7, her side console.
+                                ;  The sview test lives with the art in
+                                ;  SYMSEG; this slot got five bytes BACK
 .njcab:
         cmp  byte [cockpit],0
         je   .nopan

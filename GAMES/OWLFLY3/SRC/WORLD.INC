@@ -349,26 +349,26 @@ RENDERCELL:
         mov  [wcz],ax
         call ROTCUL             ; bounds -> rotate corners -> cull
         jc   .ret
-        ; ground height under this cell (terrain-aware)
-        mov  ax,[gi]
-        mov  bx,[gj]
-        call GETH
-        call WORLDH
-        mov  [gbase],ax
-        ; flat terrain patch (forest/water/field)? fill it on the local ground
+        ; flat terrain patch (forest/water/field)? BEND it onto the ground
+        ; the way the roads are bent - one flat height was a shelf hovering
+        ; over every slope, and a shelf beside a correctly falling road is
+        ; what read as "the road defies the relief" (the pilot, 2026-08-31)
         mov  ax,[bstreet]
         cmp  ax,2
         jne  .solid
-        mov  ax,[gbase]
-        add  ax,2               ; a hair above the terrain quad (paint order)
-        sub  ax,[camy]
-        mov  [bry1],ax
         mov  al,[bcol]
         mov  [COLOR],al
         call FACETOPC
+        call TOWNSEG:ROADYF   ; corner by corner, exactly the tarmac's door
         call FACEFILL
         jmp  .ret
 .solid:
+        call TOWNSEG:CELLYF   ; the FOUNDATION: the lowest footprint corner,
+        mov  [gbase],ax         ;  so the walls reach the ground downhill and
+                                ;  the uphill spare hides behind the terrain
+                                ;  quad. Every collision test asks the same
+                                ;  door, so the picture and the physics agree
+                                ;  by construction
         ; pick this building's wall colours from its scheme (SimCity mix)
         mov  bx,[bschm]
         add  bx,bx
@@ -580,11 +580,9 @@ ROADCELL:
         mov  ax,[minrz]
         cmp  ax,CARZ
         jg   .r                ; tarmac reaches further than the traffic
-        mov  ax,[gi]            ; the ground the vehicles stand on
-        mov  bx,[gj]
-        call GETH
-        call WORLDH
-        mov  [gbase],ax
+        call TOWNSEG:CELLY1F  ; the ground the vehicles stand on: the
+        mov  [gbase],dx         ;  CENTRE of the bent road, not the node
+                                ;  height the whole cell used to share
         mov  word [vmode],0 ; draw them, do not test them
         call TOWNSEG:TRAFFICF
 .r:

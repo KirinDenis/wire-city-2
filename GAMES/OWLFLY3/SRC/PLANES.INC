@@ -174,10 +174,7 @@ PLANESUPD:
         jne  .bldok
         pop  si
         push si
-        mov  ax,[gi]
-        mov  bx,[gj]
-        call GETH
-        call WORLDH
+        call TOWNSEG:CELLYF   ; the drawn foundation - one door, see WORLD
         pop  si
         push si
         mov  bx,[pay+si]
@@ -185,10 +182,10 @@ PLANESUPD:
         js   .bldok
         cmp  bx,[bhgt2]
         jg   .bldok
-        mov  ax,[gi]            ; inside the footprint?
-        mov  cl,8
-        shl  ax,cl
-        add  ax,128
+        mov  ax,[gi]            ; inside the footprint? Centre is the 2x2
+        mov  cl,8               ; plot's, +256 - not the one-cell +128 the
+        shl  ax,cl              ; doubling of 2026-08-03 left behind here
+        add  ax,256
         sub  ax,BIAS
         pop  si
         push si
@@ -201,7 +198,7 @@ PLANESUPD:
         mov  ax,[gj]
         mov  cl,8
         shl  ax,cl
-        add  ax,128
+        add  ax,256
         sub  ax,BIAS
         pop  si
         push si
@@ -1465,19 +1462,16 @@ MSLUPD1:
         call HBLD
         cmp  word [bstreet],0
         jne  .mbn
-        mov  ax,[gi]
-        mov  bx,[gj]
-        call GETH
-        call WORLDH
+        call TOWNSEG:CELLYF   ; the drawn foundation - one door, see WORLD
         mov  bx,[msy]
         sub  bx,ax
         js   .mbn
         cmp  bx,[bhgt2]
         jg   .mbn
-        mov  ax,[gi]
+        mov  ax,[gi]            ; the 2x2 plot's centre, +256 (2026-08-31)
         mov  cl,8
         shl  ax,cl
-        add  ax,128
+        add  ax,256
         sub  ax,BIAS
         mov  bx,[msx]
         sub  bx,ax
@@ -1488,7 +1482,7 @@ MSLUPD1:
         mov  ax,[gj]
         mov  cl,8
         shl  ax,cl
-        add  ax,128
+        add  ax,256
         sub  ax,BIAS
         mov  bx,[msz]
         sub  bx,ax
@@ -1933,10 +1927,7 @@ WRECKUPD:
         call HBLD
         cmp  word [bstreet],0
         jne  .wbn
-        mov  ax,[gi]
-        mov  bx,[gj]
-        call GETH
-        call WORLDH
+        call TOWNSEG:CELLYF   ; the drawn foundation - one door, see WORLD
         mov  bx,[ctz]
         sub  bx,ax
         js   .wbn
@@ -2829,11 +2820,8 @@ TRCUPD: xor  bx,bx
         call HBLD
         cmp  word [bstreet],3
         jne  .nocar            ; ---- a street: is there a bus on it? ----
-        mov  ax,[gi]
-        mov  bx,[gj]
-        call GETH
-        call WORLDH
-        mov  [gbase],ax
+        call TOWNSEG:CELLY1F  ; the car stands where the DRAWN one does:
+        mov  [gbase],dx         ;  the centre of the bent road (see WORLD)
         pop  di
         push di
         mov  ax,[tcx+di]
@@ -2858,19 +2846,16 @@ TRCUPD: xor  bx,bx
         push di
         mov  ax,[tcy+di]
         mov  [ctz],ax
-        mov  ax,[gi]
-        mov  bx,[gj]
-        call GETH
-        call WORLDH
+        call TOWNSEG:CELLYF   ; the drawn foundation - one door, see WORLD
         mov  bx,[ctz]
         sub  bx,ax              ; height above the base
         js   .thn
         cmp  bx,[bhgt2]
         jg   .thn              ; sailed over the roof
-        mov  ax,[gi]            ; inside the footprint?
-        mov  cl,8
+        mov  ax,[gi]            ; inside the footprint? The 2x2 plot's
+        mov  cl,8               ; centre, +256 (2026-08-31)
         shl  ax,cl
-        add  ax,128
+        add  ax,256
         sub  ax,BIAS
         pop  di
         push di
@@ -2883,7 +2868,7 @@ TRCUPD: xor  bx,bx
         mov  ax,[gj]
         mov  cl,8
         shl  ax,cl
-        add  ax,128
+        add  ax,256
         sub  ax,BIAS
         pop  di
         push di
