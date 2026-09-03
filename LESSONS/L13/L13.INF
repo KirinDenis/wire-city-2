@@ -1,0 +1,9 @@
+.title  The arm that adds up
+.what   A robot arm in one table: every link inherits its parent's place AND its turn, and because every joint turns about the same axis the angles simply ADD
+.tier   LESSON
+.main   ARM.ASM
+.needs  DRAW13.INC SINTAB.INC
+.build  FASM ARM.ASM ARM.COM
+.run    ARM.COM
+.uses   XLATB IMUL SAR NEG CBW MUL TEST REP STOSB INT
+.ignore MAKEINFO.BAT

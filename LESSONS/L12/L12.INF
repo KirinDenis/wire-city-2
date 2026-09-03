@@ -1,0 +1,10 @@
+.title  The triangle that turns the sky
+.what   Sin and cos out of the school triangle, the rotation matrix out of two anchor arrows - and a solar system out of one routine
+.tier   LESSON
+.main   ORBITS.ASM
+.needs  DRAW12.INC SINTAB.INC
+.reads  INFOGR.PAS
+.build  FASM ORBITS.ASM ORBITS.COM
+.run    ORBITS.COM
+.uses   XLATB IMUL SAR NEG CMP LOOP CALL INT
+.ignore MAKEINFO.BAT
