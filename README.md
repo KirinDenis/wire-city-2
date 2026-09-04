@@ -122,8 +122,8 @@ GAMES/OWLFLY/     the flight simulator: SRC/, res/, INSTALL/, its README
 GAMES/WIRECITY/   the wireframe night-flight: one CITY.ASM, its README
 ENGINE/           engine modules with documented contracts (shared by all)
 EXAMPLES/         the thirteen teaching machines (each states its contract)
-LAB/              the workbench: one city block that holds still, and a
-                  camera to walk round it (HOUSE.COM) - not shipped
+LAB/              the workbenches, one folder each: HOUSE/ (a city block
+                  that holds still) and OWLFLY4/ - not shipped
 docs/             the arcade site: gallery, players, bundles, deep dives
 TOOLS/            the assembler, the DPMI host and the converters
                   - see THIRD-PARTY.md for what is whose

@@ -19,6 +19,7 @@
 *.BAT   text eol=crlf
 *.TXT   text eol=crlf
 *.CFG   text eol=crlf
+*.INF   text eol=crlf
 *.asm   text eol=crlf
 *.inc   text eol=crlf
 *.bat   text eol=crlf

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>OWL FLY 4 - video in DOS</title>
+<link rel="stylesheet" href="jsdos/js-dos.css">
+<style>
+  :root {
+    --ink:#d7dbe8; --dim:#8a90a8; --acc:#c46cff; --acc2:#38d9ff;
+    --bg:#0a0a12; --panel:#12121e;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.6 system-ui,-apple-system,Segoe UI,sans-serif; }
+  main { max-width:940px; margin:0 auto; padding:24px 18px 60px; }
+  h1 { font-size:26px; margin:0 0 4px; letter-spacing:.02em; }
+  h1 span { color:var(--acc); }
+  .sub { color:var(--dim); margin:0 0 22px; font-size:14px; }
+  #dos { width:100%; aspect-ratio:16/10; background:#000; border:1px solid #232338; }
+  .note { background:var(--panel); border:1px solid #232338; border-left:3px solid var(--acc2);
+          padding:12px 16px; margin:18px 0; font-size:14px; }
+  .note b { color:var(--acc2); font-weight:600; }
+  h2 { font-size:16px; margin:28px 0 8px; color:var(--acc); letter-spacing:.04em;
+       text-transform:uppercase; }
+  dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:4px 18px; font-size:14px; }
+  dt { color:var(--dim); white-space:nowrap; }
+  dd { margin:0; }
+  p { max-width:70ch; }
+  .quiet { color:var(--dim); font-size:13px; }
+  code { font-family:ui-monospace,Consolas,monospace; font-size:13px; color:var(--acc2); }
+</style>
+</head>
+<body>
+<main>
+  <h1>OWL FLY 4 &mdash; <span>video in DOS</span></h1>
+  <p class="sub">640&times;400, 256 colours, twelve frames a second, with sound.
+     A workbench, not a game &mdash; nothing here is finished.</p>
+
+  <div class="note">
+    <b>About 23 MB to download</b> before anything happens, and it is loaded in
+    one piece. Give it a moment. Sound needs a click on the picture first, as
+    every browser insists.
+  </div>
+
+  <div id="dos"></div>
+
+  <h2>What this is</h2>
+  <p>A DOS program playing a video file. Not a recording of one &mdash; the
+     decoding is happening in the emulator, in real time, on what amounts to a
+     486. The picture is assembled a block at a time in system memory and
+     pushed to the card whole; the sound is fed to a Sound Blaster by the DMA
+     controller, and it is the sound that keeps time. Frames are pulled to it.
+     Nothing is timed from a timer.</p>
+
+  <h2>How it is built</h2>
+  <dl>
+    <dt>Mode</dt><dd>VESA 100h, 640&times;400, 256 colours, linear framebuffer</dd>
+    <dt>Codec</dt><dd>8&times;8 blocks &mdash; skip, fill, copy, run-length &mdash; over a
+        whole-frame motion vector, so a slow pan costs about thirty bytes</dd>
+    <dt>Palette</dt><dd>one for the whole clip, ordered dithering only</dd>
+    <dt>Sound</dt><dd>8-bit 22 kHz, auto-init DMA, position read from the DMA
+        controller itself</dd>
+    <dt>Addressing</dt><dd>unreal mode &mdash; a 4 GB limit cached in FS. No DOS
+        extender, nothing licensed, nothing vendored</dd>
+    <dt>Built with</dt><dd>FASM, inside DOS. The player is a 4.7 KB
+        <code>.COM</code> file</dd>
+  </dl>
+
+  <h2>What is wrong with it</h2>
+  <p>The first third of a second is silence: the sound card's ring buffer
+     starts empty and the picture does not wait for it. The bitrate is roughly
+     a megabyte a second, which is three or four times what a CD of the period
+     could feed &mdash; the fix for that is a codebook, and it is not written
+     yet. And eight-bit audio hisses in quiet passages, which is the format
+     doing what eight-bit audio does.</p>
+
+  <p class="quiet">Part of <a href="https://github.com/KirinDenis/wire-city-2"
+     style="color:var(--acc2)">wire-city-2</a>. This page is not linked from
+     anywhere and is not indexed.</p>
+</main>
+
+<script src="jsdos/js-dos.js"></script>
+<script>
+  // Named once. A cached page serving a stale bundle is a class of confusion
+  // this project has already paid for, so the version is on the glass.
+  const BUNDLE = "owlvid_v1.jsdos";
+  document.querySelector(".sub").textContent +=
+    "  ·  " + (BUNDLE.match(/_v(\d+)/) || [0, "?"])[1];
+
+  Dos(document.getElementById("dos"), {
+    url: BUNDLE,
+    pathPrefix: "jsdos/emulators/",
+    theme: "dark",
+    renderAspect: "16/10",
+    imageRendering: "pixelated",
+    scaleControls: 0.2,
+    autoStart: true
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+; TEST1.INF - the first video experiment.
+;
+; This file is the recipe, and it is the part that is tracked. The footage in
+; src\ and the packed TEST1.OWV are both ignored; both are reproducible from
+; what is written here, which is the whole reason the manifest exists.
+;
+;   dotnet run --project TOOLS\Vid2Owv -c Release -- LAB\OWLFLY4\VIDEO\TEST1.INF
+;
+; Add /reuse to skip ffmpeg and re-pack the intermediates from last time -
+; which is what you want while the codec itself is being changed.
+
+SOURCE     = src\test1.mp4
+OUTPUT     = TEST1.OWV
+
+; 640x400 is VESA mode 100h and exactly twice 320x200 in both directions.
+WIDTH      = 640
+HEIGHT     = 400
+
+; The source is 24 fps and twelve is a clean halving, so every frame is held
+; for the same time. Fifteen would be 8:5 and judders on slow pans.
+FPS        = 12
+
+; Four seconds between keyframes. A cut wants one too, and this clip has none.
+KEYEVERY   = 48
+
+AUDIO      = 22050
+
+; Ordered dithering ONLY. Error diffusion is not temporally stable, and every
+; skipped block in a delta frame depends on an unchanged pixel keeping its
+; index. See the header of TOOLS/Vid2Owv/Program.cs.
+DITHER     = bayer:bayer_scale=3
+
+; Live footage has grain, and grain means a "still" part of the picture is
+; not still at pixel level - it lands on a different index every frame, so
+; no block is ever unchanged. The last two hqdn3d parameters are the
+; temporal ones and they are the ones that matter. Measured: this alone is
+; worth little (skips went 5.1% to 7.9%); TOLERANCE below is the real lever.
+DENOISE    = hqdn3d=4:3:12:9
+
+; How far two pixels may be apart, as colours, and still count as unchanged.
+; Zero means exact, which on real footage means almost nothing is ever
+; skipped and the file comes out bigger than raw. Measured at 640x400:
+;   0 -> 2689 KB/s    2 -> 1750    4 -> 1127    8 -> 660
+; The encoder is closed-loop, so whatever this throws away is thrown away
+; once and does not accumulate between keyframes.
+TOLERANCE  = 2
+
+; The global pan vector is searched this far, in pixels.
+SEARCH     = 24
+
+; Per-block COPY. Whether it earns its place is an open question - the
+; statistics the converter prints are there to answer it.
+COPY       = on
+COPYSEARCH = 4

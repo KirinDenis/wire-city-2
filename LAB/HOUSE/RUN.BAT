@@ -2,7 +2,7 @@
 REM ============================================================================
 REM RUN.BAT - the house lab, from inside DOS.
 REM
-REM   cd LAB
+REM   cd LAB\HOUSE
 REM   RUN
 REM
 REM One city block that holds still, and a camera to walk round it. The game's

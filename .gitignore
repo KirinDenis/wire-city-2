@@ -130,3 +130,39 @@ LESSONS/L07/LINE.COM
 LESSONS/L07/LINEW.COM
 LESSONS/L07/RECON.ASM
 LESSONS/L07/RECON.COM
+
+# OWL FLY 4 video. THIS RULE IS TEMPORARY - it expires when the codec is
+# frozen, and then the packed .OWV files become ordinary tracked assets.
+#
+# The reason is churn, not size. Git stores differences, which is why this
+# repository's whole history of assembly costs so little. Video has no
+# differences to store: change one dithering threshold, repack, and every
+# byte is new, so git keeps another whole copy beside the old one, forever,
+# in every clone. Developing a codec means twenty of those, and history is
+# rewritten rather than deleted - which is not something to do to a public,
+# forked repository. The .PNG and .WAV assets already tracked here are binary
+# too and cost nothing, because nothing rewrites them; that is exactly what
+# the video becomes once the format stops moving.
+#
+# Until then this holds the recipe - the per-scene manifest, the ffmpeg
+# invocation and the C# converter - and SAMPLE.OWV, un-ignored at the end as
+# the one short clip that lets the player be tested with no footage at all.
+#
+# VIDEO/src/ is the source footage, kept beside the work that uses it and
+# ignored whole. Where it will eventually be published is still open; until
+# that is decided it exists on the maintainer's machine only, so it is NOT
+# backed up by being here - see the folder's README.
+LAB/OWLFLY4/VIDEO/*.OWV
+LAB/OWLFLY4/VIDEO/*.owv
+LAB/OWLFLY4/VIDEO/frames/
+LAB/OWLFLY4/VIDEO/src/*
+GAMES/OWLFLY4/res/video/*.OWV
+GAMES/OWLFLY4/res/video/*.owv
+GAMES/OWLFLY4/res/video/frames/
+!LAB/OWLFLY4/VIDEO/SAMPLE.OWV
+!LAB/OWLFLY4/VIDEO/src/.gitkeep
+
+# VESATEST writes its transcript here when run with /A - a diagnostic
+# result, not a source file.
+LAB/OWLFLY4/VIDEO/VESATEST.LOG
+LAB/OWLFLY4/VIDEO/PLAYER.LOG

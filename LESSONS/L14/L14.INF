@@ -1,0 +1,10 @@
+.title  The first cube
+.what   Eight corners measured from the cube's own centre and twelve pairs saying which to join - a model is a list of vectors and a list of joins, and moving it is transforming the vectors
+.tier   LESSON
+.main   CUBE.ASM
+.needs  DRAW14.INC SINTAB.INC
+.reads  INFOGR.PAS
+.build  FASM CUBE.ASM CUBE.COM
+.run    CUBE.COM
+.uses   XLATB IMUL SAR CBW MUL JCXZ LOOP INT
+.ignore MAKEINFO.BAT

@@ -1,0 +1,29 @@
+; TEST2.INF - thirty seconds, the first clip long enough to say anything
+; about bitrate. Same settings as TEST1.INF on purpose: the point of a
+; second scene is to find out how much the numbers depend on the material.
+;
+;   dotnet run --project TOOLS\Vid2Owv -c Release -- LAB\OWLFLY4\VIDEO\TEST2.INF
+
+SOURCE     = src/test2.mp4
+OUTPUT     = TEST2.OWV
+
+WIDTH      = 640
+HEIGHT     = 400
+FPS        = 12
+KEYEVERY   = 48
+AUDIO      = 22050
+
+DITHER     = bayer:bayer_scale=3
+DENOISE    = hqdn3d=4:3:12:9
+TOLERANCE  = 2
+SEARCH     = 24
+COPY       = on
+COPYSEARCH = 4
+
+; Eight-bit audio has about 48 dB of range, and a quiet passage sitting at
+; the bottom of it hisses - the quantisation error stops being masked and
+; starts being heard, and undithered it swells with the material rather than
+; sitting still. So the sound is compressed up off the noise floor before it
+; is reduced to eight bits, and dithered on the way down. Set to "none" to
+; hear the material raw, which is worth doing once.
+AUDIOFILTER = highpass=f=50,acompressor=threshold=0.06:ratio=4:attack=5:release=200:makeup=2,alimiter=limit=0.97

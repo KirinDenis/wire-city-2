@@ -2,7 +2,7 @@
 REM ============================================================================
 REM MAKE.BAT - assemble the house lab, from inside DOS.
 REM
-REM   cd LAB
+REM   cd LAB\HOUSE
 REM   MAKE            ->  HOUSE.COM
 REM
 REM Run it from this folder. Every path below is relative to here on purpose:
@@ -20,13 +20,13 @@ REM               which drives this file from Windows; a batch started from a
 REM               DOSBox -c line swallows the -c lines that follow it, so the
 REM               emulator has to be closed from in here or not at all.
 REM ============================================================================
-if not exist ..\TOOLS\FASM\FASM.EXE goto nofasm
+if not exist ..\..\TOOLS\FASM\FASM.EXE goto nofasm
 if not exist HOUSE.ASM goto nosource
 
 echo Assembling HOUSE.ASM ...
 if exist HOUSE.COM del HOUSE.COM
-..\TOOLS\CWSDPMI\CWSDPMI.EXE
-..\TOOLS\FASM\FASM.EXE HOUSE.ASM HOUSE.COM
+..\..\TOOLS\CWSDPMI\CWSDPMI.EXE
+..\..\TOOLS\FASM\FASM.EXE HOUSE.ASM HOUSE.COM
 if not exist HOUSE.COM goto failed
 echo.
 echo Built HOUSE.COM.  Type RUN to walk round it.
@@ -34,14 +34,14 @@ goto end
 
 :nofasm
 echo.
-echo Cannot find ..\TOOLS\FASM\FASM.EXE
-echo Run MAKE from the LAB folder, and make sure you mounted the whole
+echo Cannot find ..\..\TOOLS\FASM\FASM.EXE
+echo Run MAKE from the LAB\HOUSE folder, and make sure you mounted the whole
 echo repository rather than just this directory.
 goto end
 
 :nosource
 echo.
-echo HOUSE.ASM is not here. Run MAKE from LAB.
+echo HOUSE.ASM is not here. Run MAKE from LAB\HOUSE.
 goto end
 
 :failed

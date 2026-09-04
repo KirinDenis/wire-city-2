@@ -105,7 +105,7 @@ format binary as 'com'
 
         ; .8086 in the TASM source. FASM has no such directive - without this
         ; include it silently uses 386 jumps when a target is out of range.
-        include '..\ENGINE\E_8086.INC'
+        include '..\..\ENGINE\E_8086.INC'
 
 ; ============================================================================
 ;  START
@@ -2787,8 +2787,8 @@ SINT    dw 0,6,13,19,25,31,38,44,50,56,62,68,74,80,86,92,98,104,109,115
         dw 198,202,206,209,213,216,220,223,226,229,231,234,237,239,241,243
         dw 245,247,248,250,251,252,253,254,255,255,256,256,256
 
-        include '..\ENGINE\E_M3D.INC'
-        include '..\ENGINE\E_RAST.INC'
+        include '..\..\ENGINE\E_M3D.INC'
+        include '..\..\ENGINE\E_RAST.INC'
 
 KEYS    db 128 dup(0)           ; key state (held), written by KBINT
 HITS    db 128 dup(0)           ; key went down, cleared by whoever reads it

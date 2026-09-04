@@ -1,0 +1,14 @@
+; TINY.INF - one second of the test clip, for finding out whether the player
+; works at all. A small reproduction beats a long guess.
+SOURCE     = src/tiny.mp4
+OUTPUT     = TINY.OWV
+WIDTH      = 640
+HEIGHT     = 400
+FPS        = 12
+KEYEVERY   = 48
+AUDIO      = 22050
+DITHER     = bayer:bayer_scale=3
+DENOISE    = hqdn3d=4:3:12:9
+TOLERANCE  = 2
+COPY       = on
+SEARCH     = 24
