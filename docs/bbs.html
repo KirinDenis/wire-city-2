@@ -108,6 +108,7 @@
   Dos(document.getElementById("dos"), {
     url: "bbs_v6.jsdos",
     pathPrefix: "jsdos/emulators/",
+    backend: "dosbox",   // pinned: js-dos stores this choice, and only wdosbox is vendored here
     theme: "dark", imageRendering: "pixelated",
     noNetworking: false,
     onEvent: (e, ci) => {

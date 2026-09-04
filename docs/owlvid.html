@@ -140,7 +140,22 @@
     renderAspect: "16/10",
     imageRendering: "pixelated",
     scaleControls: 0.2,
-    autoStart: params.get("autostart") === "1"
+    autoStart: params.get("autostart") === "1",
+
+    // PINNED, and this is not a preference.
+    //
+    // js-dos reads its emulator from the browser's stored settings:
+    //     backend: storage.getItem("backend") ?? "dosbox"
+    // ...and its own settings panel lets a visitor change it to DOSBox-X.
+    // Only wdosbox.wasm is vendored here - wdosbox-x.wasm has never been -
+    // so one touch of that gear leaves the browser asking for a file this
+    // site does not have, and every js-dos page on it dies with a 404 from
+    // then on. It is stored, so it does not go away by reloading, and it
+    // looks exactly like the site being broken for everyone.
+    //
+    // Naming the backend here overrides the stored value. Every page that
+    // embeds js-dos wants this line.
+    backend: "dosbox"
   });
 
 </script>

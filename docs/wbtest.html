@@ -53,6 +53,7 @@
       Dos(document.getElementById("dos"), {
         url: url,
         pathPrefix: "jsdos/emulators/",
+        backend: "dosbox",   // pinned: js-dos stores this choice, and only wdosbox is vendored here
         theme: "dark",
         imageRendering: "pixelated",
         onEvent: function (e) { say("js-dos: " + e); }
