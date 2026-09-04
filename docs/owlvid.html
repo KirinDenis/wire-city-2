@@ -39,9 +39,12 @@
      A workbench, not a game &mdash; nothing here is finished.</p>
 
   <div class="note">
-    <b>About 23 MB to download</b> before anything happens, and it is loaded in
-    one piece. Give it a moment. Sound needs a click on the picture first, as
-    every browser insists.
+    <b>Press play on the picture</b>, and give it a moment &mdash; about 23 MB
+    arrives in one piece before anything happens.<br>
+    It does not start by itself on purpose. A browser will not let a page make
+    a sound until you have interacted with it, so a clip that started on its
+    own would play silently; the click that starts it is the one that unlocks
+    the audio. When it ends, any key plays it again.
   </div>
 
   <div id="dos"></div>
@@ -85,10 +88,51 @@
 <script>
   // Named once. A cached page serving a stale bundle is a class of confusion
   // this project has already paid for, so the version is on the glass.
-  const BUNDLE = "owlvid_v1.jsdos";
+  const BUNDLE = "owlvid_v2.jsdos";
+  const params = new URLSearchParams(location.search);
   document.querySelector(".sub").textContent +=
-    "  ·  " + (BUNDLE.match(/_v(\d+)/) || [0, "?"])[1];
+    "  ·  v" + (BUNDLE.match(/_v(\d+)/) || [0, "?"])[1];
 
+  // Belt and braces, and it has to be installed BEFORE js-dos runs - it
+  // works by remembering every AudioContext the page creates, and a wrapper
+  // put in place after the context already exists remembers nothing. The
+  // next real gesture then resumes any that are still suspended, so a
+  // visitor arriving with ?autostart=1, or one whose browser suspends the
+  // context for reasons of its own, gets sound on their first click rather
+  // than a silent picture and no explanation.
+  (function () {
+    const Orig = window.AudioContext || window.webkitAudioContext;
+    if (!Orig) return;
+    const made = [];
+    function Tracked(...args) {
+      const ctx = new Orig(...args);
+      made.push(ctx);
+      return ctx;
+    }
+    Tracked.prototype = Orig.prototype;
+    window.AudioContext = Tracked;
+    if (window.webkitAudioContext) window.webkitAudioContext = Tracked;
+
+    const resume = () => made.forEach((c) => {
+      if (c.state === "suspended") c.resume().catch(() => {});
+    });
+    ["pointerdown", "keydown", "touchstart"].forEach((e) =>
+      window.addEventListener(e, resume, { capture: true }));
+  })();
+
+  // NOT autoStart, and this is the whole reason:
+  //
+  // A browser refuses to let a page make a sound until the visitor has
+  // interacted with it. Start the emulator on page load and its AudioContext
+  // is created suspended, so the clip runs perfectly and in silence - and
+  // nothing on screen says why. It looked like a hardware fault: sound
+  // appeared when the volume wheel on a headset was turned, because the
+  // wheel sends an event the browser counts as interaction, and the context
+  // woke up. Two different browsers, same behaviour, no bug in either.
+  //
+  // Letting js-dos show its own play button makes the first click the thing
+  // that both starts the machine and unlocks the sound. ?autostart=1 is kept
+  // for the test rigs, which do not care about audio.
   Dos(document.getElementById("dos"), {
     url: BUNDLE,
     pathPrefix: "jsdos/emulators/",
@@ -96,8 +140,9 @@
     renderAspect: "16/10",
     imageRendering: "pixelated",
     scaleControls: 0.2,
-    autoStart: true
+    autoStart: params.get("autostart") === "1"
   });
+
 </script>
 </body>
 </html>
