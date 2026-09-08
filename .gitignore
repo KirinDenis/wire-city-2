@@ -166,3 +166,19 @@ GAMES/OWLFLY4/res/video/frames/
 # result, not a source file.
 LAB/OWLFLY4/VIDEO/VESATEST.LOG
 LAB/OWLFLY4/VIDEO/PLAYER.LOG
+
+# The stories' converted video: STORY\<name>\<scene>\*.OWV is the product,
+# the .INF beside it is the recipe. Same rule and same reason as the lab
+# above - churn, not size - and it expires with the codec freeze.
+LAB/OWLFLY4/STORY/**/*.OWV
+LAB/OWLFLY4/STORY/**/*.owv
+# ...and the converter's intermediates beside each recipe - frames.raw,
+# pal.png, audio.raw - rebuilt from the warehouse on every conversion.
+LAB/OWLFLY4/STORY/**/frames/
+# and what the converter said last time, kept beside the recipe by the desk
+LAB/OWLFLY4/STORY/**/*.LOG
+# the things of a PICKUP, made from the recipe like the .OWV
+LAB/OWLFLY4/STORY/**/*.SPR
+# the story engine's run log and the screens it writes in /AUTO
+LAB/OWLFLY4/ENGINE/STORY.LOG
+LAB/OWLFLY4/ENGINE/SHOT*.OWV

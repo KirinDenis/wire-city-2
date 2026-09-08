@@ -78,6 +78,15 @@ static class Program
         }
 
         var m = Manifest.Load(manifestPath);
+        if (m.Mode == "PICKUP") return Pickup(m, manifestPath);
+        return Encode(m, manifestPath, reuse);
+    }
+
+    // One clip (or one still) from one source, with its own palette - or
+    // with the palette handed in, when the still is the background of a
+    // PICKUP and the things placed on it must share its colours.
+    static int Encode(Manifest m, string manifestPath, bool reuse)
+    {
         string baseDir = Path.GetDirectoryName(manifestPath)!;
         string work = Path.Combine(baseDir, "frames");
         Directory.CreateDirectory(work);
@@ -119,12 +128,48 @@ static class Program
             // hqdn3d's last two parameters are the TEMPORAL ones, and those
             // are the ones that matter here.
             string denoise = m.Denoise.Length > 0 ? "," + m.Denoise : "";
-            string scale = $"fps={m.Fps},scale={m.Width}:{m.Height}:flags=lanczos{denoise}";
+
+            // Footage does not arrive in the shape of the screen. 640x400 is
+            // 16:10; a 16:9 source has to lose something or gain something,
+            // and which one is a framing decision, not a technical one - so
+            // FIT says it out loud in the manifest.
+            //
+            //   crop     fill the screen, lose a little from the sides
+            //   pad      keep the whole frame, black bars top and bottom
+            //   stretch  fill the screen and distort - almost never right
+            //
+            // PAD is nearly free in this codec, which is worth knowing before
+            // choosing: a black bar is uniform, so it costs two bytes a block
+            // on the keyframe and is skipped in every frame after it.
+            string fit = m.Fit.ToLowerInvariant() switch
+            {
+                "pad" => $"scale={m.Width}:{m.Height}:force_original_aspect_ratio=decrease:flags=lanczos," +
+                         $"pad={m.Width}:{m.Height}:(ow-iw)/2:(oh-ih)/2:color=black",
+                "stretch" => $"scale={m.Width}:{m.Height}:flags=lanczos",
+                _ => $"scale={m.Width}:{m.Height}:force_original_aspect_ratio=increase:flags=lanczos," +
+                     $"crop={m.Width}:{m.Height}",
+            };
+            // A still is a one-frame OWV, and it comes from an image. The fps
+            // filter on a single image yields NOTHING - a picture has no
+            // duration to sample at twelve a second - so for an image the
+            // chain has no fps stage and the output is capped at one frame.
+            // Found the first time the desk asked for a still: 806 bytes,
+            // zero frames, and a player with nothing to show.
+            bool imageSource = new[] { ".png", ".jpg", ".jpeg", ".bmp" }
+                .Contains(Path.GetExtension(source).ToLowerInvariant());
+            string scale = (imageSource ? "" : $"fps={m.Fps},") + fit + denoise;
+            string oneFrame = imageSource ? " -frames:v 1" : "";
+            if (imageSource && m.AudioRate > 0)
+            {
+                Console.WriteLine("source    is an image - no audio, one frame");
+                m.AudioRate = 0;
+            }
 
             // One palette for the whole clip. stats_mode=full reads every
             // frame, so a scene that darkens does not drag the palette after
             // it and then swim when it comes back.
-            if (!Run(ffmpeg, $"-y -v error -i \"{source}\" -vf \"{scale},palettegen=stats_mode=full\" \"{palPng}\"")) return 1;
+            if (m.Palette != null) File.Copy(m.Palette, palPng, true);          // shared with the things on top of it
+            else if (!Run(ffmpeg, $"-y -v error -i \"{source}\" -vf \"{scale},palettegen=stats_mode=full\" \"{palPng}\"")) return 1;
 
             // paletteuse needs its two inputs wired by hand. Left implicit,
             // the palette is fed into the head of the chain instead and
@@ -132,13 +177,23 @@ static class Program
             // pixels" - which is the good case; the bad case is a filter
             // graph that quietly does something else.
             if (!Run(ffmpeg, $"-y -v error -i \"{source}\" -i \"{palPng}\" " +
-                             $"-lavfi \"{scale}[x];[x][1:v]paletteuse=dither={m.Dither}\" " +
+                             $"-lavfi \"{scale}[x];[x][1:v]paletteuse=dither={m.Dither}\"{oneFrame} " +
                              $"-f rawvideo -pix_fmt pal8 \"{framesRaw}\"")) return 1;
 
             if (!Run(ffmpeg, $"-y -v error -i \"{palPng}\" -f rawvideo -pix_fmt rgba \"{palRaw}\"")) return 1;
 
             if (m.AudioRate > 0)
             {
+                // SIXTEEN BITS, by default. Eight-bit sound hisses, and it is
+                // the bits, not the card: measured on the same clip, the
+                // quiet passages sit at -49 dBFS after the compressor whether
+                // dithered or not, because one step of an 8-bit DAC is -42 dB
+                // and the quantisation noise lands just under that. Sixteen
+                // bits puts the floor 48 dB lower, the Sound Blaster 16 plays
+                // them, and the sound costs 44 KB/s against a megabyte a
+                // second of picture. AUDIOBITS = 8 is still here for a file
+                // meant for an older card, and then everything below applies:
+                //
                 // Eight-bit audio has about 48 dB to work with, and a quiet
                 // passage sits so low in that range that the quantisation
                 // error stops being masked and becomes audible hiss - the
@@ -156,9 +211,11 @@ static class Program
                 //
                 // Both are in AUDIOFILTER and can be changed per scene.
                 string af = m.AudioFilter.Length > 0 ? m.AudioFilter + "," : "";
-                string chain = $"{af}aresample=osr={m.AudioRate}:osf=u8:dither_method=triangular_hp";
+                string chain = m.AudioBits == 16
+                    ? $"{af}aresample=osr={m.AudioRate}:osf=s16:dither_method=triangular"
+                    : $"{af}aresample=osr={m.AudioRate}:osf=u8:dither_method=triangular_hp";
                 if (!Run(ffmpeg, $"-y -v error -i \"{source}\" -ac 1 -af \"{chain}\" " +
-                                 $"-f u8 -ar {m.AudioRate} \"{audioRaw}\"")) return 1;
+                                 $"-f {(m.AudioBits == 16 ? "s16le" : "u8")} -ar {m.AudioRate} \"{audioRaw}\"")) return 1;
             }
         }
         else
@@ -190,8 +247,9 @@ static class Program
         BuildDistance(palette, m.Tolerance);
         Console.WriteLine($"tolerance {m.Tolerance}" + (m.Tolerance == 0 ? "  (exact match required to skip a block)" : ""));
         byte[] audio = m.AudioRate > 0 && File.Exists(audioRaw) ? File.ReadAllBytes(audioRaw) : Array.Empty<byte>();
+        int bps = m.AudioBits / 8;                    // bytes per sample
         if (audio.Length > 0)
-            Console.WriteLine($"audio     {audio.Length} bytes, {m.AudioRate} Hz mono 8-bit ({audio.Length / (double)m.AudioRate:F2} s)");
+            Console.WriteLine($"audio     {audio.Length} bytes, {m.AudioRate} Hz mono {m.AudioBits}-bit ({audio.Length / (double)bps / m.AudioRate:F2} s)");
 
         // -- encode -----------------------------------------------------------
         var stats = new Stats();
@@ -216,8 +274,10 @@ static class Program
 
                 if (audio.Length > 0)
                 {
-                    int from = (int)((long)i * m.AudioRate / m.Fps);
-                    int to = (int)((long)(i + 1) * m.AudioRate / m.Fps);
+                    // sample boundaries, then bytes - a 16-bit chunk is never
+                    // cut through the middle of a word
+                    int from = (int)((long)i * m.AudioRate / m.Fps) * bps;
+                    int to = (int)((long)(i + 1) * m.AudioRate / m.Fps) * bps;
                     if (from > audio.Length) from = audio.Length;
                     if (to > audio.Length) to = audio.Length;
                     if (to > from)
@@ -253,25 +313,61 @@ static class Program
 
         // -- write -------------------------------------------------------------
         int maxChunk = chunks.Max(c => c.Length);
-        using (var os = File.Create(output))
+        // Written beside the target, then put in its place - so a player that
+        // has the old file open sees either the old one or the new, never a
+        // half. On Windows a reader that allowed FILE_SHARE_DELETE does not
+        // stop the old file being RENAMED, but the name stays taken until the
+        // reader lets go, and "replace" fails with access denied; so the old
+        // file is moved aside under another name, deleted from there (it
+        // goes when the last reader closes), and the new one takes the name.
+        // A reader that allowed nothing still wins; then say so in one line.
+        string tmp = output + ".tmp";
+        try
+        {
+            using (var os = File.Create(tmp))
+            {
+                WriteHeaderAndChunks(os, hdrOf(), chunks);
+            }
+            if (File.Exists(output))
+            {
+                string aside = $"{output}.{DateTime.UtcNow.Ticks:x}.old";
+                File.Move(output, aside);
+                try { File.Delete(aside); } catch { }
+            }
+            File.Move(tmp, output);
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"FAILED: cannot write {output} - it is held open by another program, " +
+                                    $"probably a player. ({ex.Message})");
+            try { File.Delete(tmp); } catch { }
+            return 3;
+        }
+
+        stats.Report(output, frameCount, m.Fps, maxChunk);
+        return 0;
+
+        byte[] hdrOf()
         {
             var hdr = new byte[HEADER_SIZE];
             Encoding.ASCII.GetBytes("OWV1").CopyTo(hdr, 0);
             PutU16(hdr, 4, w);
             PutU16(hdr, 6, h);
             hdr[8] = (byte)m.Fps;
-            hdr[9] = (byte)(audio.Length > 0 ? 1 : 0);
+            hdr[9] = (byte)(audio.Length > 0 ? (m.AudioBits == 16 ? 3 : 1) : 0);   // bit 0 has audio, bit 1 16-bit
             PutU16(hdr, 10, frameCount);
             PutU16(hdr, 12, audio.Length > 0 ? m.AudioRate : 0);
             PutU32(hdr, 16, (uint)maxChunk);
             PutU32(hdr, 20, 0);                       // no index
             palette.CopyTo(hdr, 32);
-            os.Write(hdr, 0, hdr.Length);
-            foreach (var c in chunks) os.Write(c, 0, c.Length);
+            return hdr;
         }
+    }
 
-        stats.Report(output, frameCount, m.Fps, maxChunk);
-        return 0;
+    static void WriteHeaderAndChunks(Stream os, byte[] hdr, List<byte[]> chunks)
+    {
+        os.Write(hdr, 0, hdr.Length);
+        foreach (var c in chunks) os.Write(c, 0, c.Length);
     }
 
     // ========================================================================
@@ -647,13 +743,152 @@ static class Program
     }
 
     // ========================================================================
+    //  PICKUP - a still with things in it that can be clicked away.
+    //
+    //  The manifest names EMPTY (the room without the things), FULL (with
+    //  them - only the palette comes from it, so the things get their own
+    //  colours) and one ITEM line per thing: where it sits in the SOURCE
+    //  picture, and its cut-out with alpha. Out come:
+    //
+    //      BG.OWV        the empty room, one frame, the shared palette
+    //      <NAME>.SPR    each thing, scaled and cropped exactly as the room
+    //                    was, in the same palette, with index 255 meaning
+    //                    "not there" - and where it stands ON SCREEN in the
+    //                    header, so the game never scales anything.
+    //
+    //  The .SPR file:
+    //      +0   'OWS1'
+    //      +4   word  width          +6  word  height
+    //      +8   int16 x on screen    +10 int16 y on screen
+    //      +12  byte  the transparent index (255)
+    //      +13  3 bytes zero
+    //      +16  width*height palette indices, row by row
+    // ========================================================================
+    static int Pickup(Manifest m, string manifestPath)
+    {
+        string baseDir = Path.GetDirectoryName(manifestPath)!;
+        string outDir = Path.GetFullPath(Path.Combine(baseDir, m.OutDir));
+        string work = Path.Combine(outDir, "frames");
+        Directory.CreateDirectory(work);
+        string empty = Path.GetFullPath(Path.Combine(baseDir, m.Empty));
+        string full = m.Full == "" ? empty : Path.GetFullPath(Path.Combine(baseDir, m.Full));
+        if (!File.Exists(empty)) { Console.Error.WriteLine($"EMPTY not found: {empty}"); return 2; }
+        if (!File.Exists(full)) { Console.Error.WriteLine($"FULL not found: {full}"); return 2; }
+        string ffmpeg = FindFfmpeg();
+        if (ffmpeg == null) { Console.Error.WriteLine("ffmpeg not found. Put it on PATH or set FFMPEG to its full path."); return 2; }
+
+        var (sw, sh) = ImageSize(empty);
+        if (sw == 0) { Console.Error.WriteLine($"cannot read the size of {empty}"); return 2; }
+        Console.WriteLine($"manifest  {manifestPath}");
+        Console.WriteLine($"pickup    {sw}x{sh} -> {m.Width}x{m.Height}, fit {m.Fit}, {m.Items.Count} item(s)");
+
+        // How the room reaches the screen: a scale, and an offset. The
+        // things go through the same two numbers, so they land where they
+        // were placed.
+        double sx, sy, ox, oy;
+        switch (m.Fit.ToLowerInvariant())
+        {
+            case "stretch": sx = (double)m.Width / sw; sy = (double)m.Height / sh; ox = oy = 0; break;
+            case "pad": sx = sy = Math.Min((double)m.Width / sw, (double)m.Height / sh); ox = (sw * sx - m.Width) / 2; oy = (sh * sy - m.Height) / 2; break;
+            default: sx = sy = Math.Max((double)m.Width / sw, (double)m.Height / sh); ox = (sw * sx - m.Width) / 2; oy = (sh * sy - m.Height) / 2; break;
+        }
+
+        // the palette, from the picture that has everything in it
+        string fit = m.Fit.ToLowerInvariant() switch
+        {
+            "pad" => $"scale={m.Width}:{m.Height}:force_original_aspect_ratio=decrease:flags=lanczos,pad={m.Width}:{m.Height}:(ow-iw)/2:(oh-ih)/2:color=black",
+            "stretch" => $"scale={m.Width}:{m.Height}:flags=lanczos",
+            _ => $"scale={m.Width}:{m.Height}:force_original_aspect_ratio=increase:flags=lanczos,crop={m.Width}:{m.Height}",
+        };
+        string palPng = Path.Combine(work, "pickup-pal.png");
+        if (!Run(ffmpeg, $"-y -v error -i \"{full}\" -vf \"{fit},palettegen=stats_mode=full\" \"{palPng}\"")) return 1;
+
+        // the room: a one-frame OWV through the ordinary path, palette given
+        var bg = new Manifest
+        {
+            Source = empty, Output = Path.Combine(outDir, "BG.OWV"), Palette = palPng,
+            Width = m.Width, Height = m.Height, Fps = m.Fps, KeyEvery = m.KeyEvery, AudioRate = 0,
+            Dither = m.Dither, Denoise = "", Fit = m.Fit, Tolerance = m.Tolerance, Search = m.Search, CopySearch = m.CopySearch, Copy = m.Copy,
+        };
+        int rc = Encode(bg, Path.Combine(outDir, "PICKUP.INF"), false);
+        if (rc != 0) return rc;
+
+        // the things: each scaled by the room's factor, quantised to the
+        // room's palette, alpha below half -> the reserved index
+        foreach (var it in m.Items)
+        {
+            string layer = Path.GetFullPath(Path.Combine(baseDir, it.Layer));
+            if (!File.Exists(layer)) { Console.Error.WriteLine($"FAILED: layer not found for {it.Name}: {layer}"); return 2; }
+            var (lw, lh) = ImageSize(layer);
+            int w = Math.Max(1, (int)Math.Round(lw * sx)), h = Math.Max(1, (int)Math.Round(lh * sy));
+            int gx = (int)Math.Round(it.X * sx - ox), gy = (int)Math.Round(it.Y * sy - oy);
+            string raw = Path.Combine(work, it.Name + ".raw");
+            if (!Run(ffmpeg, $"-y -v error -i \"{layer}\" -i \"{palPng}\" " +
+                             $"-lavfi \"format=rgba,scale={w}:{h}:flags=lanczos[x];[x][1:v]paletteuse=dither={m.Dither}:alpha_threshold=128\" " +
+                             $"-frames:v 1 -f rawvideo -pix_fmt pal8 \"{raw}\"")) return 1;
+            var data = File.ReadAllBytes(raw);
+            if (data.Length != w * h && data.Length != w * h + 1024)
+            { Console.Error.WriteLine($"FAILED: {it.Name}: {data.Length} bytes for {w}x{h}"); return 1; }
+            var spr = new byte[16 + w * h];
+            Encoding.ASCII.GetBytes("OWS1").CopyTo(spr, 0);
+            PutU16(spr, 4, w); PutU16(spr, 6, h);
+            PutU16(spr, 8, gx & 0xFFFF); PutU16(spr, 10, gy & 0xFFFF);
+            spr[12] = 255;
+            Array.Copy(data, 0, spr, 16, w * h);
+            int seen = 0; for (int i = 0; i < w * h; i++) if (data[i] != 255) seen++;
+            string sprPath = Path.Combine(outDir, it.Name + ".SPR");
+            File.WriteAllBytes(sprPath, spr);
+            Console.WriteLine($"  item      {it.Name,-8} {w,4}x{h,-4} at {gx,4},{gy,-4} on screen   {seen * 100 / Math.Max(1, w * h),3}% opaque   ({Path.GetFileName(it.Layer)} at {it.X},{it.Y})");
+        }
+        Console.WriteLine($"  wrote     BG.OWV and {m.Items.Count} sprite(s) into {outDir}");
+        return 0;
+    }
+
+    // Width and height from the file's own header - PNG, JPEG, BMP. Enough
+    // to place things; ffmpeg does the real decoding.
+    static (int w, int h) ImageSize(string path)
+    {
+        using var fs = File.OpenRead(path);
+        var b = new byte[32];
+        int n = fs.Read(b, 0, 32);
+        if (n >= 24 && b[0] == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G')
+            return ((b[16] << 24) | (b[17] << 16) | (b[18] << 8) | b[19], (b[20] << 24) | (b[21] << 16) | (b[22] << 8) | b[23]);
+        if (n >= 26 && b[0] == 'B' && b[1] == 'M')
+            return (BitConverter.ToInt32(b, 18), Math.Abs(BitConverter.ToInt32(b, 22)));
+        if (n >= 4 && b[0] == 0xFF && b[1] == 0xD8)
+        {
+            fs.Seek(2, SeekOrigin.Begin);
+            var mk = new byte[4];
+            while (fs.Read(mk, 0, 4) == 4)
+            {
+                if (mk[0] != 0xFF) break;
+                int marker = mk[1], len = (mk[2] << 8) | mk[3];
+                if (marker >= 0xC0 && marker <= 0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC)
+                {
+                    var sof = new byte[5];
+                    if (fs.Read(sof, 0, 5) != 5) break;
+                    return ((sof[3] << 8) | sof[4], (sof[1] << 8) | sof[2]);
+                }
+                fs.Seek(len - 2, SeekOrigin.Current);
+            }
+        }
+        return (0, 0);
+    }
+
+    // ========================================================================
     class Manifest
     {
         public string Source = "", Output = "";
+        public string Mode = "VIDEO";                 // or PICKUP
+        public string Palette;                        // a pal.png to use instead of making one
+        public string Empty = "", Full = "", OutDir = ".";
+        public List<PickItem> Items = new();
         public int Width = 640, Height = 400, Fps = 12, KeyEvery = 48;
         public int AudioRate = 22050, Search = 24, CopySearch = 4;
+        public int AudioBits = 16;                    // 16 for the SB16; 8 for older cards, and it hisses
         public string Dither = "bayer:bayer_scale=3";
         public string Denoise = "";
+        public string Fit = "crop";
         // Everything before the eight-bit conversion. The high-pass takes out
         // rumble that would only eat headroom; the compressor lifts quiet
         // passages off the noise floor; the limiter stops the makeup gain
@@ -684,21 +919,43 @@ static class Program
                     case "FPS": m.Fps = int.Parse(v); break;
                     case "KEYEVERY": m.KeyEvery = int.Parse(v); break;
                     case "AUDIO": m.AudioRate = int.Parse(v); break;
+                    case "AUDIOBITS":
+                        m.AudioBits = int.Parse(v);
+                        if (m.AudioBits != 8 && m.AudioBits != 16) throw new InvalidDataException("AUDIOBITS is 8 or 16");
+                        break;
                     case "DITHER": m.Dither = v; break;
                     case "DENOISE": m.Denoise = v.Equals("off", StringComparison.OrdinalIgnoreCase) ? "" : v; break;
                     case "AUDIOFILTER": m.AudioFilter = v.Equals("none", StringComparison.OrdinalIgnoreCase) ? "" : v; break;
+                    case "FIT": m.Fit = v; break;
                     case "TOLERANCE": m.Tolerance = int.Parse(v); break;
                     case "SEARCH": m.Search = int.Parse(v); break;
                     case "COPYSEARCH": m.CopySearch = int.Parse(v); break;
                     case "COPY": m.Copy = v.Equals("on", StringComparison.OrdinalIgnoreCase); break;
+                    case "MODE": m.Mode = v.ToUpperInvariant(); break;
+                    case "EMPTY": m.Empty = v; break;
+                    case "FULL": m.Full = v; break;
+                    case "OUTDIR": m.OutDir = v; break;
+                    default:
+                        // ITEM NAME = x,y layer.png
+                        if (k.StartsWith("ITEM "))
+                        {
+                            var parts = v.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+                            var xy = parts[0].Split(',');
+                            if (parts.Length < 2 || xy.Length != 2) throw new InvalidDataException("ITEM wants: NAME = x,y layer.png");
+                            m.Items.Add(new PickItem { Name = k.Substring(5).Trim(), X = int.Parse(xy[0]), Y = int.Parse(xy[1]), Layer = parts[1].Trim() });
+                        }
+                        break;
                 }
             }
-            if (m.Source == "" || m.Output == "") throw new InvalidDataException("manifest needs SOURCE and OUTPUT");
+            if (m.Mode == "PICKUP") { if (m.Empty == "") throw new InvalidDataException("a PICKUP manifest needs EMPTY"); }
+            else if (m.Source == "" || m.Output == "") throw new InvalidDataException("manifest needs SOURCE and OUTPUT");
             if (m.Width % BLOCK != 0 || m.Height % BLOCK != 0)
                 throw new InvalidDataException($"width and height must be multiples of {BLOCK}");
             return m;
         }
     }
+
+    class PickItem { public string Name = "", Layer = ""; public int X, Y; }
 
     class Stats
     {
@@ -709,7 +966,7 @@ static class Program
         public void Report(string output, int frames, int fps, int maxChunk)
         {
             long total = new FileInfo(output).Length;
-            double seconds = frames / (double)fps;
+            double seconds = Math.Max(frames, 1) / (double)fps;   // a still is one frame, not zero time
             long coded = Fill + Copy + Literal + Rle;
 
             Console.WriteLine();

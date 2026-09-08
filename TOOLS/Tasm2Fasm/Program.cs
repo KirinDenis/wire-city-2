@@ -60,6 +60,12 @@ static class Tasm2Fasm
         "cs","ds","es","ss","fs","gs","ip",
         "eax","ebx","ecx","edx","esi","edi","ebp","esp","eip",
         "rax","rbx","rcx","rdx","rsi","rdi","rbp","rsp",
+        // The debug, control and test registers are names too. DR1 was a
+        // label in a DSP-read loop once, and FASM said "reserved word used
+        // as symbol" - the third time a label has collided with an
+        // instruction or register name here, after PAUSE.
+        "dr0","dr1","dr2","dr3","dr4","dr5","dr6","dr7",
+        "cr0","cr1","cr2","cr3","cr4","tr3","tr4","tr5","tr6","tr7",
         // The byte halves x86-64 added to SI, DI, BP and SP. FLIGHT has a
         // variable called `spl` - span length - which is now the low byte of
         // RSP. Nothing warned about it until FASM refused the file, because

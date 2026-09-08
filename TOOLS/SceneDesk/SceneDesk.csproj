@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- NOT InvariantGlobalization, unlike the console tools: WPF resolves
+         xml:lang through the culture tables, and with them stripped it dies
+         on the first TextBlock with "Cannot find non-neutral culture". -->
+    <AssemblyName>SceneDesk</AssemblyName>
+    <RootNamespace>SceneDesk</RootNamespace>
+  </PropertyGroup>
+</Project>

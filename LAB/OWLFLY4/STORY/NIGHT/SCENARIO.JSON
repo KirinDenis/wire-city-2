@@ -1,0 +1,173 @@
+{
+  "Title": "NIGHT DRIVE",
+  "Name": "NIGHT",
+  "Warehouse": "C:\\DOSFiles\\OWLFLY4_RES",
+  "Scenes": [
+    {
+      "Id": "S01",
+      "Title": "Her room, night",
+      "Notes": "Prologue. She sits on the floor with a cassette walkman, headphones on. The room is lit by neon from the street. The viewer only watches. Then the same room as a still, and in it the walkman, the tapes on the floor and the keys can be touched. She gets up and leaves. Where to is not said.",
+      "Learn": "That she means to leave tonight.",
+      "Decide": "Nothing yet. Only watch and listen. The first thing you touch is the walkman.",
+      "ClipSource": "NIGHT\\S01\\scene1.mp4",
+      "Voice": [],
+      "Inserts": [],
+      "Next": [
+        "S02"
+      ],
+      "Flags": [],
+      "Ending": false
+    },
+    {
+      "Id": "S02",
+      "Title": "The pickup",
+      "Notes": "She gets into the car and tells you to come. A clip, nothing to click. This is the moment the player becomes the passenger.",
+      "Learn": "That you are going with her.",
+      "Decide": "",
+      "ClipSource": "NIGHT\\S02\\test2.mp4",
+      "Voice": [],
+      "Inserts": [],
+      "Next": [
+        "S03"
+      ],
+      "Flags": [
+        "in_car"
+      ],
+      "Ending": false
+    },
+    {
+      "Id": "S03",
+      "Title": "The serpentine",
+      "Notes": "The first road. She drives the mountain switchbacks at night and tells the passenger a story. At the end: 'put something on' - the player's first act. A tape from the glovebox.",
+      "Learn": "The first chapter of her story.",
+      "Decide": "Which tape to play - there are two in the glovebox.",
+      "ClipSource": "NIGHT\\S03\\test3.mp4",
+      "Voice": [],
+      "Inserts": [],
+      "Next": [
+        "S04"
+      ],
+      "Flags": [
+        "tape_a",
+        "tape_b"
+      ],
+      "Ending": false
+    },
+    {
+      "Id": "S04",
+      "Title": "Gas station, night",
+      "Notes": "The first stop. 'Fill her up. I'll get coffee.' The pump is locked - PAY INSIDE. The attendant knows the car and leaves a tape for her. The money is in the glovebox. The payphone rings whenever you are near it; answer and there is breathing, then the dial tone; leave it and it stops. Nothing explains this. She comes back with two cups: 'What did he say?'",
+      "Learn": "She is known here. Someone left a recording for her.",
+      "Decide": "Give her the tape / keep it / say nothing.",
+      "Voice": [],
+      "Inserts": [],
+      "Next": [
+        "S05"
+      ],
+      "Flags": [
+        "tape_kiosk_given",
+        "tape_kiosk_kept"
+      ],
+      "Ending": false
+    },
+    {
+      "Id": "S05",
+      "Title": "The road to the motel",
+      "Notes": "If you gave her the tape, she puts it in somewhere on the switchbacks; a stranger's voice says her name; she switches it off and drives on in silence. If you kept it, a different silence: you know something she does not.",
+      "Learn": "The voice on the tape knows her.",
+      "Decide": "",
+      "Voice": [],
+      "Inserts": [],
+      "Next": [
+        "S06"
+      ],
+      "Flags": [],
+      "Ending": false
+    },
+    {
+      "Id": "S06",
+      "Title": "The motel",
+      "Notes": "A room for one night she has no intention of sleeping through. The VCR: here the player can REWATCH what he has already seen for the first time, and notice in the opening clip what he missed. The walkman: if you kept the tape, you listen alone.",
+      "Learn": "That there was something in the room from the prologue you did not notice.",
+      "Decide": "Listen to the kept tape, alone - or not.",
+      "Voice": [],
+      "Inserts": [],
+      "Next": [
+        "S07"
+      ],
+      "Flags": [
+        "heard_alone"
+      ],
+      "Ending": false
+    },
+    {
+      "Id": "S07",
+      "Title": "The overlook",
+      "Notes": "She sits on the hood, the city below. Already shot - the first clip. Here she says where she is really going. The one scene where you can ask her straight - if you have something to ask with: what you heard alone gives you a question you would not otherwise have.",
+      "Learn": "Where, and why - for real.",
+      "Decide": "Ask about the voice on the tape - or let her keep her version.",
+      "Voice": [],
+      "Inserts": [],
+      "Next": [
+        "S08"
+      ],
+      "Flags": [
+        "asked"
+      ],
+      "Ending": false
+    },
+    {
+      "Id": "S08",
+      "Title": "The airport, dawn",
+      "Notes": "An empty car park, the terminal, the runway. Here what the night left you carrying decides what happens. Not one scene but a fork into three endings, by the flags.",
+      "Learn": "",
+      "Decide": "Everything was decided earlier. Here you only see by what.",
+      "Voice": [],
+      "Inserts": [],
+      "Next": [
+        "END_FLY",
+        "END_STAY",
+        "END_YOU"
+      ],
+      "Condition": "END_YOU if asked & heard_alone; END_STAY if tape_kiosk_kept; else END_FLY",
+      "Flags": [],
+      "Ending": false
+    },
+    {
+      "Id": "END_FLY",
+      "Title": "She flies",
+      "Notes": "You at the fence. The plane goes into the sunrise. You did everything she asked. The quiet, honest ending - the one people expect.",
+      "Learn": "",
+      "Decide": "",
+      "Voice": [],
+      "Inserts": [],
+      "Next": [],
+      "Flags": [],
+      "Ending": true
+    },
+    {
+      "Id": "END_STAY",
+      "Title": "She does not fly",
+      "Notes": "The car turns around at dawn. Back to the city. This is NOT the good ending - in synthwave, staying is not a victory. A night that never ends, because she never left. The player should not be sure, even at the end, whether he saved her or kept her.",
+      "Learn": "",
+      "Decide": "",
+      "Voice": [],
+      "Inserts": [],
+      "Next": [],
+      "Flags": [],
+      "Ending": true
+    },
+    {
+      "Id": "END_YOU",
+      "Title": "You fly",
+      "Notes": "She hands you the keys. Or the ticket. Or the aeroplane. This is where OWL FLY begins - not as a scene inside the story, but as one of its endings.",
+      "Learn": "",
+      "Decide": "",
+      "Voice": [],
+      "Inserts": [],
+      "Next": [],
+      "Flags": [],
+      "Ending": true
+    }
+  ]
+}

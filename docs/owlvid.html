@@ -63,21 +63,22 @@
     <dt>Codec</dt><dd>8&times;8 blocks &mdash; skip, fill, copy, run-length &mdash; over a
         whole-frame motion vector, so a slow pan costs about thirty bytes</dd>
     <dt>Palette</dt><dd>one for the whole clip, ordered dithering only</dd>
-    <dt>Sound</dt><dd>8-bit 22 kHz, auto-init DMA, position read from the DMA
-        controller itself</dd>
+    <dt>Sound</dt><dd>16-bit 22 kHz on a Sound Blaster 16, auto-init DMA on the
+        high channel, position read from the DMA controller itself; an 8-bit
+        card gets the high bytes</dd>
     <dt>Addressing</dt><dd>unreal mode &mdash; a 4 GB limit cached in FS. No DOS
         extender, nothing licensed, nothing vendored</dd>
-    <dt>Built with</dt><dd>FASM, inside DOS. The player is a 4.7 KB
+    <dt>Built with</dt><dd>FASM, inside DOS. The player is a 5.3 KB
         <code>.COM</code> file</dd>
   </dl>
 
   <h2>What is wrong with it</h2>
-  <p>The first third of a second is silence: the sound card's ring buffer
+  <p>The first fraction of a second is silence: the sound card's ring buffer
      starts empty and the picture does not wait for it. The bitrate is roughly
      a megabyte a second, which is three or four times what a CD of the period
      could feed &mdash; the fix for that is a codebook, and it is not written
-     yet. And eight-bit audio hisses in quiet passages, which is the format
-     doing what eight-bit audio does.</p>
+     yet. The hiss of the first version is gone with the move to sixteen
+     bits: it was measured to be the eight bits themselves, not the card.</p>
 
   <p class="quiet">Part of <a href="https://github.com/KirinDenis/wire-city-2"
      style="color:var(--acc2)">wire-city-2</a>. This page is not linked from
@@ -88,7 +89,7 @@
 <script>
   // Named once. A cached page serving a stale bundle is a class of confusion
   // this project has already paid for, so the version is on the glass.
-  const BUNDLE = "owlvid_v2.jsdos";
+  const BUNDLE = "owlvid_v3.jsdos";
   const params = new URLSearchParams(location.search);
   document.querySelector(".sub").textContent +=
     "  ·  v" + (BUNDLE.match(/_v(\d+)/) || [0, "?"])[1];

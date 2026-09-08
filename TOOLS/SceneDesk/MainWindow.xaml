@@ -1,0 +1,228 @@
+<Window x:Class="SceneDesk.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="SceneDesk" Width="1560" Height="920" MinWidth="1200" MinHeight="680"
+        Background="#f2f2f4" Foreground="#111111" FontFamily="Segoe UI" FontSize="15">
+  <Window.Resources>
+    <Style TargetType="TextBox">
+      <Setter Property="Background" Value="#ffffff"/>
+      <Setter Property="Foreground" Value="#111111"/>
+      <Setter Property="BorderBrush" Value="#c4c4cc"/>
+      <Setter Property="Padding" Value="5,3"/>
+      <Setter Property="Margin" Value="0,2,0,8"/>
+    </Style>
+    <Style TargetType="Button">
+      <Setter Property="Background" Value="#e6e6ec"/>
+      <Setter Property="Foreground" Value="#111111"/>
+      <Setter Property="BorderBrush" Value="#b4b4c0"/>
+      <Setter Property="Padding" Value="9,4"/>
+      <Setter Property="Margin" Value="0,0,6,4"/>
+    </Style>
+    <Style TargetType="TreeView">
+      <Setter Property="Background" Value="#ffffff"/>
+      <Setter Property="Foreground" Value="#111111"/>
+      <Setter Property="BorderBrush" Value="#c4c4cc"/>
+      <Setter Property="FontFamily" Value="Consolas"/>
+      <Setter Property="FontSize" Value="15"/>
+    </Style>
+    <!-- the selected row stays clearly lit even when the tree does not have
+         the focus - otherwise "which scene am I on" is a grey guess -->
+    <Style TargetType="TreeViewItem">
+      <Style.Resources>
+        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#bcd4ff"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#bcd4ff"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#111111"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#111111"/>
+      </Style.Resources>
+      <Setter Property="Padding" Value="2,2"/>
+    </Style>
+    <Style TargetType="Label">
+      <Setter Property="Foreground" Value="#555560"/>
+      <Setter Property="Padding" Value="0,4,0,0"/>
+    </Style>
+    <Style TargetType="CheckBox">
+      <Setter Property="Foreground" Value="#111111"/>
+      <Setter Property="Margin" Value="0,6,0,0"/>
+    </Style>
+    <Style x:Key="Head" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="#6a3fb5"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Height" Value="24"/>
+      <Setter Property="Margin" Value="0,0,0,4"/>
+    </Style>
+  </Window.Resources>
+
+  <Grid Margin="8">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <!-- the top bar is the progress bar -->
+    <DockPanel Grid.Row="0" Margin="0,0,0,8">
+      <Button Content="Save" Click="Save_Click" DockPanel.Dock="Right" Background="#d9cef5"/>
+      <Button Content="What is missing" Click="Gaps_Click" DockPanel.Dock="Right"/>
+      <Button Content="Warehouse…" Click="Warehouse_Click" DockPanel.Dock="Right"/>
+      <Button x:Name="BtnUndo" Content="↶ Undo" Click="Undo_Click" DockPanel.Dock="Right" IsEnabled="False"/>
+      <TextBlock x:Name="TxtProgress" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="16"/>
+    </DockPanel>
+
+    <Grid Grid.Row="1">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="340"/>
+        <ColumnDefinition Width="6"/>
+        <ColumnDefinition Width="430"/>
+        <ColumnDefinition Width="6"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+
+      <!-- 1  WAREHOUSE: one folder per scene, VIDEO\ and PICKUP\ inside -->
+      <DockPanel Grid.Column="0">
+        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Head}" Text="1  WAREHOUSE     ● used   ○ free"/>
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
+          <WrapPanel Margin="0,0,0,4">
+            <Button Content="▶ Open in external player" Click="PlayExternal_Click"/>
+            <Button Content="⟳ Rescan" Click="Rescan_Click"/>
+          </WrapPanel>
+          <TextBox x:Name="FFilter" TextChanged="Filter_Changed" ToolTip="search by file name" Margin="0"/>
+        </StackPanel>
+        <TreeView x:Name="TreeWare" AllowDrop="True"
+                  MouseDoubleClick="Ware_DoubleClick" SelectedItemChanged="Ware_Selected"
+                  PreviewMouseLeftButtonDown="Ware_MouseDown" PreviewMouseMove="Ware_MouseMove"
+                  DragOver="Ware_DragOver" Drop="Ware_Drop" KeyDown="Ware_KeyDown"/>
+      </DockPanel>
+
+      <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" Background="#f2f2f4"/>
+
+      <!-- 2  STORY: scenes, their sections under them, forks by code -->
+      <DockPanel Grid.Column="2">
+        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Head}" Text="2  STORY     green: all made     yellow: partly     red: nothing"/>
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
+          <WrapPanel Margin="0,0,0,4">
+            <Button Content="+ Add scene after" Click="Add_Click"/>
+            <Button Content="− Remove SCENE" Click="Remove_Click" ToolTip="takes the whole scene out of the story - all its sections. To drop one video or pickup, select it and press × section on the right"/>
+            <Button Content="▲" Click="Up_Click"/>
+            <Button Content="▼" Click="Down_Click"/>
+          </WrapPanel>
+          <TextBlock Text="drop footage on a scene to add a video; double-click in the warehouse does the same" Foreground="#555560" FontSize="13" Height="30" Margin="0" TextWrapping="Wrap"/>
+        </StackPanel>
+        <TreeView x:Name="TreeStory" AllowDrop="True"
+                  SelectedItemChanged="Story_Selected" MouseDoubleClick="Story_DoubleClick"
+                  DragOver="Story_DragOver" Drop="Story_Drop"/>
+      </DockPanel>
+
+      <GridSplitter Grid.Column="3" Width="6" HorizontalAlignment="Stretch" Background="#f2f2f4"/>
+
+      <!-- 3  SCENE -->
+      <Grid Grid.Column="4">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+          <RowDefinition Height="6"/>
+          <RowDefinition Height="400" MinHeight="180"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,6">
+          <TextBlock x:Name="TxtScene" Text="—" FontSize="26" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
+          <TextBlock x:Name="TxtSceneState" Text="" FontSize="14" Foreground="#555560" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+          <StackPanel Margin="0,0,8,0">
+            <!-- the sections, in play order; the selected one is edited below -->
+            <ListBox x:Name="LstSections" SelectionChanged="Section_Selected" FontFamily="Consolas" FontSize="14"
+                     Background="#f8f8fa" BorderBrush="#c4c4cc" MinHeight="60" Margin="0,0,0,6"/>
+            <WrapPanel Margin="0,0,0,6">
+              <Button Content="+ video" Click="AddVideo_Click" ToolTip="a VIDEO section; give it footage from the warehouse by double-click or drop"/>
+              <Button Content="+ pickup" Click="AddPickup_Click" ToolTip="a PICKUP section; its material is the scene's PICKUP\ folder in the warehouse"/>
+              <Button Content="+ quiz" Click="AddQuiz_Click" ToolTip="a QUIZ section: a question and numbered answers; the number is the code the scene ends with"/>
+              <Button Content="× section" Click="RemoveSection_Click" ToolTip="drops the selected section only - this video, this pickup, this quiz; the scene stays"/>
+              <Button Content="⧉ Open folder" Click="OpenFolder_Click" ToolTip="the selected section's material folder in the warehouse, in Explorer - put footage or pictures there"/>
+              <Button Content="▲" Click="SectionUp_Click"/>
+              <Button Content="▼" Click="SectionDown_Click"/>
+              <Button Content="⟳ convert" Click="Reconvert_Click" ToolTip="make this section's product again from its source"/>
+              <Button Content="⧉ Copy text" Click="CopyText_Click" ToolTip="title, what happens, learn, decide - one labelled block, for a translator"/>
+              <Button Content="⇩ Paste text" Click="PasteText_Click" ToolTip="the block back into the fields"/>
+            </WrapPanel>
+
+            <!-- what the selected section needs: differs by kind -->
+            <StackPanel x:Name="PnlQuiz" Visibility="Collapsed" Background="#eef2ff" Margin="0,0,0,8">
+              <Label Content="Question"/>
+              <TextBox x:Name="FQuizText" LostFocus="Quiz_Changed"/>
+              <Label Content="Answers, one a line:  code = text.  The code is what the scene ends with."/>
+              <TextBox x:Name="FQuizOptions" AcceptsReturn="True" MinHeight="70" FontFamily="Consolas" LostFocus="Quiz_Changed"/>
+            </StackPanel>
+            <StackPanel x:Name="PnlPickup" Visibility="Collapsed" Background="#eefff2" Margin="0,0,0,8">
+              <WrapPanel>
+                <Button Content="⌖ Place by matching" Click="AutoPlace_Click" ToolTip="each layer is searched for in full.jpg; exact matches are placed, the rest are left for you to drag"/>
+                <Button Content="show full" Click="ShowFull_Click" ToolTip="the reference picture, with the things in it"/>
+                <Button Content="show empty" Click="ShowEmpty_Click" ToolTip="what the game draws: the empty room, the things on top; click a thing to take it"/>
+                <Button Content="put all back" Click="PutBack_Click"/>
+              </WrapPanel>
+              <TextBlock x:Name="TxtPickState" FontWeight="Bold" FontSize="15" Margin="0,4,0,4" TextWrapping="Wrap"/>
+              <Label Content="Need (item names the player must take; empty = all of them)"/>
+              <TextBox x:Name="FNeed" LostFocus="Pickup_Changed"/>
+              <TextBlock x:Name="TxtItems" FontFamily="Consolas" FontSize="13" Foreground="#333340" TextWrapping="Wrap"/>
+            </StackPanel>
+
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="110"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="90"/>
+                <ColumnDefinition Width="120"/>
+                <ColumnDefinition Width="70"/>
+                <ColumnDefinition Width="90"/>
+              </Grid.ColumnDefinitions>
+              <Label Grid.Column="0" Content="Id"/>
+              <TextBox Grid.Column="1" x:Name="FId" LostFocus="Field_Changed"/>
+              <Label Grid.Column="2" Content="Enters on" Margin="8,0,0,0" ToolTip="the codes that start this scene"/>
+              <TextBox Grid.Column="3" x:Name="FEnters" LostFocus="Field_Changed" ToolTip="the codes that start this scene, space separated"/>
+              <Label Grid.Column="4" Content="Code" Margin="8,0,0,0" ToolTip="how the scene ends when no quiz decides"/>
+              <TextBox Grid.Column="5" x:Name="FCode" LostFocus="Field_Changed" ToolTip="how the scene ends when no quiz decides"/>
+            </Grid>
+            <Label Content="Title"/>
+            <TextBox x:Name="FTitle" LostFocus="Field_Changed"/>
+            <Label Content="What happens here"/>
+            <TextBox x:Name="FNotes" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" LostFocus="Field_Changed"/>
+            <Label Content="The one thing you learn"/>
+            <TextBox x:Name="FLearn" TextWrapping="Wrap" LostFocus="Field_Changed"/>
+            <Label Content="The one thing you decide"/>
+            <TextBox x:Name="FDecide" TextWrapping="Wrap" LostFocus="Field_Changed"/>
+            <CheckBox x:Name="FEnding" Content="This is an ending" Click="Field_Changed"/>
+          </StackPanel>
+        </ScrollViewer>
+
+        <GridSplitter Grid.Row="2" Height="6" HorizontalAlignment="Stretch" Background="#f2f2f4"/>
+
+        <DockPanel Grid.Row="3" Background="#000">
+          <StackPanel DockPanel.Dock="Bottom" Background="#e6e6ec">
+            <WrapPanel Margin="6,4,6,0">
+              <Button Content="▶ Play" Click="Play_Click"/>
+              <Button Content="■ Stop" Click="Stop_Click"/>
+              <TextBlock x:Name="TxtPos" VerticalAlignment="Center" Foreground="#555560" Margin="8,0"/>
+              <TextBlock x:Name="TxtPreview" VerticalAlignment="Center" Foreground="#555560" Margin="8,0" TextTrimming="CharacterEllipsis"/>
+            </WrapPanel>
+          </StackPanel>
+          <Grid>
+            <!-- a converted product, or a warehouse picture -->
+            <Image x:Name="Picture" Stretch="Uniform"/>
+            <!-- the pickup: the source picture at its own size, the layers on
+                 top at their positions, all scaled together by the Viewbox so
+                 that mouse coordinates on the canvas ARE source pixels -->
+            <Viewbox x:Name="PickBox" Stretch="Uniform" Visibility="Collapsed">
+              <Grid>
+                <Image x:Name="PickBg" Stretch="None"/>
+                <Canvas x:Name="PickCanvas" Background="Transparent"
+                        MouseLeftButtonDown="Pick_MouseDown" MouseMove="Pick_MouseMove" MouseLeftButtonUp="Pick_MouseUp"/>
+              </Grid>
+            </Viewbox>
+          </Grid>
+        </DockPanel>
+      </Grid>
+    </Grid>
+
+    <TextBlock Grid.Row="2" x:Name="TxtStatus" Margin="0,6,0,0" Foreground="#555560"/>
+  </Grid>
+</Window>

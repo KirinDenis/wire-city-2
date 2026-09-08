@@ -43,7 +43,7 @@ REM argument does not hold its place: "RUN.BAT %1 %2 EXIT" with nothing in %1
 REM arrives as "RUN.BAT EXIT", and the word EXIT becomes the program name.
 :defaults
 if "%VTPROG%"=="" set VTPROG=PLAYER
-if "%VTFILE%"=="" set VTFILE=TEST2.OWV
+if "%VTFILE%"=="" set VTFILE=TEST3.OWV
 set VTRUN=RUN.BAT %VTPROG% %VTFILE% EXIT
 
 :go

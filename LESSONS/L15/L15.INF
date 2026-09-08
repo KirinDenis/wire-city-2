@@ -1,0 +1,10 @@
+.title  Perspective is one divide
+.what   Two similar triangles make x' = x*d/z - lesson 0E's cube with one IDIV per coordinate, then the same without the divide through a table of d/z, and the near plane as the difference between a table that lies and a divide that traps
+.tier   LESSON
+.main   PERSP.ASM
+.needs  DRAW15.INC SINTAB.INC RECIP.INC
+.reads  INFOGR.PAS
+.build  FASM PERSP.ASM PERSP.COM
+.run    PERSP.COM
+.uses   XLATB IMUL IDIV SAR CBW MUL LOOP INT
+.ignore MAKEINFO.BAT

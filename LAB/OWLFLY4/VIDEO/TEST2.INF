@@ -12,6 +12,9 @@ HEIGHT     = 400
 FPS        = 12
 KEYEVERY   = 48
 AUDIO      = 22050
+; 16 for the Sound Blaster 16, which is what a CD-era machine has and what
+; DOSBox emulates; 8 for anything older, and eight bits hiss - see below.
+AUDIOBITS  = 16
 
 DITHER     = bayer:bayer_scale=3
 DENOISE    = hqdn3d=4:3:12:9
@@ -20,10 +23,11 @@ SEARCH     = 24
 COPY       = on
 COPYSEARCH = 4
 
-; Eight-bit audio has about 48 dB of range, and a quiet passage sitting at
-; the bottom of it hisses - the quantisation error stops being masked and
-; starts being heard, and undithered it swells with the material rather than
-; sitting still. So the sound is compressed up off the noise floor before it
-; is reduced to eight bits, and dithered on the way down. Set to "none" to
-; hear the material raw, which is worth doing once.
+; The compressor lifts quiet passages so that they can be heard over a
+; television's own noise, and the limiter stops its makeup gain clipping.
+; It mattered most at eight bits, where a quiet passage sat on the
+; quantisation floor and hissed (measured: -49 dBFS after this chain, with
+; or without dither - eight bits simply have no further down). At sixteen
+; bits the floor is 48 dB lower and the chain is about loudness only. Set
+; to "none" to hear the material raw, which is worth doing once.
 AUDIOFILTER = highpass=f=50,acompressor=threshold=0.06:ratio=4:attack=5:release=200:makeup=2,alimiter=limit=0.97

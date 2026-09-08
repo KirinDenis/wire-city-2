@@ -1,0 +1,25 @@
+; CLIP.INF - written by SceneDesk for scene S02. The recipe is tracked;
+; the CLIP.OWV it makes is not, until the codec is frozen. The source is
+; named relative to this folder: long, but it holds wherever the warehouse
+; sits beside the repository.
+
+SOURCE     = ..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S02\test2.mp4
+OUTPUT     = CLIP.OWV
+WIDTH      = 640
+HEIGHT     = 400
+FPS        = 12
+; 72 frames = six seconds, the unit the footage is generated in: every
+; six-second piece is its own keyframe group, so a clip can later be cut
+; at those boundaries without converting it again.
+KEYEVERY   = 72
+AUDIO      = 22050
+; sixteen bits: the Sound Blaster 16 plays them and eight bits hiss
+AUDIOBITS  = 16
+FIT        = crop
+DITHER     = bayer:bayer_scale=3
+DENOISE    = hqdn3d=4:3:12:9
+TOLERANCE  = 2
+SEARCH     = 24
+COPY       = on
+COPYSEARCH = 4
+AUDIOFILTER = highpass=f=50,acompressor=threshold=0.06:ratio=4:attack=5:release=200:makeup=2,alimiter=limit=0.97

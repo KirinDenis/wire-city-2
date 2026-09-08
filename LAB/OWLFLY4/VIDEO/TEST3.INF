@@ -1,0 +1,32 @@
+; TEST3.INF - thirty seconds, and the first source that is NOT the shape of
+; the screen: 1280x720 is 16:9, while 640x400 is 16:10.
+;
+;   dotnet run --project TOOLS\Vid2Owv -c Release -- LAB\OWLFLY4\VIDEO\TEST3.INF
+
+SOURCE     = src/test3.mp4
+OUTPUT     = TEST3.OWV
+
+WIDTH      = 640
+HEIGHT     = 400
+FPS        = 12
+KEYEVERY   = 48
+AUDIO      = 22050
+AUDIOBITS  = 16
+
+; crop    fill the screen, lose about five per cent off each side
+; pad     keep the whole frame, black bars top and bottom
+; stretch fill the screen and make everyone eleven per cent taller
+;
+; CROP here, because the screen is small enough already. Worth knowing before
+; you change it: PAD costs almost nothing in this codec - a black bar is
+; uniform, so it is two bytes a block on the keyframe and skipped ever after.
+FIT        = crop
+
+DITHER     = bayer:bayer_scale=3
+DENOISE    = hqdn3d=4:3:12:9
+TOLERANCE  = 2
+SEARCH     = 24
+COPY       = on
+COPYSEARCH = 4
+
+AUDIOFILTER = highpass=f=50,acompressor=threshold=0.06:ratio=4:attack=5:release=200:makeup=2,alimiter=limit=0.97

@@ -33,7 +33,7 @@ being filled ahead of the picture rather than behind it.
 | 4 | 2 | width | 640 |
 | 6 | 2 | height | 400 |
 | 8 | 1 | fps | 12 |
-| 9 | 1 | flags | bit 0: has audio. bits 1-7 zero |
+| 9 | 1 | flags | bit 0: has audio. bit 1: samples are signed 16-bit (else unsigned 8-bit). bits 2-7 zero |
 | 10 | 2 | frames | total video frames |
 | 12 | 2 | audio rate | Hz, 0 if no audio |
 | 14 | 2 | max chunk | largest chunk in the file, in bytes |
@@ -53,8 +53,9 @@ way in means the player never divides anything.
 
 ```
     +0  byte    type
-    +1  word    length of the payload, not counting these three bytes
-    +3  ...     payload
+    +1  byte    zero
+    +2  dword   length of the payload, not counting these six bytes
+    +6  ...     payload
 ```
 
 | type | name | |
@@ -67,11 +68,43 @@ way in means the player never divides anything.
 
 ### AUDIO
 
-Unsigned 8-bit PCM, mono, at the header's rate. The payload length is
-explicit and is **not** constant: 22050 Hz at 12 fps is 1837.5 bytes a
-frame, so chunks alternate 1837 and 1838 and the rate stays exact. A format
-that insisted on a round number would drift, and drift in the clock is the
-one error this player cannot survive.
+PCM, mono, at the header's rate: **signed 16-bit little-endian** when flags
+bit 1 is set, unsigned 8-bit when it is not. The payload length is explicit
+and is **not** constant: 22050 Hz at 12 fps is 1837.5 samples a frame, so
+chunks alternate 1837 and 1838 samples (3674 and 3676 bytes at 16 bits) and
+the rate stays exact. A format that insisted on a round number would drift,
+and drift in the clock is the one error this player cannot survive. A chunk
+never ends in the middle of a sample.
+
+Sixteen bits is the default. Eight-bit sound hisses, and measurement put the
+blame on the bits themselves rather than anything in the chain: after the
+compressor the quiet passages sit at about -49 dBFS with or without dither,
+because one step of an 8-bit DAC is -42 dB. The Sound Blaster 16 plays
+16-bit samples through its high DMA channel, DOSBox emulates one by default,
+and the cost is 44 KB/s of audio next to a megabyte a second of picture. A
+16-bit file still plays on an 8-bit card: the player takes the high byte of
+each sample.
+
+## OWS — a sprite, for the point-and-click scenes
+
+A thing that sits on a still and can be clicked away. It is made together
+with the still it belongs to (`BG.OWV`, one frame), scaled and cropped by
+the same numbers and quantised to the same palette, so the game draws it
+with one loop and no arithmetic: index 255 is skipped, every other index
+goes straight to the screen at the position in the header.
+
+```
+    +0   'OWS1'
+    +4   word   width           +6   word   height
+    +8   int16  x on screen     +10  int16  y on screen   (may be negative: cropped)
+    +12  byte   the transparent index, 255
+    +13  3 bytes zero
+    +16  width*height palette indices, row by row
+```
+
+The position is where the thing stands on the 640×400 screen, not in the
+source picture; `SCENE.INI` keeps the source position for the desk, and the
+converter turns one into the other once.
 
 ### PALETTE
 
@@ -129,6 +162,15 @@ one dark colour, and a block that is 64 identical bytes costs two.
 
 `0xFF` rather than counting to 4000 means a frame that changes only at the
 top costs nothing for the rest of the screen.
+
+## Two decoders, kept in step by hand
+
+`PLAYER.ASM` in this folder is the one that ships. `TOOLS/SceneDesk/OwvPlayer.cs`
+is a line-for-line port of its decoding, in C#, so the production desk can
+show a converted file without an emulator - and without Windows Media
+Player, which WPF's own video control quietly depends on and a machine may
+not have. It was checked frame for frame against DOSBox before it was
+trusted. Change the format in one and change it in the other, the same day.
 
 ## What the player does with it
 
