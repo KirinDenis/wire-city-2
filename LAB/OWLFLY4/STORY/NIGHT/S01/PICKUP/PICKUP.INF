@@ -1,6 +1,8 @@
 ; PICKUP.INF - written by SceneDesk for scene S01: the room without its things,
 ; the things, and where each stands in the SOURCE picture. Vid2Owv makes BG.OWV
-; and one .SPR per thing, in the room's palette, with the screen position inside.
+; and one .SPR per thing, in the room's palette, with the screen position inside;
+; PANEL reserves the band below the room for the slots, and one .SLT per thing
+; is the thing at slot size, placed in its slot.
 
 MODE       = PICKUP
 EMPTY      = ..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S01\PICKUP\empty.jpg
@@ -8,6 +10,7 @@ FULL       = ..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S01\PICKUP\full.jpg
 OUTDIR     = .
 WIDTH      = 640
 HEIGHT     = 400
+PANEL      = 64
 FIT        = crop
 DITHER     = bayer:bayer_scale=3
 TOLERANCE  = 2

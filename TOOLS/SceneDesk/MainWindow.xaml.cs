@@ -19,7 +19,12 @@
 //              full.jpg, layer-*.png - and "+ pickup" makes the section.
 //    place     in a PICKUP, the desk finds each layer in full.jpg and puts
 //              it there when it matches exactly; the rest you drag. Click a
-//              thing on the empty room to see it go, the way the game does.
+//              thing on the empty room to see it go, the way the game does -
+//              and its slot on the panel below turn to colour. Tick NEED
+//              per thing, and give it the line the game shows when taken.
+//    music     drop an .mp3 / .wav on a scene, or double-click one in the
+//              warehouse: it becomes the scene's track, moved into its
+//              MUSIC\ folder and converted. One track a scene.
 //    decide    a QUIZ is a question and numbered answers; the number is the
 //              code the scene ends with, and "What is missing" says which
 //              codes have nowhere to go.
@@ -85,6 +90,7 @@ public partial class MainWindow : Window
 
     static readonly string[] VideoExt = { ".mp4", ".mov", ".avi", ".mkv", ".webm" };
     static readonly string[] ImageExt = { ".png", ".jpg", ".jpeg", ".bmp" };
+    static readonly string[] AudioExt = { ".mp3", ".wav", ".ogg", ".flac", ".m4a" };
 
     static readonly Brush Green  = new SolidColorBrush(Color.FromRgb(0x1a, 0x7f, 0x37));
     static readonly Brush Yellow = new SolidColorBrush(Color.FromRgb(0xb0, 0x7a, 0x00));
@@ -165,6 +171,27 @@ public partial class MainWindow : Window
                                         if (it != null) { it.X = int.Parse(xy[0]); it.Y = int.Parse(xy[1]); PickupPlacementChanged(pk); } }
                                       break; }
                     case "convert": if (cur != null && curSec != null) Convert(cur, curSec); break;
+                    case "music":   { if (cur != null) Assign(cur, Path.GetFullPath(Path.Combine(story.MatDir, arg))); break; }   // a track to the selected scene
+                    case "tobin":   ToBin(Path.GetFullPath(Path.Combine(story.MatDir, arg))); break;                            // tobin S01\VIDEO\x.mp4
+                    case "move":    { var a = arg.Split(' ', 2); if (a.Length == 2) MoveFile(Path.GetFullPath(Path.Combine(story.MatDir, a[0])), Path.GetFullPath(Path.Combine(story.MatDir, a[1]))); break; }   // move S01\VIDEO\x.mp4 S02\VIDEO
+                    case "sweep":   Sweep_Click(null, null); break;
+                    case "removesection": RemoveSection_Click(null, null); break;
+                    case "removescene":   Remove_Click(null, null); break;
+                    case "need":    { // need NAME on|off - the tick
+                                      if (curSec is PickupSection pk) { var a = arg.Split(' ', 2);
+                                        pk.Need.RemoveAll(n => n.Equals(a[0], StringComparison.OrdinalIgnoreCase));
+                                        if (a.Length > 1 && a[1].Trim().Equals("on", StringComparison.OrdinalIgnoreCase)) pk.Need.Add(a[0].ToUpperInvariant());
+                                        BuildItemRows(pk); BuildStory(cur); FillSectionList(); }
+                                      break; }
+                    case "caption": { // caption NAME the line
+                                      if (curSec is PickupSection pk) { var a = arg.Split(' ', 2);
+                                        var it = pk.Items.FirstOrDefault(x => x.Name.Equals(a[0], StringComparison.OrdinalIgnoreCase));
+                                        if (it != null) { it.Caption = a.Length > 1 ? a[1].Trim() : ""; BuildItemRows(pk); } }
+                                      break; }
+                    case "take":    { // take NAME - a click on the thing in "show empty"
+                                      var img = PickCanvas.Children.OfType<Image>().FirstOrDefault(x => x.Tag is Item it && it.Name.Equals(arg, StringComparison.OrdinalIgnoreCase));
+                                      if (img != null && img.Tag is Item taken) Take(img, taken);
+                                      break; }
                     case "save":    story.Save(); Status("script: saved"); break;      // the one step that leaves a trace, on purpose
                     case "showempty": ShowEmpty_Click(null, null); break;
                     case "showfull": ShowFull_Click(null, null); break;
@@ -326,14 +353,18 @@ public partial class MainWindow : Window
     {
         var d = new Dictionary<string, (Scene, Section)>(StringComparer.OrdinalIgnoreCase);
         foreach (var sc in story.Scenes)
+        {
             foreach (var sec in sc.Sections)
             {
                 if (sec is VideoSection v && v.Source != "") d[v.SourceAbs(story, sc)] = (sc, sec);
                 if (sec is PickupSection p && Directory.Exists(p.MatDir(story, sc)))
                     foreach (var f in Directory.GetFiles(p.MatDir(story, sc))) d[f] = (sc, sec);
             }
+            if (sc.MusicSource != "") d[sc.MusicAbs(story)] = (sc, null);          // the music is the scene's, not a section's
+        }
         return d;
     }
+    static string KindOf(Section sec) => sec == null ? "music" : sec.Kind.ToLower();
 
     List<string> allFiles = new();
 
@@ -350,11 +381,13 @@ public partial class MainWindow : Window
         {
             Directory.CreateDirectory(Path.Combine(SceneMat(sc), "VIDEO"));
             Directory.CreateDirectory(Path.Combine(SceneMat(sc), "PICKUP"));
+            Directory.CreateDirectory(Path.Combine(SceneMat(sc), "MUSIC"));
         }
 
         allFiles = Directory.EnumerateFiles(story.MatDir, "*", SearchOption.AllDirectories)
             .Where(f => !f.Contains("\\frames\\", StringComparison.OrdinalIgnoreCase))
-            .Where(f => IsVideo(f) || IsImage(f)).ToList();
+            .Where(f => !InBin(f))                                          // the bin is out of the count
+            .Where(f => IsVideo(f) || IsImage(f) || IsAudio(f)).ToList();
 
         var owners = Owners();
         var filter = FFilter?.Text?.Trim() ?? "";
@@ -374,28 +407,137 @@ public partial class MainWindow : Window
 
     TreeViewItem FolderNode(DirectoryInfo dir, Dictionary<string, (Scene sc, Section sec)> owners, string filter, HashSet<string> open, bool first)
     {
-        var node = new TreeViewItem { Header = dir.Name + "\\", Tag = dir.FullName, IsExpanded = first || open.Contains(dir.FullName) };
-        foreach (var sub in dir.GetDirectories().OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
+        bool bin = dir.FullName.Equals(BinDir, StringComparison.OrdinalIgnoreCase);
+        var node = new TreeViewItem
+        {
+            Header = bin ? "BIN\\   (taken out of the story; nothing here is deleted - drag a file back)" : dir.Name + "\\",
+            Tag = dir.FullName, IsExpanded = !bin && (first || open.Contains(dir.FullName)), Foreground = bin ? Grey : Brushes.Black,
+        };
+        // the bin sorts last, whatever its name would do
+        foreach (var sub in dir.GetDirectories().OrderBy(d => d.FullName.Equals(BinDir, StringComparison.OrdinalIgnoreCase) ? 1 : 0).ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
         {
             if (sub.Name.Equals("frames", StringComparison.OrdinalIgnoreCase)) continue;
             node.Items.Add(FolderNode(sub, owners, filter, open, first));
         }
         foreach (var f in dir.GetFiles().OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase))
         {
-            if (!IsVideo(f.FullName) && !IsImage(f.FullName)) continue;
+            if (!IsVideo(f.FullName) && !IsImage(f.FullName) && !IsAudio(f.FullName)) continue;
             if (filter.Length > 0 && !f.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)) continue;
             bool inUse = owners.TryGetValue(f.FullName, out var who);
-            node.Items.Add(new TreeViewItem
+            var item = new TreeViewItem
             {
-                Header = inUse ? $"● {f.Name}   ({who.sc.Id} {who.sec.Kind.ToLower()})" : "○ " + f.Name,
+                Header = inUse ? $"● {f.Name}   ({who.sc.Id} {KindOf(who.sec)})" : "○ " + f.Name,
                 Tag = f.FullName, Foreground = inUse ? Brushes.Black : Grey,
-            });
+            };
+            var menu = new ContextMenu();
+            if (!bin)
+            {
+                var toBin = new MenuItem { Header = "⌫ To bin…" }; toBin.Click += (_, _) => ToBin(f.FullName); menu.Items.Add(toBin);
+            }
+            var reveal = new MenuItem { Header = "⧉ Show in Explorer" }; reveal.Click += (_, _) => { try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{f.FullName}\"") { UseShellExecute = true }); } catch { } }; menu.Items.Add(reveal);
+            item.ContextMenu = menu;
+            node.Items.Add(item);
         }
         return node;
     }
 
+    // ---- the bin: where files go instead of being deleted -----------------
+    // <warehouse>\<NAME>\BIN\. A file put there is out of the story - the
+    // scene that used it lets go of it - and out of the "used by no scene"
+    // count, and it can be dragged back into a folder. The desk deletes
+    // nothing from the warehouse, ever.
+    string BinDir => Path.Combine(story.MatDir, "BIN");
+    bool InBin(string path) => path.StartsWith(BinDir + "\\", StringComparison.OrdinalIgnoreCase);
+
+    // A yes/no, or yes when a script is driving.
+    bool Confirm(string text, string title)
+        => scripted || MessageBox.Show(text, title, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    static string UniqueIn(string dir, string name)
+    {
+        var dest = Path.Combine(dir, name);
+        for (int i = 2; File.Exists(dest); i++) dest = Path.Combine(dir, $"{Path.GetFileNameWithoutExtension(name)} ({i}){Path.GetExtension(name)}");
+        return dest;
+    }
+
+    void ToBin_Click(object s, RoutedEventArgs e) => ToBin(SelectedWarehouseFile());
+
+    void ToBin(string file)
+    {
+        if (file == null || !File.Exists(file)) return;
+        if (InBin(file)) { Status("already in the bin"); return; }
+        var owners = Owners();
+        bool used = owners.TryGetValue(file, out var o);
+        string who = used ? $"\n\n{o.sc.Id} {KindOf(o.sec)} uses it: the scene lets go of it" + (o.sec is PickupSection ? " (a picture of the room: the pickup is left without it)" : "") + "." : "";
+        if (!Confirm($"Move {Rel(file)} to the bin?{who}\n\nNothing is deleted: the bin is {Rel(BinDir)}\\, and a file can be dragged back into a folder.", "SceneDesk - to the bin")) return;
+        var dest = UniqueIn(BinDir, Path.GetFileName(file));
+        try { Directory.CreateDirectory(BinDir); StopOwv(); File.Move(file, dest); }
+        catch (Exception ex) { Status("could not move it: " + ex.Message); return; }
+        if (used) Forget(o.sc, o.sec, file);
+        AutoSave(); BuildWarehouse(); BuildStory(cur); FillFields(); ShowSection();
+        Status($"{Rel(file)} -> {Rel(dest)}" + (used ? $";  {o.sc.Id} no longer uses it" : ""));
+    }
+
+    // The scene lets go of a file that has left: a video keeps its section,
+    // empty; the music line is cleared and its product removed; a pickup's
+    // layer takes its item with it. Products of the thing are deleted - they
+    // were made from a file that is not there any more.
+    void Forget(Scene sc, Section sec, string file)
+    {
+        if (sec is VideoSection v) { DeleteProducts(sc, v); v.Source = ""; }
+        else if (sec == null) { TryDelete(sc.MusicProduct(story)); TryDelete(sc.MusicInf(story)); TryDelete(Path.ChangeExtension(sc.MusicProduct(story), ".LOG")); sc.MusicSource = ""; sc.Music = ""; }
+        else if (sec is PickupSection p)
+        {
+            var name = Path.GetFileName(file);
+            var it = p.Items.FirstOrDefault(x => x.Layer.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (it != null) { p.Items.Remove(it); p.Need.RemoveAll(n => n.Equals(it.Name, StringComparison.OrdinalIgnoreCase)); }
+            foreach (var f in Directory.Exists(p.OutDir(story, sc)) ? Directory.GetFiles(p.OutDir(story, sc)).Where(x => !x.EndsWith(".INF", StringComparison.OrdinalIgnoreCase)) : Array.Empty<string>()) TryDelete(f);
+        }
+    }
+
+    // A file to another folder of the warehouse, by drag: a scene that uses
+    // it keeps pointing at it where it lands. A pickup's pictures are the
+    // folder itself and do not move one by one.
+    void MoveFile(string file, string folder)
+    {
+        if (file == null || folder == null || !File.Exists(file) || !Directory.Exists(folder)) return;
+        if (folder.Equals(BinDir, StringComparison.OrdinalIgnoreCase)) { ToBin(file); return; }
+        if (Path.GetDirectoryName(file)!.Equals(folder, StringComparison.OrdinalIgnoreCase)) return;
+        var owners = Owners();
+        bool used = owners.TryGetValue(file, out var o);
+        if (used && o.sec is PickupSection) { Status($"{Path.GetFileName(file)} is part of {o.sc.Id}'s pickup: its pictures are the folder itself - put it in the bin, or move the folder in Explorer"); return; }
+        var dest = Path.Combine(folder, Path.GetFileName(file));
+        if (File.Exists(dest)) { Status($"{Rel(folder)}\\ already holds a {Path.GetFileName(file)} - rename one of them first"); return; }
+        if (used && !Confirm($"{o.sc.Id} {KindOf(o.sec)} uses {Rel(file)}.\n\nMove it to {Rel(folder)}\\ and keep the scene pointing at it there?", "SceneDesk - move a file")) return;
+        try { StopOwv(); File.Move(file, dest); }
+        catch (Exception ex) { Status("could not move it: " + ex.Message); return; }
+        if (used)
+        {
+            var rel = Path.GetRelativePath(SceneMat(o.sc), dest);
+            if (o.sec is VideoSection v) v.Source = rel; else if (o.sec == null) o.sc.MusicSource = rel;
+            AutoSave();
+        }
+        BuildWarehouse(); BuildStory(cur); FillFields(); ShowSection();
+        Status($"{Rel(file)} -> {Rel(dest)}" + (used ? $"  ({o.sc.Id} still uses it)" : ""));
+    }
+
+    void Sweep_Click(object s, RoutedEventArgs e)
+    {
+        var owners = Owners();
+        var unused = allFiles.Where(f => !owners.ContainsKey(f)).ToList();
+        if (unused.Count == 0) { Status("every file in the warehouse is used by a scene"); return; }
+        if (!Confirm($"Move {unused.Count} file(s) used by no scene to the bin?\n\n" + string.Join("\n", unused.Take(12).Select(Rel)) + (unused.Count > 12 ? "\n…" : "") +
+                     $"\n\nNothing is deleted: the bin is {Rel(BinDir)}\\.", "SceneDesk - unused files to the bin")) return;
+        int n = 0;
+        Directory.CreateDirectory(BinDir);
+        foreach (var f in unused) { try { File.Move(f, UniqueIn(BinDir, Path.GetFileName(f))); n++; } catch { } }
+        BuildWarehouse();
+        Status($"{n} file(s) moved to {Rel(BinDir)}\\");
+    }
+
     static bool IsVideo(string f) => VideoExt.Contains(Path.GetExtension(f).ToLowerInvariant());
     static bool IsImage(string f) => ImageExt.Contains(Path.GetExtension(f).ToLowerInvariant());
+    static bool IsAudio(string f) => AudioExt.Contains(Path.GetExtension(f).ToLowerInvariant());
 
     // The story selected a scene: the warehouse goes to its material - the
     // selected section's file or folder, else the scene's folder.
@@ -404,6 +546,7 @@ public partial class MainWindow : Window
         string want = null;
         if (sec is VideoSection v && v.Source != "" && File.Exists(v.SourceAbs(story, sc))) want = v.SourceAbs(story, sc);
         else if (sec is PickupSection p) want = p.MatDir(story, sc);
+        else if (sec == null && sc.MusicSource != "" && File.Exists(sc.MusicAbs(story))) want = sc.MusicAbs(story);
         want ??= SceneMat(sc);
         foreach (var t in AllItems(TreeWare.Items))
             if (t.Tag is string path && path.Equals(want, StringComparison.OrdinalIgnoreCase)) { Reveal(t); return; }
@@ -519,19 +662,28 @@ public partial class MainWindow : Window
 
     void Ware_DragOver(object s, DragEventArgs e)
     {
-        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+        if (e.Data.GetDataPresent(FileDropFormat)) e.Effects = DragDropEffects.Copy;                 // from Explorer: a copy in
+        else if (e.Data.GetDataPresent(DRAG))                                                        // one of ours: a move to a folder
+        {
+            var t = ItemUnder(e.OriginalSource as DependencyObject);
+            e.Effects = t?.Tag is string p && Directory.Exists(p) ? DragDropEffects.Move : DragDropEffects.None;
+        }
+        else e.Effects = DragDropEffects.None;
         e.Handled = true;
     }
+    static readonly string FileDropFormat = DataFormats.FileDrop;
 
     void Ware_Drop(object s, DragEventArgs e)
     {
-        if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
-        CopyIn((string[])e.Data.GetData(DataFormats.FileDrop), FolderOf(ItemUnder(e.OriginalSource as DependencyObject)));
+        var t = ItemUnder(e.OriginalSource as DependencyObject);
+        if (e.Data.GetDataPresent(DRAG)) { if (t?.Tag is string p && Directory.Exists(p)) MoveFile((string)e.Data.GetData(DRAG), p); }
+        else if (e.Data.GetDataPresent(DataFormats.FileDrop)) CopyIn((string[])e.Data.GetData(DataFormats.FileDrop), FolderOf(t));
         e.Handled = true;
     }
 
     void Ware_KeyDown(object s, KeyEventArgs e)
     {
+        if (e.Key == Key.Delete) { ToBin(SelectedWarehouseFile()); e.Handled = true; return; }
         if (e.Key != Key.V || (Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
         if (!Clipboard.ContainsFileDropList()) { Status("nothing on the clipboard to paste"); return; }
         CopyIn(Clipboard.GetFileDropList().Cast<string>().ToArray(), FolderOf(TreeWare.SelectedItem as TreeViewItem));
@@ -633,8 +785,15 @@ public partial class MainWindow : Window
         if (prefix != "") tb.Inlines.Add(new Run(prefix) { Foreground = Grey });
         tb.Inlines.Add(new Run("● ") { Foreground = brush, FontWeight = FontWeights.Bold });
         tb.Inlines.Add(new Run($"{sc.Id}  {sc.Title}") { FontWeight = FontWeights.SemiBold });
-        tb.Inlines.Add(new Run($"   {sc.Marks}{end}") { Foreground = Grey });
+        tb.Inlines.Add(new Run($"   {sc.Marks}") { Foreground = Grey });
+        if (sc.MusicMark != "") tb.Inlines.Add(new Run(sc.MusicMark) { Foreground = sc.MusicDone ? Brushes.Black : Red });
+        tb.Inlines.Add(new Run(end) { Foreground = Grey });
         var node = new TreeViewItem { Header = tb, Tag = sc, IsExpanded = true, ToolTip = gaps.Count == 0 ? "complete" : string.Join("\n", gaps) };
+        {
+            var menu = new ContextMenu();
+            var rm = new MenuItem { Header = $"− Remove scene {sc.Id}…" }; rm.Click += (_, _) => { SelectScene(sc); Remove_Click(null, null); }; menu.Items.Add(rm);
+            node.ContextMenu = menu;
+        }
         for (int i = 0; i < sc.Sections.Count; i++)
         {
             var sec = sc.Sections[i];
@@ -648,9 +807,23 @@ public partial class MainWindow : Window
                 _ => "",
             };
             st.Inlines.Add(new Run(detail) { Foreground = Grey });
-            node.Items.Add(new TreeViewItem { Header = st, Tag = (sc, sec) });
+            var sn = new TreeViewItem { Header = st, Tag = (sc, sec) };
+            var menu = new ContextMenu();
+            var rm = new MenuItem { Header = $"× Remove this {sec.Kind.ToLower()}…" }; rm.Click += (_, _) => { SelectScene(sc, sec); RemoveSection_Click(null, null); }; menu.Items.Add(rm);
+            sn.ContextMenu = menu;
+            node.Items.Add(sn);
         }
         return node;
+    }
+
+    // Delete on the story: the selected scene, or the selected section of
+    // it - each asks first, and says what goes with it.
+    void Story_KeyDown(object s, KeyEventArgs e)
+    {
+        if (e.Key != Key.Delete || TreeStory.SelectedItem is not TreeViewItem t) return;
+        if (t.Tag is ValueTuple<Scene, Section> p) { SelectScene(p.Item1, p.Item2); RemoveSection_Click(null, null); }
+        else if (t.Tag is Scene) Remove_Click(null, null);
+        e.Handled = true;
     }
 
     void SelectScene(Scene sc, Section sec = null)
@@ -713,8 +886,10 @@ public partial class MainWindow : Window
             var files = (string[])e.Data.GetData(DataFormats.FileDrop);
             var vids = files.Where(IsVideo).ToList();
             var pics = files.Where(IsImage).ToList();
+            var tracks = files.Where(IsAudio).ToList();
             if (vids.Count > 0) CopyIn(vids, Path.Combine(SceneMat(target), "VIDEO"));
             if (pics.Count > 0) CopyIn(pics, Path.Combine(SceneMat(target), "PICKUP"));
+            if (tracks.Count > 0) CopyIn(tracks, Path.Combine(SceneMat(target), "MUSIC"));
             SelectScene(target);
             foreach (var f in vids)
             {
@@ -722,6 +897,11 @@ public partial class MainWindow : Window
                 if (File.Exists(dest)) Assign(target, dest);
             }
             if (pics.Count > 0) EnsurePickup(target, "PICKUP");
+            if (tracks.Count > 0)
+            {
+                var dest = Path.Combine(SceneMat(target), "MUSIC", Path.GetFileName(tracks[0]));   // one track a scene: the first
+                if (File.Exists(dest)) Assign(target, dest);
+            }
         }
         e.Handled = true;
     }
@@ -733,6 +913,7 @@ public partial class MainWindow : Window
     // one at the end - and the converter starts.
     void Assign(Scene sc, string abs)
     {
+        if (IsAudio(abs)) { AssignMusic(sc, abs); return; }
         if (IsImage(abs))
         {
             var sec = SceneOfPath(abs) == sc && Path.GetFileName(Path.GetDirectoryName(abs)).StartsWith("PICKUP", StringComparison.OrdinalIgnoreCase)
@@ -775,6 +956,51 @@ public partial class MainWindow : Window
         AutoSave();
         Convert(sc, v);
         BuildWarehouse(); BuildStory(sc); FillSectionList(); ShowSection();
+    }
+
+    // A track goes to the scene the way footage does: into its MUSIC\ folder
+    // first (moved if free, copied if another scene still uses it), then into
+    // the scene's MUSIC line, and the converter starts. One track a scene.
+    void AssignMusic(Scene sc, string abs)
+    {
+        var home = Path.Combine(SceneMat(sc), "MUSIC");
+        if (!string.Equals(Path.GetDirectoryName(abs), home, StringComparison.OrdinalIgnoreCase))
+        {
+            var dest = Path.Combine(home, Path.GetFileName(abs));
+            if (File.Exists(dest)) { Status($"{sc.Id}\\MUSIC\\ already holds a {Path.GetFileName(abs)} - rename one of them first"); return; }
+            bool shared = Owners().TryGetValue(abs, out var who) && who.sc != sc;
+            try
+            {
+                Directory.CreateDirectory(home);
+                if (shared) File.Copy(abs, dest); else File.Move(abs, dest);
+            }
+            catch (Exception ex) { Status($"could not {(shared ? "copy" : "move")} {Rel(abs)} into {sc.Id}\\MUSIC\\: {ex.Message}"); return; }
+            Status($"{(shared ? "copied" : "moved")} {Rel(abs)} -> {Rel(dest)}");
+            abs = dest;
+        }
+        var rel = Path.Combine("MUSIC", Path.GetFileName(abs));
+        if (string.Equals(sc.MusicSource, rel, StringComparison.OrdinalIgnoreCase) && sc.MusicDone) { Status($"{sc.Id} already plays that track"); return; }
+        sc.MusicSource = rel; sc.Music = Scene.MUSIC;
+        undo = null; BtnUndo.IsEnabled = false;
+        AutoSave();
+        Convert(sc, null);
+        BuildWarehouse(); BuildStory(sc); FillFields();
+    }
+
+    void ReconvertMusic_Click(object s, RoutedEventArgs e)
+    {
+        if (cur == null) return;
+        if (cur.MusicSource == "") { Status("no track: drop an .mp3 / .wav on the scene first"); return; }
+        Convert(cur, null);
+    }
+
+    void RemoveMusic_Click(object s, RoutedEventArgs e)
+    {
+        if (cur == null || cur.MusicSource == "" && cur.Music == "") return;
+        TryDelete(cur.MusicProduct(story)); TryDelete(cur.MusicInf(story)); TryDelete(Path.ChangeExtension(cur.MusicProduct(story), ".LOG"));
+        cur.MusicSource = ""; cur.Music = "";
+        AutoSave(); BuildWarehouse(); BuildStory(cur); FillFields();
+        Status($"{cur.Id} plays without music; the track is still in the warehouse");
     }
 
     static string NextClipName(Scene sc)
@@ -833,7 +1059,14 @@ public partial class MainWindow : Window
     void RemoveSection_Click(object s, RoutedEventArgs e)
     {
         if (cur == null || curSec == null) return;
-        if (MessageBox.Show($"Remove this {curSec.Kind.ToLower()} section from {cur.Id}?\n\nIts converted product is deleted; the warehouse is not touched.", "SceneDesk", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        string what = curSec switch
+        {
+            VideoSection v => v.Source == "" ? "an empty video section" : $"the video {v.File} ← {v.Source}",
+            PickupSection p => $"the pickup {p.Folder}\\ with its {p.Items.Count} thing(s)",
+            QuizSection q => $"the quiz \"{q.Text}\" and its {q.Options.Count} answers",
+            _ => "this section",
+        };
+        if (!Confirm($"Remove {what} from {cur.Id} \"{cur.Title}\"?\n\nThe scene stays. The section's converted products are deleted; the footage and pictures in the warehouse are not touched.", "SceneDesk - remove a section")) return;
         StopOwv();
         DeleteProducts(cur, curSec);
         int i = cur.Sections.IndexOf(curSec);
@@ -944,11 +1177,11 @@ public partial class MainWindow : Window
     {
         if (cur == null) return;
         var what = cur.Sections.Count == 0 ? "no sections" : string.Join(", ", cur.Sections.Select(x => x.Kind.ToLower()));
-        if (MessageBox.Show($"Remove the WHOLE scene {cur.Id} \"{cur.Title}\" from the story?\n\n" +
-                            $"It has {cur.Sections.Count} section(s): {what}. All of them go with it.\n" +
-                            "To drop just one video or pickup, answer No and use × section instead.\n\n" +
-                            "The folder and its products stay; SCENE.INI becomes SCENE.INI.REMOVED and can be renamed back.",
-                            "SceneDesk - remove a scene", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+        if (!Confirm($"Remove the WHOLE scene {cur.Id} \"{cur.Title}\" from the story?\n\n" +
+                     $"It has {cur.Sections.Count} section(s): {what}. All of them go with it.\n" +
+                     "To drop just one video or pickup, answer No and use × section instead.\n\n" +
+                     "The folder and its products stay; SCENE.INI becomes SCENE.INI.REMOVED and can be renamed back. The warehouse is not touched.",
+                     "SceneDesk - remove a scene")) return;
         int i = story.Scenes.IndexOf(cur);
         // whoever led here now leads where this one led, when that is plain
         if (cur.Quiz == null && cur.Code.HasValue)
@@ -1026,6 +1259,12 @@ public partial class MainWindow : Window
         FLearn.Text = c.Learn; FDecide.Text = c.Decide;
         FEnters.Text = string.Join(" ", c.Enters); FCode.Text = c.Code?.ToString() ?? "";
         FEnding.IsChecked = c.Ending;
+        if (cur != null) cur.Refresh(story);
+        TxtMusic.Text = c.MusicSource == "" ? "none - drop an .mp3 / .wav on this scene, or double-click one in the warehouse"
+                      : c.MusicDone ? $"♪ {c.MusicSource}  →  {Path.GetFileName(c.MusicProduct(story))}   (looped under the room, under the clips at half level)"
+                      : c.MusicStale ? $"♪ {c.MusicSource}   STALE - ⟳ music makes {Path.GetFileName(c.MusicProduct(story))} again"
+                      : File.Exists(c.MusicAbs(story)) ? $"♪ {c.MusicSource}   NOT converted - press ⟳ music" : $"♪ {c.MusicSource}   (track missing from the warehouse)";
+        TxtMusic.Foreground = c.MusicSource == "" ? Grey : c.MusicDone ? Green : Red;
         FillSectionList(); ShowSceneHead();
         filling = false;
     }
@@ -1078,8 +1317,8 @@ public partial class MainWindow : Window
                 }
             case PickupSection p:
                 PnlPickup.Visibility = Visibility.Visible;
-                FNeed.Text = string.Join(" ", p.Need);
                 p.AdoptLayers(story, cur);
+                BuildItemRows(p);
                 LoadPick(p, showFull);
                 break;
             case QuizSection q:
@@ -1161,17 +1400,49 @@ public partial class MainWindow : Window
             q.Text = FQuizText.Text.Trim(); q.Options = opts;
             AutoSave(); BuildStory(cur); FillSectionList();
         }
-        else if (curSec is PickupSection p)
-        {
-            var need = Story.Split(FNeed.Text).Select(x => x.ToUpperInvariant()).ToList();
-            if (string.Join(" ", need) == string.Join(" ", p.Need)) return;
-            p.Need = need;
-            AutoSave(); BuildStory(cur); FillSectionList();
-        }
+        // a pickup's NEED ticks and TEXT lines commit themselves, row by row
     }
 
     void Quiz_Changed(object s, RoutedEventArgs e) { if (!filling) CommitSection(); }
-    void Pickup_Changed(object s, RoutedEventArgs e) { if (!filling) CommitSection(); }
+
+    // One row a thing: the NEED tick, the name and where it stands, the line
+    // that shows when it is taken. Ticks and lines write the story at once.
+    void BuildItemRows(PickupSection p)
+    {
+        GridItems.Children.Clear(); GridItems.RowDefinitions.Clear(); GridItems.ColumnDefinitions.Clear();
+        GridItems.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+        GridItems.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
+        GridItems.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        int row = 0;
+        foreach (var it in p.Items)
+        {
+            GridItems.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var tick = new CheckBox { Content = "need", IsChecked = p.Need.Any(n => n.Equals(it.Name, StringComparison.OrdinalIgnoreCase)), Margin = new Thickness(0, 4, 0, 0), Tag = it };
+            tick.Click += (_, _) =>
+            {
+                if (filling) return;
+                p.Need.RemoveAll(n => n.Equals(it.Name, StringComparison.OrdinalIgnoreCase));
+                if (tick.IsChecked == true) p.Need.Add(it.Name);
+                p.Need = p.Items.Where(x => p.Need.Any(n => n.Equals(x.Name, StringComparison.OrdinalIgnoreCase))).Select(x => x.Name).ToList();   // in the items' order
+                AutoSave(); BuildStory(cur); FillSectionList();
+            };
+            var name = new TextBlock { FontFamily = new FontFamily("Consolas"), FontSize = 13, VerticalAlignment = VerticalAlignment.Center,
+                                       Text = $"{it.Name,-8} {(it.Placed ? $"{it.X},{it.Y}" : "?")}", ToolTip = it.Layer, Foreground = it.Placed ? Brushes.Black : Red };
+            var line = new TextBox { Text = it.Caption, Margin = new Thickness(0, 2, 0, 2), ToolTip = $"TEXT {it.Name} - a line over the room for a moment when it is taken; {PickupSection.CAPTION_MAX} letters fit" };
+            line.LostFocus += (_, _) =>
+            {
+                if (filling || it.Caption == line.Text.Trim()) return;
+                it.Caption = line.Text.Trim();
+                if (it.Caption.Length > PickupSection.CAPTION_MAX) Status($"{it.Name}'s line is {it.Caption.Length} letters; the screen fits {PickupSection.CAPTION_MAX} - the game stops at the right edge");
+                AutoSave(); BuildStory(cur); FillSectionList();
+            };
+            Grid.SetRow(tick, row); Grid.SetColumn(tick, 0);
+            Grid.SetRow(name, row); Grid.SetColumn(name, 1);
+            Grid.SetRow(line, row); Grid.SetColumn(line, 2);
+            GridItems.Children.Add(tick); GridItems.Children.Add(name); GridItems.Children.Add(line);
+            row++;
+        }
+    }
 
     const string M_HAPPENS = "--- WHAT HAPPENS ---", M_LEARN = "--- LEARN ---", M_DECIDE = "--- DECIDE ---";
 
@@ -1218,7 +1489,7 @@ public partial class MainWindow : Window
         var bgPath = full ? (p.FullAbs(story, cur) ?? p.EmptyAbs(story, cur)) : (p.EmptyAbs(story, cur) ?? p.FullAbs(story, cur));
         if (bgPath == null)
         {
-            TxtPreview.Text = $"no empty.jpg / full.jpg in {p.Folder}\\ yet"; TxtItems.Text = "";
+            TxtPreview.Text = $"no empty.jpg / full.jpg in {p.Folder}\\ yet"; TxtPanel.Text = "";
             TxtPickState.Text = $"EMPTY: put empty.jpg, full.jpg and layer-*.png into {p.MatDir(story, cur)} - drop them on the {p.Folder}\\ folder in the warehouse, on this scene in the story, or press ⧉ Open folder";
             TxtPickState.Foreground = Red;
             return;
@@ -1249,8 +1520,24 @@ public partial class MainWindow : Window
                 PickCanvas.Children.Add(r);
             }
         }
-        TxtPreview.Text = $"{Path.GetFileName(bgPath)}   {bg.PixelWidth}x{bg.PixelHeight}   " + (full ? "the reference; drag a thing to place it" : "what the game draws; click a thing to take it");
-        TxtItems.Text = string.Join("\n", p.Items.Select(it => $"{it.Name,-8} {(it.Placed ? $"{it.X},{it.Y}" : "?      ")}  {it.Layer}"));
+        // what the game will not show: the room is cropped to fill 640 by
+        // (400 - PANEL), and the cut edges are dimmed here so a thing placed
+        // in them is seen to be out of the picture
+        {
+            int roomH = SCREEN_H - Math.Max(0, p.Panel);
+            double sw = bg.PixelWidth, sh = bg.PixelHeight;
+            double sc = Math.Max(SCREEN_W / sw, roomH / sh);
+            double vw = SCREEN_W / sc, vh = roomH / sc, ox = (sw - vw) / 2, oy = (sh - vh) / 2;
+            foreach (var r in new[] { new Rect(0, 0, sw, oy), new Rect(0, sh - oy, sw, oy), new Rect(0, oy, ox, vh), new Rect(sw - ox, oy, ox, vh) })
+            {
+                if (r.Width < 0.5 || r.Height < 0.5) continue;
+                var dim = new System.Windows.Shapes.Rectangle { Width = r.Width, Height = r.Height, Fill = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0)), IsHitTestVisible = false };
+                Canvas.SetLeft(dim, r.X); Canvas.SetTop(dim, r.Y);
+                PickCanvas.Children.Add(dim);
+            }
+            LoadPanel(p, sw / SCREEN_W);
+        }
+        TxtPreview.Text = $"{Path.GetFileName(bgPath)}   {bg.PixelWidth}x{bg.PixelHeight}   " + (full ? "the reference; drag a thing to place it" : "what the game draws; click a thing to take it") + "   (dimmed edges: cropped by the game)";
         // the state, in words and in colour - a □ against a ■ was not seen
         p.Refresh(story, cur);
         int left = p.Items.Count(i => !i.Placed);
@@ -1277,7 +1564,7 @@ public partial class MainWindow : Window
 
     void ShowFull_Click(object s, RoutedEventArgs e) { showFull = true; if (curSec is PickupSection p) LoadPick(p, true); }
     void ShowEmpty_Click(object s, RoutedEventArgs e) { showFull = false; if (curSec is PickupSection p) LoadPick(p, false); }
-    void PutBack_Click(object s, RoutedEventArgs e) { foreach (var c in PickCanvas.Children.OfType<Image>()) c.Visibility = Visibility.Visible; }
+    void PutBack_Click(object s, RoutedEventArgs e) => PutBack();
 
     void Pick_MouseDown(object s, MouseButtonEventArgs e)
     {
@@ -1310,12 +1597,88 @@ public partial class MainWindow : Window
             Status($"{it.Name} placed at {it.X},{it.Y}");
             if (curSec is PickupSection p) PickupPlacementChanged(p);
         }
-        else if (!showFull && it.Placed)
-        {
-            img.Visibility = Visibility.Collapsed;                  // taken - the way the game does it
-            Status($"{it.Name} taken; 'put all back' restores it");
-        }
+        else if (!showFull && it.Placed) Take(img, it);
         e.Handled = true;
+    }
+
+    // Taken, the way the game does it: gone from the room, its slot in colour.
+    void Take(Image img, Item it)
+    {
+        img.Visibility = Visibility.Collapsed;
+        foreach (var slot in PanelCanvas.Children.OfType<Image>().Where(x => x.Tag is Slot s && s.Item == it))
+            slot.Visibility = ((Slot)slot.Tag).Colour ? Visibility.Visible : Visibility.Collapsed;
+        Status($"{it.Name} taken" + (it.Caption.Trim().Length > 0 ? $" - \"{it.Caption.Trim()}\"" : "") + "; 'put all back' restores it");
+    }
+    record Slot(Item Item, bool Colour);
+
+    void PutBack()
+    {
+        foreach (var c in PickCanvas.Children.OfType<Image>()) c.Visibility = Visibility.Visible;
+        foreach (var slot in PanelCanvas.Children.OfType<Image>().Where(x => x.Tag is Slot))
+            slot.Visibility = ((Slot)slot.Tag).Colour ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    // The panel under the room, the way the game draws it: a dark band (or
+    // panel.png) of PANEL rows, and a slot per thing - its outline while it
+    // is in the room, its picture once taken. Drawn in the source picture's
+    // scale so the Viewbox keeps the proportion. The slot positions are the
+    // converter's arithmetic, repeated here (SlotAt in Vid2Owv); the pictures
+    // are the .SLT products when they exist - what the game will draw - and
+    // the layers scaled by WPF until then.
+    const int SCREEN_W = 640, SCREEN_H = 400, SLOT_CELL = 88, SLOT_W = 72, SLOT_H = 48;
+
+    void LoadPanel(PickupSection p, double k)
+    {
+        PanelCanvas.Children.Clear();
+        if (p.Panel <= 0) { PanelCanvas.Height = 0; PanelCanvas.Visibility = Visibility.Collapsed; return; }
+        PanelCanvas.Visibility = Visibility.Visible;
+        PanelCanvas.Width = SCREEN_W * k; PanelCanvas.Height = p.Panel * k;
+        var art = p.PanelArtAbs(story, cur);
+        if (art != null)
+        {
+            try
+            {
+                var bi = new BitmapImage(); bi.BeginInit(); bi.CacheOption = BitmapCacheOption.OnLoad; bi.UriSource = new Uri(art); bi.EndInit();
+                var im = new Image { Source = bi, Width = SCREEN_W * k, Height = p.Panel * k, Stretch = Stretch.Fill };
+                PanelCanvas.Children.Add(im);
+            }
+            catch { }
+        }
+        int roomH = SCREEN_H - p.Panel;
+        var bgPath = Path.Combine(p.OutDir(story, cur), PickupSection.BG);
+        int[] pal = File.Exists(bgPath) ? Ows.Palette(bgPath) : null;
+        int n = p.Items.Count, index = 0;
+        foreach (var it in p.Items)
+        {
+            var sltPath = Path.Combine(p.OutDir(story, cur), it.Name + ".SLT");
+            Ows.Picture pic = null;
+            if (pal != null && File.Exists(sltPath)) { try { pic = Ows.Load(sltPath, pal); } catch { pic = null; } }
+            if (pic == null)
+            {
+                var layer = Path.Combine(p.MatDir(story, cur), it.Layer);
+                if (File.Exists(layer)) { try { pic = Ows.FromLayer(layer, SLOT_W, SLOT_H); } catch { pic = null; } }
+                if (pic != null)
+                {
+                    int cell = Math.Min(SLOT_CELL, SCREEN_W / Math.Max(1, n)), x0 = (SCREEN_W - n * cell) / 2;
+                    pic.X = x0 + index * cell + (cell - pic.W) / 2; pic.Y = roomH + (p.Panel - pic.H) / 2;
+                }
+            }
+            index++;
+            if (pic == null) continue;
+            byte grey = pal != null ? Ows.GreyIndex(pal) : (byte)0;
+            int greyBgra = pal != null ? pal[grey] : unchecked((int)0xFF969696);
+            var outline = new Image { Source = pic.Outline(greyBgra), Width = pic.W * k, Height = pic.H * k, Tag = new Slot(it, false), Stretch = Stretch.Fill };
+            var colour = new Image { Source = pic.Colour(), Width = pic.W * k, Height = pic.H * k, Tag = new Slot(it, true), Stretch = Stretch.Fill, Visibility = Visibility.Collapsed };
+            foreach (var im in new[] { outline, colour })
+            {
+                RenderOptions.SetBitmapScalingMode(im, BitmapScalingMode.NearestNeighbor);
+                Canvas.SetLeft(im, pic.X * k); Canvas.SetTop(im, (pic.Y - roomH) * k);
+                PanelCanvas.Children.Add(im);
+            }
+        }
+        TxtPanel.Text = p.Panel <= 0 ? "no panel: the room is the whole screen"
+                      : (art == null ? $"panel: {p.Panel} rows below the room, dark - put a {PickupSection.PANELART} into {p.Folder}\\ for the backing" : $"panel: {p.Panel} rows below the room, {PickupSection.PANELART}")
+                        + (pal == null ? "   (slots shown from the layers until the pickup is converted)" : "   (slots as the game draws them)");
     }
 
     // Each layer is looked for in full.jpg by its opaque pixels: a coarse
@@ -1471,16 +1834,19 @@ public partial class MainWindow : Window
             var outDir = p.OutDir(story, sc);
             Directory.CreateDirectory(outDir);
             StopOwv();
-            foreach (var f in Directory.GetFiles(outDir, "*.OWV").Concat(Directory.GetFiles(outDir, "*.SPR"))) TryDelete(f);
+            foreach (var f in Directory.GetFiles(outDir, "*.OWV").Concat(Directory.GetFiles(outDir, "*.SPR")).Concat(Directory.GetFiles(outDir, "*.SLT"))) TryDelete(f);
             infPath = Path.Combine(outDir, PickupSection.INF);
             logPath = Path.Combine(outDir, "PICKUP.LOG");
             TryDelete(logPath);
             var full = p.FullAbs(story, sc) ?? empty;
+            var art = p.PanelArtAbs(story, sc);
             var lines = new List<string>
             {
                 $"; PICKUP.INF - written by SceneDesk for scene {sc.Id}: the room without its things,",
                 $"; the things, and where each stands in the SOURCE picture. Vid2Owv makes BG.OWV",
-                $"; and one .SPR per thing, in the room's palette, with the screen position inside.",
+                $"; and one .SPR per thing, in the room's palette, with the screen position inside;",
+                $"; PANEL reserves the band below the room for the slots, and one .SLT per thing",
+                $"; is the thing at slot size, placed in its slot.",
                 "",
                 "MODE       = PICKUP",
                 $"EMPTY      = {Path.GetRelativePath(outDir, empty)}",
@@ -1488,17 +1854,49 @@ public partial class MainWindow : Window
                 "OUTDIR     = .",
                 "WIDTH      = 640",
                 "HEIGHT     = 400",
+                $"PANEL      = {p.Panel}",
+            };
+            if (art != null && p.Panel > 0) lines.Add($"PANELART   = {Path.GetRelativePath(outDir, art)}");
+            lines.AddRange(new[]
+            {
                 "FIT        = crop",
                 "DITHER     = bayer:bayer_scale=3",
                 "TOLERANCE  = 2",
                 "",
-            };
+            });
             foreach (var it in p.Items) lines.Add($"ITEM {it.Name,-8} = {it.X},{it.Y} {Path.GetRelativePath(outDir, Path.Combine(p.MatDir(story, sc), it.Layer))}");
             lines.Add("");
             File.WriteAllText(infPath, string.Join("\r\n", lines));
             label = $"{sc.Id}\\{p.Folder}\\";
         }
-        else { Status("a quiz has nothing to convert"); return; }
+        else if (sec == null && sc.MusicSource != "")
+        {
+            var srcAbs = sc.MusicAbs(story);
+            if (!File.Exists(srcAbs)) { Status("the track is missing: " + srcAbs); return; }
+            var sceneDir = SceneDir(sc);
+            Directory.CreateDirectory(sceneDir);
+            TryDelete(sc.MusicProduct(story));
+            logPath = Path.ChangeExtension(sc.MusicProduct(story), ".LOG");
+            TryDelete(logPath);
+            infPath = sc.MusicInf(story);
+            File.WriteAllText(infPath, string.Join("\r\n", new[]
+            {
+                $"; {Scene.MUSIC_INF} - written by SceneDesk for scene {sc.Id}: the scene's track. Vid2Owv",
+                $"; makes {Path.GetFileName(sc.MusicProduct(story))} from it - sixteen-bit mono samples with a sixteen-byte",
+                $"; header, meant to loop. The recipe is tracked; the product is not.",
+                "",
+                "MODE       = MUSIC",
+                $"SOURCE     = {Path.GetRelativePath(sceneDir, srcAbs)}",
+                $"OUTPUT     = {Path.GetFileName(sc.MusicProduct(story))}",
+                "AUDIO      = 22050",
+                "; no compressor: that chain is for speech. VOLUME is a gain before the resample.",
+                "AUDIOFILTER = none",
+                "VOLUME     = 0.8",
+                ""
+            }));
+            label = $"{sc.Id}\\music";
+        }
+        else { Status(sec == null ? "no track to convert" : "a quiz has nothing to convert"); return; }
 
         jobs.Enqueue(() =>
         {
@@ -1522,7 +1920,8 @@ public partial class MainWindow : Window
             {
                 Status(tail);
                 BuildStory(cur); FillSectionList();
-                if (cur == sc && curSec == sec) ShowSection();
+                if (sec == null) FillFields();                              // the music line
+                else if (cur == sc && curSec == sec) ShowSection();
             });
         });
         RunJobs();

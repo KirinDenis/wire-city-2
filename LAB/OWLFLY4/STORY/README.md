@@ -7,7 +7,8 @@ STORY\NIGHT\
     STORY.INI            title, the folder name, where to start
     S01\  SCENE.INI      the scene: its text, its codes, its sections in order
           CLIP.INF  CLIP.OWV            a VIDEO section's recipe and product
-          PICKUP\  PICKUP.INF  BG.OWV  KEYS.SPR  CASSETTE.SPR ...
+          MUSIC.INF MUSIC.PCM           the scene's track, recipe and product
+          PICKUP\  PICKUP.INF  BG.OWV  KEYS.SPR  KEYS.SLT  CASSETTE.SPR ...
     S02\  SCENE.INI  CLIP.INF  CLIP.OWV
     ...
 ```
@@ -19,6 +20,8 @@ with a folder per kind of material:
 C:\...\OWLFLY4_RES\NIGHT\
     S01\  VIDEO\   room.mp4  room_take2.mp4
           PICKUP\  empty.jpg  full.jpg  layer-keys.png  layer-cassette.png ...
+                   panel.png            the panel's backing, if it has art
+          MUSIC\   night.mp3            the scene's track
     S02\  VIDEO\   pump.mp4
     ...
 ```
@@ -52,6 +55,8 @@ ENTERS   = 4                  the codes that start this scene
 CODE     = 5                  how it ends, when no quiz decides
 ENDING   = no
 NOTES    = ...                what happens, learn, decide - for the writer
+MUSIC    = MUSIC.PCM          the scene's track: looped under the room, mixed under the clips
+MUSICSOURCE = MUSIC\night.mp3 where it came from - desk only
 
 [VIDEO]
 FILE     = CLIP.OWV
@@ -59,9 +64,11 @@ SOURCE   = VIDEO\pump.mp4     relative to the scene's warehouse folder
 
 [PICKUP]
 FOLDER   = PICKUP
+PANEL    = 64                 rows below the room for the panel of slots; 0 = none
 NEED     = KEYS CASSETTE      what must be taken for the scene to go on; empty = all
 ITEM KEYS     = 610,222 layer-keys.png         where it sits in the SOURCE picture
 ITEM CASSETTE = 377,574 layer-cassette.png
+TEXT KEYS     = Her keys. Warm from her pocket.   a line over the room for a moment when it is taken
 
 [QUIZ]
 TEXT     = You'll come with me?
@@ -104,11 +111,22 @@ file stayed. The desk shows such a file as STALE and does not count it as
 converted; `⟳ convert` makes it again. What the converter said is kept
 beside the recipe in `CLIP.LOG` / `PICKUP.LOG`, ignored like the product.
 
-A PICKUP's products are `BG.OWV` - the empty room, one frame - and one
-`.SPR` per thing: the cut-out scaled and cropped exactly as the room was,
-in the room's palette, index 255 meaning "not there", and **where it stands
-on screen** in the header, so the game never scales anything. The format is
-in [VIDEO/FORMAT.md](../VIDEO/FORMAT.md).
+A PICKUP's products are `BG.OWV` - the empty room, one frame, with the
+panel's backing in the `PANEL` rows below it (dark, or `panel.png` from the
+warehouse folder laid in) - and, per thing, a `.SPR`: the cut-out scaled and
+cropped exactly as the room was, in the room's palette, index 255 meaning
+"not there", and **where it stands on screen** in the header, so the game
+never scales anything; and a `.SLT`: the same thing at slot size, placed in
+its slot on the panel. The game draws a slot as the thing's **outline**
+while it is still in the room and as the thing itself once it is taken, and
+shows its `TEXT` line over the room for a moment at the taking. The formats
+are in [VIDEO/FORMAT.md](../VIDEO/FORMAT.md).
+
+A scene's music is `MUSIC.PCM` beside `SCENE.INI`, made by the same
+converter from `MUSIC.INF` (`MODE = MUSIC`): sixteen-bit mono samples with a
+sixteen-byte header, meant to loop. The game plays it on its own while the
+room (or a quiz) is on the screen and mixes it under a clip's own sound at
+half level; a clip carries only its own sounds.
 
 ## The desk
 
@@ -136,7 +154,14 @@ matching** finds each layer in `full.jpg` and puts it there when it matches
 exactly - a layer cut from the picture does; one drawn separately does not,
 and is left for you to drag, because a wrong guess would look like a fact.
 On `show empty` the things sit on the empty room the way the game draws
-them, and clicking one takes it.
+them, with the edges the game crops dimmed, and the panel below it as the
+game draws that too - the slots as the `.SLT` products once the pickup is
+converted, as the layers scaled by the desk until then. Clicking a thing
+takes it: it goes from the room and its slot turns to colour. Under the
+buttons, one row a thing: the `NEED` tick, where it stands, and its `TEXT`
+line. Drop an `.mp3` or `.wav` on a scene, or double-click one in the
+warehouse, and it becomes the scene's music - moved into its `MUSIC\`
+folder, converted, and named in `SCENE.INI`; `× music` takes it away.
 
 **Nothing plays by itself.** Selecting a video section shows its first frame
 and stops. Play, or a double-click on it in the tree, plays it once with

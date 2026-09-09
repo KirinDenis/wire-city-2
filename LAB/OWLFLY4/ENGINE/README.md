@@ -28,9 +28,24 @@ each scene's sections in play order.
 - `[VIDEO]` - the clip, through the same decoder as the workbench player:
   `..\VIDEO\OWV.INC` and `..\VIDEO\SB.INC` are included, not copied. Sound
   is the clock, sixteen bits on a Sound Blaster 16.
+- `MUSIC` - the scene's track, `MUSIC.PCM`, an OWA1 file of sixteen-bit
+  mono samples opened when the scene starts and closed when it ends, and
+  looped. Under the room and under a quiz the card is started for it and
+  the loop keeps the queue fed; under a clip the decoder hands every audio
+  chunk through `OWV_MIX` and the music is added in at half level,
+  saturated - so a clip carries only its own sounds and the scene's mood
+  goes on underneath. A silent clip plays silent: the mixing rides on the
+  clip's own audio chunks.
 - `[PICKUP]` - `BG.OWV`, one frame, through that same decoder; then every
   `.SPR` named in the section drawn on top at the position in its header,
-  index 255 skipped. The mouse (`INT 33h`, ranges set to 640x400) with a
+  index 255 skipped. `PANEL = 64` says the bottom 64 rows are not the room:
+  the converter laid the panel's backing there, and each thing's `.SLT` -
+  the thing at slot size, placed in its slot by the converter - is drawn
+  on it as an **outline** in the palette's grey (every opaque pixel with a
+  transparent neighbour) while the thing is in the room, and as itself
+  once taken. A `TEXT` line for the thing is drawn in a black band at the
+  foot of the room for a second and a half at the taking, and the section
+  waits that long for the last one. The mouse (`INT 33h`, ranges set to 640x400) with a
   cursor drawn by hand, because the driver draws none in a VESA mode; and
   the arrow keys move that same cursor, Enter clicks, so a mouse an
   emulator has not captured yet is not a wall. A click takes a thing in
@@ -79,20 +94,34 @@ goes through the same hit test a click does, for exactly that reason.
 
 ```
 0100  code and the small data
-4000  SECTTAB   the scene's sections, parsed     4A00  ITEMTAB  the things on screen
-4800  ORDERTAB  the scene ids from STORY.INI     4B00  CURSAVE  under the cursor
-4C00  HDRBUF    the clip's header                5000  MODEBUF  what VESA said
-5400  INIBUF    the INI being read, 4 KB         6400  QUEUE    audio, 32 KB
-E400  IOBUF     DOS reads land here, 4 KB        F400  the stack
+4000  SECTTAB   the scene's sections, parsed     4E00  ITEMTAB  the things on screen
+4C00  ORDERTAB  the scene ids from STORY.INI     5000  CURSAVE  under the cursor
+5100  HDRBUF    the clip's header                5500  MODEBUF  what VESA said
+5600  INIBUF    the INI being read, 4 KB         6600  QUEUE    audio, 32 KB
+E600  IOBUF     DOS reads land here, 4 KB        F600  the stack
 ```
 
 and above 1 MB, taken outright as the player does: the clip buffers of
-`OWV.INC`, and the things of a pickup at `400000h`, 64 KB a slot. Not safe
-with a memory manager loaded; the batch files start DOSBox without one.
+`OWV.INC`, the things of a pickup at `400000h`, 64 KB a slot, and their
+slot pictures at `500000h`, 16 KB a slot. Not safe with a memory manager
+loaded; the batch files start DOSBox without one.
 
 ## What is not here yet
 
-Inventory - a thing taken goes nowhere. Flags, and a quiz answer that
-depends on them. Sound in a pickup. Text of the pickup's own (a line under
-the room). A title screen. Each of those is a section kind or a key, and
+Inventory - a thing taken goes into its slot and no further; nothing
+persists into the next scene. Flags, and a quiz answer that depends on
+them. A click on a slot does nothing. Music under a clip that has no sound
+of its own. A title screen. Each of those is a section kind or a key, and
 the desk and this program grow together.
+
+## Seen once, not yet understood
+
+Twice in this lab a `/AUTO` run of the whole story ended early - DOSBox
+closed in the middle of a clip (once at the start of S02's, once fifteen
+seconds into S03's), with nothing in the log and no message - and the
+same build then played the story to THE END twice over. It did not happen
+in a run of S02 alone. The log stops without `reached: the end of the
+stream`, so the program did not finish the clip by itself; nothing in the
+room or the panel code is running at those moments. If it shows again,
+the thing to catch is DOSBox's own console (`RUNWIN` without the batch's
+`exit`, or `-noconsole` so `stdout.txt` keeps it), not the engine's log.

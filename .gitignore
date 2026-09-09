@@ -177,8 +177,11 @@ LAB/OWLFLY4/STORY/**/*.owv
 LAB/OWLFLY4/STORY/**/frames/
 # and what the converter said last time, kept beside the recipe by the desk
 LAB/OWLFLY4/STORY/**/*.LOG
-# the things of a PICKUP, made from the recipe like the .OWV
+# the things of a PICKUP, made from the recipe like the .OWV - and their
+# slot pictures, and the scene's music
 LAB/OWLFLY4/STORY/**/*.SPR
+LAB/OWLFLY4/STORY/**/*.SLT
+LAB/OWLFLY4/STORY/**/*.PCM
 # the story engine's run log and the screens it writes in /AUTO
 LAB/OWLFLY4/ENGINE/STORY.LOG
 LAB/OWLFLY4/ENGINE/SHOT*.OWV

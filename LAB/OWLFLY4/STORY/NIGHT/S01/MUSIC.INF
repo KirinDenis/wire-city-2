@@ -1,0 +1,11 @@
+; MUSIC.INF - written by SceneDesk for scene S01: the scene's track. Vid2Owv
+; makes MUSIC.PCM from it - sixteen-bit mono samples with a sixteen-byte
+; header, meant to loop. The recipe is tracked; the product is not.
+
+MODE       = MUSIC
+SOURCE     = ..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S01\MUSIC\placeholder-loop.wav
+OUTPUT     = MUSIC.PCM
+AUDIO      = 22050
+; no compressor: that chain is for speech. VOLUME is a gain before the resample.
+AUDIOFILTER = none
+VOLUME     = 0.8

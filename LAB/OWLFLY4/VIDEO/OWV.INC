@@ -319,6 +319,14 @@ DOAUDIO:
         cmp  byte [SBRUN],1
         jne  SKIPPAY                    ; no card, or not playing: step over it
         call READPAY                    ; ECX survives - the byte count
+if defined OWV_MIX
+        ; The program that includes this may have something to lay UNDER
+        ; the clip's sound - the story engine's scene music. It gets the
+        ; chunk at BUFLIN, ECX bytes, before the queue does, and must hand
+        ; ECX back. The workbench player defines nothing and plays the
+        ; file as it is.
+        call OWV_MIX
+end if
         mov  esi,BUFLIN
         call SBFEED
         jmp  NEXTCHUNK

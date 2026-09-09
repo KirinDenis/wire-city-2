@@ -106,6 +106,35 @@ The position is where the thing stands on the 640×400 screen, not in the
 source picture; `SCENE.INI` keeps the source position for the desk, and the
 converter turns one into the other once.
 
+The same file with the extension `.SLT` is the thing at **slot size** - at
+most 72×48, aspect kept - placed in its slot on the panel below the room
+(the position in the header is the slot's, worked out by the converter: a
+cell of up to 88 pixels a thing, the row of cells centred in the band). The
+game draws it two ways: as an outline in the palette's grey while the thing
+is still in the room - every opaque pixel with a transparent neighbour or an
+edge of the picture - and as itself once the thing is taken. The panel's
+own backing is not a file of its own: the converter lays it into the bottom
+`PANEL` rows of `BG.OWV`, dark or from `panel.png`.
+
+## OWA — a track, for the scenes
+
+Sixteen-bit mono samples for the scene's music, looped by the engine:
+poured into the same queue the clips use while the room is on the screen,
+mixed under a clip's own sound while a clip plays. Raw PCM with no rate
+written down is a trap, and a WAV header is forty-four bytes of chunk
+parsing the engine has no reason to learn, so:
+
+```
+    +0   'OWA1'
+    +4   word   rate, Hz        +6   byte   bits per sample, 16
+    +7   byte   zero            +8   dword  samples
+    +12  dword  zero
+    +16  the samples, signed little-endian words
+```
+
+The rate must be the clips' rate for the mixing to happen (22050); the
+converter writes both the same.
+
 ### PALETTE
 
 ```

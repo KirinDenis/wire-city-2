@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>OWL FLY 4 - video in DOS</title>
+<title>OWL NIGHT - the lab, in DOS</title>
 <link rel="stylesheet" href="jsdos/js-dos.css">
 <style>
   :root {
@@ -34,51 +34,66 @@
 </head>
 <body>
 <main>
-  <h1>OWL FLY 4 &mdash; <span>video in DOS</span></h1>
-  <p class="sub">640&times;400, 256 colours, twelve frames a second, with sound.
-     A workbench, not a game &mdash; nothing here is finished.</p>
+  <h1>OWL NIGHT &mdash; <span>the lab, in DOS</span></h1>
+  <p class="sub">A story of scenes: a room to touch, clips with sound, a question at
+     the end. 640&times;400, 256 colours. A lab, not a game &mdash; nothing here is
+     finished.</p>
 
   <div class="note">
-    <b>Press play on the picture</b>, and give it a moment &mdash; about 23 MB
-    arrives in one piece before anything happens.<br>
+    <b>Press play on the picture</b>, and give it a moment &mdash; the whole
+    story arrives in one piece before anything happens, and it is large: the
+    clips cost a megabyte a second.<br>
     It does not start by itself on purpose. A browser will not let a page make
-    a sound until you have interacted with it, so a clip that started on its
+    a sound until you have interacted with it, so a game that started on its
     own would play silently; the click that starts it is the one that unlocks
-    the audio. When it ends, any key plays it again.
+    the audio. When the story ends, any key plays it again.
   </div>
 
   <div id="dos"></div>
 
+  <h2>How to play</h2>
+  <dl>
+    <dt>The room</dt><dd>click a thing to take it; or move the cursor with the
+        arrow keys and take with Enter, if the browser has not given the
+        emulator your mouse. Every thing taken goes to its slot on the panel
+        below, and when the last one is taken the story goes on</dd>
+    <dt>A clip</dt><dd>Esc skips it</dd>
+    <dt>A question</dt><dd>the number keys answer it</dd>
+    <dt>Q</dt><dd>quits, anywhere</dd>
+  </dl>
+
   <h2>What this is</h2>
-  <p>A DOS program playing a video file. Not a recording of one &mdash; the
-     decoding is happening in the emulator, in real time, on what amounts to a
-     486. The picture is assembled a block at a time in system memory and
-     pushed to the card whole; the sound is fed to a Sound Blaster by the DMA
-     controller, and it is the sound that keeps time. Frames are pulled to it.
-     Nothing is timed from a timer.</p>
+  <p>A DOS program playing a story it reads from plain text files: which
+     scene, which clip, which things are in the room, which number the scene
+     ends with and which scene that number leads to. The clips are not
+     recordings of video &mdash; the decoding is happening in the emulator, in
+     real time, on what amounts to a 486; the sound is fed to a Sound Blaster
+     by the DMA controller, and it is the sound that keeps time. The music
+     under the room is mixed under the clips by the same program.</p>
 
   <h2>How it is built</h2>
   <dl>
     <dt>Mode</dt><dd>VESA 100h, 640&times;400, 256 colours, linear framebuffer</dd>
     <dt>Codec</dt><dd>8&times;8 blocks &mdash; skip, fill, copy, run-length &mdash; over a
         whole-frame motion vector, so a slow pan costs about thirty bytes</dd>
-    <dt>Palette</dt><dd>one for the whole clip, ordered dithering only</dd>
+    <dt>Palette</dt><dd>one for the whole clip, ordered dithering only; the
+        things in the room share the room's</dd>
     <dt>Sound</dt><dd>16-bit 22 kHz on a Sound Blaster 16, auto-init DMA on the
         high channel, position read from the DMA controller itself; an 8-bit
         card gets the high bytes</dd>
     <dt>Addressing</dt><dd>unreal mode &mdash; a 4 GB limit cached in FS. No DOS
         extender, nothing licensed, nothing vendored</dd>
-    <dt>Built with</dt><dd>FASM, inside DOS. The player is a 5.3 KB
-        <code>.COM</code> file</dd>
+    <dt>Built with</dt><dd>FASM, inside DOS. The engine is a 13 KB
+        <code>.COM</code> file; the scenes are INI files beside their clips</dd>
   </dl>
 
   <h2>What is wrong with it</h2>
-  <p>The first fraction of a second is silence: the sound card's ring buffer
-     starts empty and the picture does not wait for it. The bitrate is roughly
-     a megabyte a second, which is three or four times what a CD of the period
-     could feed &mdash; the fix for that is a codebook, and it is not written
-     yet. The hiss of the first version is gone with the move to sixteen
-     bits: it was measured to be the eight bits themselves, not the card.</p>
+  <p>Most scenes are still empty: the story runs through them and says so
+     on the screen. The room's panel has no art yet, only a dark band, and
+     the music under the first scene is a placeholder loop. The bitrate of
+     the clips is roughly a megabyte a second, three or four times what a CD
+     of the period could feed &mdash; the fix for that is a codebook, and it
+     is not written yet.</p>
 
   <p class="quiet">Part of <a href="https://github.com/KirinDenis/wire-city-2"
      style="color:var(--acc2)">wire-city-2</a>. This page is not linked from
@@ -89,10 +104,10 @@
 <script>
   // Named once. A cached page serving a stale bundle is a class of confusion
   // this project has already paid for, so the version is on the glass.
-  const BUNDLE = "owlvid_v3.jsdos";
+  const BUNDLE = "owlvid_v5.jsdos";
   const params = new URLSearchParams(location.search);
   document.querySelector(".sub").textContent +=
-    "  ·  v" + (BUNDLE.match(/_v(\d+)/) || [0, "?"])[1];
+    "  ·  v" + (BUNDLE.match(/_v(\d+)/) || [0, "?"])[1];   // the dot is escaped: pack.ps1 rewrites this page as ASCII
 
   // Belt and braces, and it has to be installed BEFORE js-dos runs - it
   // works by remembering every AudioContext the page creates, and a wrapper
@@ -162,3 +177,5 @@
 </script>
 </body>
 </html>
+
+

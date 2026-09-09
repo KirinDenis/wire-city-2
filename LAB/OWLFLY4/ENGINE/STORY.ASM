@@ -26,10 +26,19 @@
 ;  is a folder with SCENE.INI: some text for the writer, which this program
 ;  skips, a CODE, an ENTERS list, and SECTIONS in play order:
 ;
+;      MUSIC = MUSIC.PCM                  -> the scene's track, looped: on
+;                                            its own under the room, mixed
+;                                            under the clips
 ;      [VIDEO]   FILE = CLIP.OWV          -> OWVPLAY, from OWV.INC
 ;      [PICKUP]  FOLDER = PICKUP          -> BG.OWV, one frame, through the
-;                ITEM KEYS = ...             same OWVPLAY; then KEYS.SPR etc.
-;                NEED = KEYS CASSETTE        drawn on top, and taken by mouse
+;                PANEL = 64                  same OWVPLAY; then KEYS.SPR etc.
+;                ITEM KEYS = ...             drawn on top, and taken by mouse;
+;                TEXT KEYS = Her keys.       the panel below the room with a
+;                NEED = KEYS CASSETTE        slot per thing: its outline
+;                                            while it is in the room, its
+;                                            picture once taken, and a line
+;                                            of text over the room for a
+;                                            moment at the taking
 ;      [QUIZ]    TEXT = ...               -> the question and numbered
 ;                OPTION 9 = She flies        answers over the last frame
 ;
@@ -59,36 +68,38 @@ format binary as 'com'
 ; ---- conventional memory, inside this 64 KB segment -----------------------
 ;
 ;  0100  code and the small data
-;  4000  SECTTAB  2 KB         the scene's sections, parsed
-;  4800  ORDERTAB 416 bytes    the scene ids from STORY.INI
-;  4A00  ITEMTAB  256 bytes    the things of the pickup on screen
-;  4B00  CURSAVE  256 bytes    what is under the cursor
-;  4C00  HDRBUF   800 bytes    the file header of the clip being played
-;  5000  MODEBUF  256 bytes    what VESA says about mode 100h
-;  5400  INIBUF   4 KB         the INI being read, 0-terminated
-;  6400  QUEUE    32 KB        audio waiting for the interrupt (SB.INC)
-;  E400  IOBUF    4 KB         where DOS reads land before going above 1 MB
-;  F400  ...      3 KB         the stack, growing down from FFFE
+;  4000  SECTTAB  3 KB         the scene's sections, parsed
+;  4C00  ORDERTAB 416 bytes    the scene ids from STORY.INI
+;  4E00  ITEMTAB  512 bytes    the things of the pickup on screen
+;  5000  CURSAVE  256 bytes    what is under the cursor
+;  5100  HDRBUF   800 bytes    the file header of the clip being played
+;  5500  MODEBUF  256 bytes    what VESA says about mode 100h
+;  5600  INIBUF   4 KB         the INI being read, 0-terminated
+;  6600  QUEUE    32 KB        audio waiting for the interrupt (SB.INC)
+;  E600  IOBUF    4 KB         where DOS reads land before going above 1 MB
+;  F600  ...      2.5 KB       the stack, growing down from FFFE
 ;
 ;  The tables are ADDRESSES, not data in the code: the code with the two
 ;  includes is over 12 KB, and every byte of table in it would be a byte
 ;  of file and a byte less for the stack.
 SECTTAB  = 4000h
-ORDERTAB = 4800h
-ITEMTAB  = 4A00h
-CURSAVE  = 4B00h
-HDRBUF  = 4C00h
-MODEBUF = 5000h
-INIBUF  = 5400h
+ORDERTAB = 4C00h
+ITEMTAB  = 4E00h
+CURSAVE  = 5000h
+HDRBUF  = 5100h
+MODEBUF = 5500h
+INIBUF  = 5600h
 INISZ   = 1000h
-QUEUE   = 6400h
+QUEUE   = 6600h
 QUEUESZ = 32768
-IOBUF   = 0E400h
+IOBUF   = 0E600h
 IOSIZE  = 1000h
 
 ; ---- above 1 MB, through FS ------------------------------------------------
 SPRBASE = 400000h               ; the things of a pickup, 64 KB a slot
 SPRSLOT = 10000h
+ICOBASE = 500000h               ; their slot pictures, 16 KB a slot
+ICOSLOT = 4000h
 
 ; ---- the story, as tables ---------------------------------------------------
 MAXSECT  = 8
@@ -98,7 +109,7 @@ MAXORDER = 32
 NAMESZ   = 13                   ; 8.3 and a zero
 
 ; a section record
-SECTSZ   = 256
+SECTSZ   = 384
 S_KIND   = 0                    ; 1 video, 2 pickup, 3 quiz
 S_NAME   = 1                    ; FILE or FOLDER, NAMESZ bytes
 S_TOFF   = 14                   ; quiz TEXT: offset in INIBUF, length
@@ -108,23 +119,35 @@ S_OPT    = 20                   ; MAXOPT * (code w, off w, len w)
 S_NEEDO  = 74                   ; NEED: offset, length
 S_NEEDL  = 76
 S_NITEM  = 78
-S_ITEM   = 80                   ; MAXITEMS * 9 (name, zero)
+S_PANEL  = 80                   ; pickup: rows of the panel below the room
+S_ITEM   = 82                   ; MAXITEMS * SI_SZ
+SI_SZ    = 13                   ; an item: the name and a zero, then its
+SI_TOFF  = 9                    ; TEXT line - offset in INIBUF, length
+SI_TLEN  = 11
 
 K_VIDEO  = 1
 K_PICKUP = 2
 K_QUIZ   = 3
 
 ; a thing on the screen, once its .SPR is loaded
-ITSZ     = 16
+ITSZ     = 32
 IT_X     = 0                    ; signed words: where it stands on screen
 IT_Y     = 2
 IT_W     = 4
 IT_H     = 6
 IT_ADDR  = 8                    ; linear, above 1 MB
 IT_FLAGS = 12                   ; 1 loaded, 2 taken, 4 needed
+IT_ICO   = 16                   ; its slot picture: linear, or 0 for none
+IT_IX    = 20                   ; where the slot is, and how big
+IT_IY    = 22
+IT_IW    = 24
+IT_IH    = 26
 
 AUTOWAIT = 18                   ; ticks a message stays up in /AUTO: a second
 AUTOSTEP = 9                    ; ticks between two things taken in /AUTO
+CAPTH    = 24                   ; the caption band over the room, in rows
+CAPTHOLD = 27                   ; ticks it stays: a second and a half
+GREYLVL  = 38                   ; the outline's grey, in six bits (150 of 255)
 
 START:  cld
         mov  sp,0FFFEh
@@ -263,6 +286,7 @@ SCENELOOP:
         mov  dx,MKSECTS
         mov  si,NUMBUF
         call LOGWITH
+        call MUSOPEN                    ; the scene's track, if it names one
 
         mov  byte [HAVEANS],0
         mov  word [SECTNO],0
@@ -326,6 +350,7 @@ SECTNEXT:
 
 ; ---- the scene is over: an ending, or a code, or nothing ------------------
 SECTSDONE:
+        call MUSCLOSE
         cmp  byte [SENDING],1
         je   THEEND
         cmp  byte [HAVEANS],1
@@ -374,6 +399,7 @@ SCENEMISSING:
         jmp  QUITGAME
 
 QUITGAME:
+        call MUSCLOSE
         call TEXTMODE
         call SBRELEASE
         mov  dx,MSGDONE
@@ -430,6 +456,21 @@ RUNPICKUP:
 PKROOM: mov  eax,[PFRAME]               ; the frame just shown
         mov  [BGFRAME],eax
         call PALCOLS
+        ; the room is the rows above the panel; the panel's backing is
+        ; already in the frame, laid there by the converter
+        mov  bx,[CURSECT]
+        mov  ax,HEIGHT
+        sub  ax,[bx+S_PANEL]
+        cmp  ax,HEIGHT
+        ja   PKNOPANEL
+        cmp  ax,CAPTH*2
+        jb   PKNOPANEL
+        mov  [ROOMH],ax
+        jmp  PKROOMH
+PKNOPANEL:
+        mov  word [ROOMH],HEIGHT
+PKROOMH:
+        mov  byte [CAPTON],0
 
         ; the things: <scene>\<FOLDER>\<NAME>.SPR, each to its slot
         mov  bx,[CURSECT]
@@ -452,6 +493,8 @@ PKLOAD: cmp  cx,[NITEMS]
 PKLOADED:
         call MARKNEED
         call DRAWALL
+        call DRAWPANEL                  ; every slot: an outline, nothing taken yet
+        call MUSSTART                   ; the card for the room's music
         mov  byte [WASDOWN],0
         mov  word [CURX],320
         mov  word [CURY],200
@@ -551,6 +594,8 @@ PKKCLICK:
         jmp  PKCHECK
 PKNOKEY:
         call REFLAT
+        call MUSFEED                    ; the queue kept full from here
+        call CAPTCHECK                  ; a caption that has had its time
         ; /AUTO: every AUTOSTEP ticks, take the next thing
         cmp  byte [AUTO],1
         jne  PKMOUSE
@@ -657,62 +702,41 @@ PKUP:   mov  byte [WASDOWN],0
 PKCHECK:
         call ALLTAKEN
         jnc  PKLOOP
+        call CAPTWAIT                   ; the last thing's line gets its time
 PKDONE: call CURHIDE
+        call MUSSTOP
         ret
 PKQUIT: mov  byte [QUITFLAG],1
         jmp  PKDONE
 
-; Load thing CX: header, then the pixels into slot CX above 1 MB.
+; Load thing CX: its .SPR into slot CX above 1 MB, and its .SLT - the
+; slot picture for the panel - into the icon slot with the same number. A
+; thing without its .SLT has no place on the panel, and the log says so.
 LOADSPR:
+        mov  [LSIDX],cx
         mov  ax,ITSZ
         mul  cx
         add  ax,ITEMTAB
         mov  [CURIT],ax
         mov  bx,ax
         mov  byte [bx+IT_FLAGS],0
+        mov  dword [bx+IT_ICO],0
         ; the name from the section's item list
-        push cx
-        mov  ax,9
+        mov  ax,SI_SZ
         mul  cx
         mov  bx,[CURSECT]
         add  bx,ax
         lea  si,[bx+S_ITEM]
         mov  di,NAMEBUF
         call STRCPY
+        mov  [NAMEEND],di               ; the extension goes here
         mov  si,N_SPR
         call STRCPY0
-        pop  cx
-        push cx
-        mov  bx,[CURSECT]
-        lea  bx,[bx+S_NAME]
-        mov  si,NAMEBUF
-        call SCENEPATH
-        mov  ax,3D00h
-        mov  dx,PATHBUF
-        int  21h
+        mov  dword [LOLIMIT],SPRSLOT
+        call LOADOWS                    ; -> SPRHDR, the pixels at BUFLIN
         jc   LSNONE
-        mov  [FH],ax
-        mov  bx,ax
-        mov  cx,16
-        mov  dx,SPRHDR
-        mov  ah,3Fh
-        int  21h
-        call REFLAT
-        cmp  ax,16
-        jne  LSBAD
-        cmp  dword [SPRHDR],'OWS1'
-        jne  LSBAD
-        movzx ecx,word [SPRHDR+4]
-        movzx eax,word [SPRHDR+6]
-        mul  ecx                        ; eax = w*h
-        mov  ecx,eax
-        cmp  ecx,SPRSLOT
-        ja   LSBAD
-        call READPAY                    ; -> BUFLIN
-        pop  cx
-        push cx
         mov  eax,SPRSLOT
-        movzx ebx,cx
+        movzx ebx,word [LSIDX]
         mul  ebx
         add  eax,SPRBASE
         mov  edi,eax
@@ -752,22 +776,92 @@ LOADSPR:
         call LOGWITH
         mov  dx,MKHEX
         call LOGMARK
-        jmp  LSCLOSE
-LSBAD:  mov  dx,MKBADSPR
+
+        ; and the slot picture, <NAME>.SLT, into the icon slot
+        mov  di,[NAMEEND]
+        mov  si,N_SLT
+        call STRCPY0
+        mov  dword [LOLIMIT],ICOSLOT
+        call LOADOWS
+        jc   LSNOSLT
+        mov  eax,ICOSLOT
+        movzx ebx,word [LSIDX]
+        mul  ebx
+        add  eax,ICOBASE
+        mov  edi,eax
+        mov  bx,[CURIT]
+        mov  [bx+IT_ICO],edi
+        mov  esi,BUFLIN
+        movzx ecx,word [SPRHDR+4]
+        movzx eax,word [SPRHDR+6]
+        mul  ecx
+        mov  ecx,eax
+        call COPYB
+        mov  bx,[CURIT]
+        mov  ax,word [SPRHDR+8]
+        mov  [bx+IT_IX],ax
+        mov  ax,word [SPRHDR+10]
+        mov  [bx+IT_IY],ax
+        mov  ax,word [SPRHDR+4]
+        mov  [bx+IT_IW],ax
+        mov  ax,word [SPRHDR+6]
+        mov  [bx+IT_IH],ax
+        ret
+LSNOSLT:
+        mov  dx,MKNOSLT
         mov  si,NAMEBUF
         call LOGWITH
-LSCLOSE:
+        ret
+LSNONE: ; a thing without its .SPR is not there; the log says so
+        mov  dx,MKNOSPR
+        mov  si,PATHBUF
+        call LOGWITH
+        ret
+
+; An OWS1 file, <scene>\<FOLDER>\NAMEBUF: the sixteen-byte header into
+; SPRHDR, the pixels to BUFLIN. CF = not there, not an OWS1, or bigger
+; than [LOLIMIT] - the last two are logged, the first is the caller's.
+LOADOWS:
+        mov  bx,[CURSECT]
+        lea  bx,[bx+S_NAME]
+        mov  si,NAMEBUF
+        call SCENEPATH
+        mov  ax,3D00h
+        mov  dx,PATHBUF
+        int  21h
+        jc   LONONE
+        mov  [FH],ax
+        mov  bx,ax
+        mov  cx,16
+        mov  dx,SPRHDR
+        mov  ah,3Fh
+        int  21h
+        call REFLAT
+        cmp  ax,16
+        jne  LOBAD
+        cmp  dword [SPRHDR],'OWS1'
+        jne  LOBAD
+        movzx ecx,word [SPRHDR+4]
+        movzx eax,word [SPRHDR+6]
+        mul  ecx                        ; eax = w*h
+        mov  ecx,eax
+        cmp  ecx,[LOLIMIT]
+        ja   LOBAD
+        call READPAY                    ; -> BUFLIN
         mov  bx,[FH]
         mov  ah,3Eh
         int  21h
         call REFLAT
-        pop  cx
+        clc
         ret
-LSNONE: pop  cx
-        ; a thing without its .SPR is not there; the log says so
-        mov  dx,MKNOSPR
-        mov  si,PATHBUF
+LOBAD:  mov  dx,MKBADSPR
+        mov  si,NAMEBUF
         call LOGWITH
+        mov  bx,[FH]
+        mov  ah,3Eh
+        int  21h
+LONONE: call REFLAT
+        stc
         ret
 
 ; Which things must be taken: the ones named in NEED, or all of them.
@@ -777,7 +871,7 @@ MN1:    mov  dx,[MNIDX]
         cmp  dx,[NITEMS]
         jae  MNDONE
         mov  di,dx
-        shl  di,4                       ; ITSZ = 16
+        shl  di,5                       ; ITSZ = 32
         add  di,ITEMTAB
         test byte [di+IT_FLAGS],1
         jz   MN2                        ; not loaded: never needed
@@ -785,7 +879,7 @@ MN1:    mov  dx,[MNIDX]
         mov  cx,[bx+S_NEEDL]
         test cx,cx
         jz   MNALL                      ; no NEED line: everything is needed
-        mov  ax,9
+        mov  ax,SI_SZ
         mul  dx
         mov  bx,[CURSECT]
         add  bx,ax
@@ -886,7 +980,8 @@ DSROW:  test ecx,ecx
         jz   DSDONE
         cmp  eax,0
         jl   DSNEXT
-        cmp  eax,HEIGHT
+        movzx edx,word [ROOMH]          ; the room ends where the panel starts
+        cmp  eax,edx
         jge  DSDONE
         push ecx
         push eax
@@ -937,7 +1032,8 @@ RSROW:  test ecx,ecx
         jz   RSDONE
         cmp  eax,0
         jl   RSNEXT
-        cmp  eax,HEIGHT
+        movzx edx,word [ROOMH]
+        cmp  eax,edx
         jge  RSDONE
         push ecx
         push eax
@@ -982,8 +1078,14 @@ TAKE:   push cx
         call RESTBG
         call DRAWALL
         pop  cx
+        push cx
+        call SLOTON                     ; its slot turns to colour
+        pop  cx
+        push cx
+        call CAPTION                    ; and its line, if it has one
+        pop  cx
         ; the log: which one
-        mov  ax,9
+        mov  ax,SI_SZ
         mul  cx
         mov  bx,[CURSECT]
         add  bx,ax
@@ -1002,6 +1104,8 @@ TAKE:   push cx
 HITTEST:
         mov  [HX],ax
         mov  [HY],dx
+        cmp  dx,[ROOMH]                 ; the panel is not the room: a click
+        jae  HTNO                       ; there takes nothing
         mov  byte [HTPASS],0
 HTPASS0:
         mov  cx,[NITEMS]
@@ -1009,7 +1113,7 @@ HT1:    test cx,cx
         jz   HTAGAIN
         dec  cx
         mov  bx,cx
-        shl  bx,4                       ; ITSZ = 16
+        shl  bx,5                       ; ITSZ = 32
         add  bx,ITEMTAB
         mov  al,[bx+IT_FLAGS]
         and  al,3
@@ -1122,9 +1226,11 @@ CE1:    cmp  ax,WIDTH-1
 CE2:    cmp  dx,0
         jge  CE3
         xor  dx,dx
-CE3:    cmp  dx,HEIGHT-1
+CE3:    mov  cx,[ROOMH]                 ; inside the room, not the panel
+        dec  cx
+        cmp  dx,cx
         jle  CE4
-        mov  dx,HEIGHT-1
+        mov  dx,cx
 CE4:    ret
 
 ; ---------------------------------------------------------------------------
@@ -1291,6 +1397,7 @@ QZDRAWN:
         call SHOT
         mov  dx,MKQUIZ
         call LOGMARK
+        call MUSSTART                   ; the scene's music under the question
         call TICK
         mov  [AUTOT],eax
 QZWAIT: mov  ah,1
@@ -1312,6 +1419,7 @@ QZWAIT: mov  ah,1
         jmp  QZPICK
 QZNOKEY:
         call REFLAT
+        call MUSFEED
         cmp  byte [AUTO],1
         jne  QZWAIT
         call TICK
@@ -1333,8 +1441,10 @@ QZPICK: ; answer DX -> its code
         mov  dx,MKANSWER
         mov  si,NUMBUF
         call LOGWITH
+        call MUSSTOP
         ret
 QZQUIT: mov  byte [QUITFLAG],1
+        call MUSSTOP
         ret
 
 ; ===========================================================================
@@ -1416,11 +1526,16 @@ FR2:    mov  [fs:edi],al
 
 ; The brightest and the darkest entries of the palette in HDRBUF: every
 ; clip has its own colours, and text has to be readable over all of them.
+; And the entry nearest a mid grey, for the outlines on the panel - a
+; night-time palette has few greys, so "nearest" is measured as the
+; distance from the grey level AND the distance from being grey at all,
+; or a strong colour of the right brightness would win.
 PALCOLS:
         mov  si,HDRBUF+32
         xor  cx,cx
         mov  word [PMAX],0
         mov  word [PMIN],0FFFFh
+        mov  word [PGREY],0FFFFh
 PC1:    movzx ax,byte [si]
         movzx bx,byte [si+1]
         add  ax,bx
@@ -1434,10 +1549,41 @@ PC2:    cmp  ax,[PMIN]
         jae  PC3
         mov  [PMIN],ax
         mov  [BLACK],cl
-PC3:    add  si,3
-        inc  cx
+PC3:    push cx
+        movzx ax,byte [si]              ; r
+        movzx bx,byte [si+1]            ; g
+        movzx dx,byte [si+2]            ; b
+        add  si,3
+        xor  cx,cx
+        mov  di,ax
+        sub  di,GREYLVL
+        call ABSADD                     ; cx += |r - grey|
+        mov  di,bx
+        sub  di,GREYLVL
+        call ABSADD
+        mov  di,dx
+        sub  di,GREYLVL
+        call ABSADD
+        mov  di,ax
+        sub  di,bx
+        call ABSADD                     ; cx += |r - g|
+        mov  di,bx
+        sub  di,dx
+        call ABSADD                     ; cx += |g - b|
+        mov  di,cx
+        pop  cx
+        cmp  di,[PGREY]
+        jae  PC4
+        mov  [PGREY],di
+        mov  [GREY],cl
+PC4:    inc  cx
         cmp  cx,256
         jb   PC1
+        ret
+ABSADD: test di,di
+        jns  AA1
+        neg  di
+AA1:    add  cx,di
         ret
 
 ; ---------------------------------------------------------------------------
@@ -1675,6 +1821,7 @@ PSDONE: ret
 PARSESCENE:
         mov  byte [HAVECODE],0
         mov  byte [SENDING],0
+        mov  byte [MUSNAME],0
         mov  word [NSECT],0
         mov  word [CURSECT],0
         mov  word [INIPOS],INIBUF
@@ -1687,7 +1834,7 @@ PC1A:   call NEXTLINE
         mov  bx,[CURSECT]
         test bx,bx
         jnz  PCINSECT
-        ; top level: CODE, ENDING
+        ; top level: CODE, ENDING, MUSIC
         mov  di,KEYBUF
         mov  bx,K_CODE
         call STREQ
@@ -1695,6 +1842,15 @@ PC1A:   call NEXTLINE
         mov  bx,K_ENDING
         call STREQ
         jnc  PCENDING
+        mov  bx,K_MUSIC
+        call STREQ
+        jnc  PCMUSIC
+        jmp  PC1A
+PCMUSIC:
+        mov  si,[VALOFF]
+        mov  cx,[VALLEN]
+        mov  di,MUSNAME
+        call COPYNAME
         jmp  PC1A
 PCCODE: mov  si,[VALOFF]
         mov  cx,[VALLEN]
@@ -1775,6 +1931,40 @@ PCP:    mov  di,KEYBUF
         mov  bx,K_ITEM
         call STREQ
         jnc  PCITEM
+        mov  bx,K_PANEL
+        call STREQ
+        jnc  PCPANEL
+        mov  bx,K_TEXT
+        call STREQ
+        jnc  PCITEXT
+        jmp  PC1A
+PCPANEL:
+        mov  si,[VALOFF]
+        mov  cx,[VALLEN]
+        call PARSENUM
+        jc   PC1A
+        mov  bx,[CURSECT]
+        mov  [bx+S_PANEL],ax
+        jmp  PC1A
+PCITEXT:
+        ; TEXT <item> = a line: to the item of that name, if it is one of
+        ; the section's - the desk writes the ITEM lines first
+        mov  bx,[CURSECT]
+        movzx cx,byte [bx+S_NITEM]
+        lea  bx,[bx+S_ITEM]
+PT1:    test cx,cx
+        jz   PC1A
+        mov  di,SUBBUF
+        call STREQ                      ; DS:DI against DS:BX, the name
+        jnc  PT2
+        add  bx,SI_SZ
+        dec  cx
+        jmp  PT1
+PT2:    mov  ax,[VALOFF]
+        sub  ax,INIBUF
+        mov  [bx+SI_TOFF],ax
+        mov  ax,[VALLEN]
+        mov  [bx+SI_TLEN],ax
         jmp  PC1A
 PCNEED: mov  bx,[CURSECT]
         mov  ax,[VALOFF]
@@ -1788,7 +1978,7 @@ PCITEM: mov  bx,[CURSECT]
         cmp  ax,MAXITEMS
         jae  PC1A
         inc  byte [bx+S_NITEM]
-        mov  cx,9
+        mov  cx,SI_SZ
         mul  cx
         add  bx,ax
         lea  di,[bx+S_ITEM]
@@ -2245,6 +2435,412 @@ PZ1:    lodsb
 PZ2:    pop  si
         ret
 
+; ===========================================================================
+;  The panel: a slot per thing in the band below the room. The band's
+;  backing is in the room's frame already (the converter laid it there);
+;  this draws only the things' slot pictures, .SLT files placed by the
+;  converter, so the desk and the game put a slot in the same place by
+;  construction. A thing still in the room shows as its OUTLINE - every
+;  opaque pixel with a transparent neighbour, in the palette's grey - and
+;  a thing that has been taken shows as itself.
+; ===========================================================================
+DRAWPANEL:
+        xor  cx,cx
+DP1:    cmp  cx,[NITEMS]
+        jae  DPDONE
+        push cx
+        mov  ax,ITSZ
+        mul  cx
+        add  ax,ITEMTAB
+        mov  bx,ax
+        mov  al,[bx+IT_FLAGS]
+        shr  al,1
+        and  al,1                       ; taken -> in colour
+        mov  [ICOMODE],al
+        pop  cx
+        push cx
+        call DRAWICO
+        pop  cx
+        inc  cx
+        jmp  DP1
+DPDONE: ret
+
+; Thing CX has been taken: its slot in colour.
+SLOTON: mov  byte [ICOMODE],1
+        call DRAWICO
+        ret
+
+; The slot picture of thing CX: in colour when [ICOMODE] is 1, as an
+; outline when it is 0. Nothing is clipped - the converter put every
+; slot inside the band.
+DRAWICO:
+        mov  ax,ITSZ
+        mul  cx
+        add  ax,ITEMTAB
+        mov  bx,ax
+        mov  esi,[bx+IT_ICO]
+        test esi,esi
+        jz   DIDONE
+        movzx eax,word [bx+IT_IW]
+        mov  [IWD],eax
+        movzx eax,word [bx+IT_IH]
+        mov  [IHD],eax
+        movzx eax,word [bx+IT_IY]
+        imul eax,WIDTH
+        movzx edx,word [bx+IT_IX]
+        add  eax,edx
+        add  eax,[LFB]
+        mov  edi,eax                    ; the top left, on the screen
+        mov  dword [DIY],0
+        mov  ecx,[IHD]
+DIROW:  push ecx
+        push edi
+        mov  ecx,[IWD]
+        xor  edx,edx                    ; x within the picture
+DIPIX:  mov  al,[fs:esi]
+        cmp  al,255
+        je   DISKIP
+        cmp  byte [ICOMODE],1
+        je   DIPUT
+        ; an outline pixel: at an edge of the picture, or next to a
+        ; transparent one - left, right, above, below
+        test edx,edx
+        jz   DIEDGE
+        cmp  byte [fs:esi-1],255
+        je   DIEDGE
+        mov  eax,edx
+        inc  eax
+        cmp  eax,[IWD]
+        jae  DIEDGE
+        cmp  byte [fs:esi+1],255
+        je   DIEDGE
+        cmp  dword [DIY],0
+        je   DIEDGE
+        push esi
+        sub  esi,[IWD]
+        mov  al,[fs:esi]
+        pop  esi
+        cmp  al,255
+        je   DIEDGE
+        mov  eax,[DIY]
+        inc  eax
+        cmp  eax,[IHD]
+        jae  DIEDGE
+        push esi
+        add  esi,[IWD]
+        mov  al,[fs:esi]
+        pop  esi
+        cmp  al,255
+        je   DIEDGE
+        jmp  DISKIP                     ; inside the shape: not drawn
+DIEDGE: mov  al,[GREY]
+DIPUT:  mov  [fs:edi],al
+DISKIP: inc  esi
+        inc  edi
+        inc  edx
+        dec  ecx
+        jnz  DIPIX
+        pop  edi
+        add  edi,WIDTH
+        pop  ecx
+        inc  dword [DIY]
+        dec  ecx
+        jnz  DIROW
+DIDONE: ret
+
+; ===========================================================================
+;  The caption: the thing's TEXT line, in a black band at the foot of the
+;  room for a second and a half. Drawn at the taking, taken down from the
+;  loop; the band is restored from the room's frame and the things drawn
+;  again over it. The last thing's line gets its time before the section
+;  ends (CAPTWAIT), so the video does not cut it off mid-word.
+; ===========================================================================
+CAPTION:
+        mov  ax,SI_SZ
+        mul  cx
+        mov  bx,[CURSECT]
+        add  bx,ax
+        mov  cx,[bx+S_ITEM+SI_TLEN]
+        test cx,cx
+        jz   CPDONE
+        mov  si,[bx+S_ITEM+SI_TOFF]
+        add  si,INIBUF
+        push si
+        push cx
+        cmp  byte [CAPTON],1            ; the last one comes down first
+        jne  CP1
+        call CAPTHIDE
+CP1:    mov  word [RX],0
+        mov  ax,[ROOMH]
+        sub  ax,CAPTH
+        mov  [RY],ax
+        mov  word [RWID],WIDTH
+        mov  word [RHGT],CAPTH
+        mov  al,[BLACK]
+        call FILLRECT
+        pop  cx
+        pop  si
+        ; centred, sixteen pixels a glyph; too long for the width and it
+        ; starts at the left and stops at the right edge
+        mov  ax,cx
+        shl  ax,4
+        cmp  ax,WIDTH
+        jbe  CP2
+        mov  ax,WIDTH
+CP2:    neg  ax
+        add  ax,WIDTH
+        shr  ax,1
+        mov  [TX],ax
+        mov  ax,[RY]
+        add  ax,(CAPTH-16)/2
+        mov  [TY],ax
+        call DRAWTXT
+        mov  byte [CAPTON],1
+        call TICK
+        mov  [CAPT],eax
+CPDONE: ret
+
+; From the loop: a caption that has had its time comes down.
+CAPTCHECK:
+        cmp  byte [CAPTON],1
+        jne  CCDONE
+        call TICK
+        sub  eax,[CAPT]
+        cmp  eax,CAPTHOLD
+        jb   CCDONE
+        call CURHIDE
+        call CAPTHIDE
+        call CURSHOW
+CCDONE: ret
+
+; Wait the caption out, feeding the music meanwhile.
+CAPTWAIT:
+        cmp  byte [CAPTON],1
+        jne  CWDONE
+CW1:    call MUSFEED
+        call TICK
+        sub  eax,[CAPT]
+        cmp  eax,CAPTHOLD
+        jb   CW1
+        call CURHIDE
+        call CAPTHIDE
+        call CURSHOW
+CWDONE: ret
+
+; The band back from the room's frame, the things over it again.
+CAPTHIDE:
+        pushad
+        movzx eax,word [ROOMH]
+        sub  eax,CAPTH
+        imul eax,WIDTH
+        mov  esi,eax
+        mov  edi,eax
+        add  esi,[BGFRAME]
+        add  edi,[LFB]
+        mov  ecx,CAPTH*WIDTH
+        call COPYB
+        call DRAWALL
+        mov  byte [CAPTON],0
+        popad
+        ret
+
+; ===========================================================================
+;  The scene's music. MUSIC = <file> in SCENE.INI names an OWA1 file beside
+;  it - sixteen-bit mono samples with a sixteen-byte header - opened when
+;  the scene starts and closed when it ends, and LOOPED: a read that comes
+;  up short goes back to the first sample and carries on. Under the room
+;  (and a quiz) the card is started for it and the loop keeps the queue
+;  fed; under a clip the decoder hands every audio chunk through OWV_MIX
+;  and the music is added in at half level. No card: silence, as before.
+; ===========================================================================
+MUSOPEN:
+        mov  byte [MUSON],0
+        cmp  byte [MUSNAME],0
+        je   MODONE
+        mov  si,MUSNAME
+        xor  bx,bx
+        call SCENEPATH
+        mov  ax,3D00h
+        mov  dx,PATHBUF
+        int  21h
+        jc   MONONE
+        mov  [MUSFH],ax
+        mov  bx,ax
+        mov  cx,16
+        mov  dx,MUSHDR
+        mov  ah,3Fh
+        int  21h
+        call REFLAT
+        cmp  ax,16
+        jne  MOBAD
+        cmp  dword [MUSHDR],'OWA1'
+        jne  MOBAD
+        cmp  byte [MUSHDR+6],16
+        jne  MOBAD
+        mov  ax,word [MUSHDR+4]
+        mov  [MUSRATE],ax
+        mov  byte [MUSON],1
+        mov  dx,MKMUSIC
+        mov  si,MUSNAME
+        call LOGWITH
+        ret
+MOBAD:  mov  bx,[MUSFH]
+        mov  ah,3Eh
+        int  21h
+        call REFLAT
+        mov  dx,MKBADMUS
+        mov  si,MUSNAME
+        call LOGWITH
+        ret
+MONONE: call REFLAT
+        mov  dx,MKNOMUS
+        mov  si,PATHBUF
+        call LOGWITH
+MODONE: ret
+
+MUSCLOSE:
+        cmp  byte [MUSON],1
+        jne  MCDONE
+        call MUSSTOP
+        mov  bx,[MUSFH]
+        mov  ah,3Eh
+        int  21h
+        call REFLAT
+        mov  byte [MUSON],0
+MCDONE: ret
+
+; The card, for a screen with no clip on it: the music's rate, sixteen
+; bits, an empty queue that MUSFEED fills from the loop.
+MUSSTART:
+        mov  byte [MUSRUN],0
+        cmp  byte [MUSON],1
+        jne  MSDONE
+        mov  ax,[MUSRATE]
+        mov  [SBRATE],ax
+        mov  byte [SBWANT16],1
+        call SBINIT
+        jc   MSNOCARD
+        call REFLAT
+        mov  byte [MUSRUN],1
+        call MUSFEED
+        ret
+MSNOCARD:
+        call REFLAT
+MSDONE: ret
+
+MUSSTOP:
+        cmp  byte [MUSRUN],1
+        jne  MTDONE
+        call SBHALT
+        mov  byte [MUSRUN],0
+MTDONE: ret
+
+; Keep the queue full: while there is room for a whole IOBUF, read one
+; and hand it over. Bounded by the queue - eight pieces at the most.
+MUSFEED:
+        cmp  byte [MUSRUN],1
+        jne  MFDONE
+        pushad
+MF1:    mov  ax,[QHEAD]
+        sub  ax,[QTAIL]
+        dec  ax
+        and  ax,QUEUESZ-1               ; bytes free
+        cmp  ax,IOSIZE
+        jb   MFEXIT
+        mov  cx,IOSIZE
+        call MUSREAD                    ; -> AX bytes at IOBUF
+        test ax,ax
+        jz   MFEXIT
+        mov  cx,ax
+        mov  esi,[IOBUFLIN]
+        call SBFEED
+        jmp  MF1
+MFEXIT: popad
+MFDONE: ret
+
+; CX bytes of the music into IOBUF, from where it left off. A read that
+; comes up short is the end of the file: back to the first sample, once,
+; and the rest of the piece from there - so the loop point is not a hole.
+; AX = how many arrived.
+MUSREAD:
+        mov  [MRWANT],cx
+        mov  word [MRGOT],0
+        mov  byte [MRWRAP],0
+MR1:    mov  cx,[MRWANT]
+        sub  cx,[MRGOT]
+        jz   MRDONE
+        mov  bx,[MUSFH]
+        mov  dx,IOBUF
+        add  dx,[MRGOT]
+        mov  ah,3Fh
+        int  21h
+        jc   MRDONE
+        add  [MRGOT],ax
+        cmp  ax,cx
+        je   MR1
+        cmp  byte [MRWRAP],1
+        je   MRDONE
+        mov  byte [MRWRAP],1
+        mov  bx,[MUSFH]
+        mov  ax,4200h                   ; seek: past the header
+        xor  cx,cx
+        mov  dx,16
+        int  21h
+        jmp  MR1
+MRDONE: call REFLAT
+        mov  ax,[MRGOT]
+        ret
+
+; OWV_MIX - the decoder calls this with the clip's audio chunk at BUFLIN,
+; ECX bytes, before the queue gets it. The music is read in step and added
+; in at half level, saturated. Sixteen-bit clips at the music's own rate
+; only; anything else plays the clip alone. ECX goes back as it came.
+OWV_MIX:
+        cmp  byte [MUSON],1
+        jne  OMDONE
+        test byte [HDRBUF+9],2
+        jz   OMDONE
+        mov  ax,[HDRBUF+12]
+        cmp  ax,[MUSRATE]
+        jne  OMDONE
+        pushad
+        mov  esi,BUFLIN
+        mov  [OMLEFT],ecx
+OM1:    mov  ecx,[OMLEFT]
+        test ecx,ecx
+        jz   OMEXIT
+        cmp  ecx,IOSIZE
+        jbe  OM2
+        mov  ecx,IOSIZE
+OM2:    and  cx,0FFFEh                  ; whole samples
+        jz   OMEXIT
+        push esi
+        call MUSREAD                    ; -> AX bytes at IOBUF
+        pop  esi
+        movzx ecx,ax
+        and  ecx,0FFFFFFFEh
+        jz   OMEXIT
+        sub  [OMLEFT],ecx
+        shr  ecx,1                      ; samples
+        mov  di,IOBUF
+OM3:    mov  ax,[di]
+        sar  ax,1                       ; the music at half level
+        mov  bx,[fs:esi]
+        add  bx,ax
+        jno  OM4
+        mov  bx,7FFFh                   ; over the top: pinned at the rail
+        test ax,ax                      ; on the side it went over
+        jns  OM4
+        mov  bx,8000h
+OM4:    mov  [fs:esi],bx
+        add  esi,2
+        add  di,2
+        dec  ecx
+        jnz  OM3
+        jmp  OM1
+OMEXIT: popad
+OMDONE: ret
+
 include '..\VIDEO\OWV.INC'
 include '..\VIDEO\SB.INC'
 
@@ -2257,6 +2853,7 @@ N_STORY  db 'STORY.INI',0
 N_SCENE  db 'SCENE.INI',0
 N_BG     db 'BG.OWV',0
 N_SPR    db '.SPR',0
+N_SLT    db '.SLT',0
 SHOTNAME db 'SHOT00.OWV',0
 
 K_START  db 'START',0
@@ -2268,6 +2865,8 @@ K_FILE   db 'FILE',0
 K_FOLDER db 'FOLDER',0
 K_NEED   db 'NEED',0
 K_ITEM   db 'ITEM',0
+K_PANEL  db 'PANEL',0
+K_MUSIC  db 'MUSIC',0
 K_TEXT   db 'TEXT',0
 K_OPTION db 'OPTION',0
 K_VIDEON db 'VIDEO',0
@@ -2301,6 +2900,10 @@ MKDIR    db 'story    $'
 MKITEMS  db 'items    $'
 MKSPR    db 'loaded   $'
 MKBADSPR db 'BAD .SPR $'
+MKNOSLT  db 'no .SLT  $'
+MKMUSIC  db 'music    $'
+MKNOMUS  db 'no music $'
+MKBADMUS db 'BAD music$'
 MKHEX    db '         buflin='
 HEXA     db '00000000  slot='
 HEXB     db '00000000  at '
@@ -2399,6 +3002,26 @@ HTY      dw 0
 HTPASS   db 0
 MNIDX    dw 0
 INIPOS   dw 0
+ROOMH    dw HEIGHT              ; where the room ends and the panel starts
+GREY     db 7                   ; the palette's grey, for the outlines
+PGREY    dw 0
+ICOMODE  db 0
+DIY      dd 0
+IWD      dd 0
+IHD      dd 0
+CAPTON   db 0
+CAPT     dd 0
+LSIDX    dw 0
+NAMEEND  dw 0
+LOLIMIT  dd 0
+MUSON    db 0                   ; the scene has a track, and it is open
+MUSRUN   db 0                   ; ...and the card is playing it by itself
+MUSFH    dw 0
+MUSRATE  dw 0
+MRWANT   dw 0
+MRGOT    dw 0
+MRWRAP   db 0
+OMLEFT   dd 0
 
 STORYDIR db 80 dup (0)
 PATHBUF  db 128 dup (0)
@@ -2411,6 +3034,8 @@ CURID    db NAMESZ dup (0)
 CANDID   db NAMESZ dup (0)
 LINEBUF  db 96 dup (0)
 SPRHDR   db 16 dup (0)
+MUSNAME  db NAMESZ dup (0)
+MUSHDR   db 16 dup (0)
 
 ; ============================================================================
 ;  The program must not grow into its own tables.

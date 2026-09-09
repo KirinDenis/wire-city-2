@@ -248,6 +248,30 @@ $MAP = @{
       @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`ncls`nHELP.BAT`n" }
     )
   }
+  # OWL NIGHT, the LAB game, on the unlisted page: the story engine and the
+  # whole NIGHT story - every SCENE.INI and every product beside it. The
+  # story is a TREE, not a list of files, so it comes in through `trees`:
+  # a folder walked for the extensions named, `frames\` and the recipes'
+  # logs left behind. The bundle is large (the clips are a megabyte a
+  # second) and GitHub refuses a file over 100 MB, so the script says the
+  # size out loud and stops rather than commit a bundle Pages cannot serve.
+  OWLVID = @{
+    prefix = "owlvid"
+    page   = Join-Path $root "docs\owlvid.html"
+    detect = "owlvid_v(\d+)\.jsdos"
+    files  = @(
+      @{ p = "LAB\OWLFLY4\ENGINE\STORY.COM"; n = "ENGINE/STORY.COM" }
+    )
+    trees  = @(
+      @{ p = "LAB\OWLFLY4\STORY\NIGHT"; n = "STORY/NIGHT"; ext = @('.INI', '.OWV', '.SPR', '.SLT', '.PCM'); skip = @('frames') }
+    )
+    ignore = @()
+    limit  = 100MB
+    strings = @(
+      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[sblaster]`nsbtype=sb16`n[autoexec]`necho off`nmount c .`nc:`ncd ENGINE`n:again`nSTORY`necho.`necho Press a key to play it again.`npause`ngoto again`n" },
+      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[sblaster]`nsbtype=sb16`n[autoexec]`necho off`nmount c .`nc:`ncd ENGINE`n:again`nSTORY`necho.`necho Press a key to play it again.`npause`ngoto again`n" }
+    )
+  }
   WIRECITY = @{
     prefix = "wirecity"
     page   = Join-Path $root "docs\play.html"
@@ -267,6 +291,22 @@ $g = $MAP[$Game]
 foreach ($f in $g.files) {
   $full = Join-Path $root $f.p
   if (-not (Test-Path $full)) { throw "$($f.p) not found - build it first (MAKE.BAT $Game)" }
+}
+
+# a tree becomes files: walked now, so that everything below sees one list
+if ($g.ContainsKey('trees')) {
+  $g.files = @($g.files)
+  foreach ($t in $g.trees) {
+    $base = Join-Path $root $t.p
+    if (-not (Test-Path $base)) { throw "$($t.p) not found" }
+    Get-ChildItem $base -File -Recurse | Where-Object {
+      $_.Extension.ToUpper() -in $t.ext -and
+      -not ($t.skip | Where-Object { $_ -and $PSItem -and $_.FullName -match "\\$PSItem\\" })
+    } | Sort-Object FullName | ForEach-Object {
+      $rel = $_.FullName.Substring($base.Length + 1) -replace '\\', '/'
+      $g.files += @{ p = $_.FullName.Substring($root.Length + 1); n = "$($t.n)/$rel" }
+    }
+  }
 }
 
 # ...and now the other direction, which is the one that actually bites. The
@@ -297,6 +337,17 @@ $out  = Join-Path $root "docs\$name"
 if (Test-Path $out) { Remove-Item -Force $out }
 $fs  = [System.IO.File]::Open($out, [System.IO.FileMode]::CreateNew)
 $zip = New-Object System.IO.Compression.ZipArchive($fs, [System.IO.Compression.ZipArchiveMode]::Create)
+# Every folder on the way to a file gets an entry of its own, parents
+# first. js-dos's unzip makes ONE level of folder from a file's path and no
+# more: a file two folders deep came out as "STORY/NIGHT/END_FLY: No such
+# file or directory" and the machine never booted. (.jsdos/dosbox.conf is
+# one level deep, which is why the flat games never met this.)
+$dirs = @{}
+foreach ($f in @($g.files) + @($g.strings)) {
+  $parts = $f.n -split '/'
+  for ($i = 1; $i -lt $parts.Length; $i++) { $dirs[(($parts[0..($i - 1)]) -join '/') + '/'] = $true }
+}
+foreach ($d in $dirs.Keys | Sort-Object { ($_ -split '/').Length }, { $_ }) { [void]$zip.CreateEntry($d) }
 foreach ($f in $g.files) {
   $entry  = $zip.CreateEntry($f.n, [System.IO.Compression.CompressionLevel]::Optimal)
   $stream = $entry.Open()
@@ -313,6 +364,17 @@ foreach ($e in $g.strings) {
 }
 $zip.Dispose()
 $fs.Close()
+
+# a bundle GitHub will not take is not a release: stop before the page is
+# touched, and leave the older bundle in place
+if ($g.ContainsKey('limit')) {
+  $len = (Get-Item $out).Length
+  Write-Host ("  bundle    {0:N1} MB" -f ($len / 1MB))
+  if ($len -gt $g.limit) {
+    Remove-Item -Force $out
+    throw ("docs/$name would be {0:N1} MB and GitHub refuses files over {1:N0} MB - leave a clip out of the story (a missing product plays as MISSING, any key moves on)" -f ($len / 1MB), ($g.limit / 1MB))
+  }
+}
 
 # retire this game's older bundles (incl. the legacy city_v* for OWLFLY)
 Get-ChildItem (Join-Path $root "docs") -Filter "$($g.prefix)_v*.jsdos" |

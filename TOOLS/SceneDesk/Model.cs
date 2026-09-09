@@ -197,8 +197,21 @@ public class Scene
     public int? Code;                               // how it ends, when no quiz decides
     public List<Section> Sections = new();
 
+    // MUSIC = MUSIC.PCM          the scene's track, the product beside SCENE.INI:
+    //                            the game loops it under the room and mixes it
+    //                            under the clips
+    // MUSICSOURCE = MUSIC\x.mp3  where it came from, relative to the scene's
+    //                            warehouse folder - the desk's, not the game's
+    public const string MUSIC = "MUSIC.PCM", MUSIC_INF = "MUSIC.INF";
+    public string Music = "", MusicSource = "";
+    public bool MusicDone, MusicStale;
+
     public string Dir(Story s) => Path.Combine(s.Dir, Id);
     public string MatDir(Story s) => Path.Combine(s.MatDir, Id);
+    public string MusicAbs(Story s) => MusicSource == "" ? null : Path.Combine(MatDir(s), MusicSource);
+    public string MusicProduct(Story s) => Path.Combine(Dir(s), Music == "" ? MUSIC : Music);
+    public string MusicInf(Story s) => Path.Combine(Dir(s), MUSIC_INF);
+    public string MusicMark => MusicSource == "" ? "" : MusicDone ? "♪" : "♪?";
 
     public QuizSection Quiz => Sections.OfType<QuizSection>().LastOrDefault();
 
@@ -240,6 +253,8 @@ public class Scene
                     case "ENDING": sc.Ending = l.Value.Equals("yes", StringComparison.OrdinalIgnoreCase); break;
                     case "ENTERS": sc.Enters = Story.Ints(l.Value); break;
                     case "CODE": sc.Code = int.TryParse(l.Value, out var c) ? c : null; break;
+                    case "MUSIC": sc.Music = l.Value; break;
+                    case "MUSICSOURCE": sc.MusicSource = l.Value; break;
                 }
             else cur.Read(l);
         }
@@ -262,13 +277,20 @@ public class Scene
             .Key("ENDING", Ending ? "yes" : "no")
             .Key("NOTES", Ini.One(Notes))
             .Key("LEARN", Ini.One(Learn))
-            .Key("DECIDE", Ini.One(Decide));
+            .Key("DECIDE", Ini.One(Decide))
+            .Key("MUSIC", MusicSource == "" && Music == "" ? "" : (Music == "" ? MUSIC : Music))
+            .Key("MUSICSOURCE", MusicSource);
         foreach (var sec in Sections) { w.Blank().Section(sec.Kind); sec.Write(w); }
         w.Save(Path.Combine(d, FILE));
     }
 
-    // Every section's state, asked of the disk now.
-    public void Refresh(Story s) { foreach (var sec in Sections) sec.Refresh(s, this); }
+    // Every section's state, asked of the disk now - and the music's.
+    public void Refresh(Story s)
+    {
+        foreach (var sec in Sections) sec.Refresh(s, this);
+        MusicDone = MusicSource != "" && Section.Fresh(MusicProduct(s), MusicInf(s));
+        MusicStale = MusicSource != "" && Section.Stale(MusicProduct(s), MusicInf(s));
+    }
 
     // What is missing. Empty = complete.
     public IEnumerable<string> Gaps(Story s)
@@ -277,6 +299,12 @@ public class Scene
         if (Sections.Count == 0) yield return "no sections - nothing plays";
         for (int i = 0; i < Sections.Count; i++)
             foreach (var g in Sections[i].Gaps(s, this)) yield return $"{Sections[i].Kind.ToLower()} {i + 1}: {g}";
+        if (MusicSource != "")
+        {
+            if (!File.Exists(MusicAbs(s))) yield return $"music missing: {MusicSource}";
+            else if (MusicStale) yield return $"{Path.GetFileName(MusicProduct(s))} is from an EARLIER track - convert again";
+            else if (!MusicDone) yield return $"music {MusicSource} not converted";
+        }
         if (!Ending && !Exits().Any()) yield return "no CODE and no quiz - the story stops here, and it is not an ending";
         if (Enters.Count == 0 && !Id.Equals(s.Start, StringComparison.OrdinalIgnoreCase)) yield return "no ENTERS - nothing can lead here";
     }
@@ -302,9 +330,9 @@ public abstract class Section
     // The converter writes the .INF first and the product last. A product
     // OLDER than its recipe was made from an EARLIER recipe: that run
     // failed and the old file stayed. Shown, but not counted.
-    protected static bool Fresh(string product, string inf)
+    public static bool Fresh(string product, string inf)
         => File.Exists(product) && (!File.Exists(inf) || File.GetLastWriteTimeUtc(product) >= File.GetLastWriteTimeUtc(inf));
-    protected static bool Stale(string product, string inf)
+    public static bool Stale(string product, string inf)
         => File.Exists(product) && File.Exists(inf) && File.GetLastWriteTimeUtc(product) < File.GetLastWriteTimeUtc(inf);
 }
 
@@ -346,27 +374,38 @@ public class VideoSection : Section
 
 // ---- [PICKUP] --------------------------------------------------------------
 //  FOLDER = PICKUP             the material folder in the warehouse, and the
-//                              product folder in the scene: BG.OWV, <ITEM>.SPR
+//                              product folder in the scene: BG.OWV, <ITEM>.SPR,
+//                              <ITEM>.SLT
+//  PANEL  = 64                 rows below the room for the panel: a slot per
+//                              thing, its outline while it is in the room, its
+//                              picture once taken. 0 = no panel, the room is
+//                              the whole screen
 //  NEED   = KEYS CASSETTE      what must be collected for the scene to go on
 //  ITEM KEYS = 640,240 layer-keys.png     where it sits in the SOURCE picture
 //                                          (the .SPR knows where on screen)
+//  TEXT KEYS = Her keys.       a line over the room for a moment when it is taken
 //  In the warehouse folder: empty.jpg (the room without the things), full.jpg
 //  (with them - the reference the desk places against), layer-*.png (each
-//  thing, cut out, with alpha).
+//  thing, cut out, with alpha), and panel.png if the panel has art - it is
+//  laid into the band by the converter and never named in the INI, like
+//  empty.jpg and full.jpg.
 public class PickupSection : Section
 {
     public override string Kind => "PICKUP";
     public string Folder = "PICKUP";
+    public int Panel = 64;
     public List<string> Need = new();
     public List<Item> Items = new();
     public bool StaleProduct;
     public override string Mark => Done ? "■" : Items.Count > 0 && Items.All(i => i.Placed) ? "□" : "·";
 
-    public const string EMPTY = "empty.jpg", FULL = "full.jpg", BG = "BG.OWV", INF = "PICKUP.INF";
+    public const string EMPTY = "empty.jpg", FULL = "full.jpg", PANELART = "panel.png", BG = "BG.OWV", INF = "PICKUP.INF";
+    public const int CAPTION_MAX = 39;              // sixteen-pixel glyphs across 640
     public string MatDir(Story s, Scene sc) => Path.Combine(sc.MatDir(s), Folder);
     public string OutDir(Story s, Scene sc) => Path.Combine(sc.Dir(s), Folder);
     public string EmptyAbs(Story s, Scene sc) => FindPicture(MatDir(s, sc), "empty");
     public string FullAbs(Story s, Scene sc) => FindPicture(MatDir(s, sc), "full");
+    public string PanelArtAbs(Story s, Scene sc) => FindPicture(MatDir(s, sc), "panel");
     static string FindPicture(string dir, string stem)
     {
         if (!Directory.Exists(dir)) return null;
@@ -396,7 +435,14 @@ public class PickupSection : Section
         switch (l.Key)
         {
             case "FOLDER": Folder = l.Value; break;
+            case "PANEL": Panel = int.TryParse(l.Value, out var ph) ? ph : 0; break;
             case "NEED": Need = Story.Split(l.Value); break;
+            case "TEXT":
+                {
+                    var it = Items.FirstOrDefault(i => i.Name.Equals(l.Sub ?? "", StringComparison.OrdinalIgnoreCase));
+                    if (it != null) it.Caption = l.Value;
+                    break;
+                }
             case "ITEM":
                 {
                     var it = new Item { Name = (l.Sub ?? "").ToUpperInvariant() };
@@ -417,14 +463,17 @@ public class PickupSection : Section
     public override void Write(Ini.Writer w)
     {
         w.Key("FOLDER", Folder);
+        w.Key("PANEL", Panel.ToString());
         w.Key("NEED", string.Join(" ", Need));
         foreach (var it in Items) w.Key("ITEM", it.Name, (it.Placed ? $"{it.X},{it.Y}" : "?") + " " + it.Layer);
+        foreach (var it in Items) if (it.Caption.Trim().Length > 0) w.Key("TEXT", it.Name, it.Caption.Trim());   // after the ITEM lines: the game files them by name
     }
     public override void Refresh(Story s, Scene sc)
     {
         var inf = Path.Combine(OutDir(s, sc), INF);
         var bg = Path.Combine(OutDir(s, sc), BG);
-        bool all = Fresh(bg, inf) && Items.All(i => Fresh(Path.Combine(OutDir(s, sc), i.Name + ".SPR"), inf));
+        bool all = Fresh(bg, inf) && Items.All(i => Fresh(Path.Combine(OutDir(s, sc), i.Name + ".SPR"), inf))
+                   && (Panel == 0 || Items.All(i => Fresh(Path.Combine(OutDir(s, sc), i.Name + ".SLT"), inf)));
         Done = Items.Count > 0 && Items.All(i => i.Placed) && all;
         StaleProduct = Stale(bg, inf);
     }
@@ -434,19 +483,21 @@ public class PickupSection : Section
         if (Items.Count == 0) yield return "no layer-*.png - nothing to pick up";
         foreach (var it in Items) if (!it.Placed) yield return $"{it.Name} not placed";
         foreach (var n in Need) if (!Items.Any(i => i.Name.Equals(n, StringComparison.OrdinalIgnoreCase))) yield return $"NEED names {n}, which is not an item";
+        foreach (var it in Items) if (it.Caption.Trim().Length > CAPTION_MAX) yield return $"{it.Name}'s line is {it.Caption.Trim().Length} letters; the screen fits {CAPTION_MAX}";
         if (Items.Count > 0 && Items.All(i => i.Placed) && !Done) yield return StaleProduct ? "products are from an EARLIER placement - convert again" : "not converted";
     }
     public override string Describe(Story s, Scene sc)
     {
         int placed = Items.Count(i => i.Placed);
         string state = Done ? "converted" : StaleProduct ? "STALE - convert again" : placed == Items.Count && Items.Count > 0 ? "NOT CONVERTED" : $"{Items.Count - placed} to place";
-        return (Done ? "■" : "□") + $" pickup  {Folder}\\  {Items.Count} item(s), {placed} placed, {state}" + (Need.Count > 0 ? $"   need: {string.Join(" ", Need)}" : "   need: all");
+        string panel = Panel == 0 ? "no panel" : PanelArtAbs(s, sc) == null ? $"panel {Panel}, no {PANELART} (dark band)" : $"panel {Panel} ({PANELART})";
+        return (Done ? "■" : "□") + $" pickup  {Folder}\\  {Items.Count} item(s), {placed} placed, {state}" + (Need.Count > 0 ? $"   need: {string.Join(" ", Need)}" : "   need: all") + $"   {panel}";
     }
 }
 
 public class Item
 {
-    public string Name = "", Layer = "";
+    public string Name = "", Layer = "", Caption = "";
     public int? X, Y;
     public bool Placed => X.HasValue && Y.HasValue;
 }

@@ -79,11 +79,13 @@
 
       <!-- 1  WAREHOUSE: one folder per scene, VIDEO\ and PICKUP\ inside -->
       <DockPanel Grid.Column="0">
-        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Head}" Text="1  WAREHOUSE     ● used   ○ free"/>
+        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Head}" Text="1  WAREHOUSE     ● used   ○ free     drag a file onto a folder to move it"/>
         <StackPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
           <WrapPanel Margin="0,0,0,4">
             <Button Content="▶ Open in external player" Click="PlayExternal_Click"/>
             <Button Content="⟳ Rescan" Click="Rescan_Click"/>
+            <Button Content="⌫ To bin" Click="ToBin_Click" ToolTip="the selected file goes to BIN\ - nothing is deleted, and a scene that used it lets go of it. The Delete key does the same"/>
+            <Button Content="⌫ Unused to bin" Click="Sweep_Click" ToolTip="every file no scene uses goes to BIN\"/>
           </WrapPanel>
           <TextBox x:Name="FFilter" TextChanged="Filter_Changed" ToolTip="search by file name" Margin="0"/>
         </StackPanel>
@@ -105,11 +107,11 @@
             <Button Content="▲" Click="Up_Click"/>
             <Button Content="▼" Click="Down_Click"/>
           </WrapPanel>
-          <TextBlock Text="drop footage on a scene to add a video; double-click in the warehouse does the same" Foreground="#555560" FontSize="13" Height="30" Margin="0" TextWrapping="Wrap"/>
+          <TextBlock Text="drop footage or a track on a scene; double-click in the warehouse does the same. Delete or right-click removes a scene or a section - it asks first" Foreground="#555560" FontSize="13" Height="30" Margin="0" TextWrapping="Wrap"/>
         </StackPanel>
         <TreeView x:Name="TreeStory" AllowDrop="True"
                   SelectedItemChanged="Story_Selected" MouseDoubleClick="Story_DoubleClick"
-                  DragOver="Story_DragOver" Drop="Story_Drop"/>
+                  DragOver="Story_DragOver" Drop="Story_Drop" KeyDown="Story_KeyDown"/>
       </DockPanel>
 
       <GridSplitter Grid.Column="3" Width="6" HorizontalAlignment="Stretch" Background="#f2f2f4"/>
@@ -161,9 +163,10 @@
                 <Button Content="put all back" Click="PutBack_Click"/>
               </WrapPanel>
               <TextBlock x:Name="TxtPickState" FontWeight="Bold" FontSize="15" Margin="0,4,0,4" TextWrapping="Wrap"/>
-              <Label Content="Need (item names the player must take; empty = all of them)"/>
-              <TextBox x:Name="FNeed" LostFocus="Pickup_Changed"/>
-              <TextBlock x:Name="TxtItems" FontFamily="Consolas" FontSize="13" Foreground="#333340" TextWrapping="Wrap"/>
+              <TextBlock x:Name="TxtPanel" FontSize="13" Foreground="#555560" Margin="0,0,0,4" TextWrapping="Wrap"/>
+              <Label Content="The things.  ✓ NEED: the player must take it before the scene goes on (none ticked = all of them).  The line shows over the room for a moment when it is taken; 39 letters fit."/>
+              <!-- one row a thing: the NEED tick, the name and where it stands, its line -->
+              <Grid x:Name="GridItems" Margin="0,2,0,6"/>
             </StackPanel>
 
             <Grid>
@@ -181,6 +184,21 @@
               <TextBox Grid.Column="3" x:Name="FEnters" LostFocus="Field_Changed" ToolTip="the codes that start this scene, space separated"/>
               <Label Grid.Column="4" Content="Code" Margin="8,0,0,0" ToolTip="how the scene ends when no quiz decides"/>
               <TextBox Grid.Column="5" x:Name="FCode" LostFocus="Field_Changed" ToolTip="how the scene ends when no quiz decides"/>
+            </Grid>
+            <!-- the scene's music: a track from the warehouse, looped under the
+                 room and mixed under the clips; drop an audio file on the
+                 scene, or double-click one in the warehouse -->
+            <Grid Margin="0,0,0,8">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="110"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <Label Grid.Column="0" Content="Music" ToolTip="the scene's track: looped while the room is on the screen, mixed under the clips at half level"/>
+              <TextBlock Grid.Column="1" x:Name="TxtMusic" VerticalAlignment="Center" TextWrapping="Wrap" Text="none - drop an .mp3 / .wav on this scene, or double-click one in the warehouse"/>
+              <Button Grid.Column="2" Content="⟳ music" Click="ReconvertMusic_Click" ToolTip="make MUSIC.PCM again from the track" Margin="6,0,6,0"/>
+              <Button Grid.Column="3" Content="× music" Click="RemoveMusic_Click" ToolTip="the scene plays without music; the track stays in the warehouse"/>
             </Grid>
             <Label Content="Title"/>
             <TextBox x:Name="FTitle" LostFocus="Field_Changed"/>
@@ -212,11 +230,17 @@
                  top at their positions, all scaled together by the Viewbox so
                  that mouse coordinates on the canvas ARE source pixels -->
             <Viewbox x:Name="PickBox" Stretch="Uniform" Visibility="Collapsed">
-              <Grid>
-                <Image x:Name="PickBg" Stretch="None"/>
-                <Canvas x:Name="PickCanvas" Background="Transparent"
-                        MouseLeftButtonDown="Pick_MouseDown" MouseMove="Pick_MouseMove" MouseLeftButtonUp="Pick_MouseUp"/>
-              </Grid>
+              <StackPanel>
+                <Grid>
+                  <Image x:Name="PickBg" Stretch="None"/>
+                  <Canvas x:Name="PickCanvas" Background="Transparent"
+                          MouseLeftButtonDown="Pick_MouseDown" MouseMove="Pick_MouseMove" MouseLeftButtonUp="Pick_MouseUp"/>
+                </Grid>
+                <!-- the panel the way the game draws it, in the source picture's
+                     scale so the Viewbox keeps the proportion: the slots' outlines,
+                     and a slot in colour once its thing is clicked away above -->
+                <Canvas x:Name="PanelCanvas" Background="#101018" Height="0"/>
+              </StackPanel>
             </Viewbox>
           </Grid>
         </DockPanel>
