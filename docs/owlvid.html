@@ -104,10 +104,10 @@
 <script>
   // Named once. A cached page serving a stale bundle is a class of confusion
   // this project has already paid for, so the version is on the glass.
-  const BUNDLE = "owlvid_v6.jsdos";
+  const BUNDLE = "owlvid_v7.jsdos";
   const params = new URLSearchParams(location.search);
   document.querySelector(".sub").textContent +=
-    "  ·  v" + (BUNDLE.match(/_v(\d+)/) || [0, "?"])[1];   // the dot is escaped: pack.ps1 rewrites this page as ASCII
+    "  ??  v" + (BUNDLE.match(/_v(\d+)/) || [0, "?"])[1];   // the dot is escaped: pack.ps1 rewrites this page as ASCII
 
   // Belt and braces, and it has to be installed BEFORE js-dos runs - it
   // works by remembering every AudioContext the page creates, and a wrapper
@@ -177,6 +177,7 @@
 </script>
 </body>
 </html>
+
 
 
 
