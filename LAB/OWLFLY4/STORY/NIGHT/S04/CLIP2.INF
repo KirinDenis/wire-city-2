@@ -1,10 +1,10 @@
-; CLIP.INF - written by SceneDesk for scene S02. The recipe is tracked;
-; the CLIP.OWV it makes is not, until the codec is frozen. The source is
+; CLIP2.INF - written by SceneDesk for scene S04. The recipe is tracked;
+; the CLIP2.OWV it makes is not, until the codec is frozen. The source is
 ; named relative to this folder: long, but it holds wherever the warehouse
 ; sits beside the repository.
 
-SOURCE     = ..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S02\test2.mp4
-OUTPUT     = CLIP.OWV
+SOURCE     = ..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S04\VIDEO\sp4p22.mp4
+OUTPUT     = CLIP2.OWV
 WIDTH      = 640
 HEIGHT     = 400
 FPS        = 12

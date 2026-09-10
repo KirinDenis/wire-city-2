@@ -1,0 +1,18 @@
+; PICKUP.INF - written by SceneDesk for scene S04: the room without its things,
+; the things, and where each stands in the SOURCE picture. Vid2Owv makes BG.OWV
+; and one .SPR per thing, in the room's palette, with the screen position inside;
+; PANEL reserves the band below the room for the slots, and one .SLT per thing
+; is the thing at slot size, placed in its slot.
+
+MODE       = PICKUP
+EMPTY      = ..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S04\PICKUP\empty.jpg
+FULL       = ..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S04\PICKUP\full.jpg
+OUTDIR     = .
+WIDTH      = 640
+HEIGHT     = 400
+PANEL      = 64
+FIT        = crop
+DITHER     = bayer:bayer_scale=3
+TOLERANCE  = 2
+
+ITEM FUELHOSE = 1608,326 ..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S04\PICKUP\layer-fuel-hose.png

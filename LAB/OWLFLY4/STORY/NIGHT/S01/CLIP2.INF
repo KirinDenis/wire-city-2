@@ -3,7 +3,7 @@
 ; named relative to this folder: long, but it holds wherever the warehouse
 ; sits beside the repository.
 
-SOURCE     = ..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S01\VIDEO\1214.mp4
+SOURCE     = ..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S01\VIDEO\sc1p1.mp4
 OUTPUT     = CLIP2.OWV
 WIDTH      = 640
 HEIGHT     = 400
