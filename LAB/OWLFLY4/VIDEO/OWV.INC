@@ -8,8 +8,10 @@
 ;
 ;      UNREALON      once: A20, the flat descriptor in FS. CF = refused.
 ;      GFXON         once: VESA 100h with the linear framebuffer. CF = refused.
-;      OWVPLAY       DS:DX = a file name. Plays it to the end, or until ESC
-;                    or Q, and returns AL: 0 played, 1 no file, 2 not an
+;      GFXON13       or this instead: mode 13h, 320x200, any VGA. The files
+;                    played must then be 320x200 ones.
+;      OWVPLAY       DS:DX = a file name. Plays it to the end, or until ESC,
+;                    Space or Q, and returns AL: 0 played, 1 no file, 2 not an
 ;                    OWV, 3 not 640x400. The key that stopped it is in
 ;                    OWVKEY (0 = it ran out). The last frame shown is at
 ;                    [PFRAME], the palette in HDRBUF+32.
@@ -82,13 +84,13 @@
 ; ============================================================================
 
 ; ---- the frame ------------------------------------------------------------
-WIDTH   = 640
-HEIGHT  = 400
-PLANE   = WIDTH*HEIGHT          ; 256000
+; Two screens, and the size is a VARIABLE, set by whichever mode was put
+; up: GFXON for VESA 100h at 640x400, GFXON13 for mode 13h at 320x200.
+; Everything below multiplies by [SCRW] and compares with [SCRH] instead
+; of carrying a constant; the block is eight pixels either way, and 320
+; and 200 are both multiples of it. SCRW, SCRH, PLANE, PLANE4, BLKW and
+; BLKROW are in the data at the end, 640x400 until a mode says otherwise.
 BLOCK   = 8
-BLKW    = WIDTH/BLOCK           ; 80 blocks across
-BLKH    = HEIGHT/BLOCK          ; 50 blocks down
-BLKROW  = WIDTH*BLOCK           ; 5120 bytes per block row
 
 ; ---- linear addresses, taken outright -------------------------------------
 BUFLIN  = 200000h               ; the chunk payload being decoded
@@ -179,6 +181,9 @@ GFXON:  push ds
         cmp  ax,004Fh
         jne  GFXNO
         mov  byte [INGFX],1
+        mov  eax,640
+        mov  edx,400
+        call SETSCR
         call REFLAT
         mov  dx,MK3
         call LOGMARK
@@ -188,6 +193,42 @@ GFXNO:  call TEXTMODE
         mov  dx,MKNOMODE
         call LOGMARK
         stc
+        ret
+
+; ===========================================================================
+;  GFXON13 - mode 13h, 320x200, the VGA every machine has. No VBE, no
+;  question asked: the frame buffer is A000:0000, linear 0A0000h, and the
+;  whole picture is one 64000-byte plane. The same decoder, a quarter of
+;  the pixels, a quarter of the bytes a second.
+; ===========================================================================
+GFXON13:
+        mov  ax,13h
+        int  10h
+        mov  dword [LFB],0A0000h
+        mov  dword [PITCH],320
+        mov  byte [INGFX],1
+        mov  eax,320
+        mov  edx,200
+        call SETSCR
+        call REFLAT
+        mov  dx,MK3A
+        call LOGMARK
+        clc
+        ret
+
+; The size in EAX x EDX, and everything the decoder derives from it.
+SETSCR: mov  [SCRW],eax
+        mov  [SCRH],edx
+        mov  ecx,eax
+        shr  ecx,3
+        mov  [BLKW],ecx
+        mov  ecx,eax
+        shl  ecx,3
+        mov  [BLKROW],ecx
+        mul  edx
+        mov  [PLANE],eax
+        shr  eax,2
+        mov  [PLANE4],eax
         ret
 
 TEXTMODE:
@@ -220,10 +261,10 @@ OWVPLAY:
         cmp  dword [HDRBUF],'OWV1'
         jne  OWVBAD
         mov  ax,[HDRBUF+4]
-        cmp  ax,WIDTH
+        cmp  ax,word [SCRW]             ; the file must be the screen's size
         jne  OWVSIZE
         mov  ax,[HDRBUF+6]
-        cmp  ax,HEIGHT
+        cmp  ax,word [SCRH]
         jne  OWVSIZE
 
         movzx ecx,byte [HDRBUF+8]       ; frames a second
@@ -273,7 +314,11 @@ NOSOUND:
         call LOGMARK
 SNDREADY:
         call REFLAT                     ; SBINIT has been through DOS
-        call SETPAL
+if defined OWV_PALETTE
+        call OWV_PALETTE                ; the includer's: the story engine
+else                                    ; starts a clip from black and brings
+        call SETPAL                     ; the palette up over the first frames
+end if
         call REFLAT
 
         mov  dword [PFRAME],FRAMEA
@@ -376,7 +421,7 @@ DOKEY:  call TICKIN
         call TICKIN
         mov  esi,BUFLIN
         mov  edi,[CFRAME]
-        mov  ecx,PLANE
+        mov  ecx,[PLANE]
         call RLEOUT
         call TICKOUT
         add  [ACCBLK],eax
@@ -418,7 +463,8 @@ DODELTA:
 BLKLOOP:
         cmp  esi,[BUFEND]
         jae  BLKDONE
-        cmp  dword [ROWBASE],PLANE
+        mov  eax,[PLANE]
+        cmp  [ROWBASE],eax
         jae  BLKDONE
         mov  al,[fs:esi]
         inc  esi
@@ -451,7 +497,7 @@ BFILL:  mov  al,[fs:esi]
         mov  ecx,BLOCK
 BF1:    mov  [fs:edi],eax
         mov  [fs:edi+4],eax
-        add  edi,WIDTH
+        add  edi,[SCRW]
         dec  ecx
         jnz  BF1
         mov  ecx,1
@@ -465,7 +511,7 @@ BL1:    mov  eax,[fs:esi]
         mov  eax,[fs:esi+4]
         mov  [fs:edi+4],eax
         add  esi,BLOCK
-        add  edi,WIDTH
+        add  edi,[SCRW]
         dec  ecx
         jnz  BL1
         mov  ecx,1
@@ -481,7 +527,7 @@ BCOPY:  movsx eax,byte [fs:esi]
         mov  esi,edi                    ; the same place in the frame before,
         sub  esi,[CFRAME]               ; moved by (eax, ebx) pixels
         add  esi,[PFRAME]
-        imul ebx,WIDTH
+        imul ebx,[SCRW]
         add  esi,ebx
         add  esi,eax
         mov  ecx,BLOCK
@@ -489,8 +535,8 @@ BC1:    mov  eax,[fs:esi]
         mov  [fs:edi],eax
         mov  eax,[fs:esi+4]
         mov  [fs:edi+4],eax
-        add  esi,WIDTH
-        add  edi,WIDTH
+        add  esi,[SCRW]
+        add  edi,[SCRW]
         dec  ecx
         jnz  BC1
         pop  esi
@@ -518,7 +564,7 @@ BR1:    mov  eax,[fs:esi]
         mov  eax,[fs:esi+4]
         mov  [fs:edi+4],eax
         add  esi,BLOCK
-        add  edi,WIDTH
+        add  edi,[SCRW]
         dec  ecx
         jnz  BR1
         pop  esi
@@ -537,7 +583,7 @@ SHOWFRAME:
         call TICKIN
         mov  esi,[CFRAME]
         mov  edi,[LFB]
-        mov  ecx,PLANE/4
+        mov  ecx,[PLANE4]
         call COPYD
         call TICKOUT
         add  [ACCBLIT],eax
@@ -568,6 +614,9 @@ SHOWFRAME:
         ; sixty-four bit product for DIV to work on, so nothing overflows
         ; until the clip is days long.
         inc  dword [FRAMENO]
+if defined OWV_FRAME
+        call OWV_FRAME                  ; once a frame, FRAMENO counted: the
+end if                                  ; story engine's fades ride on this
 
         ; A mark every five seconds. Six lines for a thirty-second clip, and
         ; the difference between "it stops somewhere" and "it stops HERE".
@@ -628,6 +677,8 @@ WAITDONE:
         int  16h
         cmp  al,27
         je   KEYSTOP
+        cmp  al,' '                     ; the key people press to skip a
+        je   KEYSTOP                    ; thing, whatever the screen says
         cmp  al,'q'
         je   KEYSTOP
         cmp  al,'Q'
@@ -643,7 +694,11 @@ NOKEY:  call REFLAT
 ;  The end of the clip: let the sound finish, write the numbers, halt the
 ;  card (the vector and the ring stay for the next clip), close the file.
 ; ---------------------------------------------------------------------------
-FINISH: call SBDRAIN                    ; the sound is a ring behind the
+FINISH:
+if defined OWV_FINISH
+        call OWV_FINISH                 ; a clip stopped early goes down to
+end if                                  ; black the same way as one that ended
+        call SBDRAIN                    ; the sound is a ring behind the
         mov  dx,MKFIN                   ; picture - let it finish the sentence
         call LOGMARK
         call TICK
@@ -898,13 +953,13 @@ SHIFTFRAME:
         jnz  SFMOVED
         mov  esi,[PFRAME]
         mov  edi,[CFRAME]
-        mov  ecx,PLANE/4
+        mov  ecx,[PLANE4]
         call COPYD
         jmp  SFEXIT
 
 SFMOVED:
         mov  edi,[CFRAME]               ; clear first - what scrolls in from
-        mov  ecx,PLANE/4                ; outside has no source at all
+        mov  ecx,[PLANE4]                ; outside has no source at all
         xor  eax,eax
         call FILLD
 
@@ -912,18 +967,18 @@ SFMOVED:
 SFROW:  mov  eax,ebx
         sub  eax,[GDY]                  ; source row
         js   SFNEXT
-        cmp  eax,HEIGHT
+        cmp  eax,[SCRH]
         jge  SFNEXT
 
-        imul eax,WIDTH
+        imul eax,[SCRW]
         add  eax,[PFRAME]
         mov  esi,eax                    ; source row, at x = 0
         mov  eax,ebx
-        imul eax,WIDTH
+        imul eax,[SCRW]
         add  eax,[CFRAME]
         mov  edi,eax                    ; destination row, at x = 0
 
-        mov  ecx,WIDTH
+        mov  ecx,[SCRW]
         mov  edx,[GDX]
         test edx,edx
         js   SFNEG
@@ -936,7 +991,7 @@ SFNEG:  sub  esi,edx                    ; moving left - edx is negative
         jle  SFNEXT
 SFCOPY: call COPYB
 SFNEXT: inc  ebx
-        cmp  ebx,HEIGHT
+        cmp  ebx,[SCRH]
         jb   SFROW
 SFEXIT: pop  edi
         pop  esi
@@ -962,10 +1017,11 @@ ADVANCE:
         push eax
         mov  eax,[BLKX]
         add  eax,ecx
-ADV1:   cmp  eax,BLKW
+ADV1:   cmp  eax,[BLKW]
         jb   ADV2
-        sub  eax,BLKW
-        add  dword [ROWBASE],BLKROW
+        sub  eax,[BLKW]
+        mov  ecx,[BLKROW]
+        add  [ROWBASE],ecx
         jmp  ADV1
 ADV2:   mov  [BLKX],eax
         pop  eax
@@ -1128,6 +1184,12 @@ FLATOK   db 0
 OWVKEY   db 0
 LFB      dd 0
 PITCH    dd 0
+SCRW     dd 640                 ; the screen, as the mode set it (SETSCR)
+SCRH     dd 400
+PLANE    dd 256000              ; SCRW * SCRH
+PLANE4   dd 64000               ; ...in dwords
+BLKW     dd 80                  ; blocks across
+BLKROW   dd 5120                ; bytes per block row
 PFRAME   dd 0
 CFRAME   dd 0
 GDX      dd 0
@@ -1180,6 +1242,7 @@ MK1      db 'reached: header read, palette set, playing',13,10,'$'
 MK1B     db 'reached: GDT loaded, FS made flat',13,10,'$'
 MK2      db 'reached: unreal mode granted, 2 MB written and read',13,10,'$'
 MK3      db 'reached: VESA 100h set',13,10,'$'
+MK3A     db 'reached: mode 13h set, 320x200',13,10,'$'
 MKNOUNR  db 'FAILED: the 4 GB limit did not survive',13,10,'$'
 MKNOMODE db 'FAILED: VESA 100h with the LFB bit was refused',13,10,'$'
 MKFIN    db 'reached: the end of the stream',13,10,'$'

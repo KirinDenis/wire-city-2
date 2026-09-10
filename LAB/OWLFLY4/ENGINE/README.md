@@ -10,9 +10,9 @@ STORY ..\STORY\OTHER        plays that one
 STORY ..\STORY\NIGHT /AUTO  plays itself and writes SHOTnn.OWV of the screen
 ```
 
-| in a clip | ESC skips it, Q quits |
+| in a clip | ESC or Space skips it, Q quits |
 |---|---|
-| in a pickup | click a thing to take it, or move the cursor with the arrow keys and press Enter; ESC skips, Q quits |
+| in a pickup | click a thing to take it, or move the cursor with the arrow keys and press Enter or Space; ESC skips, Q quits |
 | in a quiz | 1..9 answers; ESC takes the first |
 
 Build with `MAKE` from inside DOS (or `MAKEWIN` from Windows), run with
@@ -57,6 +57,13 @@ each scene's sections in play order.
   its rectangle from the frame the decoder left above 1 MB, and the
   others are drawn again. When every thing in NEED is taken - all of
   them, if NEED is empty - the section is over.
+- **Transitions.** Every section comes up out of black and goes down into
+  it: the DAC is written with the palette scaled to a level of eight, a
+  clip over its first and last eight frames from the decoder's frame hook,
+  a still (the room, a question, a message) a level a tick with the music
+  kept fed. Nothing in the frame is touched, so `/AUTO` shots are
+  unaffected. A cross-dissolve is not on: two pictures with two palettes
+  have no colours in common to blend through.
 - `[QUIZ]` - the question and its numbered answers in a box at the bottom,
   over whatever the last frame was, in the ROM's 8x8 font doubled and in
   the brightest and darkest entries of the current palette. The number

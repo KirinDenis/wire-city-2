@@ -11,9 +11,14 @@
 ;                                run can be looked at afterwards, frame by
 ;                                frame, by a person or by the desk's --dump.
 ;
-;      in a clip      ESC skips it, Q quits
+;      in a clip      ESC or Space skips it, Q quits
 ;      in a pickup    click a thing to take it - or the arrow keys move
-;                     the cursor and Enter takes; ESC skips, Q quits
+;                     the cursor and Enter or Space takes; ESC skips, Q quits
+;
+;  Every section comes up out of black and goes down into it - the DAC
+;  ramped over the palette, nothing in the frame touched - so a cut from a
+;  clip to the room, or from one scene to the next, is a dip rather than a
+;  snap. See TRANSITIONS below.
 ;      in a quiz      1..9 answers; ESC takes the first
 ;
 ;  Every run writes STORY.LOG: which scene, which section, what was taken,
@@ -263,6 +268,19 @@ NOMOUSE:
 
         call GFXON
         jc   NOMODE
+        ; a palette before any clip has brought one: a grey ramp, so that a
+        ; message about a missing first scene is readable and the fades
+        ; have something to scale
+        mov  di,HDRBUF+32
+        xor  cx,cx
+GP1:    mov  ax,cx
+        shr  ax,2
+        stosb
+        stosb
+        stosb
+        inc  cx
+        cmp  cx,256
+        jb   GP1
 
 ; ===========================================================================
 ;  The scene loop
@@ -515,6 +533,7 @@ PKLOADED:
         call REFLAT
 PKNOMOUSE:
         call CURSHOW
+        call FADEUP                     ; the room comes up, things and all
         call SHOT
         call TICK
         mov  [AUTOT],eax
@@ -704,6 +723,7 @@ PKCHECK:
         jnc  PKLOOP
         call CAPTWAIT                   ; the last thing's line gets its time
 PKDONE: call CURHIDE
+        call FADEDN                     ; and the room goes down, music still on
         call MUSSTOP
         ret
 PKQUIT: mov  byte [QUITFLAG],1
@@ -1398,6 +1418,7 @@ QZDRAWN:
         mov  dx,MKQUIZ
         call LOGMARK
         call MUSSTART                   ; the scene's music under the question
+        call FADEUP
         call TICK
         mov  [AUTOT],eax
 QZWAIT: mov  ah,1
@@ -1441,9 +1462,11 @@ QZPICK: ; answer DX -> its code
         mov  dx,MKANSWER
         mov  si,NUMBUF
         call LOGWITH
+        call FADEDN
         call MUSSTOP
         ret
 QZQUIT: mov  byte [QUITFLAG],1
+        call FADEDN
         call MUSSTOP
         ret
 
@@ -1609,8 +1632,10 @@ MSGBOX: push dx
         mov  word [TY],32
         call STRLEN2
         call DRAWTXT
+        call FADEUP
         call SHOT
         call WAITKEY
+        call FADEDN
         ret
 
 ; MISSING: PATHBUF is the file that is not there.
@@ -2791,6 +2816,98 @@ MRDONE: call REFLAT
         mov  ax,[MRGOT]
         ret
 
+; ===========================================================================
+;  TRANSITIONS. Every section comes up out of black and goes down into it.
+;  Only the DAC is written - the palette in HDRBUF scaled to a level of
+;  0..FADEN - and nothing in the frame is touched, so a shot in /AUTO shows
+;  the picture as it is whatever the level. A clip ramps from the decoder's
+;  frame hook, over its first and last FADEN frames, without a wait; a
+;  still - the room, a question, a message - ramps from here, a level a
+;  tick, with the music kept fed meanwhile. A cross-dissolve is not on: two
+;  pictures with two palettes have no common colours to blend through, and
+;  a dip to black is what the era's games did with the same hardware.
+; ===========================================================================
+FADEN   = 8
+
+; The DAC at level AL of FADEN: HDRBUF's palette, scaled. 0 is black.
+PALSET: pushad
+        mov  [PALLVL],al
+        mov  bl,al
+        mov  dx,3C8h
+        xor  al,al
+        out  dx,al
+        inc  dx
+        mov  si,HDRBUF+32
+        mov  cx,768
+PSL1:   lodsb
+        mul  bl
+        shr  ax,3
+        out  dx,al
+        loop PSL1
+        popad
+        ret
+
+; Up to full, or down to black, from wherever the level is: a step a tick.
+FADEUP: cmp  byte [PALLVL],FADEN
+        jae  FUDONE
+        mov  al,[PALLVL]
+        inc  al
+        call PALSET
+        call FADEWAIT
+        jmp  FADEUP
+FUDONE: ret
+
+FADEDN: cmp  byte [PALLVL],0
+        je   FDDONE
+        mov  al,[PALLVL]
+        dec  al
+        call PALSET
+        call FADEWAIT
+        jmp  FADEDN
+FDDONE: ret
+
+FADEWAIT:
+        call TICK
+        mov  [FADET],eax
+FW1:    call MUSFEED
+        call TICK
+        cmp  eax,[FADET]
+        je   FW1
+        ret
+
+; The decoder's hooks. OWV_PALETTE stands in for SETPAL when a clip opens:
+; the palette is in HDRBUF as before, the DAC gets black, and the frames
+; bring it up. OWV_FRAME runs once a frame, FRAMENO already counted: the
+; first FADEN frames climb, the last FADEN descend, so the clip ends on
+; black; a one-frame still (the room's BG.OWV) stays black and comes up
+; from RUNPICKUP once the things are on it. OWV_FINISH runs when a clip
+; stops for any reason: skipped in the middle, it goes down the same ramp.
+OWV_PALETTE:
+        xor  al,al
+        call PALSET
+        ret
+
+OWV_FRAME:
+        pushad
+        mov  eax,[FRAMENO]              ; 1 on the first frame shown
+        movzx ebx,word [HDRBUF+10]      ; the frames in the file
+        sub  ebx,eax                    ; ...still to come
+        cmp  eax,ebx
+        jbe  OF1
+        mov  eax,ebx                    ; the nearer edge
+OF1:    cmp  eax,FADEN
+        jbe  OF2
+        mov  eax,FADEN
+OF2:    cmp  al,[PALLVL]
+        je   OFDONE                     ; a write only while it moves
+        call PALSET
+OFDONE: popad
+        ret
+
+OWV_FINISH:
+        call FADEDN
+        ret
+
 ; OWV_MIX - the decoder calls this with the clip's audio chunk at BUFLIN,
 ; ECX bytes, before the queue gets it. The music is read in step and added
 ; in at half level, saturated. Sixteen-bit clips at the music's own rate
@@ -3022,6 +3139,8 @@ MRWANT   dw 0
 MRGOT    dw 0
 MRWRAP   db 0
 OMLEFT   dd 0
+PALLVL   db 8                   ; the DAC's level, 0 black .. FADEN full
+FADET    dd 0
 
 STORYDIR db 80 dup (0)
 PATHBUF  db 128 dup (0)
