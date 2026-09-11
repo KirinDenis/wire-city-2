@@ -491,7 +491,8 @@ public partial class MainWindow : Window
             var name = Path.GetFileName(file);
             var it = p.Items.FirstOrDefault(x => x.Layer.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (it != null) { p.Items.Remove(it); p.Need.RemoveAll(n => n.Equals(it.Name, StringComparison.OrdinalIgnoreCase)); }
-            foreach (var f in Directory.Exists(p.OutDir(story, sc)) ? Directory.GetFiles(p.OutDir(story, sc)).Where(x => !x.EndsWith(".INF", StringComparison.OrdinalIgnoreCase)) : Array.Empty<string>()) TryDelete(f);
+            foreach (var screen in story.Screens)
+                foreach (var f in Directory.Exists(p.OutDir(story, sc, screen)) ? Directory.GetFiles(p.OutDir(story, sc, screen)).Where(x => !x.EndsWith(".INF", StringComparison.OrdinalIgnoreCase)) : Array.Empty<string>()) TryDelete(f);
         }
     }
 
@@ -1078,13 +1079,16 @@ public partial class MainWindow : Window
 
     void DeleteProducts(Scene sc, Section sec)
     {
-        if (sec is VideoSection v && v.File != "")
+        foreach (var screen in story.Screens)
         {
-            TryDelete(v.Product(story, sc)); TryDelete(v.InfPath(story, sc)); TryDelete(Path.ChangeExtension(v.Product(story, sc), ".LOG"));
-        }
-        if (sec is PickupSection p)
-        {
-            try { if (Directory.Exists(p.OutDir(story, sc))) Directory.Delete(p.OutDir(story, sc), true); } catch { }
+            if (sec is VideoSection v && v.File != "")
+            {
+                TryDelete(v.Product(story, sc, screen)); TryDelete(v.InfPath(story, sc, screen)); TryDelete(Path.ChangeExtension(v.Product(story, sc, screen), ".LOG"));
+            }
+            if (sec is PickupSection p)
+            {
+                try { if (Directory.Exists(p.OutDir(story, sc, screen))) Directory.Delete(p.OutDir(story, sc, screen), true); } catch { }
+            }
         }
     }
 
@@ -1776,36 +1780,48 @@ public partial class MainWindow : Window
     // ------------------------------------------------------------------------
     //  conversion, in the background, one at a time
     // ------------------------------------------------------------------------
+    // A section's products, one job a screen the story is made in; the
+    // music once, it is the same at any size. Each screen's recipe goes into
+    // that screen's folder with that screen's WIDTH and HEIGHT.
     void Convert(Scene sc, Section sec)
     {
         if (repoRoot == null) { Status("cannot convert: TOOLS\\Vid2Owv not found above the story"); return; }
+        if (sec == null) { ConvertOne(sc, null, story.Primary); return; }
+        if (sec is QuizSection) { Status("a quiz has nothing to convert"); return; }
+        foreach (var screen in story.Screens) ConvertOne(sc, sec, screen);
+    }
+
+    void ConvertOne(Scene sc, Section sec, string screen)
+    {
         string infPath, label, logPath;
+        var (sw, sh) = Story.ScreenSize(screen);
+        string tag = story.Screens.Count > 1 ? $" [{screen}]" : "";
         if (sec is VideoSection v)
         {
             if (v.Source == "") { Status("no footage to convert"); return; }
             var srcAbs = v.SourceAbs(story, sc);
             if (!File.Exists(srcAbs)) { Status("footage is missing: " + srcAbs); return; }
-            var sceneDir = SceneDir(sc);
+            var sceneDir = sc.Dir(story, screen);
             Directory.CreateDirectory(sceneDir);
             // The product of the LAST source must not survive to pose as this
             // one's: let go of the file, and remove it, before the recipe is written.
             StopOwv();
-            TryDelete(v.Product(story, sc));
-            logPath = Path.ChangeExtension(v.Product(story, sc), ".LOG");
+            TryDelete(v.Product(story, sc, screen));
+            logPath = Path.ChangeExtension(v.Product(story, sc, screen), ".LOG");
             TryDelete(logPath);
-            infPath = v.InfPath(story, sc);
+            infPath = v.InfPath(story, sc, screen);
             var srcRel = Path.GetRelativePath(sceneDir, srcAbs);
             File.WriteAllText(infPath, string.Join("\r\n", new[]
             {
-                $"; {v.Inf} - written by SceneDesk for scene {sc.Id}. The recipe is tracked;",
-                $"; the {v.File} it makes is not, until the codec is frozen. The source is",
+                $"; {v.Inf} - written by SceneDesk for scene {sc.Id}, the {screen} edition. The recipe is",
+                $"; tracked; the {v.File} it makes is not, until the codec is frozen. The source is",
                 $"; named relative to this folder: long, but it holds wherever the warehouse",
                 $"; sits beside the repository.",
                 "",
                 $"SOURCE     = {srcRel}",
                 $"OUTPUT     = {v.File}",
-                "WIDTH      = 640",
-                "HEIGHT     = 400",
+                $"WIDTH      = {sw}",
+                $"HEIGHT     = {sh}",
                 "FPS        = 12",
                 "; 72 frames = six seconds, the unit the footage is generated in: every",
                 "; six-second piece is its own keyframe group, so a clip can later be cut",
@@ -1824,14 +1840,14 @@ public partial class MainWindow : Window
                 "AUDIOFILTER = highpass=f=50,acompressor=threshold=0.06:ratio=4:attack=5:release=200:makeup=2,alimiter=limit=0.97",
                 ""
             }));
-            label = $"{sc.Id}\\{v.File}";
+            label = $"{sc.Id}\\{v.File}{tag}";
         }
         else if (sec is PickupSection p)
         {
             var empty = p.EmptyAbs(story, sc);
             if (empty == null) { Status($"no empty.jpg in {p.Folder}\\ - nothing to draw the room from"); return; }
             if (p.Items.Any(i => !i.Placed)) { Status($"place every item first: {string.Join(", ", p.Items.Where(i => !i.Placed).Select(i => i.Name))}"); return; }
-            var outDir = p.OutDir(story, sc);
+            var outDir = p.OutDir(story, sc, screen);
             Directory.CreateDirectory(outDir);
             StopOwv();
             foreach (var f in Directory.GetFiles(outDir, "*.OWV").Concat(Directory.GetFiles(outDir, "*.SPR")).Concat(Directory.GetFiles(outDir, "*.SLT"))) TryDelete(f);
@@ -1842,19 +1858,19 @@ public partial class MainWindow : Window
             var art = p.PanelArtAbs(story, sc);
             var lines = new List<string>
             {
-                $"; PICKUP.INF - written by SceneDesk for scene {sc.Id}: the room without its things,",
-                $"; the things, and where each stands in the SOURCE picture. Vid2Owv makes BG.OWV",
-                $"; and one .SPR per thing, in the room's palette, with the screen position inside;",
-                $"; PANEL reserves the band below the room for the slots, and one .SLT per thing",
-                $"; is the thing at slot size, placed in its slot.",
+                $"; PICKUP.INF - written by SceneDesk for scene {sc.Id}, the {screen} edition: the room",
+                $"; without its things, the things, and where each stands in the SOURCE picture.",
+                $"; Vid2Owv makes BG.OWV and one .SPR per thing, in the room's palette, with the",
+                $"; screen position inside; PANEL reserves the band below the room for the slots,",
+                $"; and one .SLT per thing is the thing at slot size, placed in its slot.",
                 "",
                 "MODE       = PICKUP",
                 $"EMPTY      = {Path.GetRelativePath(outDir, empty)}",
                 $"FULL       = {Path.GetRelativePath(outDir, full)}",
                 "OUTDIR     = .",
-                "WIDTH      = 640",
-                "HEIGHT     = 400",
-                $"PANEL      = {p.Panel}",
+                $"WIDTH      = {sw}",
+                $"HEIGHT     = {sh}",
+                $"PANEL      = {p.PanelFor(screen)}",
             };
             if (art != null && p.Panel > 0) lines.Add($"PANELART   = {Path.GetRelativePath(outDir, art)}");
             lines.AddRange(new[]
@@ -1867,7 +1883,7 @@ public partial class MainWindow : Window
             foreach (var it in p.Items) lines.Add($"ITEM {it.Name,-8} = {it.X},{it.Y} {Path.GetRelativePath(outDir, Path.Combine(p.MatDir(story, sc), it.Layer))}");
             lines.Add("");
             File.WriteAllText(infPath, string.Join("\r\n", lines));
-            label = $"{sc.Id}\\{p.Folder}\\";
+            label = $"{sc.Id}\\{p.Folder}\\{tag}";
         }
         else if (sec == null && sc.MusicSource != "")
         {
@@ -1896,7 +1912,7 @@ public partial class MainWindow : Window
             }));
             label = $"{sc.Id}\\music";
         }
-        else { Status(sec == null ? "no track to convert" : "a quiz has nothing to convert"); return; }
+        else { Status("no track to convert"); return; }
 
         jobs.Enqueue(() =>
         {

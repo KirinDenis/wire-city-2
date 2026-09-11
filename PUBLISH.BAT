@@ -22,12 +22,21 @@ if "%GAME%"=="" set GAME=OWLFLY2
 echo [1/2] Packing a fresh %GAME% bundle ...
 powershell -NoProfile -ExecutionPolicy Bypass -File docs\pack.ps1 -Game %GAME%
 if errorlevel 1 goto fail
+if /i "%GAME%"=="OWLVID" goto pair320
 if /i not "%GAME%"=="OWLFLY3" goto packed
 REM OWL FLY III ships as TWO bundles - the colour machine and the
 REM Hercules machine - and they publish together or the pages tell
 REM different versions of the game.
 echo [1b/2] ...and the Hercules edition ...
 powershell -NoProfile -ExecutionPolicy Bypass -File docs\pack.ps1 -Game OWLFLY3H
+if errorlevel 1 goto fail
+goto packed
+:pair320
+REM OWL NIGHT (the lab, on the unlisted page) ships as TWO bundles too:
+REM the 640x400 edition and the 320x200 one, chosen on the page. The two
+REM together are over GitHub's 100 MB, which is why they are two.
+echo [1b/2] ...and the 320x200 edition ...
+powershell -NoProfile -ExecutionPolicy Bypass -File docs\pack.ps1 -Game OWLVID320
 if errorlevel 1 goto fail
 :packed
 

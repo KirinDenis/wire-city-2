@@ -255,6 +255,13 @@ $MAP = @{
   # logs left behind. The bundle is large (the clips are a megabyte a
   # second) and GitHub refuses a file over 100 MB, so the script says the
   # size out loud and stops rather than commit a bundle Pages cannot serve.
+  # The story is made in TWO editions - 640x400 through VESA and 320x200
+  # through mode 13h - and the two together are over GitHub's 100 MB, so
+  # each is its own bundle and the page offers the choice before the
+  # machine starts. Each bundle's STORY.INI is patched to list only the
+  # edition it carries, so the engine does not ask again. The 320x200
+  # products live in a 320\ folder inside each scene; SCENE.INI and the
+  # music are shared and go into both.
   OWLVID = @{
     prefix = "owlvid"
     page   = Join-Path $root "docs\owlvid.html"
@@ -263,7 +270,33 @@ $MAP = @{
       @{ p = "LAB\OWLFLY4\ENGINE\STORY.COM"; n = "ENGINE/STORY.COM" }
     )
     trees  = @(
-      @{ p = "LAB\OWLFLY4\STORY\NIGHT"; n = "STORY/NIGHT"; ext = @('.INI', '.OWV', '.SPR', '.SLT', '.PCM'); skip = @('frames') }
+      @{ p = "LAB\OWLFLY4\STORY\NIGHT"; n = "STORY/NIGHT"; ext = @('.INI', '.OWV', '.SPR', '.SLT', '.PCM'); skip = @('frames', '320') }
+    )
+    patch  = @(
+      @{ p = "LAB\OWLFLY4\STORY\NIGHT\STORY.INI"; n = "STORY/NIGHT/STORY.INI"; find = '(?m)^SCREENS\s*=[^\r\n]*'; put = 'SCREENS  = 640x400' }
+    )
+    ignore = @()
+    limit  = 100MB
+    strings = @(
+      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[sblaster]`nsbtype=sb16`n[autoexec]`necho off`nmount c .`nc:`ncd ENGINE`n:again`nSTORY`necho.`necho Press a key to play it again.`npause`ngoto again`n" },
+      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[sblaster]`nsbtype=sb16`n[autoexec]`necho off`nmount c .`nc:`ncd ENGINE`n:again`nSTORY`necho.`necho Press a key to play it again.`npause`ngoto again`n" }
+    )
+  }
+  OWLVID320 = @{
+    prefix = "owlvid320"
+    page   = Join-Path $root "docs\owlvid.html"
+    detect = "owlvid320_v(\d+)\.jsdos"
+    files  = @(
+      @{ p = "LAB\OWLFLY4\ENGINE\STORY.COM"; n = "ENGINE/STORY.COM" }
+    )
+    trees  = @(
+      # the shared text and music from the scenes themselves...
+      @{ p = "LAB\OWLFLY4\STORY\NIGHT"; n = "STORY/NIGHT"; ext = @('.INI', '.PCM'); skip = @('frames', '320') },
+      # ...and the pictures only from the 320\ folders
+      @{ p = "LAB\OWLFLY4\STORY\NIGHT"; n = "STORY/NIGHT"; ext = @('.INI', '.OWV', '.SPR', '.SLT'); skip = @('frames'); only = '\\320\\' }
+    )
+    patch  = @(
+      @{ p = "LAB\OWLFLY4\STORY\NIGHT\STORY.INI"; n = "STORY/NIGHT/STORY.INI"; find = '(?m)^SCREENS\s*=[^\r\n]*'; put = 'SCREENS  = 320x200' }
     )
     ignore = @()
     limit  = 100MB
@@ -293,19 +326,40 @@ foreach ($f in $g.files) {
   if (-not (Test-Path $full)) { throw "$($f.p) not found - build it first (MAKE.BAT $Game)" }
 }
 
-# a tree becomes files: walked now, so that everything below sees one list
+# a tree becomes files: walked now, so that everything below sees one list.
+# `skip` names folders left out anywhere on the path, `only` a regex the
+# path must match; a file named by a `patch` entry is left to the patch.
+$patched = @()
+if ($g.ContainsKey('patch')) { $patched = $g.patch | ForEach-Object { $_.n } }
 if ($g.ContainsKey('trees')) {
   $g.files = @($g.files)
+  $seen = @{}
   foreach ($t in $g.trees) {
     $base = Join-Path $root $t.p
     if (-not (Test-Path $base)) { throw "$($t.p) not found" }
     Get-ChildItem $base -File -Recurse | Where-Object {
-      $_.Extension.ToUpper() -in $t.ext -and
-      -not ($t.skip | Where-Object { $_ -and $PSItem -and $_.FullName -match "\\$PSItem\\" })
+      $f = $_
+      $f.Extension.ToUpper() -in $t.ext -and
+      -not ($t.skip | Where-Object { $_ -and $f.FullName -match "\\$_\\" }) -and
+      (-not $t.ContainsKey('only') -or $f.FullName -match $t.only)
     } | Sort-Object FullName | ForEach-Object {
       $rel = $_.FullName.Substring($base.Length + 1) -replace '\\', '/'
-      $g.files += @{ p = $_.FullName.Substring($root.Length + 1); n = "$($t.n)/$rel" }
+      $n = "$($t.n)/$rel"
+      if ($patched -contains $n -or $seen.ContainsKey($n)) { return }
+      $seen[$n] = $true
+      $g.files += @{ p = $_.FullName.Substring($root.Length + 1); n = $n }
     }
+  }
+}
+# a patched file: read, one regex replaced, and put in as a string entry
+if ($g.ContainsKey('patch')) {
+  $g.strings = @($g.strings)
+  foreach ($pt in $g.patch) {
+    $src = Join-Path $root $pt.p
+    if (-not (Test-Path $src)) { throw "$($pt.p) not found" }
+    $text = [System.IO.File]::ReadAllText($src)
+    if ($text -notmatch $pt.find) { throw "$($pt.p) has nothing matching $($pt.find) to patch" }
+    $g.strings += @{ n = $pt.n; c = [regex]::Replace($text, $pt.find, $pt.put) }
   }
 }
 

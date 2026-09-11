@@ -285,6 +285,8 @@ OWVPLAY:
         ; Without one the player still runs - it just falls back to timing
         ; frames from the BIOS tick, which is what it did before there was
         ; any sound at all.
+        mov  dword [SBORIGIN],0
+        mov  byte [RIDING],0
         test byte [HDRBUF+9],1
         jz   NOSOUND
         mov  ax,[HDRBUF+12]
@@ -293,6 +295,15 @@ OWVPLAY:
         shr  al,1
         and  al,1
         mov  [SBWANT16],al
+if defined OWV_RIDE
+        ; The card may already be running for the scene's music, and a clip
+        ; of the same format RIDES it rather than stopping and restarting
+        ; it: its chunks queue behind the music already waiting, and its
+        ; clock counts from where they will start (SBORIGIN). No gap, no
+        ; jump in the music between sections. CF from the hook says so.
+        call OWV_RIDE
+        jc   SNDRIDE
+end if
         call SBINIT
         jc   NOSOUND
 
@@ -308,6 +319,10 @@ SND8:   cmp  byte [SBDOWN],1
         jne  SNDLOG
         mov  dx,MKSNDDN
 SNDLOG: call LOGMARK
+        jmp  SNDREADY
+SNDRIDE:
+        mov  dx,MKRIDE
+        call LOGMARK
         jmp  SNDREADY
 NOSOUND:
         mov  dx,MKNOSND
@@ -617,6 +632,9 @@ SHOWFRAME:
 if defined OWV_FRAME
         call OWV_FRAME                  ; once a frame, FRAMENO counted: the
 end if                                  ; story engine's fades ride on this
+if defined OWV_IDLE
+        call OWV_IDLE                   ; ...and its music under a clip that
+end if                                  ; has no sound of its own to mix into
 
         ; A mark every five seconds. Six lines for a thirty-second clip, and
         ; the difference between "it stops somewhere" and "it stops HERE".
@@ -650,9 +668,12 @@ WS1:    mov  eax,[FRAMENO]
         mov  [WANTED],eax
         mov  ebx,eax
 WAITS:  call SBPOS
-        cmp  eax,ebx
-        jb   WAITS
-        jmp  WAITDONE
+        sub  eax,[SBORIGIN]             ; zero where this clip's sound began
+        cmp  eax,ebx                    ; SIGNED: before that zero the
+        jl   WAITS                      ; difference is negative, and an
+        jmp  WAITDONE                   ; unsigned test read it as "hours
+                                        ; late" - the decoder ran free,
+                                        ; filled the queue and dropped chunks
 
 WAITTICK:
         mov  eax,[FRAMENO]
@@ -698,8 +719,11 @@ FINISH:
 if defined OWV_FINISH
         call OWV_FINISH                 ; a clip stopped early goes down to
 end if                                  ; black the same way as one that ended
+        mov  byte [RIDING],0
+        cmp  byte [SBKEEP],1            ; the card is the scene's: it plays
+        je   FIN0                       ; on, the music takes over the queue
         call SBDRAIN                    ; the sound is a ring behind the
-        mov  dx,MKFIN                   ; picture - let it finish the sentence
+FIN0:   mov  dx,MKFIN                   ; picture - let it finish the sentence
         call LOGMARK
         call TICK
         sub  eax,[TICKBASE]
@@ -721,8 +745,10 @@ FIN1:   mov  eax,[SBWRAPS]
         mov  di,TIMWANT
         call HEX32TO
 
+        cmp  byte [SBKEEP],1
+        je   FIN2
         call SBHALT
-        call REFLAT
+FIN2:   call REFLAT
         mov  ax,[SBUNDER]
         mov  di,TIMUNDER
         call HEX16TO
@@ -1184,6 +1210,10 @@ FLATOK   db 0
 OWVKEY   db 0
 LFB      dd 0
 PITCH    dd 0
+SBORIGIN dd 0                   ; SBPOS where this clip's sound begins
+SBKEEP   db 0                   ; the card belongs to the scene's music: a
+                                ; clip neither starts nor stops it
+RIDING   db 0                   ; this clip mixes into the running queue
 SCRW     dd 640                 ; the screen, as the mode set it (SETSCR)
 SCRH     dd 400
 PLANE    dd 256000              ; SCRW * SCRH
@@ -1252,3 +1282,4 @@ MKSOUND  db 'sound:   Sound Blaster found, it is the clock',13,10,'$'
 MKNOSND  db 'sound:   none - frames timed from the BIOS tick instead',13,10,'$'
 MKSND16  db 'sound:   Sound Blaster 16, sixteen-bit DMA, it is the clock',13,10,'$'
 MKSNDDN  db 'sound:   16-bit file on the 8-bit path (DSP below 4, or no H in BLASTER)',13,10,'$'
+MKRIDE   db 'sound:   riding the card the scene',39,'s music runs on',13,10,'$'

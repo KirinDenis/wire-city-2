@@ -20,9 +20,15 @@ REM passed every argument through, the engine took "EXIT" as part of the
 REM story path, found nothing there, and the emulator closed before anyone
 REM could read why.
 REM ============================================================================
+REM Two switches can ride along - /AUTO and /320 or /640 - so EXIT may be
+REM the second, third or fourth word.
 if not exist STORY.COM goto nostory
 if "%1"=="" goto plain
 if "%2"=="EXIT" goto dironly
+if "%3"=="EXIT" goto oneswitch
+STORY.COM %1 %2 %3
+goto done
+:oneswitch
 STORY.COM %1 %2
 goto done
 :dironly
@@ -39,3 +45,4 @@ echo STORY.COM is not built. Type MAKE first.
 :done
 if "%2"=="EXIT" exit
 if "%3"=="EXIT" exit
+if "%4"=="EXIT" exit

@@ -95,6 +95,20 @@ public class Story
     public string Title = "", Name = "", Warehouse = "", Start = "";
     public List<Scene> Scenes = new();
 
+    // SCREENS = 640x400 320x200 - the editions the story is made in. The
+    // first is the one the desk shows; the game asks the player when there
+    // are two. The 640x400 products sit beside SCENE.INI as they always
+    // did; another screen's sit in a folder named by its width (320\)
+    // inside the scene, recipes and all. SCENE.INI and the music are shared.
+    public List<string> Screens = new() { "640x400" };
+    public string Primary => Screens.Count > 0 ? Screens[0] : "640x400";
+    public static string ScreenDir(string screen) => screen.StartsWith("640") ? "" : screen.Split('x')[0];
+    public static (int w, int h) ScreenSize(string screen)
+    {
+        var p = screen.ToLowerInvariant().Split('x');
+        return p.Length == 2 && int.TryParse(p[0], out var w) && int.TryParse(p[1], out var h) ? (w, h) : (640, 400);
+    }
+
     public string MatDir => Path.Combine(Warehouse, Name);
     public string IniPath => Path.Combine(Dir, FILE);
 
@@ -111,6 +125,7 @@ public class Story
                     case "WAREHOUSE": s.Warehouse = l.Value; break;
                     case "START": s.Start = l.Value; break;
                     case "ORDER": order = Split(l.Value); break;
+                    case "SCREENS": { var sc = Split(l.Value); if (sc.Count > 0) s.Screens = sc; break; }
                 }
         // every folder with a SCENE.INI is a scene; ORDER says how the desk lists them
         var found = new Dictionary<string, Scene>(StringComparer.OrdinalIgnoreCase);
@@ -135,6 +150,7 @@ public class Story
             .Key("NAME", Name)
             .Key("START", Start)
             .Key("ORDER", string.Join(" ", Scenes.Select(x => x.Id)))
+            .Key("SCREENS", string.Join(" ", Screens))
             .Blank()
             .Comment("desk only: where the raw material is, outside the repository")
             .Key("WAREHOUSE", Warehouse)
@@ -207,6 +223,9 @@ public class Scene
     public bool MusicDone, MusicStale;
 
     public string Dir(Story s) => Path.Combine(s.Dir, Id);
+    // ...and where a screen's products go: the scene itself for 640x400, a
+    // folder named by the width inside it for any other
+    public string Dir(Story s, string screen) { var d = Story.ScreenDir(screen); return d == "" ? Dir(s) : Path.Combine(Dir(s), d); }
     public string MatDir(Story s) => Path.Combine(s.MatDir, Id);
     public string MusicAbs(Story s) => MusicSource == "" ? null : Path.Combine(MatDir(s), MusicSource);
     public string MusicProduct(Story s) => Path.Combine(Dir(s), Music == "" ? MUSIC : Music);
@@ -347,23 +366,27 @@ public class VideoSection : Section
     public override string Mark => Done ? "▶" : StaleProduct ? "▷" : Source == "" ? "·" : "▷";
 
     public string Inf => Path.ChangeExtension(File, ".INF");
-    public string Product(Story s, Scene sc) => Path.Combine(sc.Dir(s), File);
-    public string InfPath(Story s, Scene sc) => Path.Combine(sc.Dir(s), Inf);
+    public string Product(Story s, Scene sc) => Product(s, sc, s.Primary);
+    public string InfPath(Story s, Scene sc) => InfPath(s, sc, s.Primary);
+    public string Product(Story s, Scene sc, string screen) => Path.Combine(sc.Dir(s, screen), File);
+    public string InfPath(Story s, Scene sc, string screen) => Path.Combine(sc.Dir(s, screen), Inf);
     public string SourceAbs(Story s, Scene sc) => Source == "" ? null : Path.Combine(sc.MatDir(s), Source);
+    public List<string> Missing = new();            // the screens without a fresh product
 
     public override void Read(IniLine l) { if (l.Key == "FILE") File = l.Value; else if (l.Key == "SOURCE") Source = l.Value; }
     public override void Write(Ini.Writer w) { w.Key("FILE", File); w.Key("SOURCE", Source); }
     public override void Refresh(Story s, Scene sc)
     {
-        Done = File != "" && Fresh(Product(s, sc), InfPath(s, sc));
-        StaleProduct = File != "" && Stale(Product(s, sc), InfPath(s, sc));
+        Missing = File == "" ? new List<string>() : s.Screens.Where(x => !Fresh(Product(s, sc, x), InfPath(s, sc, x))).ToList();
+        Done = File != "" && Missing.Count == 0;
+        StaleProduct = File != "" && s.Screens.Any(x => Stale(Product(s, sc, x), InfPath(s, sc, x)));
     }
     public override IEnumerable<string> Gaps(Story s, Scene sc)
     {
         if (Source == "") { yield return "no footage chosen"; yield break; }
         if (!System.IO.File.Exists(SourceAbs(s, sc))) yield return $"footage missing: {Source}";
         if (StaleProduct) yield return $"{File} is from an EARLIER source - convert again";
-        else if (!Done) yield return $"{Source} not converted";
+        else if (!Done) yield return $"{Source} not converted" + (Missing.Count < s.Screens.Count ? $" for {string.Join(", ", Missing)}" : "");
     }
     public override string Describe(Story s, Scene sc)
         => Done ? $"▶ video   {File}  ← {Source}"
@@ -402,7 +425,11 @@ public class PickupSection : Section
     public const string EMPTY = "empty.jpg", FULL = "full.jpg", PANELART = "panel.png", BG = "BG.OWV", INF = "PICKUP.INF";
     public const int CAPTION_MAX = 39;              // sixteen-pixel glyphs across 640
     public string MatDir(Story s, Scene sc) => Path.Combine(sc.MatDir(s), Folder);
-    public string OutDir(Story s, Scene sc) => Path.Combine(sc.Dir(s), Folder);
+    public string OutDir(Story s, Scene sc) => OutDir(s, sc, s.Primary);
+    public string OutDir(Story s, Scene sc, string screen) => Path.Combine(sc.Dir(s, screen), Folder);
+    public List<string> Missing = new();            // the screens without fresh products
+    // PANEL is written for 640x400 and scales with the screen: 64 there, 32 at 320x200
+    public int PanelFor(string screen) => Panel * Story.ScreenSize(screen).h / 400;
     public string EmptyAbs(Story s, Scene sc) => FindPicture(MatDir(s, sc), "empty");
     public string FullAbs(Story s, Scene sc) => FindPicture(MatDir(s, sc), "full");
     public string PanelArtAbs(Story s, Scene sc) => FindPicture(MatDir(s, sc), "panel");
@@ -470,12 +497,19 @@ public class PickupSection : Section
     }
     public override void Refresh(Story s, Scene sc)
     {
-        var inf = Path.Combine(OutDir(s, sc), INF);
-        var bg = Path.Combine(OutDir(s, sc), BG);
-        bool all = Fresh(bg, inf) && Items.All(i => Fresh(Path.Combine(OutDir(s, sc), i.Name + ".SPR"), inf))
-                   && (Panel == 0 || Items.All(i => Fresh(Path.Combine(OutDir(s, sc), i.Name + ".SLT"), inf)));
-        Done = Items.Count > 0 && Items.All(i => i.Placed) && all;
-        StaleProduct = Stale(bg, inf);
+        Missing = new List<string>();
+        StaleProduct = false;
+        foreach (var screen in s.Screens)
+        {
+            var dir = OutDir(s, sc, screen);
+            var inf = Path.Combine(dir, INF);
+            var bg = Path.Combine(dir, BG);
+            bool all = Fresh(bg, inf) && Items.All(i => Fresh(Path.Combine(dir, i.Name + ".SPR"), inf))
+                       && (Panel == 0 || Items.All(i => Fresh(Path.Combine(dir, i.Name + ".SLT"), inf)));
+            if (!all) Missing.Add(screen);
+            if (Stale(bg, inf)) StaleProduct = true;
+        }
+        Done = Items.Count > 0 && Items.All(i => i.Placed) && Missing.Count == 0;
     }
     public override IEnumerable<string> Gaps(Story s, Scene sc)
     {
@@ -484,7 +518,9 @@ public class PickupSection : Section
         foreach (var it in Items) if (!it.Placed) yield return $"{it.Name} not placed";
         foreach (var n in Need) if (!Items.Any(i => i.Name.Equals(n, StringComparison.OrdinalIgnoreCase))) yield return $"NEED names {n}, which is not an item";
         foreach (var it in Items) if (it.Caption.Trim().Length > CAPTION_MAX) yield return $"{it.Name}'s line is {it.Caption.Trim().Length} letters; the screen fits {CAPTION_MAX}";
-        if (Items.Count > 0 && Items.All(i => i.Placed) && !Done) yield return StaleProduct ? "products are from an EARLIER placement - convert again" : "not converted";
+        if (Items.Count > 0 && Items.All(i => i.Placed) && !Done)
+            yield return StaleProduct ? "products are from an EARLIER placement - convert again"
+                       : "not converted" + (Missing.Count < s.Screens.Count ? $" for {string.Join(", ", Missing)}" : "");
     }
     public override string Describe(Story s, Scene sc)
     {

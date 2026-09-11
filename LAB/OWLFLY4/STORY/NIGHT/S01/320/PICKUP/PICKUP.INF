@@ -1,0 +1,21 @@
+; PICKUP.INF - written by SceneDesk for scene S01: the room without its things,
+; the things, and where each stands in the SOURCE picture. Vid2Owv makes BG.OWV
+; and one .SPR per thing, in the room's palette, with the screen position inside;
+; PANEL reserves the band below the room for the slots, and one .SLT per thing
+; is the thing at slot size, placed in its slot.
+
+MODE       = PICKUP
+EMPTY      = ..\..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S01\PICKUP\empty.jpg
+FULL       = ..\..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S01\PICKUP\full.jpg
+OUTDIR     = .
+WIDTH      = 320
+HEIGHT     = 200
+PANEL      = 32
+FIT        = crop
+DITHER     = bayer:bayer_scale=3
+TOLERANCE  = 2
+
+ITEM ASHTRAY  = -8,817 ..\..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S01\PICKUP\layer-ashtray.png
+ITEM CASSETTE = 372,562 ..\..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S01\PICKUP\layer-cassette-label.png
+ITEM KEYS     = 582,215 ..\..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S01\PICKUP\layer-keys.png
+ITEM NEONOWLF = 1118,545 ..\..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S01\PICKUP\layer-neon-owl-figurine.png

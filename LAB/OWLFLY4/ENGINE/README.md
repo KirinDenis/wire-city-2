@@ -8,7 +8,20 @@ game around it yet.
 STORY                       plays ..\STORY\NIGHT
 STORY ..\STORY\OTHER        plays that one
 STORY ..\STORY\NIGHT /AUTO  plays itself and writes SHOTnn.OWV of the screen
+STORY ..\STORY\NIGHT /320   the 320x200 edition (/640 the other); with neither,
+                            a story made in both asks the player first
 ```
+
+**Two screens.** A story lists the editions it is made in (`SCREENS` in
+STORY.INI): 640x400 through VESA 100h, and 320x200 through mode 13h, the
+VGA every machine has - a quarter of the pixels, a quarter of the bytes a
+second, and no VESA to ask for. The 320x200 products sit in a `320\`
+folder inside each scene, recipes and all; SCENE.INI and the music are
+shared. When both are there the engine asks in text mode before any
+picture, and the answer sets everything: the decoder's frame size, the
+font (the ROM's 8x8 doubled at 640, plain at 320), the cursor (16 or 8),
+the bands and margins, and the mouse driver's habit of counting mode 13h
+in 640 columns. `/AUTO` takes 640x400 unless `/320` says otherwise.
 
 | in a clip | ESC or Space skips it, Q quits |
 |---|---|
@@ -30,12 +43,16 @@ each scene's sections in play order.
   is the clock, sixteen bits on a Sound Blaster 16.
 - `MUSIC` - the scene's track, `MUSIC.PCM`, an OWA1 file of sixteen-bit
   mono samples opened when the scene starts and closed when it ends, and
-  looped. Under the room and under a quiz the card is started for it and
-  the loop keeps the queue fed; under a clip the decoder hands every audio
-  chunk through `OWV_MIX` and the music is added in at half level,
-  saturated - so a clip carries only its own sounds and the scene's mood
-  goes on underneath. A silent clip plays silent: the mixing rides on the
-  clip's own audio chunks.
+  looped. The card is started ONCE, when the scene opens, and runs until
+  the scene ends: under the room and under a quiz the loop keeps the
+  queue fed; a clip of the same format (sixteen bits at the music's rate)
+  RIDES the running card - it neither starts nor stops it, its chunks
+  queue behind the music already waiting, its clock counts from where
+  they will play (`SBORIGIN`), and `OWV_MIX` adds the music into every
+  chunk at its own level, saturated. A silent clip leaves the queue to
+  the music (`OWV_IDLE`). So the track plays on across every cut in the
+  scene without a gap or a jump; only a clip of another format (an 8-bit
+  file) stops it for its length. `VOLUME` in MUSIC.INF sets the level.
 - `[PICKUP]` - `BG.OWV`, one frame, through that same decoder; then every
   `.SPR` named in the section drawn on top at the position in its header,
   index 255 skipped. `PANEL = 64` says the bottom 64 rows are not the room:

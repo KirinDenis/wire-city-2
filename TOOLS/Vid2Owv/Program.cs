@@ -812,12 +812,16 @@ static class Program
     // ========================================================================
     // The slots: a cell per thing, centred as a row in the band; the icon
     // fits a box inside the cell. Sixteen things at 640 wide still get 40
-    // pixels each.
+    // pixels each. The numbers are for 640x400 and scale with the screen:
+    // at 320x200 a cell is 44 and an icon 36x24.
     public const int SLOT_CELL = 88, SLOT_W = 72, SLOT_H = 48;
+    public static int SlotCell(int width) => SLOT_CELL * width / 640;
+    public static int SlotW(int width) => SLOT_W * width / 640;
+    public static int SlotH(int height) => SLOT_H * height / 400;
 
     public static (int x, int y, int cell) SlotAt(int index, int count, int width, int height, int panelH, int w, int h)
     {
-        int cell = Math.Min(SLOT_CELL, width / Math.Max(1, count));
+        int cell = Math.Min(SlotCell(width), width / Math.Max(1, count));
         int x0 = (width - count * cell) / 2;
         return (x0 + index * cell + (cell - w) / 2, height - panelH + (panelH - h) / 2, cell);
     }
@@ -893,7 +897,7 @@ static class Program
 
             if (m.PanelHeight > 0)
             {
-                double f = Math.Min(Math.Min((double)SLOT_W / lw, (double)SLOT_H / lh), 1.0);
+                double f = Math.Min(Math.Min((double)SlotW(m.Width) / lw, (double)SlotH(m.Height) / lh), 1.0);
                 int iw = Math.Max(1, (int)Math.Round(lw * f)), ih = Math.Max(1, (int)Math.Round(lh * f));
                 var (ix, iy, _) = SlotAt(index, m.Items.Count, m.Width, m.Height, m.PanelHeight, iw, ih);
                 var icon = Quantise(ffmpeg, layer, palPng, m.Dither, iw, ih, Path.Combine(work, it.Name + "-slot.raw"));

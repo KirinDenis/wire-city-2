@@ -44,8 +44,17 @@ TITLE    = Night Drive
 NAME     = NIGHT              the folder name, 8.3 - the game sees it
 START    = S01
 ORDER    = S01 S02 S03 ...    how the desk lists them; the game does not care
+SCREENS  = 640x400 320x200    the editions the story is made in; the game
+                              asks the player when there are two
 WAREHOUSE = C:\...\OWLFLY4_RES     desk only
 ```
+
+The 640x400 products sit beside `SCENE.INI` as shown above. Another
+screen's sit in a folder named by its width inside the scene - `S01\320\
+CLIP.INF CLIP.OWV`, `S01\320\PICKUP\...` - recipes and products alike, so
+that each edition is rebuilt from its own recipe. `SCENE.INI` and the
+music are shared: the story is the same story. The desk converts every
+section for every screen listed, and shows the first.
 
 and one `SCENE.INI` per scene folder:
 

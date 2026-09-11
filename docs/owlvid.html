@@ -18,7 +18,16 @@
   h1 { font-size:26px; margin:0 0 4px; letter-spacing:.02em; }
   h1 span { color:var(--acc); }
   .sub { color:var(--dim); margin:0 0 22px; font-size:14px; }
+  #stage { position:relative; }
   #dos { width:100%; aspect-ratio:16/10; background:#000; border:1px solid #232338; }
+  #choice { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+            justify-content:center; gap:14px; background:#000; border:1px solid #232338; }
+  #choice p { margin:0 0 6px; color:var(--dim); font-size:15px; letter-spacing:.04em; text-transform:uppercase; }
+  #choice button { width:min(60%,420px); padding:14px 18px; background:var(--panel); color:var(--ink);
+                   border:1px solid #33334a; border-left:3px solid var(--acc); font:inherit; font-size:20px;
+                   cursor:pointer; text-align:left; }
+  #choice button:hover { border-color:var(--acc2); border-left-color:var(--acc2); }
+  #choice button small { display:block; color:var(--dim); font-size:13px; margin-top:4px; }
   .note { background:var(--panel); border:1px solid #232338; border-left:3px solid var(--acc2);
           padding:12px 16px; margin:18px 0; font-size:14px; }
   .note b { color:var(--acc2); font-weight:600; }
@@ -40,19 +49,31 @@
      finished.</p>
 
   <div class="note">
-    <b>Press play on the picture</b>, and give it a moment &mdash; the whole
-    story arrives in one piece before anything happens, and it is large: the
-    clips cost a megabyte a second.<br>
+    <b>Choose a screen on the picture</b>, and give it a moment &mdash; the
+    whole story arrives in one piece before anything happens, and it is
+    large: the clips cost a megabyte a second at 640&times;400, a quarter of
+    that at 320&times;200.<br>
     It does not start by itself on purpose. A browser will not let a page make
     a sound until you have interacted with it, so a game that started on its
     own would play silently; the click that starts it is the one that unlocks
     the audio. When the story ends, any key plays it again.
   </div>
 
-  <div id="dos"></div>
+  <div id="stage">
+    <div id="dos"></div>
+    <div id="choice">
+      <p>Which screen?</p>
+      <button id="pick640">640 &times; 400<small>VESA &middot; the picture as it was made &middot; the larger download</small></button>
+      <button id="pick320">320 &times; 200<small>mode 13h &middot; any VGA &middot; a quarter of the bytes</small></button>
+    </div>
+  </div>
 
   <h2>How to play</h2>
   <dl>
+    <dt>First</dt><dd>the screen: 640&times;400 (a VESA card, the picture as it
+        was made) or 320&times;200 (mode 13h, any VGA - a quarter of the pixels
+        and a quarter of the bytes a second). In DOS the engine asks the same
+        question in text mode</dd>
     <dt>The room</dt><dd>click a thing to take it; or move the cursor with the
         arrow keys and take with Enter, if the browser has not given the
         emulator your mouse. Every thing taken goes to its slot on the panel
@@ -73,7 +94,8 @@
 
   <h2>How it is built</h2>
   <dl>
-    <dt>Mode</dt><dd>VESA 100h, 640&times;400, 256 colours, linear framebuffer</dd>
+    <dt>Mode</dt><dd>VESA 100h, 640&times;400, 256 colours, linear framebuffer;
+        or mode 13h, 320&times;200, the same story converted twice</dd>
     <dt>Codec</dt><dd>8&times;8 blocks &mdash; skip, fill, copy, run-length &mdash; over a
         whole-frame motion vector, so a slow pan costs about thirty bytes</dd>
     <dt>Palette</dt><dd>one for the whole clip, ordered dithering only; the
@@ -104,10 +126,17 @@
 <script>
   // Named once. A cached page serving a stale bundle is a class of confusion
   // this project has already paid for, so the version is on the glass.
-  const BUNDLE = "owlvid_v8.jsdos";
+  // Two bundles, one an edition: the story is made at 640x400 and at
+  // 320x200, and the two together are over what GitHub will hold in one
+  // file. The choice the DOS engine asks in text mode is asked HERE
+  // instead - each bundle's STORY.INI lists only its own edition, so the
+  // machine goes straight to the story.
+  const BUNDLE640 = "owlvid_v9.jsdos";
+  const BUNDLE320 = "owlvid320_v1.jsdos";
   const params = new URLSearchParams(location.search);
   document.querySelector(".sub").textContent +=
-    "  \u00b7  v" + (BUNDLE.match(/_v(\d+)/) || [0, "?"])[1];   // the dot is escaped: pack.ps1 rewrites this page as ASCII
+    "  \u00b7  v" + (BUNDLE640.match(/_v(\d+)/) || [0, "?"])[1] +
+    " / v" + (BUNDLE320.match(/_v(\d+)/) || [0, "?"])[1];   // the dot is escaped: pack.ps1 rewrites this page as ASCII
 
   // Belt and braces, and it has to be installed BEFORE js-dos runs - it
   // works by remembering every AudioContext the page creates, and a wrapper
@@ -146,17 +175,20 @@
   // wheel sends an event the browser counts as interaction, and the context
   // woke up. Two different browsers, same behaviour, no bug in either.
   //
-  // Letting js-dos show its own play button makes the first click the thing
-  // that both starts the machine and unlocks the sound. ?autostart=1 is kept
-  // for the test rigs, which do not care about audio.
-  Dos(document.getElementById("dos"), {
-    url: BUNDLE,
+  // The click on a screen button is that gesture: it picks the bundle,
+  // starts the machine and unlocks the sound in one go. ?autostart=1 (with
+  // &screen=320 for the other edition) is kept for the test rigs, which do
+  // not care about audio.
+  function start(bundle) {
+    document.getElementById("choice").hidden = true;
+    Dos(document.getElementById("dos"), {
+    url: bundle,
     pathPrefix: "jsdos/emulators/",
     theme: "dark",
     renderAspect: "16/10",
     imageRendering: "pixelated",
     scaleControls: 0.2,
-    autoStart: params.get("autostart") === "1",
+    autoStart: true,
 
     // PINNED, and this is not a preference.
     //
@@ -172,11 +204,17 @@
     // Naming the backend here overrides the stored value. Every page that
     // embeds js-dos wants this line.
     backend: "dosbox"
-  });
+    });
+  }
+  document.getElementById("pick640").addEventListener("click", () => start(BUNDLE640));
+  document.getElementById("pick320").addEventListener("click", () => start(BUNDLE320));
+  if (params.get("autostart") === "1") start(params.get("screen") === "320" ? BUNDLE320 : BUNDLE640);
 
 </script>
 </body>
 </html>
+
+
 
 
 

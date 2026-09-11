@@ -1,0 +1,10 @@
+.title  Move the camera, or move the world
+.what   The view matrix and the projection matrix, by their classical names - and the discovery that a picture cannot tell you whether the cube moved or the camera did, because only where the eye is RELATIVE to the cube decides it
+.tier   LESSON
+.main   CAM.ASM
+.needs  DRAW16.INC SINTAB.INC RECIP.INC
+.reads  INFOGR.PAS
+.build  FASM CAM.ASM CAM.COM
+.run    CAM.COM
+.uses   XLATB IMUL CBW NEG SAR LOOP INT
+.ignore MAKEINFO.BAT

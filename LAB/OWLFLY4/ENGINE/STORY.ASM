@@ -3,6 +3,9 @@
 ;
 ;      STORY                     plays ..\STORY\NIGHT
 ;      STORY ..\STORY\OTHER      plays that one
+;      STORY ..\STORY\NIGHT /320 plays the 320x200 edition of the story
+;                                (/640 the other); with neither, a story
+;                                that lists both screens asks the player
 ;      STORY ..\STORY\NIGHT /AUTO
 ;                                plays itself: takes every thing in a pickup,
 ;                                answers 1 to every quiz, waits a second on
@@ -27,7 +30,10 @@
 ;  ------------------------------------------------------------------------
 ;  WHAT A STORY IS, TO THIS PROGRAM
 ;  ------------------------------------------------------------------------
-;  STORY.INI names the first scene and lists the rest (ORDER). Each scene
+;  STORY.INI names the first scene and lists the rest (ORDER), and which
+;  SCREENS the story was made for: 640x400 (VESA) and/or 320x200 (mode
+;  13h, any VGA). The products of the 320x200 edition sit in a 320\
+;  folder inside each scene; SCENE.INI and the music are shared. Each scene
 ;  is a folder with SCENE.INI: some text for the writer, which this program
 ;  skips, a CODE, an ENTERS list, and SECTIONS in play order:
 ;
@@ -150,8 +156,7 @@ IT_IH    = 26
 
 AUTOWAIT = 18                   ; ticks a message stays up in /AUTO: a second
 AUTOSTEP = 9                    ; ticks between two things taken in /AUTO
-CAPTH    = 24                   ; the caption band over the room, in rows
-CAPTHOLD = 27                   ; ticks it stays: a second and a half
+CAPTHOLD = 27                   ; ticks the caption band stays: a second and a half
 GREYLVL  = 38                   ; the outline's grey, in six bits (150 of 255)
 
 START:  cld
@@ -193,8 +198,20 @@ CL1B:   mov  byte [di],0
         jmp  CL1
 CLEND0: mov  byte [di],0
         jmp  CLEND
-CLSW:   ; /AUTO, or anything else starting with a slash: the same thing
-        mov  byte [AUTO],1
+CLSW:   ; a switch: /320 or /640 picks the screen, anything else is /AUTO
+        test cx,cx
+        jz   CLEND
+        lodsb
+        dec  cx
+        cmp  al,'3'
+        jne  CLSW1
+        mov  byte [SCRSEL],2
+        jmp  CL3
+CLSW1:  cmp  al,'6'
+        jne  CLSW2
+        mov  byte [SCRSEL],1
+        jmp  CL3
+CLSW2:  mov  byte [AUTO],1
 CL3:    jcxz CLEND
         lodsb
         dec  cx
@@ -266,8 +283,46 @@ DIROK:  mov  dx,MKDIR
 NOMOUSE:
         call REFLAT
 
+        ; Which screen: the switch, else the only one the story lists, else
+        ; the player's answer - in text mode, before any picture. /AUTO
+        ; takes 640x400 when both are there.
+        mov  al,[SCRSEL]
+        test al,al
+        jnz  SCRGOT
+        mov  al,1
+        cmp  byte [HAS320],1
+        jne  SCRGOT                     ; only 640x400 is made
+        mov  al,2
+        cmp  byte [HAS640],1
+        jne  SCRGOT                     ; only 320x200 is made
+        mov  al,1
+        cmp  byte [AUTO],1
+        je   SCRGOT
+        mov  dx,MENU1
+        call PUTS
+SCRASK: xor  ah,ah
+        int  16h
+        cmp  al,'1'
+        je   SCR1
+        cmp  al,'2'
+        je   SCR2
+        cmp  al,27
+        je   SCR1
+        cmp  al,13
+        je   SCR1
+        jmp  SCRASK
+SCR2:   mov  al,2
+        jmp  SCRGOT
+SCR1:   mov  al,1
+SCRGOT: mov  [SCRSEL],al
+        cmp  al,2
+        je   SCRLO
         call GFXON
         jc   NOMODE
+        jmp  SCRSET
+SCRLO:  call GFXON13
+        jc   NOMODE
+SCRSET: call SETSCREEN
         ; a palette before any clip has brought one: a grey ramp, so that a
         ; message about a missing first scene is readable and the fades
         ; have something to scale
@@ -293,7 +348,7 @@ SCENELOOP:
         ; <story>\<scene>\SCENE.INI
         mov  si,N_SCENE
         xor  bx,bx                      ; no subfolder
-        call SCENEPATH
+        call SCENEPATH0                 ; shared by both screens
         mov  dx,PATHBUF
         call READTXT
         jc   SCENEMISSING
@@ -477,16 +532,19 @@ PKROOM: mov  eax,[PFRAME]               ; the frame just shown
         ; the room is the rows above the panel; the panel's backing is
         ; already in the frame, laid there by the converter
         mov  bx,[CURSECT]
-        mov  ax,HEIGHT
+        mov  ax,[H16]
         sub  ax,[bx+S_PANEL]
-        cmp  ax,HEIGHT
+        cmp  ax,[H16]
         ja   PKNOPANEL
-        cmp  ax,CAPTH*2
+        mov  bx,[CAPTHV]
+        shl  bx,1
+        cmp  ax,bx
         jb   PKNOPANEL
         mov  [ROOMH],ax
         jmp  PKROOMH
 PKNOPANEL:
-        mov  word [ROOMH],HEIGHT
+        mov  ax,[H16]
+        mov  [ROOMH],ax
 PKROOMH:
         mov  byte [CAPTON],0
 
@@ -518,19 +576,17 @@ PKLOADED:
         mov  word [CURY],200
         cmp  byte [MOUSEOK],1
         jne  PKNOMOUSE
-        mov  ax,7                       ; the driver's idea of the screen:
-        xor  cx,cx                      ; ours, exactly
-        mov  dx,WIDTH-1
+        mov  dx,[WM1]                   ; the driver's idea of the screen:
+        mov  cl,[MXSH]                  ; ours, exactly - and in mode 13h it
+        shl  dx,cl                      ; counts x in 640 columns
+        xor  cx,cx
+        mov  ax,7
         int  33h
         mov  ax,8
         xor  cx,cx
-        mov  dx,HEIGHT-1
+        mov  dx,[HM1]
         int  33h
-        mov  ax,4
-        mov  cx,[CURX]
-        mov  dx,[CURY]
-        int  33h
-        call REFLAT
+        call MOUSESET
 PKNOMOUSE:
         call CURSHOW
         call FADEUP                     ; the room comes up, things and all
@@ -563,16 +619,18 @@ PKLOOP: ; a key? ESC, Q - or the keyboard as a mouse: the arrows move the
         xor  dx,dx
         cmp  ah,48h                     ; up
         jne  PKK1
-        mov  dx,-8
+        mov  dx,[CURSTEP]
+        neg  dx
 PKK1:   cmp  ah,50h                     ; down
         jne  PKK2
-        mov  dx,8
+        mov  dx,[CURSTEP]
 PKK2:   cmp  ah,4Bh                     ; left
         jne  PKK3
-        mov  cx,-8
+        mov  cx,[CURSTEP]
+        neg  cx
 PKK3:   cmp  ah,4Dh                     ; right
         jne  PKK4
-        mov  cx,8
+        mov  cx,[CURSTEP]
 PKK4:   mov  ax,cx
         or   ax,dx
         jz   PKNOKEY
@@ -582,23 +640,19 @@ PKK4:   mov  ax,cx
         cmp  cx,0
         jge  PKK5
         xor  cx,cx
-PKK5:   cmp  cx,WIDTH-1
+PKK5:   cmp  cx,[WM1]
         jle  PKK6
-        mov  cx,WIDTH-1
+        mov  cx,[WM1]
 PKK6:   cmp  dx,0
         jge  PKK7
         xor  dx,dx
-PKK7:   cmp  dx,HEIGHT-1
+PKK7:   cmp  dx,[HM1]
         jle  PKK8
-        mov  dx,HEIGHT-1
+        mov  dx,[HM1]
 PKK8:   mov  [CURX],cx
         mov  [CURY],dx
-        cmp  byte [MOUSEOK],1           ; keep the driver in step, or its next
-        jne  PKK9                       ; reading pulls the cursor back
-        mov  ax,4
-        int  33h
-        call REFLAT
-PKK9:   call CURSHOW
+        call MOUSESET                   ; keep the driver in step, or its next
+PKK9:   call CURSHOW                    ; reading pulls the cursor back
         jmp  PKCHECK
 PKKCLICK:
         mov  ax,[CURX]
@@ -631,13 +685,9 @@ PKNOKEY:
         call CURHIDE
         mov  [CURX],ax
         mov  [CURY],dx
-        cmp  byte [MOUSEOK],1           ; and the driver's idea of where the
-        jne  PKAUTO1                    ; mouse is, or its next reading pulls
-        mov  cx,ax                      ; the cursor straight back
-        mov  ax,4
-        int  33h
-        call REFLAT
-PKAUTO1:
+        call MOUSESET                   ; and the driver's idea of where the
+PKAUTO1:                                ; mouse is, or its next reading pulls
+                                        ; the cursor straight back
         call CURSHOW
         pop  cx
         ; and then exactly what a click does - through HITTEST, not straight
@@ -684,6 +734,12 @@ PKMOUSE:
         mov  ax,3
         int  33h                        ; BX buttons, CX x, DX y
         call REFLAT
+        push bx
+        mov  bx,cx                      ; x in the driver's columns: in mode
+        mov  cl,[MXSH]                  ; 13h there are 640 of them for 320
+        shr  bx,cl                      ; pixels
+        mov  cx,bx
+        pop  bx
         push bx
         cmp  cx,[CURX]
         jne  PKMOVED
@@ -1006,7 +1062,7 @@ DSROW:  test ecx,ecx
         push ecx
         push eax
         ; the row: x from IT_X, w pixels
-        imul eax,WIDTH
+        imul eax,[SCRW]
         add  eax,[LFB]
         movsx edx,word [bx+IT_X]
         add  eax,edx                    ; eax = screen address of (x, y)
@@ -1015,7 +1071,7 @@ DSROW:  test ecx,ecx
         push esi
 DSPIX:  cmp  edx,0
         jl   DSSKIP
-        cmp  edx,WIDTH
+        cmp  edx,[SCRW]
         jge  DSSKIP
         mov  al,[fs:esi]
         cmp  al,255
@@ -1066,13 +1122,13 @@ RSROW:  test ecx,ecx
         xor  edx,edx
 RS1:    mov  edi,edx
         add  edi,ecx
-        cmp  edi,WIDTH
+        cmp  edi,[SCRW]
         jle  RS2
-        mov  ecx,WIDTH
+        mov  ecx,[SCRW]
         sub  ecx,edx
 RS2:    cmp  ecx,0
         jle  RS3
-        imul eax,WIDTH
+        imul eax,[SCRW]
         add  eax,edx
         mov  esi,eax
         mov  edi,eax
@@ -1240,9 +1296,9 @@ CENTRE: mov  ax,ITSZ
         cmp  ax,0
         jge  CE1
         xor  ax,ax
-CE1:    cmp  ax,WIDTH-1
+CE1:    cmp  ax,[WM1]
         jle  CE2
-        mov  ax,WIDTH-1
+        mov  ax,[WM1]
 CE2:    cmp  dx,0
         jge  CE3
         xor  dx,dx
@@ -1270,44 +1326,45 @@ CURSHOW:
         ; keep what is under it
         push edi
         mov  si,CURSAVE
-        mov  cx,16
+        mov  cx,[CURSZ]
 CS1:    push cx
-        mov  cx,16
+        mov  cx,[CURSZ]
 CS2:    mov  al,[fs:edi]
         mov  [si],al
         inc  si
         inc  edi
         loop CS2
         pop  cx
-        add  edi,WIDTH-16
+        add  edi,[WMC]
         loop CS1
         pop  edi
         ; the outline in black, the arrow in white
-        mov  bx,CUROUT
+        mov  bx,[CUROUTP]
         mov  al,[BLACK]
         call CURBITS
-        mov  bx,CURIN
+        mov  bx,[CURINP]
         mov  al,[WHITE]
         call CURBITS
         mov  byte [CURON],1
         popad
 CSDONE: ret
 
-; Sixteen rows of sixteen bits at DS:BX, colour AL, at FS:EDI.
+; CURSZ rows of CURSZ bits at DS:BX - a word a row, the bits from the top
+; - colour AL, at FS:EDI.
 CURBITS:
         push edi
-        mov  cx,16
+        mov  cx,[CURSZ]
 CB1A:   push cx
         mov  dx,[bx]
         add  bx,2
-        mov  cx,16
+        mov  cx,[CURSZ]
 CB2A:   shl  dx,1
         jnc  CB3A
         mov  [fs:edi],al
 CB3A:   inc  edi
         loop CB2A
         pop  cx
-        add  edi,WIDTH-16
+        add  edi,[WMC]
         loop CB1A
         pop  edi
         ret
@@ -1319,20 +1376,20 @@ CURHIDE:
         jne  CHDONE
         pushad
         mov  edi,[CURDY]
-        imul edi,WIDTH
+        imul edi,[SCRW]
         add  edi,[CURDX]
         add  edi,[LFB]
         mov  si,CURSAVE
-        mov  cx,16
+        mov  cx,[CURSZ]
 CH1:    push cx
-        mov  cx,16
+        mov  cx,[CURSZ]
 CH2:    mov  al,[si]
         mov  [fs:edi],al
         inc  si
         inc  edi
         loop CH2
         pop  cx
-        add  edi,WIDTH-16
+        add  edi,[WMC]
         loop CH1
         mov  byte [CURON],0
         popad
@@ -1341,19 +1398,96 @@ CHDONE: ret
 ; Where the cursor is drawn: its position, kept inside the screen.
 CURADDR:
         movzx eax,word [CURX]
-        cmp  eax,WIDTH-16
+        cmp  eax,[WMC]
         jbe  CA1
-        mov  eax,WIDTH-16
+        mov  eax,[WMC]
 CA1:    mov  [CURDX],eax
         movzx edx,word [CURY]
-        cmp  edx,HEIGHT-16
+        cmp  edx,[HMC]
         jbe  CA2
-        mov  edx,HEIGHT-16
+        mov  edx,[HMC]
 CA2:    mov  [CURDY],edx
-        imul edx,WIDTH
+        imul edx,[SCRW]
         add  edx,eax
         add  edx,[LFB]
         mov  edi,edx
+        ret
+
+; The driver's cursor to CURX/CURY - or its next reading pulls ours back.
+; In mode 13h the driver counts x in 640 columns for a 320 screen.
+MOUSESET:
+        cmp  byte [MOUSEOK],1
+        jne  MSET1
+        push ax
+        push cx
+        push dx
+        mov  ax,[CURX]
+        mov  cl,[MXSH]
+        shl  ax,cl
+        mov  cx,ax
+        mov  dx,[CURY]
+        mov  ax,4
+        int  33h
+        call REFLAT
+        pop  dx
+        pop  cx
+        pop  ax
+MSET1:  ret
+
+; Everything the engine draws is sized from the screen the mode set:
+; the ROM font doubled at 640, plain at 320; a 16- or 8-pixel cursor; the
+; bands and margins halved; the mouse's x shift; and where the products
+; are - the 320x200 edition lives in a 320\ folder inside each scene.
+SETSCREEN:
+        mov  eax,[SCRW]
+        mov  [W16],ax
+        dec  ax
+        mov  [WM1],ax
+        mov  eax,[SCRH]
+        mov  [H16],ax
+        mov  [ROOMH],ax
+        dec  ax
+        mov  [HM1],ax
+        cmp  dword [SCRW],640
+        jb   SS320
+        mov  byte [SCALE],2
+        mov  word [GLYPH],16
+        mov  word [MARG],8
+        mov  word [LINEH],24
+        mov  word [MSGH],56
+        mov  word [CAPTHV],24
+        mov  word [CURSZ],16
+        mov  word [CURSTEP],8
+        mov  byte [MXSH],0
+        mov  word [CUROUTP],CUROUT
+        mov  word [CURINP],CURIN
+        mov  byte [RESDIR],0
+        jmp  SSCOMMON
+SS320:  mov  byte [SCALE],1
+        mov  word [GLYPH],8
+        mov  word [MARG],4
+        mov  word [LINEH],12
+        mov  word [MSGH],28
+        mov  word [CAPTHV],12
+        mov  word [CURSZ],8
+        mov  word [CURSTEP],4
+        mov  byte [MXSH],1
+        mov  word [CUROUTP],CUR8OUT
+        mov  word [CURINP],CUR8IN
+        mov  si,RES320
+        mov  di,RESDIR
+        call STRCPY0
+SSCOMMON:
+        mov  eax,[SCRW]
+        movzx edx,word [CURSZ]
+        sub  eax,edx
+        mov  [WMC],eax
+        mov  eax,[SCRH]
+        sub  eax,edx
+        mov  [HMC],eax
+        mov  ax,[W16]
+        sub  ax,[GLYPH]
+        mov  [WMG],ax
         ret
 
 ; ===========================================================================
@@ -1364,23 +1498,25 @@ RUNQUIZ:
         mov  bx,[CURSECT]
         movzx cx,byte [bx+S_NOPT]
         mov  [NOPTS],cx
-        ; the box: a line for the question, one per answer, 24 pixels each
+        ; the box: a line for the question, one per answer, LINEH each
         inc  cx
-        mov  ax,24
+        mov  ax,[LINEH]
         mul  cx
-        add  ax,16
+        add  ax,[GLYPH]
         mov  [RHGT],ax
-        mov  cx,HEIGHT
+        mov  cx,[H16]
         sub  cx,ax
         mov  [RY],cx
         mov  word [RX],0
-        mov  word [RWID],WIDTH
+        mov  ax,[W16]
+        mov  [RWID],ax
         mov  al,[BLACK]
         call FILLRECT
 
-        mov  word [TX],8
+        mov  ax,[MARG]
+        mov  [TX],ax
         mov  ax,[RY]
-        add  ax,8
+        add  ax,[MARG]
         mov  [TY],ax
         mov  bx,[CURSECT]
         mov  si,[bx+S_TOFF]
@@ -1392,8 +1528,10 @@ RUNQUIZ:
 QZ1:    cmp  dx,[NOPTS]
         jae  QZDRAWN
         push dx
-        add  word [TY],24
-        mov  word [TX],8
+        mov  ax,[LINEH]
+        add  [TY],ax
+        mov  ax,[MARG]
+        mov  [TX],ax
         mov  al,dl
         add  al,'1'
         mov  [DIGIT],al
@@ -1476,7 +1614,8 @@ QZQUIT: mov  byte [QUITFLAG],1
 ; DS:SI, CX bytes, at [TX],[TY]; TX advances. Stops at the right edge.
 DRAWTXT:
         jcxz DTDONE
-DT1:    cmp  word [TX],WIDTH-16
+DT1:    mov  ax,[WMG]
+        cmp  [TX],ax
         ja   DTDONE
         push cx
         lodsb
@@ -1485,12 +1624,13 @@ DT1:    cmp  word [TX],WIDTH-16
         cmp  al,10
         je   DTSKIP
         call DRAWCHAR
-        add  word [TX],16
+        mov  ax,[GLYPH]
+        add  [TX],ax
 DTSKIP: pop  cx
         loop DT1
 DTDONE: ret
 
-; AL at [TX],[TY] in [WHITE], 2x2 pixels a dot.
+; AL at [TX],[TY] in [WHITE]: 2x2 pixels a dot at 640, a pixel at 320.
 DRAWCHAR:
         push si
         push es
@@ -1499,11 +1639,13 @@ DRAWCHAR:
         add  bx,[FONTOFF]
         mov  es,[FONTSEG]
         movzx eax,word [TY]
-        imul eax,WIDTH
+        imul eax,[SCRW]
         movzx edx,word [TX]
         add  eax,edx
         add  eax,[LFB]
         mov  edi,eax                    ; top left of the cell
+        cmp  byte [SCALE],1
+        je   DC1X
         mov  cx,8
 DC1:    push cx
         mov  dl,[es:bx]                 ; one row of the glyph
@@ -1514,21 +1656,42 @@ DC2:    shl  dl,1
         jnc  DC3
         mov  [fs:edi],al
         mov  [fs:edi+1],al
-        mov  [fs:edi+WIDTH],al
-        mov  [fs:edi+WIDTH+1],al
+        push edi
+        add  edi,[SCRW]
+        mov  [fs:edi],al
+        mov  [fs:edi+1],al
+        pop  edi
 DC3:    add  edi,2
         loop DC2
-        add  edi,WIDTH*2-16             ; two rows down, back to the left
+        add  edi,[SCRW]                 ; two rows down, back to the left
+        add  edi,[SCRW]
+        sub  edi,16
         pop  cx
         loop DC1
-        pop  es
+        jmp  DCDONE
+DC1X:   mov  cx,8                       ; plain: a dot a pixel
+DC4:    push cx
+        mov  dl,[es:bx]
+        inc  bx
+        mov  cx,8
+        mov  al,[WHITE]
+DC5:    shl  dl,1
+        jnc  DC6
+        mov  [fs:edi],al
+DC6:    inc  edi
+        loop DC5
+        add  edi,[SCRW]
+        sub  edi,8
+        pop  cx
+        loop DC4
+DCDONE: pop  es
         pop  si
         ret
 
 ; A rectangle [RX],[RY],[RWID],[RHGT] of colour AL.
 FILLRECT:
         movzx edi,word [RY]
-        imul edi,WIDTH
+        imul edi,[SCRW]
         movzx edx,word [RX]
         add  edi,edx
         add  edi,[LFB]
@@ -1541,7 +1704,7 @@ FR2:    mov  [fs:edi],al
         dec  ecx
         jnz  FR2
         pop  edi
-        add  edi,WIDTH
+        add  edi,[SCRW]
         pop  ecx
         dec  ecx
         jnz  FR1
@@ -1618,18 +1781,23 @@ MSGBOX: push dx
         call PALCOLS
         mov  word [RX],0
         mov  word [RY],0
-        mov  word [RWID],WIDTH
-        mov  word [RHGT],56
+        mov  ax,[W16]
+        mov  [RWID],ax
+        mov  ax,[MSGH]
+        mov  [RHGT],ax
         mov  al,[BLACK]
         call FILLRECT
         pop  si
-        mov  word [TX],8
-        mov  word [TY],8
+        mov  ax,[MARG]
+        mov  [TX],ax
+        mov  [TY],ax
         call STRLEN2                    ; -> CX
         call DRAWTXT
         pop  si
-        mov  word [TX],8
-        mov  word [TY],32
+        mov  ax,[MARG]
+        mov  [TX],ax
+        add  ax,[LINEH]
+        mov  [TY],ax
         call STRLEN2
         call DRAWTXT
         call FADEUP
@@ -1712,7 +1880,11 @@ SHOT:   cmp  byte [AUTO],1
         ; the KEY chunk header
         mov  byte [IOBUF],CH_KEY
         mov  byte [IOBUF+1],0
-        mov  dword [IOBUF+2],PLANE+PLANE/128
+        mov  eax,[PLANE]                ; the plane, and a lead byte a run
+        mov  edx,eax
+        shr  edx,7
+        add  eax,edx
+        mov  [IOBUF+2],eax
         mov  cx,6
         mov  dx,IOBUF
         mov  ah,40h
@@ -1722,7 +1894,9 @@ SHOT:   cmp  byte [AUTO],1
         ; what fits in IOBUF. 62 did not, and the overflow ran off the end of
         ; the segment and over the program's own start.
         mov  esi,[LFB]
-        mov  word [SHRUNS],PLANE/128
+        mov  eax,[PLANE]
+        shr  eax,7
+        mov  [SHRUNS],ax
 SH1:    mov  di,IOBUF
         mov  cx,31
         cmp  cx,[SHRUNS]
@@ -1802,6 +1976,8 @@ RTNO:   call REFLAT
 PARSESTORY:
         mov  byte [STARTID],0
         mov  word [NORDER],0
+        mov  byte [HAS640],0
+        mov  byte [HAS320],0
         mov  word [INIPOS],INIBUF
 PS1:    call NEXTLINE                   ; -> SI at a key, or CF at the end
         jc   PSDONE
@@ -1814,7 +1990,34 @@ PS1:    call NEXTLINE                   ; -> SI at a key, or CF at the end
         mov  bx,K_ORDER
         call STREQ
         jnc  PSORDER
+        mov  bx,K_SCREENS
+        call STREQ
+        jnc  PSSCREENS
         jmp  PS1
+PSSCREENS:
+        ; SCREENS = 640x400 320x200 - the editions the story was made in;
+        ; a word starting with 6 is the one, with 3 the other
+        mov  si,[VALOFF]
+        mov  cx,[VALLEN]
+PSC1:   jcxz PS1
+        lodsb
+        dec  cx
+        cmp  al,'6'
+        jne  PSC2
+        mov  byte [HAS640],1
+PSC2:   cmp  al,'3'
+        jne  PSC3
+        mov  byte [HAS320],1
+PSC3:   ; to the end of the word
+        jcxz PS1
+        cmp  byte [si],' '
+        je   PSC4
+        inc  si
+        dec  cx
+        jmp  PSC3
+PSC4:   inc  si
+        dec  cx
+        jmp  PSC1
 PSSTART:
         mov  si,[VALOFF]
         mov  cx,[VALLEN]
@@ -1840,7 +2043,12 @@ PO2:    cmp  word [NORDER],MAXORDER
         add  di,NAMESZ
         inc  word [NORDER]
         jmp  PO1
-PSDONE: ret
+PSDONE: cmp  byte [HAS640],1           ; no SCREENS line: the story is
+        je   PSD1                       ; 640x400, as every story was
+        cmp  byte [HAS320],1
+        je   PSD1
+        mov  byte [HAS640],1
+PSD1:   ret
 
 ; ---- SCENE.INI: the code, the ending, the sections ------------------------
 PARSESCENE:
@@ -2366,8 +2574,15 @@ CN2:    mov  byte [di],0
         pop  dx
         ret
 
-; <story>\<CURID>\[BX folder\]SI name -> PATHBUF. BX = 0 for no folder.
+; <story>\<CURID>\[320\][BX folder\]SI name -> PATHBUF: a PRODUCT's path,
+; in the tree of the screen chosen. BX = 0 for no folder.
 SCENEPATH:
+        mov  byte [WANTRES],1
+        jmp  SCENEP1
+; ...and without the screen's folder: SCENE.INI and the music are shared.
+SCENEPATH0:
+        mov  byte [WANTRES],0
+SCENEP1:
         push si
         push bx
         mov  si,STORYDIR
@@ -2379,6 +2594,13 @@ SCENEPATH:
         call STRCPY
         mov  al,'\'
         stosb
+        cmp  byte [WANTRES],1
+        jne  SPNORES
+        cmp  byte [RESDIR],0
+        je   SPNORES
+        mov  si,RESDIR                  ; '320\' - the backslash is its own
+        call STRCPY
+SPNORES:
         pop  si                         ; the folder, if any
         test si,si
         jz   SPNOF
@@ -2511,7 +2733,7 @@ DRAWICO:
         movzx eax,word [bx+IT_IH]
         mov  [IHD],eax
         movzx eax,word [bx+IT_IY]
-        imul eax,WIDTH
+        imul eax,[SCRW]
         movzx edx,word [bx+IT_IX]
         add  eax,edx
         add  eax,[LFB]
@@ -2566,7 +2788,7 @@ DISKIP: inc  esi
         dec  ecx
         jnz  DIPIX
         pop  edi
-        add  edi,WIDTH
+        add  edi,[SCRW]
         pop  ecx
         inc  dword [DIY]
         dec  ecx
@@ -2597,27 +2819,31 @@ CAPTION:
         call CAPTHIDE
 CP1:    mov  word [RX],0
         mov  ax,[ROOMH]
-        sub  ax,CAPTH
+        sub  ax,[CAPTHV]
         mov  [RY],ax
-        mov  word [RWID],WIDTH
-        mov  word [RHGT],CAPTH
+        mov  ax,[W16]
+        mov  [RWID],ax
+        mov  ax,[CAPTHV]
+        mov  [RHGT],ax
         mov  al,[BLACK]
         call FILLRECT
         pop  cx
         pop  si
-        ; centred, sixteen pixels a glyph; too long for the width and it
-        ; starts at the left and stops at the right edge
+        ; centred, a glyph a letter; too long for the width and it starts
+        ; at the left and stops at the right edge
         mov  ax,cx
-        shl  ax,4
-        cmp  ax,WIDTH
+        mul  word [GLYPH]
+        cmp  ax,[W16]
         jbe  CP2
-        mov  ax,WIDTH
+        mov  ax,[W16]
 CP2:    neg  ax
-        add  ax,WIDTH
+        add  ax,[W16]
         shr  ax,1
         mov  [TX],ax
-        mov  ax,[RY]
-        add  ax,(CAPTH-16)/2
+        mov  ax,[CAPTHV]
+        sub  ax,[GLYPH]
+        shr  ax,1
+        add  ax,[RY]
         mov  [TY],ax
         call DRAWTXT
         mov  byte [CAPTON],1
@@ -2656,13 +2882,15 @@ CWDONE: ret
 CAPTHIDE:
         pushad
         movzx eax,word [ROOMH]
-        sub  eax,CAPTH
-        imul eax,WIDTH
+        movzx edx,word [CAPTHV]
+        sub  eax,edx
+        imul eax,[SCRW]
         mov  esi,eax
         mov  edi,eax
         add  esi,[BGFRAME]
         add  edi,[LFB]
-        mov  ecx,CAPTH*WIDTH
+        movzx ecx,word [CAPTHV]
+        imul ecx,[SCRW]
         call COPYB
         call DRAWALL
         mov  byte [CAPTON],0
@@ -2684,7 +2912,7 @@ MUSOPEN:
         je   MODONE
         mov  si,MUSNAME
         xor  bx,bx
-        call SCENEPATH
+        call SCENEPATH0                 ; one track for both screens
         mov  ax,3D00h
         mov  dx,PATHBUF
         int  21h
@@ -2708,6 +2936,7 @@ MUSOPEN:
         mov  dx,MKMUSIC
         mov  si,MUSNAME
         call LOGWITH
+        call MUSSTART                   ; the card is up from the scene's first second
         ret
 MOBAD:  mov  bx,[MUSFH]
         mov  ah,3Eh
@@ -2726,7 +2955,24 @@ MODONE: ret
 MUSCLOSE:
         cmp  byte [MUSON],1
         jne  MCDONE
-        call MUSSTOP
+        cmp  byte [SBKEEP],1            ; the card ran for the scene: now it
+        jne  MC1                        ; stops, once, at the scene's end -
+        mov  byte [RIDING],0            ; the music taken down over a second
+        mov  byte [MUSRUN],1            ; rather than cut, and the card
+MCFADE: mov  eax,[MUSLVL]               ; halted on silence rather than
+        test eax,eax                    ; mid-wave, which is a click
+        jz   MCOUT
+        dec  eax
+        mov  [MUSLVL],eax
+        call MUSFEED
+        call FADEWAIT
+        jmp  MCFADE
+MCOUT:  mov  byte [MUSRUN],0
+        call SBDRAIN                    ; what is queued plays out, then a ring of silence
+        call SBHALT
+        mov  byte [SBKEEP],0
+        mov  dword [MUSLVL],8
+MC1:    mov  byte [MUSRUN],0
         mov  bx,[MUSFH]
         mov  ah,3Eh
         int  21h
@@ -2734,54 +2980,89 @@ MUSCLOSE:
         mov  byte [MUSON],0
 MCDONE: ret
 
-; The card, for a screen with no clip on it: the music's rate, sixteen
-; bits, an empty queue that MUSFEED fills from the loop.
+; The card, ONCE A SCENE: the music's rate, sixteen bits, an empty queue
+; that MUSFEED fills from whichever loop is running. Called when the scene
+; opens and again by every still - the second and later calls find the
+; card up (SBKEEP) and only feed. A clip of the same format rides the
+; running card (OWV_RIDE) and mixes the music into its own sound, so the
+; card never stops between sections and the music never jumps.
 MUSSTART:
-        mov  byte [MUSRUN],0
         cmp  byte [MUSON],1
         jne  MSDONE
+        cmp  byte [SBKEEP],1
+        je   MSUP
         mov  ax,[MUSRATE]
         mov  [SBRATE],ax
         mov  byte [SBWANT16],1
         call SBINIT
         jc   MSNOCARD
         call REFLAT
-        mov  byte [MUSRUN],1
+        mov  byte [SBKEEP],1
+MSUP:   mov  byte [MUSRUN],1
         call MUSFEED
         ret
 MSNOCARD:
         call REFLAT
 MSDONE: ret
 
+; A still is over. The card plays on: what is queued is the music the
+; next section continues from.
 MUSSTOP:
-        cmp  byte [MUSRUN],1
-        jne  MTDONE
-        call SBHALT
-        mov  byte [MUSRUN],0
-MTDONE: ret
+        ret
 
 ; Keep the queue full: while there is room for a whole IOBUF, read one
-; and hand it over. Bounded by the queue - eight pieces at the most.
+; and hand it over. Bounded by the queue - eight pieces at the most. Not
+; while a clip rides the card: then the mixing is what feeds the music.
 MUSFEED:
         cmp  byte [MUSRUN],1
         jne  MFDONE
+        cmp  byte [RIDING],1
+        je   MFDONE
         pushad
 MF1:    mov  ax,[QHEAD]
         sub  ax,[QTAIL]
         dec  ax
         and  ax,QUEUESZ-1               ; bytes free
-        cmp  ax,IOSIZE
+        ; Only HALF the queue is kept full of music. A clip that comes to
+        ; ride the card has to wait for what is queued to play before its
+        ; own sound can start, and the first time it found the queue full
+        ; its first chunks were thrown away - 12 KB dropped, a click, and
+        ; the picture ahead of its sound. Half a queue is a third of a
+        ; second: still far more than the half-ring the interrupt takes at
+        ; a time, and a wait the fade between sections hides.
+        cmp  ax,QUEUESZ/2+IOSIZE
         jb   MFEXIT
         mov  cx,IOSIZE
         call MUSREAD                    ; -> AX bytes at IOBUF
         test ax,ax
         jz   MFEXIT
+        call MUSLEVEL                   ; the level, when it is not full
         mov  cx,ax
         mov  esi,[IOBUFLIN]
         call SBFEED
         jmp  MF1
 MFEXIT: popad
 MFDONE: ret
+
+; AX bytes of samples at IOBUF scaled to [MUSLVL] of 8 - the scene's
+; fade-out. At 8 nothing is touched.
+MUSLEVEL:
+        cmp  dword [MUSLVL],8
+        jae  MLDONE
+        pushad
+        mov  di,IOBUF
+        movzx ecx,ax
+        shr  ecx,1
+        jz   ML2
+ML1:    movsx eax,word [di]
+        imul eax,[MUSLVL]
+        sar  eax,3
+        mov  [di],ax
+        add  di,2
+        dec  ecx
+        jnz  ML1
+ML2:    popad
+MLDONE: ret
 
 ; CX bytes of the music into IOBUF, from where it left off. A read that
 ; comes up short is the end of the file: back to the first sample, once,
@@ -2908,6 +3189,62 @@ OWV_FINISH:
         call FADEDN
         ret
 
+; OWV_RIDE - a clip is about to start its sound (SBRATE, SBWANT16 set from
+; its header). If the card is up for the scene's music and the clip is
+; the same kind - sixteen bits at the music's rate - the clip rides it:
+; its clock's zero is set where its first chunk will play, behind what is
+; already queued, and CF says "do not init". A clip of another kind stops
+; the music for its length; the next still starts it again.
+OWV_RIDE:
+        cmp  byte [SBKEEP],1
+        jne  ORNO
+        cmp  byte [SBWANT16],1
+        jne  ORSTOP
+        mov  ax,[SBRATE]
+        cmp  ax,[MUSRATE]
+        jne  ORSTOP
+        ; From here the mixing feeds the music, so the loop's feeding stops;
+        ; and the queue is let run down to a piece or so first, or the
+        ; clip's first chunks find no room and are dropped - which is a
+        ; click and a picture ahead of its sound. Bounded: a card that has
+        ; stopped taking must not hold the story.
+        mov  byte [RIDING],1
+        call TICK
+        mov  [FADET],eax
+ORWAIT: mov  ax,[QTAIL]
+        sub  ax,[QHEAD]
+        and  ax,QUEUESZ-1               ; bytes waiting: down to where the
+        cmp  ax,QUEUESZ/2-IOSIZE        ; clip's chunks all fit, but never
+        jbe  ORGO                       ; below the half-ring the interrupt
+                                        ; takes at a go, or it pours silence
+        call TICK
+        sub  eax,[FADET]
+        cmp  eax,18                     ; a second, at the most
+        jb   ORWAIT
+ORGO:   call SBPOS                      ; played so far...
+        push eax
+        mov  ax,[QTAIL]                 ; ...plus what still waits in the queue
+        sub  ax,[QHEAD]
+        and  ax,QUEUESZ-1
+        shr  ax,1                       ; bytes -> samples
+        movzx eax,ax
+        pop  edx
+        add  eax,edx
+        mov  [SBORIGIN],eax
+        stc
+        ret
+ORSTOP: call SBHALT
+        mov  byte [SBKEEP],0
+        mov  byte [MUSRUN],0
+ORNO:   clc
+        ret
+
+; OWV_IDLE - once a frame from the decoder: a clip with no sound of its own
+; leaves the queue to the music.
+OWV_IDLE:
+        call MUSFEED
+        ret
+
 ; OWV_MIX - the decoder calls this with the clip's audio chunk at BUFLIN,
 ; ECX bytes, before the queue gets it. The music is read in step and added
 ; in at half level, saturated. Sixteen-bit clips at the music's own rate
@@ -2940,9 +3277,10 @@ OM2:    and  cx,0FFFEh                  ; whole samples
         sub  [OMLEFT],ecx
         shr  ecx,1                      ; samples
         mov  di,IOBUF
-OM3:    mov  ax,[di]
-        sar  ax,1                       ; the music at half level
-        mov  bx,[fs:esi]
+OM3:    mov  ax,[di]                    ; the music as it is: the same level
+        mov  bx,[fs:esi]                ; under a clip as under the room, or
+                                        ; every cut would sound like a jump;
+                                        ; VOLUME in MUSIC.INF sets it
         add  bx,ax
         jno  OM4
         mov  bx,7FFFh                   ; over the top: pinned at the rail
@@ -2975,6 +3313,8 @@ SHOTNAME db 'SHOT00.OWV',0
 
 K_START  db 'START',0
 K_ORDER  db 'ORDER',0
+K_SCREENS db 'SCREENS',0
+RES320   db '320\',0
 K_CODE   db 'CODE',0
 K_ENDING db 'ENDING',0
 K_ENTERS db 'ENTERS',0
@@ -3031,6 +3371,10 @@ MSGANYKEY   db 'Press a key.',13,10,'$'
 MKNOSTORY   db 'FAILED: cannot read $'
 MSGNOUNREAL db 'Unreal mode was refused - no 32-bit addressing here.',13,10,'$'
 MSGNOMODE   db 'VESA mode 100h with a linear framebuffer was refused.',13,10,'$'
+MENU1       db 'OWL NIGHT',13,10,13,10
+            db '  1   640 x 400   (VESA card and a 486)',13,10
+            db '  2   320 x 200   (any VGA)',13,10,13,10
+            db 'Your screen? $'
 MSGDONE     db 'STORY.LOG written.',13,10,'$'
 CRLF        db 13,10,'$'
 
@@ -3066,6 +3410,23 @@ CURIN:   dw 0000000000000000b
          dw 0000011000000000b
          dw 0000001100000000b
          dw 0000001100000000b
+         dw 0000000000000000b
+; ...and the same arrow at 320x200: eight rows, the bits from the top
+CUR8OUT: dw 1100000000000000b
+         dw 1110000000000000b
+         dw 1111000000000000b
+         dw 1111100000000000b
+         dw 1111110000000000b
+         dw 1111100000000000b
+         dw 1101100000000000b
+         dw 1000110000000000b
+CUR8IN:  dw 0000000000000000b
+         dw 0100000000000000b
+         dw 0110000000000000b
+         dw 0111000000000000b
+         dw 0111100000000000b
+         dw 0110000000000000b
+         dw 0000000000000000b
          dw 0000000000000000b
 
 AUTO     db 0
@@ -3119,7 +3480,31 @@ HTY      dw 0
 HTPASS   db 0
 MNIDX    dw 0
 INIPOS   dw 0
-ROOMH    dw HEIGHT              ; where the room ends and the panel starts
+ROOMH    dw 400                 ; where the room ends and the panel starts
+; the screen, as SETSCREEN worked it out from the mode
+SCRSEL   db 0                   ; 0 ask, 1 640x400, 2 320x200
+HAS640   db 0                   ; the editions STORY.INI lists
+HAS320   db 0
+W16      dw 640
+H16      dw 400
+WM1      dw 639
+HM1      dw 399
+WMC      dd 624                 ; the screen less the cursor
+HMC      dd 384
+WMG      dw 624                 ; the screen less a glyph
+SCALE    db 2                   ; the ROM font doubled, or not
+GLYPH    dw 16                  ; a glyph cell
+MARG     dw 8                   ; the margin of a box
+LINEH    dw 24                  ; a line of text in a box
+MSGH     dw 56                  ; the message box
+CAPTHV   dw 24                  ; the caption band
+CURSZ    dw 16                  ; the cursor's side
+CURSTEP  dw 8                   ; the arrow keys' step
+MXSH     db 0                   ; the mouse's x, shifted right this much
+CUROUTP  dw CUROUT
+CURINP   dw CURIN
+WANTRES  db 0
+RESDIR   db 8 dup (0)           ; '320\' or nothing
 GREY     db 7                   ; the palette's grey, for the outlines
 PGREY    dw 0
 ICOMODE  db 0
@@ -3141,6 +3526,7 @@ MRWRAP   db 0
 OMLEFT   dd 0
 PALLVL   db 8                   ; the DAC's level, 0 black .. FADEN full
 FADET    dd 0
+MUSLVL   dd 8                   ; the music's level of 8: below 8 only while a scene fades out
 
 STORYDIR db 80 dup (0)
 PATHBUF  db 128 dup (0)
