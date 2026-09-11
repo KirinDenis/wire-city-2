@@ -22,6 +22,9 @@
   #dos { width:100%; aspect-ratio:16/10; background:#000; border:1px solid #232338; }
   #choice { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
             justify-content:center; gap:14px; background:#000; border:1px solid #232338; }
+  /* the hidden attribute must beat the flex above, or the choice stays
+     over the running machine and "nothing happens" until fullscreen */
+  #choice[hidden] { display:none; }
   #choice p { margin:0 0 6px; color:var(--dim); font-size:15px; letter-spacing:.04em; text-transform:uppercase; }
   #choice button { width:min(60%,420px); padding:14px 18px; background:var(--panel); color:var(--ink);
                    border:1px solid #33334a; border-left:3px solid var(--acc); font:inherit; font-size:20px;
