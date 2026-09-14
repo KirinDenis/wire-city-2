@@ -108,9 +108,19 @@
   // camera - belongs here, on a panel you open, use and shut. Putting the
   // stick on a pop-up panel would mean flying blind whenever you touched it.
   //
-  // So this is the SWITCHES, and nothing else. Three rows: js-dos lays the
-  // first group of a row to the left, the second to the middle, the third
-  // to the right.
+  // So this is the SWITCHES, and nothing else.
+  //
+  // HOW js-dos READS THIS, corrected 2026-09-14 against its own source, now
+  // unpacked in jsdos/src (window/soft-keyboard.tsx): the array below is not
+  // rows. Each ELEMENT is a COLUMN, and the columns are spread evenly across
+  // the width; the strings inside a column are its rows, stacked downwards.
+  // The column's INDEX picks how its rows sit: the first left-aligned, the
+  // second centred, the third and any after it right-aligned - a lone column
+  // is centred. An empty string is a blank spacer row, which is how the stock
+  // layout builds its arrow cluster.
+  //
+  // So what follows is three columns of two, two and three rows - and a page
+  // adding a fourth (OWL FLY III's digits) gets a fourth column, not a row.
   //
   // NO SECOND PAGE, deliberately. A `{layout}` key would buy a QWERTY board
   // and the game asks you to type nothing at all. The one keystroke that is
