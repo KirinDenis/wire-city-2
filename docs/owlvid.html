@@ -29,7 +29,8 @@
   #choice button { width:min(60%,420px); padding:14px 18px; background:var(--panel); color:var(--ink);
                    border:1px solid #33334a; border-left:3px solid var(--acc); font:inherit; font-size:20px;
                    cursor:pointer; text-align:left; }
-  #choice button:hover { border-color:var(--acc2); border-left-color:var(--acc2); }
+  #choice button:hover:not(:disabled) { border-color:var(--acc2); border-left-color:var(--acc2); }
+  #choice button:disabled { opacity:.45; cursor:default; border-left-color:#33334a; }
   #choice button small { display:block; color:var(--dim); font-size:13px; margin-top:4px; }
   .note { background:var(--panel); border:1px solid #232338; border-left:3px solid var(--acc2);
           padding:12px 16px; margin:18px 0; font-size:14px; }
@@ -52,9 +53,11 @@
      finished.</p>
 
   <div class="note">
-    <b>Choose a screen on the picture</b>, and give it a moment &mdash; the
-    whole story arrives in one piece before anything happens, and it is
-    large: about 90 MB at 640&times;400, 37 MB at 320&times;200.<br>
+    <b>Press play on the picture</b>, and give it a moment &mdash; the whole
+    story arrives in one piece before anything happens, and at 320&times;200
+    that is 56 MB. The 640&times;400 edition is 157 MB, which is more than
+    GitHub will serve as one file, so in the browser it waits for a home of
+    its own; in DOS it plays from the folder like everything else.<br>
     It does not start by itself on purpose. A browser will not let a page make
     a sound until you have interacted with it, so a game that started on its
     own would play silently; the click that starts it is the one that unlocks
@@ -65,10 +68,11 @@
     <div id="dos"></div>
     <div id="choice">
       <p>Which screen?</p>
-      <button id="pick640">640 &times; 400<small>VESA &middot; the picture as it was made &middot; the larger download</small></button>
+      <button id="pick640" disabled>640 &times; 400<small>not in the browser yet &middot; 157 MB, and GitHub holds 100</small></button>
       <button id="pick320">320 &times; 200<small>mode 13h &middot; any VGA &middot; a quarter of the bytes</small></button>
     </div>
   </div>
+  <p id="feed" class="quiet"></p>
 
   <h2>How to play</h2>
   <dl>
@@ -136,8 +140,23 @@
   // file. The choice the DOS engine asks in text mode is asked HERE
   // instead - each bundle's STORY.INI lists only its own edition, so the
   // machine goes straight to the story.
-  const BUNDLE640 = "owlvid_v11.jsdos";
-  const BUNDLE320 = "owlvid320_v3.jsdos";
+  const BUNDLE640 = "owlvid_v13.jsdos";
+  const BUNDLE320 = "owlvid320_v15.jsdos";
+
+  // The bundle holds the engine, every scene's text, the first room and the
+  // music - enough for the machine to start in seconds. The CLIPS do not:
+  // they are fetched one at a time and written into the running DOS file
+  // system while the player is still in the room ahead of them. The engine
+  // waits for whatever has not landed (STREAM.ON in the bundle tells it to),
+  // so the order below is the order the story plays.
+  //
+  // CLIP_BASE is the one line to change when the clips move off this site:
+  // any host will do that sends Access-Control-Allow-Origin and
+  // Cross-Origin-Resource-Policy, which this page needs because it runs
+  // under COEP for the emulator's shared memory.
+  const CLIP_BASE = "owlnight/";
+  const CLIPS640 = CLIP_BASE + "owlvid_clips.json";
+  const CLIPS320 = CLIP_BASE + "owlvid320_clips.json";
   const params = new URLSearchParams(location.search);
   document.querySelector(".sub").textContent +=
     "  \u00b7  v" + (BUNDLE640.match(/_v(\d+)/) || [0, "?"])[1] +
@@ -184,10 +203,66 @@
   // starts the machine and unlocks the sound in one go. ?autostart=1 (with
   // &screen=320 for the other edition) is kept for the test rigs, which do
   // not care about audio.
-  function start(bundle) {
+  // Fetch the clips in play order and hand each to the machine. Each one
+  // OVERWRITES a four-byte placeholder that was in the bundle: DOS caches
+  // the directory of a mounted drive and never sees a file that appears
+  // after boot, but it does read back the new content of one whose entry
+  // it already had. The engine tells the two apart by the first four bytes
+  // and waits for a clip that has not landed. One that fails to arrive is
+  // not fatal - the engine says MISSING for that section and goes on.
+  async function feed(ci, listUrl) {
+    let clips;
+    try {
+      const r = await fetch(listUrl);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      clips = await r.json();
+    } catch (e) {
+      say("no clip list at " + listUrl + " - only what is in the bundle will play");
+      return;
+    }
+    const total = clips.reduce((n, c) => n + c.bytes, 0);
+    let done = 0;
+    for (const c of clips) {
+      try {
+        const r = await fetch(CLIP_BASE + c.file);
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const bytes = new Uint8Array(await r.arrayBuffer());
+        await ci.fsWriteFile(c.into, bytes);
+        done += c.bytes;
+        say("loading the rest of the night: " +
+            Math.round(done * 100 / Math.max(1, total)) + "%" +
+            (done >= total ? " - all of it is here" : ""));
+      } catch (e) {
+        say("could not fetch " + c.file + " (" + e.message + ")");
+      }
+    }
+  }
+  function say(text) { document.getElementById("feed").textContent = text; }
+
+  function start(bundle, listUrl) {
     document.getElementById("choice").hidden = true;
+    say("loading the rest of the night: 0%");
     Dos(document.getElementById("dos"), {
     url: bundle,
+    // The machine's own hand, kept on the window on purpose: it is how the
+    // clips get in, and it is the only way to ask the DOS side what it
+    // thinks afterwards - window.owlci.fsReadFile("ENGINE/STORY.LOG")
+    // prints the engine's log without leaving the browser.
+    // ?autostart=1 FREEZES THE MACHINE the moment the story makes a sound,
+    // and that is not a bug to chase: with no gesture behind it the page's
+    // AudioContext is suspended, the emulator's audio backs up, and the
+    // whole machine stops - the engine's log ends at the line before the
+    // first note. A real click on a screen button is a gesture, the context
+    // runs, and none of this happens. Keep autostart for looking at the
+    // picture and the file system, not for hearing anything.
+    //
+    // ?nofeed=1 starts the machine and sends it nothing - the way to tell
+    // a fault in the engine from a fault in the feeding.
+    onEvent: (name, ci) => {
+      if (name !== "ci-ready") return;
+      window.owlci = ci;
+      if (params.get("nofeed") !== "1") feed(ci, listUrl); else say("not feeding (nofeed=1)");
+    },
     pathPrefix: "jsdos/emulators/",
     theme: "dark",
     renderAspect: "16/10",
@@ -211,13 +286,30 @@
     backend: "dosbox"
     });
   }
-  document.getElementById("pick640").addEventListener("click", () => start(BUNDLE640));
-  document.getElementById("pick320").addEventListener("click", () => start(BUNDLE320));
-  if (params.get("autostart") === "1") start(params.get("screen") === "320" ? BUNDLE320 : BUNDLE640);
+  // The 640x400 button is off until its bundle has somewhere to live: see
+  // the note above the picture, and the dormant streaming in pack.ps1.
+  document.getElementById("pick640").addEventListener("click", () => start(BUNDLE640, CLIPS640));
+  document.getElementById("pick320").addEventListener("click", () => start(BUNDLE320, CLIPS320));
+  if (params.get("autostart") === "1")
+    params.get("screen") === "320" ? start(BUNDLE320, CLIPS320) : start(BUNDLE640, CLIPS640);
 
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -14,6 +14,6 @@ PANEL      = 64
 FIT        = crop
 DITHER     = bayer:bayer_scale=3
 TOLERANCE  = 2
-SNAP       = 2
+SNAP       = 0
 
 ITEM FUELHOSE = 1608,326 ..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S04\PICKUP\layer-fuel-hose.png

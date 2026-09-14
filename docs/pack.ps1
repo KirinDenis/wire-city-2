@@ -1,4 +1,4 @@
-# pack.ps1 -Game <OWLFLY|OWLFLY2|WIRECITY|TRAINER> - build a versioned js-dos bundle.
+﻿# pack.ps1 -Game <OWLFLY|OWLFLY2|WIRECITY|TRAINER> - build a versioned js-dos bundle.
 #
 # js-dos caches extracted bundles in IndexedDB keyed by the bundle PATH,
 # so every release gets a NEW FILENAME: <prefix>_vN.jsdos. This script
@@ -275,11 +275,37 @@ $MAP = @{
     patch  = @(
       @{ p = "LAB\OWLFLY4\STORY\NIGHT\STORY.INI"; n = "STORY/NIGHT/STORY.INI"; find = '(?m)^SCREENS\s*=[^\r\n]*'; put = 'SCREENS  = 640x400' }
     )
+    # the clips ride outside the bundle; the room, the music and every INI
+    # stay inside it, because the machine cannot start without them
+    # DORMANT, and the reason is worth keeping. Uncomment these four and the
+    # STREAM.ON line below and the clips come OUT of the bundle, into
+    # docs\owlnight\ with a JSON list, for the page to fetch and write into
+    # the running machine with ci.fsWriteFile. Every part of that works
+    # except the last one: the write lands in the emulator's file system -
+    # ci.fsTree() shows the whole 3.8 MB clip at the right path - and DOS
+    # cannot see it. DOSBox caches the directory of a mounted drive, and
+    # neither a NEW file nor new CONTENT in an old one reaches a machine
+    # that has already booted. Proved by making the engine print the four
+    # bytes it read: "WAIT", the placeholder, with the real clip sitting in
+    # the file system underneath it.
+    #
+    # So streaming needs one of: a js-dos whose fsWriteFile invalidates that
+    # cache, or a feed that does not go through the file system at all
+    # (IPX, which this project already has a relay for). Until then the
+    # clips travel in the bundle, and the bundle has to fit.
+    # loose    = '\.OWV$'
+    # looseNot = '/PICKUP/'
+    # dist     = "docs\owlnight"
+    # storyIni = "LAB\OWLFLY4\STORY\NIGHT\STORY.INI"
     ignore = @()
     limit  = 100MB
     strings = @(
       @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[sblaster]`nsbtype=sb16`n[autoexec]`necho off`nmount c .`nc:`ncd ENGINE`n:again`nSTORY`necho.`necho Press a key to play it again.`npause`ngoto again`n" },
       @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[sblaster]`nsbtype=sb16`n[autoexec]`necho off`nmount c .`nc:`ncd ENGINE`n:again`nSTORY`necho.`necho Press a key to play it again.`npause`ngoto again`n" }
+      # the engine looks for this: with it here a product that is not
+      # there is one that has not landed yet, and it waits instead of
+      # saying MISSING
+      # dormant with the loose-clip feature above
     )
   }
   OWLVID320 = @{
@@ -298,11 +324,35 @@ $MAP = @{
     patch  = @(
       @{ p = "LAB\OWLFLY4\STORY\NIGHT\STORY.INI"; n = "STORY/NIGHT/STORY.INI"; find = '(?m)^SCREENS\s*=[^\r\n]*'; put = 'SCREENS  = 320x200' }
     )
+    # DORMANT, and the reason is worth keeping. Uncomment these four and the
+    # STREAM.ON line below and the clips come OUT of the bundle, into
+    # docs\owlnight\ with a JSON list, for the page to fetch and write into
+    # the running machine with ci.fsWriteFile. Every part of that works
+    # except the last one: the write lands in the emulator's file system -
+    # ci.fsTree() shows the whole 3.8 MB clip at the right path - and DOS
+    # cannot see it. DOSBox caches the directory of a mounted drive, and
+    # neither a NEW file nor new CONTENT in an old one reaches a machine
+    # that has already booted. Proved by making the engine print the four
+    # bytes it read: "WAIT", the placeholder, with the real clip sitting in
+    # the file system underneath it.
+    #
+    # So streaming needs one of: a js-dos whose fsWriteFile invalidates that
+    # cache, or a feed that does not go through the file system at all
+    # (IPX, which this project already has a relay for). Until then the
+    # clips travel in the bundle, and the bundle has to fit.
+    # loose    = '\.OWV$'
+    # looseNot = '/PICKUP/'
+    # dist     = "docs\owlnight"
+    # storyIni = "LAB\OWLFLY4\STORY\NIGHT\STORY.INI"
     ignore = @()
     limit  = 100MB
     strings = @(
       @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[sblaster]`nsbtype=sb16`n[autoexec]`necho off`nmount c .`nc:`ncd ENGINE`n:again`nSTORY`necho.`necho Press a key to play it again.`npause`ngoto again`n" },
       @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[sblaster]`nsbtype=sb16`n[autoexec]`necho off`nmount c .`nc:`ncd ENGINE`n:again`nSTORY`necho.`necho Press a key to play it again.`npause`ngoto again`n" }
+      # the engine looks for this: with it here a product that is not
+      # there is one that has not landed yet, and it waits instead of
+      # saying MISSING
+      # dormant with the loose-clip feature above
     )
   }
   WIRECITY = @{
@@ -385,6 +435,80 @@ foreach ($d in $dirs) {
         Write-Warning "$($_.Name) is in $d but NOT in the bundle - deliberate?"
       }
     }
+}
+
+# ---- the clips do not travel in the bundle ---------------------------------
+#
+# A story of half-hour clips is a hundred megabytes, and a browser will not
+# hold anyone at a progress bar for that long - nor will GitHub take a file
+# that size. So `loose` names the entries that come OUT of the zip: they are
+# copied, unchanged, into `dist` (a folder git ignores) and listed in a JSON
+# beside them, in the order the scenes play. The page reads that list and
+# writes each file into the running machine while the player is still in the
+# room ahead of it; the engine waits for whatever has not landed yet, which
+# is what STREAM.ON in the bundle tells it to do.
+#
+# The order is the story's: ORDER in STORY.INI, then the file's own name, so
+# what is wanted first is fetched first.
+if ($g.ContainsKey('loose')) {
+  $distDir = Join-Path $root $g.dist
+  New-Item -ItemType Directory -Force $distDir | Out-Null
+  # Clear only what THIS edition put here last time, from its own list: the
+  # two editions share the folder, and a blanket wipe had the 320 pack
+  # deleting the 640 pack's clips a minute after it wrote them.
+  $listPath = Join-Path $distDir "$($g.prefix)_clips.json"
+  if (Test-Path $listPath) {
+    foreach ($old in (Get-Content $listPath -Raw | ConvertFrom-Json)) {
+      Remove-Item (Join-Path $distDir $old.file) -Force -ErrorAction SilentlyContinue
+    }
+    Remove-Item $listPath -Force -ErrorAction SilentlyContinue
+  }
+
+  $order = @()
+  $storyIni = Join-Path $root $g.storyIni
+  if (Test-Path $storyIni) {
+    $m2 = [regex]::Match([IO.File]::ReadAllText($storyIni), '(?m)^ORDER\s*=\s*([^\r\n]*)')
+    if ($m2.Success) { $order = $m2.Groups[1].Value -split '\s+' | Where-Object { $_ } }
+  }
+  function SceneRank($n) {
+    $parts = $n -split '/'
+    for ($i = 0; $i -lt $order.Count; $i++) { if ($parts -contains $order[$i]) { return $i } }
+    return 9999
+  }
+
+  $keep = @(); $sent = @()
+  foreach ($f in $g.files) {
+    if ($f.n -notmatch $g.loose -or ($g.ContainsKey('looseNot') -and $f.n -match $g.looseNot)) { $keep += $f; continue }
+    $sent += $f
+  }
+  $g.files = $keep
+  $sent = $sent | Sort-Object @{ e = { SceneRank $_.n } }, @{ e = { $_.n } }
+
+  $list = @()
+  $looseBytes = 0
+  foreach ($f in $sent) {
+    $flat = ($f.n -replace '/', '__')
+    $src  = Join-Path $root $f.p
+    Copy-Item $src (Join-Path $distDir $flat) -Force
+    $len  = (Get-Item $src).Length
+    $looseBytes += $len
+    # a PSCustomObject, not a hashtable: ConvertTo-Json keeps the order of
+    # the properties either way, and this one can also be measured
+    $list += [pscustomobject]@{ into = $f.n; file = $flat; bytes = $len }
+  }
+  # ...and a PLACEHOLDER for each goes INTO the bundle, at the name the
+  # clip will have. DOS caches the directory of a mounted drive: a file
+  # written from outside after the machine booted is not there as far as
+  # DOS is concerned, however plainly it sits in the file system. A file
+  # whose directory entry was there at boot reads back its new content,
+  # though - so the entry must exist from the start, and the engine tells
+  # a waiting placeholder from an arrived clip by its first four bytes.
+  $g.strings = @($g.strings)
+  foreach ($f in $sent) { $g.strings += @{ n = $f.n; c = "WAIT" } }
+
+  $json = Join-Path $distDir "$($g.prefix)_clips.json"
+  [IO.File]::WriteAllText($json, (ConvertTo-Json @($list) -Compress), [Text.Encoding]::ASCII)
+  Write-Host ("  loose     {0} clip(s), {1:N1} MB, into {2}\ (not in the bundle, not in git)" -f $list.Count, ($looseBytes / 1MB), $g.dist)
 }
 
 # next version = the one referenced in the player page + 1

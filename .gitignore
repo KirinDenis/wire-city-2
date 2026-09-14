@@ -185,3 +185,8 @@ LAB/OWLFLY4/STORY/**/*.PCM
 # the story engine's run log and the screens it writes in /AUTO
 LAB/OWLFLY4/ENGINE/STORY.LOG
 LAB/OWLFLY4/ENGINE/SHOT*.OWV
+
+# The OWL NIGHT clips, served loose beside the page instead of packed into
+# the bundle: a hundred megabytes of them, rebuilt from the recipes, and the
+# whole reason the bundle got small. Never in git - see docs/pack.ps1.
+docs/owlnight/

@@ -259,6 +259,31 @@ DIROK:  mov  dx,MKDIR
         mov  di,CURID
         call STRCPY0
 
+        ; <story>\STREAM.ON - written by whatever is FEEDING this machine.
+        ; Its presence says the products are not all here yet and will be
+        ; put here while the story plays, each with a <name>.RDY beside it
+        ; when it is whole. Without it nothing below ever waits and the
+        ; engine behaves exactly as it did.
+        mov  si,STORYDIR
+        mov  di,PATHBUF
+        call STRCPY
+        mov  al,'\'
+        stosb
+        mov  si,N_STREAM
+        call STRCPY0
+        mov  ax,3D00h
+        mov  dx,PATHBUF
+        int  21h
+        jc   NOSTREAM
+        mov  bx,ax
+        mov  ah,3Eh
+        int  21h
+        mov  byte [STREAMON],1
+        mov  dx,MKSTREAM
+        call LOGMARK
+NOSTREAM:
+        call REFLAT
+
 ; ---------------------------------------------------------------------------
 ;  The machine: the BIOS font, unreal mode, the mouse, the graphics mode.
 ; ---------------------------------------------------------------------------
@@ -391,10 +416,14 @@ DOVIDEO:
         lea  si,[bx+S_NAME]
         xor  bx,bx
         call SCENEPATH
+        call WAITFILE                   ; it may still be on its way here
+        jc   VIDMISSING
         mov  dx,PATHBUF
         call OWVPLAY
         test al,al
         jnz  VIDMISSING
+        cmp  byte [QUITFLAG],1
+        je   QUITGAME
         cmp  byte [OWVKEY],'q'
         je   QUITGAME
         cmp  byte [OWVKEY],'Q'
@@ -520,11 +549,13 @@ RUNPICKUP:
         lea  bx,[bx+S_NAME]
         mov  si,N_BG
         call SCENEPATH
+        call WAITFILE
+        jc   PKNOBG
         mov  dx,PATHBUF
         call OWVPLAY
         test al,al
         jz   PKROOM
-        call MISSING
+PKNOBG: call MISSING
         ret
 PKROOM: mov  eax,[PFRAME]               ; the frame just shown
         mov  [BGFRAME],eax
@@ -1770,6 +1801,149 @@ ABSADD: test di,di
         jns  AA1
         neg  di
 AA1:    add  cx,di
+        ret
+
+; ===========================================================================
+;  WAITFILE - the product named in PATHBUF, which may not be here yet.
+;
+;  A story of half-hour clips is a hundred megabytes, and a browser will not
+;  hold the player at a progress bar for that long. So the machine boots
+;  with the engine, the scenes' text and the first room, and whatever is
+;  feeding it - the page, in the browser's case - writes each clip into the
+;  file system while the player is still in the room ahead of it. A product
+;  that is not there is therefore not an error any more: it is one that has
+;  not landed. The engine says so on the screen and waits.
+;
+;  A file that APPEARS is no use as a signal: DOS caches the directory of a
+;  mounted drive, so a file written from outside after the machine booted is
+;  not there as far as DOS is concerned, however plainly it sits in the file
+;  system. (Proved the hard way: the page wrote every clip, the emulator's
+;  own tree showed them all, and the engine waited for ever.) What DOS does
+;  see is the CONTENT of a file whose directory entry it already had.
+;
+;  So every clip is in the bundle from the start as a four-byte placeholder,
+;  and the feeder overwrites it. Ready means the file opens and begins with
+;  OWV1 - which a real clip always does and a placeholder never does. No
+;  marker files, and nothing to go wrong on a full install, where every
+;  file is real from the first look.
+;
+;  Only done at all when <story>\STREAM.ON says the machine is being fed.
+;
+;  /AUTO does not wait: a scripted run of a half-built story would never
+;  end. ESC gives up on the section, Q quits the story.
+;
+;  CF = it is not coming; the caller says MISSING.
+; ===========================================================================
+WAITFILE:
+        cmp  byte [STREAMON],1
+        je   WFSTREAM
+        call TRYOPEN                    ; the ordinary rule: is it there?
+        ret
+WFSTREAM:
+        call TRYREADY
+        jnc  WFDONE
+        cmp  byte [AUTO],1
+        je   WFNO
+        call LOADBOX
+        mov  dx,MKWAIT
+        mov  si,PATHBUF
+        call LOGWITH
+WF1:    call MUSFEED
+        mov  ah,1
+        int  16h
+        jz   WF2
+        xor  ah,ah
+        int  16h
+        cmp  al,'q'
+        je   WFQ
+        cmp  al,'Q'
+        je   WFQ
+        cmp  al,27
+        je   WFGIVE
+WF2:    call TRYREADY
+        jc   WF1
+        call FADEDN
+WFDONE: clc
+        ret
+WFQ:    mov  byte [QUITFLAG],1
+WFGIVE: call FADEDN
+WFNO:   stc
+        ret
+
+; The file at PATHBUF, opened and read four bytes: CF clear only if it
+; begins with OWV1. A placeholder waiting to be overwritten does not.
+TRYREADY:
+        mov  ax,3D00h
+        mov  dx,PATHBUF
+        int  21h
+        jc   TRNO
+        mov  [WFH],ax
+        mov  bx,ax
+        mov  cx,4
+        mov  dx,MAGBUF
+        mov  ah,3Fh
+        int  21h
+        push ax
+        mov  bx,[WFH]
+        mov  ah,3Eh
+        int  21h
+        call REFLAT
+        pop  ax
+        cmp  ax,4
+        jne  TRBAD
+        cmp  dword [MAGBUF],'OWV1'
+        jne  TRBAD
+        clc
+        ret
+TRBAD:  stc
+        ret
+TRNO:   call REFLAT
+        stc
+        ret
+
+; DS:PATHBUF: open it and close it again. CF = not there.
+TRYOPEN:
+        mov  ax,3D00h
+        mov  dx,PATHBUF
+        int  21h
+        jc   TONO
+        mov  bx,ax
+        mov  ah,3Eh
+        int  21h
+        call REFLAT
+        clc
+        ret
+TONO:   call REFLAT
+        stc
+        ret
+
+; A band at the top saying what is being waited for, brought up out of
+; black like everything else.
+LOADBOX:
+        call PALCOLS
+        mov  word [RX],0
+        mov  word [RY],0
+        mov  ax,[W16]
+        mov  [RWID],ax
+        mov  ax,[MSGH]
+        mov  [RHGT],ax
+        mov  al,[BLACK]
+        call FILLRECT
+        mov  ax,[MARG]
+        mov  [TX],ax
+        mov  [TY],ax
+        mov  si,T_LOADING
+        call STRLEN2
+        call DRAWTXT
+        mov  ax,[MARG]
+        mov  [TX],ax
+        mov  ax,[MARG]
+        add  ax,[LINEH]
+        mov  [TY],ax
+        mov  si,PATHBUF
+        call STRLEN2
+        call DRAWTXT
+        call FADEUP
         ret
 
 ; ---------------------------------------------------------------------------
@@ -3019,7 +3193,16 @@ MUSFEED:
         cmp  byte [RIDING],1
         je   MFDONE
         pushad
-MF1:    mov  ax,[QHEAD]
+        ; AT MOST a queue's worth in one call, and that bound is not
+        ; decoration. Filling "until the queue is half full" is a loop with
+        ; no end when the card drains faster than the loop fills - which is
+        ; exactly what a browser's emulated card did, while the same build
+        ; was fine under DOSBox. The story stopped dead after "music" in the
+        ; log and nothing else was ever written.
+        mov  word [MFLEFT],QUEUESZ/IOSIZE
+MF1:    dec  word [MFLEFT]
+        js   MFEXIT
+        mov  ax,[QHEAD]
         sub  ax,[QTAIL]
         dec  ax
         and  ax,QUEUESZ-1               ; bytes free
@@ -3309,6 +3492,7 @@ N_SCENE  db 'SCENE.INI',0
 N_BG     db 'BG.OWV',0
 N_SPR    db '.SPR',0
 N_SLT    db '.SLT',0
+N_STREAM db 'STREAM.ON',0
 SHOTNAME db 'SHOT00.OWV',0
 
 K_START  db 'START',0
@@ -3335,6 +3519,7 @@ T_KEY    db 'press a key',0
 T_NOCODE db 'THE SCENE ENDS WITH NO CODE',0
 T_NONEXT db 'NO SCENE ENTERS ON THIS CODE',0
 T_MISSING db 'MISSING:',0
+T_LOADING db 'LOADING...',0
 
 MKSCENE  db 'scene    $'
 MKVIDEO  db 'video    $'
@@ -3358,6 +3543,8 @@ MKITEMS  db 'items    $'
 MKSPR    db 'loaded   $'
 MKBADSPR db 'BAD .SPR $'
 MKNOSLT  db 'no .SLT  $'
+MKSTREAM db 'stream   STREAM.ON is here: products are waited for, not demanded',13,10,'$'
+MKWAIT   db 'waiting  $'
 MKMUSIC  db 'music    $'
 MKNOMUS  db 'no music $'
 MKBADMUS db 'BAD music$'
@@ -3504,6 +3691,7 @@ MXSH     db 0                   ; the mouse's x, shifted right this much
 CUROUTP  dw CUROUT
 CURINP   dw CURIN
 WANTRES  db 0
+STREAMON db 0                   ; the products arrive while the story plays
 RESDIR   db 8 dup (0)           ; '320\' or nothing
 GREY     db 7                   ; the palette's grey, for the outlines
 PGREY    dw 0
@@ -3523,6 +3711,8 @@ MUSRATE  dw 0
 MRWANT   dw 0
 MRGOT    dw 0
 MRWRAP   db 0
+MFLEFT   dw 0
+WFH      dw 0
 OMLEFT   dd 0
 PALLVL   db 8                   ; the DAC's level, 0 black .. FADEN full
 FADET    dd 0
@@ -3530,6 +3720,7 @@ MUSLVL   dd 8                   ; the music's level of 8: below 8 only while a s
 
 STORYDIR db 80 dup (0)
 PATHBUF  db 128 dup (0)
+MAGBUF   db 8 dup (0)
 NAMEBUF  db 32 dup (0)
 KEYBUF   db 16 dup (0)
 SUBBUF   db 16 dup (0)
