@@ -136,8 +136,8 @@
   // file. The choice the DOS engine asks in text mode is asked HERE
   // instead - each bundle's STORY.INI lists only its own edition, so the
   // machine goes straight to the story.
-  const BUNDLE640 = "owlvid_v10.jsdos";
-  const BUNDLE320 = "owlvid320_v2.jsdos";
+  const BUNDLE640 = "owlvid_v11.jsdos";
+  const BUNDLE320 = "owlvid320_v3.jsdos";
   const params = new URLSearchParams(location.search);
   document.querySelector(".sub").textContent +=
     "  \u00b7  v" + (BUNDLE640.match(/_v(\d+)/) || [0, "?"])[1] +
@@ -218,6 +218,8 @@
 </script>
 </body>
 </html>
+
+
 
 
 
