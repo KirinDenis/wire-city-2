@@ -19,8 +19,8 @@ FIT        = crop
 DITHER     = bayer:bayer_scale=3
 DENOISE    = hqdn3d=4:3:12:9
 TOLERANCE  = 2
-GRAIN      = 12
-SNAP       = 2
+GRAIN      = 8
+SNAP       = 0
 SEARCH     = 24
 COPY       = on
 COPYSEARCH = 4
