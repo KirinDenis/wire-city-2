@@ -114,6 +114,11 @@ and is **tracked**; the `.OWV` and `.SPR` are products and are **ignored**
 until the codec is frozen - the reason is in `.gitignore`, and it is churn,
 not size. Anyone with the warehouse can rebuild everything from the recipes.
 
+A video recipe carries `GRAIN` and `SNAP` beside `TOLERANCE`. They halve
+the file and cost the encoder only — the format and the DOS player know
+nothing of either, so an old player reads a new file. What they do, and
+what they cost in picture, is in [VIDEO/FORMAT.md](../VIDEO/FORMAT.md).
+
 The recipe is written first and the product last, so a product **older than
 its `.INF`** was made from an earlier recipe: that run failed and the old
 file stayed. The desk shows such a file as STALE and does not count it as

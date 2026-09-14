@@ -14,6 +14,7 @@ PANEL      = 64
 FIT        = crop
 DITHER     = bayer:bayer_scale=3
 TOLERANCE  = 2
+SNAP       = 2
 
 ITEM ASHTRAY  = -8,817 ..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S01\PICKUP\layer-ashtray.png
 ITEM CASSETTE = 372,562 ..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S01\PICKUP\layer-cassette-label.png

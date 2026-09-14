@@ -54,8 +54,7 @@
   <div class="note">
     <b>Choose a screen on the picture</b>, and give it a moment &mdash; the
     whole story arrives in one piece before anything happens, and it is
-    large: the clips cost a megabyte a second at 640&times;400, a quarter of
-    that at 320&times;200.<br>
+    large: about 90 MB at 640&times;400, 37 MB at 320&times;200.<br>
     It does not start by itself on purpose. A browser will not let a page make
     a sound until you have interacted with it, so a game that started on its
     own would play silently; the click that starts it is the one that unlocks
@@ -113,12 +112,15 @@
   </dl>
 
   <h2>What is wrong with it</h2>
-  <p>Most scenes are still empty: the story runs through them and says so
-     on the screen. The room's panel has no art yet, only a dark band, and
-     the music under the first scene is a placeholder loop. The bitrate of
-     the clips is roughly a megabyte a second, three or four times what a CD
-     of the period could feed &mdash; the fix for that is a codebook, and it
-     is not written yet.</p>
+  <p>Some scenes are still empty: the story runs through them and says so
+     on the screen. The room's panel has no art yet, only a dark band.
+     The bitrate is down to about 350 KB a second at 640&times;400 &mdash;
+     roughly what a CD of the period could feed, and half what it was
+     &mdash; but that came from letting the encoder ignore film grain and
+     put runs back into the dither, not from a better codec. A codebook is
+     still not written, and on this material it would have to be a real
+     one: measured, 165,648 coded blocks in a clip and 165,642 of them
+     different from every other, so nothing matches anything exactly.</p>
 
   <p class="quiet">Part of <a href="https://github.com/KirinDenis/wire-city-2"
      style="color:var(--acc2)">wire-city-2</a>. This page is not linked from
@@ -134,8 +136,8 @@
   // file. The choice the DOS engine asks in text mode is asked HERE
   // instead - each bundle's STORY.INI lists only its own edition, so the
   // machine goes straight to the story.
-  const BUNDLE640 = "owlvid_v9.jsdos";
-  const BUNDLE320 = "owlvid320_v1.jsdos";
+  const BUNDLE640 = "owlvid_v10.jsdos";
+  const BUNDLE320 = "owlvid320_v2.jsdos";
   const params = new URLSearchParams(location.search);
   document.querySelector(".sub").textContent +=
     "  \u00b7  v" + (BUNDLE640.match(/_v(\d+)/) || [0, "?"])[1] +
@@ -216,6 +218,8 @@
 </script>
 </body>
 </html>
+
+
 
 
 

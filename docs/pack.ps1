@@ -358,8 +358,14 @@ if ($g.ContainsKey('patch')) {
     $src = Join-Path $root $pt.p
     if (-not (Test-Path $src)) { throw "$($pt.p) not found" }
     $text = [System.IO.File]::ReadAllText($src)
-    if ($text -notmatch $pt.find) { throw "$($pt.p) has nothing matching $($pt.find) to patch" }
-    $g.strings += @{ n = $pt.n; c = [regex]::Replace($text, $pt.find, $pt.put) }
+    if ($text -match $pt.find) { $text = [regex]::Replace($text, $pt.find, $pt.put) }
+    else {
+      # the line is not there (a desk built before it knew the key rewrote
+      # the file without it): the bundle still needs it, so it is added
+      Write-Warning "$($pt.p) has no line matching $($pt.find) - adding '$($pt.put)' to the bundle's copy"
+      $text = $text.TrimEnd("`r", "`n") + "`r`n" + $pt.put + "`r`n"
+    }
+    $g.strings += @{ n = $pt.n; c = $text }
   }
 }
 

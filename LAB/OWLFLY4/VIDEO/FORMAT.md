@@ -135,6 +135,45 @@ parsing the engine has no reason to learn, so:
 The rate must be the clips' rate for the mixing to happen (22050); the
 converter writes both the same.
 
+### What the encoder decides, and the player never sees
+
+Three keys in a recipe change the bytes written without changing a line of
+this format or of the player. They are worth knowing because they are the
+difference between a megabyte a second and half of it.
+
+| key | what it lets the encoder do |
+|---|---|
+| `TOLERANCE` | how far one pixel may move and still count as unchanged |
+| `GRAIN` | how many of a block's 64 pixels may be past that and the block still be skipped |
+| `SNAP` | how far a pixel may be moved onto the one before it, to make a run |
+
+`GRAIN` is the one that matters most, and counting is the point of it. The
+first version of this rule averaged the error over the block instead, and
+that wrecks motion: eight pixels of a moving edge badly wrong average out
+against fifty-six right ones, the block is skipped, and the ghost stays
+until the next keyframe — which is exactly what the pictures showed. Grain
+is a FEW pixels anywhere; motion is MANY. Counting says that, an average
+does not.
+
+`SNAP` exists because ordered dithering guarantees the RLE coder finds
+nothing: the pattern alternates between two indices a shade apart, pixel
+by pixel, so no two neighbours are ever equal and every coded block costs
+its full 64 literal bytes. Moving a pixel onto its neighbour when it is
+already that close puts the runs back.
+
+Measured on one sixteen-second clip, 640×400:
+
+| TOLERANCE / GRAIN / SNAP | bytes | |
+|---|---|---|
+| 2 / 0 / 0 | 12,368,454 | as it was |
+| 2 / 12 / 2 | 5,522,605 | the same picture, looked at frame by frame |
+| 2 / 16 / 3 | 4,698,987 | banding starts to show in the dark |
+
+The error cannot run away: every comparison is against what the PLAYER
+holds, so what is measured is the whole accumulated error since the last
+keyframe, and a block that keeps being nearly-right eventually drifts past
+the count and is recoded.
+
 ### PALETTE
 
 ```

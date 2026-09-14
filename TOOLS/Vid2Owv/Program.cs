@@ -62,6 +62,47 @@ static class Program
     static int[] Dist;
     static int Threshold;
 
+    // ---- the block census, behind /blocks ----------------------------------
+    //
+    //  Eighty per cent of a clip is LITERAL and RLE blocks - the pixels that
+    //  changed and did not compress. The question a codebook turns on is how
+    //  many of those blocks are the SAME block: a night scene dithered with an
+    //  ordered matrix repeats its patterns, and a repeated block is one that a
+    //  codebook replaces with two bytes. This counts them, and says what a
+    //  codebook of each size would have caught, before any of it is built.
+    class BlockCensus
+    {
+        readonly Dictionary<ulong, int> seen = new();
+        long total;
+
+        public void See(byte[] b)
+        {
+            total++;
+            ulong h = 1469598103934665603;
+            foreach (var x in b) { h ^= x; h *= 1099511628211; }
+            seen[h] = seen.TryGetValue(h, out var n) ? n + 1 : 1;
+        }
+
+        public void Report()
+        {
+            var counts = seen.Values.OrderByDescending(x => x).ToArray();
+            Console.WriteLine();
+            Console.WriteLine($"  blocks    {total:N0} coded, {counts.Length:N0} distinct " +
+                              $"({(total > 0 ? 100 - counts.Length * 100.0 / total : 0):F1}% are a repeat of another)");
+            foreach (int k in new[] { 256, 1024, 4096, 16384, 65536 })
+            {
+                long hit = counts.Take(k).Sum(x => (long)x);
+                int idx = k <= 256 ? 1 : 2;
+                long was = total * 64;
+                long now = hit * idx + (total - hit) * 64 + (long)Math.Min(k, counts.Length) * 64;
+                Console.WriteLine($"    top {k,5}   {hit * 100.0 / Math.Max(1, total),5:F1}% of blocks   " +
+                                  $"{now * 100.0 / Math.Max(1, was),5:F1}% of their bytes" +
+                                  $"   (book {Math.Min(k, counts.Length) * 64 / 1024} KB, {idx}-byte index)");
+            }
+        }
+    }
+    static BlockCensus Census;
+
     static int Main(string[] args)
     {
         if (args.Length < 1)
@@ -72,6 +113,7 @@ static class Program
         }
 
         bool reuse = args.Any(a => a.Equals("/reuse", StringComparison.OrdinalIgnoreCase));
+        if (args.Any(a => a.Equals("/blocks", StringComparison.OrdinalIgnoreCase))) Census = new BlockCensus();
         string manifestPath = Path.GetFullPath(args[0]);
         if (!File.Exists(manifestPath))
         {
@@ -80,6 +122,11 @@ static class Program
         }
 
         var m = Manifest.Load(manifestPath);
+        // /set KEY=VALUE, for trying a setting without editing the recipe.
+        // What is packed for real always comes from the recipe; this is for
+        // the sweep that decides what the recipe should say.
+        foreach (var a in args.Where(x => x.StartsWith("/set", StringComparison.OrdinalIgnoreCase) && x.Contains('=')))
+            m.Set(a.Substring(a.IndexOf(':') + 1));
         if (m.Mode == "PICKUP") return Pickup(m, manifestPath);
         if (m.Mode == "MUSIC") return Music(m, manifestPath);
         return Encode(m, manifestPath, reuse);
@@ -284,7 +331,12 @@ static class Program
 
         byte[] palette = ReadPalette(palRaw);
         BuildDistance(palette, m.Tolerance);
-        Console.WriteLine($"tolerance {m.Tolerance}" + (m.Tolerance == 0 ? "  (exact match required to skip a block)" : ""));
+        GrainPixels = m.Grain;
+        GrainCap = 9 * (3 * m.Tolerance) * (3 * m.Tolerance);
+        SnapThreshold = 9 * m.Snap * m.Snap;
+        Console.WriteLine($"tolerance {m.Tolerance}" + (m.Tolerance == 0 ? "  (exact match required to skip a block)" : "") +
+                          (m.Grain > 0 ? $", grain {m.Grain} of 64 pixels" : ", no grain allowance (one pixel over and the block is recoded)") +
+                          (m.Snap > 0 ? $", snap {m.Snap}" : ", no snapping"));
         byte[] audio = m.AudioRate > 0 && File.Exists(audioRaw) ? File.ReadAllBytes(audioRaw) : Array.Empty<byte>();
         int bps = m.AudioBits / 8;                    // bytes per sample
         if (audio.Length > 0)
@@ -332,6 +384,7 @@ static class Program
                 byte[] payload;
                 if (key)
                 {
+                    Snap(cur, 0, plane);            // a keyframe is one long run-length
                     payload = Rle(cur, 0, plane);
                     chunks.Add(MakeChunk(CHUNK_KEY, payload));
                     stats.KeyFrames++;
@@ -384,6 +437,7 @@ static class Program
         }
 
         stats.Report(output, frameCount, m.Fps, maxChunk);
+        Census?.Report();
         return 0;
 
         byte[] hdrOf()
@@ -484,7 +538,9 @@ static class Program
                 }
             }
 
+            Snap(block, 0, block.Length);           // runs where the dither left none
             Scatter(predicted, block, w, bx, by);   // RLE and LITERAL are exact
+            if (Census != null) Census.See(block);
             byte[] rle = Rle(block, 0, block.Length);
             if (rle.Length < block.Length)
             {
@@ -595,6 +651,10 @@ static class Program
         // read as roughly "how many of sixty-four levels a channel may move".
         Threshold = 9 * tolerance * tolerance;
         Dist = new int[256 * 256];
+        BuildDistance2(pal);
+    }
+    static void BuildDistance2(byte[] pal)
+    {
         for (int a = 0; a < 256; a++)
             for (int b = 0; b < 256; b++)
             {
@@ -605,18 +665,74 @@ static class Program
             }
     }
 
+    // Is this block near enough to what the player already holds to be left
+    // alone? Two ways of asking, and the difference is most of the bitrate.
+    //
+    //  TOLERANCE alone is a MAXIMUM: one pixel over the line and the whole
+    //  block is recoded, all sixty-four bytes of it. On live footage that is
+    //  the worst rule there is - film grain moves one pixel of a block that
+    //  is otherwise still, and the block costs full price. Measured on one
+    //  clip: 165,648 blocks coded, 165,642 of them different from every
+    //  other, which is the signature of noise rather than of picture.
+    //
+    //  GRAIN counts instead of averaging, and the difference matters. A mean
+    //  budget was tried first and it wrecks motion: eight pixels of a moving
+    //  edge badly wrong average out against fifty-six right ones, the block
+    //  is skipped, and the ghost stays until the next keyframe. Counting
+    //  says the thing we actually mean - grain is a FEW pixels anywhere,
+    //  motion is MANY - so a block may carry up to GRAIN changed pixels and
+    //  still be left alone, and none of them may be more than three times
+    //  TOLERANCE off, which keeps a lone bright speck from living there.
+    //
+    //  The error does not run away: the comparison is against what the
+    //  player HOLDS, so what is measured is the whole accumulated error
+    //  since the last keyframe, not this frame's alone - a block that keeps
+    //  being nearly-right eventually drifts past the count and is recoded.
+    static int GrainPixels;                  // 0 = the old rule: any pixel over and it is coded
+    static int GrainCap;
+
     static bool BlockEquals(byte[] a, byte[] b, int w, int bx, int by)
     {
+        int over = 0;
         for (int r = 0; r < BLOCK; r++)
         {
             int o = (by * BLOCK + r) * w + bx * BLOCK;
             for (int c = 0; c < BLOCK; c++)
             {
                 int x = a[o + c], y = b[o + c];
-                if (x != y && Dist[(x << 8) | y] > Threshold) return false;
+                if (x == y) continue;
+                int d = Dist[(x << 8) | y];
+                if (d <= Threshold) continue;
+                if (d > GrainCap || ++over > GrainPixels) return false;
             }
         }
         return true;
+    }
+
+    // ---- run snapping ------------------------------------------------------
+    //
+    //  A block that has to be coded is coded as RLE if it has runs and as 64
+    //  literal bytes if it has not. Ordered dithering guarantees it has not:
+    //  the pattern alternates between two indices a shade apart, pixel by
+    //  pixel, and no two neighbours are ever equal. So before coding, a pixel
+    //  within SNAP of the one being run is MADE equal to it - a shade of
+    //  error, invisible against the dither it replaces, and the runs appear.
+    //
+    //  Nothing in the format or the player changes: this only decides which
+    //  bytes are written. The encoder reconstructs the snapped block, so the
+    //  player and the encoder still hold the same picture.
+    static int SnapThreshold;
+
+    static void Snap(byte[] b, int from, int len)
+    {
+        if (SnapThreshold <= 0 || len <= 1) return;
+        int run = b[from];
+        for (int i = from + 1; i < from + len; i++)
+        {
+            int x = b[i];
+            if (x != run && Dist[(x << 8) | run] <= SnapThreshold) b[i] = (byte)run;
+            else run = x;
+        }
     }
 
     static void Gather(byte[] src, byte[] block, int w, int bx, int by)
@@ -874,6 +990,7 @@ static class Program
             Source = empty, Output = Path.Combine(outDir, "BG.OWV"), Palette = palPng,
             Width = m.Width, Height = m.Height, Fps = m.Fps, KeyEvery = m.KeyEvery, AudioRate = 0,
             Dither = m.Dither, Denoise = "", Fit = m.Fit, Tolerance = m.Tolerance, Search = m.Search, CopySearch = m.CopySearch, Copy = m.Copy,
+            Grain = m.Grain, Snap = m.Snap,     // the room is a frame like any other
             PanelHeight = m.PanelHeight, PanelArt = m.PanelArt == "" ? "" : Path.GetFullPath(Path.Combine(baseDir, m.PanelArt)),
         };
         int rc = Encode(bg, Path.Combine(outDir, "PICKUP.INF"), false);
@@ -1064,17 +1181,38 @@ static class Program
         public string AudioFilter =
             "highpass=f=50,acompressor=threshold=0.06:ratio=4:attack=5:release=200:makeup=2,alimiter=limit=0.97";
         public int Tolerance = 0;
+        // GRAIN: how many of a block's sixty-four pixels may be past
+        // TOLERANCE and the block still be left alone - the allowance for
+        // film grain, which is a few pixels, as against motion, which is
+        // many. 0 keeps the old rule.
+        // SNAP: how far a pixel may be moved onto the one before it to make
+        // a run for the RLE coder. Both are encoder-side only; the format
+        // and the player know nothing about either.
+        public int Grain = 0;
+        public int Snap = 0;
         public bool Copy = true;
 
         public static Manifest Load(string path)
         {
             var m = new Manifest();
-            foreach (var raw in File.ReadAllLines(path))
+            foreach (var raw in File.ReadAllLines(path)) m.Set(raw);
+            if (m.Mode == "PICKUP") { if (m.Empty == "") throw new InvalidDataException("a PICKUP manifest needs EMPTY"); }
+            else if (m.Mode == "MUSIC") { if (m.Source == "" || m.Output == "") throw new InvalidDataException("a MUSIC manifest needs SOURCE and OUTPUT"); }
+            else if (m.Source == "" || m.Output == "") throw new InvalidDataException("manifest needs SOURCE and OUTPUT");
+            if (m.PanelHeight % BLOCK != 0) throw new InvalidDataException($"PANEL must be a multiple of {BLOCK}");
+            if (m.Width % BLOCK != 0 || m.Height % BLOCK != 0)
+                throw new InvalidDataException($"width and height must be multiples of {BLOCK}");
+            return m;
+        }
+
+        public void Set(string raw)
+        {
+            var m = this;
             {
                 var line = raw.Trim();
-                if (line.Length == 0 || line[0] == ';' || line[0] == '#') continue;
+                if (line.Length == 0 || line[0] == ';' || line[0] == '#') return;
                 int eq = line.IndexOf('=');
-                if (eq < 0) continue;
+                if (eq < 0) return;
                 string k = line.Substring(0, eq).Trim().ToUpperInvariant();
                 string v = line.Substring(eq + 1).Trim();
                 switch (k)
@@ -1098,6 +1236,8 @@ static class Program
                     case "VOLUME": m.Volume = double.Parse(v, System.Globalization.CultureInfo.InvariantCulture); break;
                     case "FIT": m.Fit = v; break;
                     case "TOLERANCE": m.Tolerance = int.Parse(v); break;
+                    case "GRAIN": m.Grain = int.Parse(v); break;
+                    case "SNAP": m.Snap = int.Parse(v); break;
                     case "SEARCH": m.Search = int.Parse(v); break;
                     case "COPYSEARCH": m.CopySearch = int.Parse(v); break;
                     case "COPY": m.Copy = v.Equals("on", StringComparison.OrdinalIgnoreCase); break;
@@ -1117,12 +1257,6 @@ static class Program
                         break;
                 }
             }
-            if (m.Mode == "PICKUP") { if (m.Empty == "") throw new InvalidDataException("a PICKUP manifest needs EMPTY"); }
-            else if (m.Source == "" || m.Output == "") throw new InvalidDataException("manifest needs SOURCE and OUTPUT");
-            if (m.PanelHeight % BLOCK != 0) throw new InvalidDataException($"PANEL must be a multiple of {BLOCK}");
-            if (m.Width % BLOCK != 0 || m.Height % BLOCK != 0)
-                throw new InvalidDataException($"width and height must be multiples of {BLOCK}");
-            return m;
         }
     }
 
