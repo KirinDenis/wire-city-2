@@ -141,7 +141,7 @@
   // instead - each bundle's STORY.INI lists only its own edition, so the
   // machine goes straight to the story.
   const BUNDLE640 = "";   // the 640x400 edition has no bundle: 157 MB, and its button is off
-  const BUNDLE320 = "owlvid320_v19.jsdos";
+  const BUNDLE320 = "owlvid320_v23.jsdos";
 
   // The bundle holds the engine, every scene's text, the first room and the
   // music - enough for the machine to start in seconds. The CLIPS do not:
@@ -210,15 +210,33 @@
   // it already had. The engine tells the two apart by the first four bytes
   // and waits for a clip that has not landed. One that fails to arrive is
   // not fatal - the engine says MISSING for that section and goes on.
+  //  BEFORE THE ENGINE LOOKS, and that is the whole trick. Writing into a
+  //  machine that is already playing does not work: DOS caches the
+  //  directory of a mounted drive the first time it reads it, and a file
+  //  that arrives afterwards is not there as far as DOS is concerned -
+  //  proved by making the engine print the four bytes it read back, which
+  //  were the placeholder's while the real clip sat in the file system.
+  //
+  //  So the bundle's autoexec stops at a PAUSE before it runs anything.
+  //  Nothing has listed the scene folders yet, nothing is cached, and the
+  //  clips are written into a machine that is up but idle. Then one
+  //  simulated keypress lets it out of the pause and the story starts with
+  //  everything in place.
+  //
+  //  What this buys: the clips are ordinary files beside the page, one per
+  //  scene, none of them near GitHub's 100 MB limit, and the bundle itself
+  //  stays small. What it does not buy is a shorter wait - that needs the
+  //  files to arrive DURING the story, which this js-dos cannot do.
+  const KEY_ENTER = 257;
+
   async function feed(ci, listUrl) {
-    let clips;
+    let clips = [];
     try {
       const r = await fetch(listUrl);
       if (!r.ok) throw new Error("HTTP " + r.status);
       clips = await r.json();
     } catch (e) {
       say("no clip list at " + listUrl + " - only what is in the bundle will play");
-      return;
     }
     const total = clips.reduce((n, c) => n + c.bytes, 0);
     let done = 0;
@@ -229,13 +247,15 @@
         const bytes = new Uint8Array(await r.arrayBuffer());
         await ci.fsWriteFile(c.into, bytes);
         done += c.bytes;
-        say("loading the rest of the night: " +
-            Math.round(done * 100 / Math.max(1, total)) + "%" +
-            (done >= total ? " - all of it is here" : ""));
+        say("loading the night: " + Math.round(done * 100 / Math.max(1, total)) + "%");
       } catch (e) {
         say("could not fetch " + c.file + " (" + e.message + ")");
       }
     }
+    // out of the pause, whatever happened above: a machine left waiting
+    // for a key nobody presses is worse than a story with a hole in it
+    say(done >= total && total > 0 ? "all of it is here" : "starting with what arrived");
+    try { ci.simulateKeyPress(KEY_ENTER); } catch (e) { say("could not start the story: " + e.message); }
   }
   function say(text) { document.getElementById("feed").textContent = text; }
 
@@ -296,6 +316,11 @@
 </script>
 </body>
 </html>
+
+
+
+
+
 
 
 

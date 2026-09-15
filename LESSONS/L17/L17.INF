@@ -1,0 +1,9 @@
+.title  Diamond-Square: a landscape out of random numbers
+.what   A game ships a recipe, not a world. One multiply and one add make a random number; four adds and two shifts turn four of them into a 64x64 island, on a torus, in integers - watched one step at a time, then minted fresh on every keypress
+.tier   LESSON
+.main   TERRAIN.ASM
+.build  FASM TERRAIN.ASM TERRAIN.COM
+.run    TERRAIN.COM
+.uses   MUL DIV SHL SHR AND OR LODSB OUT INT
+.reads  INFOGR.PAS
+.ignore MAKEINFO.BAT
