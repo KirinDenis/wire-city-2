@@ -88,64 +88,76 @@ DIVC    = 8                     ; the divided cube, in stage 4: dark grey
 DIFFC   = 12                    ; a pixel the two methods disagree on: red
 ORGC    = 14                    ; the eye's axis on the glass: yellow
 
-        jmp  Boot
+        jmp  Boot               ; over the routines, to the boot at the bottom
 
 ; ============================================================================
 ;  Rot2 - lesson 12's matrix, exactly as lesson 0E used it. A turn about an
 ;  axis is a flat turn of the pair perpendicular to it. Nothing new here.
 ; ============================================================================
-Rot2:   push ax
-        mov  bx, SINTAB
-        xlatb
-        mov  [tsin], al
-        pop  ax
-        add  al, 64
-        xlatb
-        mov  [tcos], al
-        mov  al, [tcos]
-        imul byte [pa]
-        mov  dx, ax
-        mov  al, [tsin]
-        imul byte [pb]
-        sub  dx, ax
-        mov  cl, 7
-        sar  dx, cl
-        mov  [t1], dl
-        mov  al, [tsin]
-        imul byte [pa]
-        mov  dx, ax
-        mov  al, [tcos]
-        imul byte [pb]
-        add  dx, ax
-        sar  dx, cl
-        mov  [pb], dl
-        mov  al, [t1]
-        mov  [pa], al
-        ret
+;  In C:
+;
+;      void rot2(int a)                     /* turns the byte pair (pa, pb) */
+;      {
+;          int s = SINTAB[a];               /* sin * 127, -127..127         */
+;          int c = SINTAB[(a + 64) & 255];  /* cos = sin a quarter turn on  */
+;          int na = (pa * c - pb * s) >> 7; /* the matrix, row one          */
+;          int nb = (pa * s + pb * c) >> 7; /*             row two          */
+;          pa = na;  pb = nb;               /* row two used the OLD pa      */
+;      }
+Rot2:   push ax                 ; keep a
+        mov  bx, SINTAB         ; BX = the table
+        xlatb                   ; AL = SINTAB[a] = s
+        mov  [tsin], al         ; tsin = s
+        pop  ax                 ; AL = a
+        add  al, 64             ; AL = a + 64  (wraps: a byte is the circle)
+        xlatb                   ; AL = SINTAB[a + 64] = c
+        mov  [tcos], al         ; tcos = c
+        mov  al, [tcos]         ; AL = c
+        imul byte [pa]          ; AX = pa * c
+        mov  dx, ax             ; DX = pa * c
+        mov  al, [tsin]         ; AL = s
+        imul byte [pb]          ; AX = pb * s
+        sub  dx, ax             ; DX = pa * c - pb * s   in 128ths
+        mov  cl, 7              ; CL = 7
+        sar  dx, cl             ; DX >>= 7: / 128
+        mov  [t1], dl           ; t1 = na   PARKED: nb still wants the old pa
+        mov  al, [tsin]         ; AL = s
+        imul byte [pa]          ; AX = pa * s
+        mov  dx, ax             ; DX = pa * s
+        mov  al, [tcos]         ; AL = c
+        imul byte [pb]          ; AX = pb * c
+        add  dx, ax             ; DX = pa * s + pb * c
+        sar  dx, cl             ; DX >>= 7
+        mov  [pb], dl           ; pb = nb
+        mov  al, [t1]           ; AL = na
+        mov  [pa], al           ; pa = na   ...and only now may it land
+        ret                     ; return
 
-TurnY:  mov  al, [vx3]
-        mov  [pa], al
-        mov  al, [vz3]
-        mov  [pb], al
-        mov  al, [angy]
-        call Rot2
-        mov  al, [pa]
-        mov  [vx3], al
-        mov  al, [pb]
-        mov  [vz3], al
-        ret
+;  In C:   pa = vx3; pb = vz3; rot2(angy); vx3 = pa; vz3 = pb;   - about Y: the pair is (x, z)
+TurnY:  mov  al, [vx3]          ; AL = vx3
+        mov  [pa], al           ; pa = vx3
+        mov  al, [vz3]          ; AL = vz3
+        mov  [pb], al           ; pb = vz3
+        mov  al, [angy]         ; AL = angy
+        call Rot2               ; rot2(angy)
+        mov  al, [pa]           ; AL = pa
+        mov  [vx3], al          ; vx3 = pa
+        mov  al, [pb]           ; AL = pb
+        mov  [vz3], al          ; vz3 = pb
+        ret                     ; return
 
-TurnX:  mov  al, [vy3]
-        mov  [pa], al
-        mov  al, [vz3]
-        mov  [pb], al
-        mov  al, [angx]
-        call Rot2
-        mov  al, [pa]
-        mov  [vy3], al
-        mov  al, [pb]
-        mov  [vz3], al
-        ret
+;  In C:   pa = vy3; pb = vz3; rot2(angx); vy3 = pa; vz3 = pb;   - about X: the pair is (y, z)
+TurnX:  mov  al, [vy3]          ; AL = vy3
+        mov  [pa], al           ; pa = vy3
+        mov  al, [vz3]          ; AL = vz3
+        mov  [pb], al           ; pb = vz3
+        mov  al, [angx]         ; AL = angx
+        call Rot2               ; rot2(angx)
+        mov  al, [pa]           ; AL = pa
+        mov  [vy3], al          ; vy3 = pa
+        mov  al, [pb]           ; AL = pb
+        mov  [vz3], al          ; vz3 = pb
+        ret                     ; return
 
 ; ============================================================================
 ;  ProjDiv - PERSPECTIVE, THE HONEST WAY: one divide per coordinate.
@@ -174,18 +186,29 @@ TurnX:  mov  al, [vy3]
 ;  the program in words. The near plane exists so that this line is never
 ;  reached with such a number.
 ; ============================================================================
+;  In C:
+;
+;      void proj_div(void)
+;      {
+;          px = vx3 * dcon / deph;      /* dcon = D/2, deph = z/2: x*D/z    */
+;          py = vy3 * dcon / deph;      /* ...and this divide can TRAP      */
+;      }
+;
+;  In C the quotient simply becomes an int. On the 8086 a byte IDIV must
+;  fit its quotient in AL, and a corner too close does not: INT 0.
 ProjDiv:
-        mov  al, [vx3]
-        imul byte [dcon]        ; AX = x * D, sign kept
-        idiv byte [deph]        ; AL = x*D/z. AH = the remainder, unused.
-        cbw                     ;  THIS is the instruction that can trap.
-        mov  [px], ax
-        mov  al, [vy3]
-        imul byte [dcon]
-        idiv byte [deph]
-        cbw
-        mov  [py], ax
-        ret
+        mov  al, [vx3]          ; AL = vx3
+        imul byte [dcon]        ; AX = vx3 * dcon = x * D/2, sign kept
+        idiv byte [deph]        ; AL = AX / deph = x*D/z. AH = the remainder,
+                                ;  unused. THIS is the instruction that can trap
+        cbw                     ; AX = AL, sign and all
+        mov  [px], ax           ; px = AX
+        mov  al, [vy3]          ; AL = vy3
+        imul byte [dcon]        ; AX = vy3 * dcon
+        idiv byte [deph]        ; AL = y*D/z
+        cbw                     ; AX = AL
+        mov  [py], ax           ; py = AX
+        ret                     ; return
 
 ; ============================================================================
 ;  ProjTab - PERSPECTIVE WITHOUT A DIVIDE: the table of d/z.
@@ -207,24 +230,32 @@ ProjDiv:
 ;  of "/256". Read the product's size before you trust that shortcut in a
 ;  program of your own: raise d or lower the near plane and it breaks.
 ; ============================================================================
+;  In C:
+;
+;      void proj_tab(void)
+;      {
+;          rcp = RECIP[depb];               /* d/z * 256, one word a row   */
+;          px = (vx3 * rcp) >> 8;           /* the divide, as a multiply   */
+;          py = (vy3 * rcp) >> 8;
+;      }
 ProjTab:
-        mov  bl, [depb]
-        xor  bh, bh
-        add  bx, bx             ; a word per row
-        mov  ax, [RECIP+bx]     ; d/z, in 256ths
-        mov  [rcp], ax
-        mov  al, [vx3]
-        cbw
-        imul word [rcp]         ; DX:AX = x * d/z * 256
-        mov  cl, 8
-        sar  ax, cl             ; /256: the integer part, sign kept
-        mov  [px], ax
-        mov  al, [vy3]
-        cbw
-        imul word [rcp]
-        sar  ax, cl
-        mov  [py], ax
-        ret
+        mov  bl, [depb]         ; BL = depb, the depth 0..255
+        xor  bh, bh             ; BX = depb
+        add  bx, bx             ; BX = depb * 2: a word per row
+        mov  ax, [RECIP+bx]     ; AX = RECIP[depb]: d/z, in 256ths
+        mov  [rcp], ax          ; rcp = AX
+        mov  al, [vx3]          ; AL = vx3
+        cbw                     ; AX = vx3
+        imul word [rcp]         ; DX:AX = vx3 * rcp = x * d/z * 256
+        mov  cl, 8              ; CL = 8
+        sar  ax, cl             ; AX >>= 8: /256, the integer part, sign kept
+        mov  [px], ax           ; px = AX
+        mov  al, [vy3]          ; AL = vy3
+        cbw                     ; AX = vy3
+        imul word [rcp]         ; DX:AX = vy3 * rcp
+        sar  ax, cl             ; AX >>= 8
+        mov  [py], ax           ; py = AX
+        ret                     ; return
 
 ; ============================================================================
 ;  Xform - the pipeline of lesson 0E, with the projection swapped out.
@@ -237,79 +268,101 @@ ProjTab:
 ;      3  both      ProjDiv into sxd/syd, ProjTab into sx/sy - for stage 4,
 ;                   which draws them on top of each other and counts
 ; ============================================================================
-Xform:  mov  si, VERTS
-        xor  di, di
-        mov  cx, NV
-.v:     push cx
-        mov  al, [si]
-        mov  [vx3], al
-        mov  al, [si+1]
-        mov  [vy3], al
-        mov  al, [si+2]
-        mov  [vz3], al
-        push si
-        push di
-        call TurnY
-        call TurnX
-        pop  di
-        pop  si
+;  In C:
+;
+;      void xform(void)
+;      {
+;          for (int i = 0; i < NV; i++) {
+;              vx3 = VERTS[i*3]; vy3 = VERTS[i*3+1]; vz3 = VERTS[i*3+2];
+;              turn_y();  turn_x();
+;              int z = vz3 + tz;                 /* the corner's depth       */
+;              depb = z;  deph = z / 2;          /* a byte, and half a byte  */
+;              switch (pmode) {
+;                  case 0:  px = vx3;  py = vy3;                  break; /* flat  */
+;                  case 1:  proj_div();                           break;
+;                  case 3:  proj_div();                                   /* both: */
+;                           sxd[i] = CX0 + px;  syd[i] = CY0 - py;        /* park  */
+;                           /* fall through */
+;                  case 2:  proj_tab();                           break;
+;              }
+;              sx[i] = CX0 + px;
+;              sy[i] = CY0 - py;                 /* paper y up, beam down    */
+;          }
+;      }
+Xform:  mov  si, VERTS          ; SI = &VERTS[0]
+        xor  di, di             ; DI = 0: i * 2, the index into sx/sy
+        mov  cx, NV             ; CX = 8 corners
+.v:     push cx                 ; keep the count
+        mov  al, [si]           ; AL = VERTS[i*3]
+        mov  [vx3], al          ; vx3 = x
+        mov  al, [si+1]         ; AL = VERTS[i*3+1]
+        mov  [vy3], al          ; vy3 = y
+        mov  al, [si+2]         ; AL = VERTS[i*3+2]
+        mov  [vz3], al          ; vz3 = z
+        push si                 ; keep SI and DI across the turns
+        push di                 ; (the pair)
+        call TurnY              ; turn_y()
+        call TurnX              ; turn_x()
+        pop  di                 ; DI back
+        pop  si                 ; SI back
 
-        mov  al, [vz3]          ; the DEPTH: this corner's distance from
-        cbw                     ;  the eye along its axis. The cube's
-        add  ax, [tz]           ;  centre is [tz] out; the corner is a
-        mov  [depb], al         ;  little nearer or further. As a BYTE:
-        shr  ax, 1              ;  the table has a row per depth, 0..255 -
-        mov  [deph], al         ;  and the divide gets HALF of it, so that
-                                ;  a signed byte can still hold it.
-        mov  al, [pmode]
-        cmp  al, 1
-        je   .div
-        cmp  al, 2
-        je   .tab
-        cmp  al, 3
-        je   .both
-        mov  al, [vx3]          ; ---- flat: the deleted coordinate ----
-        cbw
-        mov  [px], ax
-        mov  al, [vy3]
-        cbw
-        mov  [py], ax
-        jmp  .land
-.div:   push si
-        push di
-        call ProjDiv
-        pop  di
-        pop  si
-        jmp  .land
-.both:  push si
-        push di
-        call ProjDiv            ; the divided answer, parked aside...
-        pop  di
-        pop  si
-        mov  ax, [px]
-        add  ax, CX0
-        mov  [sxd+di], ax
-        mov  ax, CY0
-        sub  ax, [py]
-        mov  [syd+di], ax
-.tab:   push si
-        push di
-        call ProjTab            ; ...and the table's, which is what is drawn
-        pop  di
-        pop  si
-.land:  mov  ax, [px]
-        add  ax, CX0
-        mov  [sx+di], ax
-        mov  ax, CY0
-        sub  ax, [py]           ; THE MINUS: paper y up, the beam draws down
-        mov  [sy+di], ax
-        add  si, 3
-        add  di, 2
-        pop  cx
-        dec  cx                 ; LOOP reaches one signed byte backwards and
-        jz   .done              ;  this body is longer than that. So: count
-        jmp  .v                 ;  by hand, and let a JMP do the reaching.
-.done:  ret                     ;  The assembler refusing was the good case.
+        mov  al, [vz3]          ; AL = vz3    the DEPTH: this corner's distance
+        cbw                     ; AX = vz3    from the eye along its axis. The
+        add  ax, [tz]           ; AX = z = vz3 + tz   cube's centre is tz out;
+        mov  [depb], al         ; depb = z    the corner a little nearer or
+        shr  ax, 1              ; AX = z / 2  further. As a BYTE: the table has
+        mov  [deph], al         ; deph = z/2  a row per depth, 0..255 - and the
+                                ;  divide gets HALF of it, so that a signed
+                                ;  byte can still hold it
+        mov  al, [pmode]        ; AL = pmode
+        cmp  al, 1              ; pmode == 1 ?
+        je   .div               ;   the divide
+        cmp  al, 2              ; pmode == 2 ?
+        je   .tab               ;   the table
+        cmp  al, 3              ; pmode == 3 ?
+        je   .both              ;   both
+        mov  al, [vx3]          ; AL = vx3    ---- flat: the deleted coordinate
+        cbw                     ; AX = vx3
+        mov  [px], ax           ; px = vx3
+        mov  al, [vy3]          ; AL = vy3
+        cbw                     ; AX = vy3
+        mov  [py], ax           ; py = vy3
+        jmp  .land              ; to the landing
+.div:   push si                 ; keep SI, DI
+        push di                 ; (the pair)
+        call ProjDiv            ; proj_div()
+        pop  di                 ; DI back
+        pop  si                 ; SI back
+        jmp  .land              ; to the landing
+.both:  push si                 ; keep SI, DI
+        push di                 ; (the pair)
+        call ProjDiv            ; proj_div(): the divided answer, parked aside...
+        pop  di                 ; DI back
+        pop  si                 ; SI back
+        mov  ax, [px]           ; AX = px
+        add  ax, CX0            ; AX = CX0 + px
+        mov  [sxd+di], ax       ; sxd[i] = AX
+        mov  ax, CY0            ; AX = CY0
+        sub  ax, [py]           ; AX = CY0 - py
+        mov  [syd+di], ax       ; syd[i] = AX
+.tab:   push si                 ; keep SI, DI
+        push di                 ; (the pair)
+        call ProjTab            ; proj_tab(): ...and the table's, which is drawn
+        pop  di                 ; DI back
+        pop  si                 ; SI back
+.land:  mov  ax, [px]           ; AX = px
+        add  ax, CX0            ; AX = CX0 + px
+        mov  [sx+di], ax        ; sx[i] = AX
+        mov  ax, CY0            ; AX = CY0
+        sub  ax, [py]           ; AX = CY0 - py: THE MINUS, paper y up, beam down
+        mov  [sy+di], ax        ; sy[i] = AX
+        add  si, 3              ; SI += 3: the next corner's bytes
+        add  di, 2              ; DI += 2: the next corner's word
+        pop  cx                 ; the count
+        dec  cx                 ; CX--    LOOP reaches one signed byte backwards
+        jz   .done              ; done?    and this body is longer than that. So:
+        jmp  .v                 ;   no: next corner   count by hand, let a JMP reach
+.done:  ret                     ; return   (the assembler refusing was the good case)
 
 ; ============================================================================
 ;  Trap - OUR OWN INT 0, and it never returns.
@@ -327,159 +380,215 @@ Xform:  mov  si, VERTS
 ;  Installed by Boot through INT 21h function 25h: AL the vector, DS:DX the
 ;  handler. In a COM file DS is CS, so DX alone names it.
 ; ============================================================================
-Trap:   mov  ax, cs             ; the interrupt brings whatever DS it finds;
-        mov  ds, ax             ;  ours is CS, and the string is in it
-        mov  ax, 0003h          ; a text screen, so the words can be read
-        int  10h
-        mov  dx, t_trap
-        mov  ah, 9
-        int  21h
-        mov  ax, 4C01h          ; and out, with a non-zero exit code
-        int  21h
+;  In C there is no such function: the CPU calls it, and it never returns.
+;
+;      void trap(void)   { set_mode(3);  puts(t_trap);  exit(1); }
+Trap:   mov  ax, cs             ; AX = our segment: the interrupt brings whatever
+        mov  ds, ax             ; DS = AX   DS it finds; ours is CS, the string is in it
+        mov  ax, 0003h          ; AX = 3: a text screen, so the words can be read
+        int  10h                ; set_mode(3)
+        mov  dx, t_trap         ; DX = the string
+        mov  ah, 9              ; AH = 9: DOS print string, up to the $
+        int  21h                ; puts(t_trap)
+        mov  ax, 4C01h          ; AH = 4Ch exit, AL = 1: a non-zero exit code
+        int  21h                ; exit(1)
 
 t_trap  db 'INT 0: the quotient did not fit in a byte.',13,10
         db 'A corner came closer than the near plane, and x*d/z outran AL.',13,10
         db 'The near plane was the promise never to ask the divide this.',13,10,'$'
 
 ; ---- the eye's axis, where it meets the glass: a small yellow cross ------
-Axis:   mov  word [p0x], CX0-5
-        mov  word [p1x], CX0+5
-        mov  word [p0y], CY0
-        mov  word [p1y], CY0
-        mov  byte [col], ORGC
-        call Line
-        mov  word [p0x], CX0
-        mov  word [p1x], CX0
-        mov  word [p0y], CY0-5
-        mov  word [p1y], CY0+5
-        mov  byte [col], ORGC
-        call Line
-        ret
+;  In C:   line(CX0-5, CY0, CX0+5, CY0);  line(CX0, CY0-5, CX0, CY0+5);  in yellow
+Axis:   mov  word [p0x], CX0-5  ; p0x = 155  \
+        mov  word [p1x], CX0+5  ; p1x = 165   > the horizontal stroke
+        mov  word [p0y], CY0    ; p0y = 100   >
+        mov  word [p1y], CY0    ; p1y = 100  /
+        mov  byte [col], ORGC   ; col = yellow
+        call Line               ; line()
+        mov  word [p0x], CX0    ; p0x = 160  \
+        mov  word [p1x], CX0    ; p1x = 160   > the vertical stroke
+        mov  word [p0y], CY0-5  ; p0y = 95    >
+        mov  word [p1y], CY0+5  ; p1y = 105  /
+        mov  byte [col], ORGC   ; col = yellow
+        call Line               ; line()
+        ret                     ; return
 
 ; ---- the edges, from whichever corner table [esrc] points at -------------
 ;  Lesson 0E's routine, with one change: it reads the corners through a
 ;  pointer, so stage 4 can draw the divided cube and the table's cube with
 ;  the same twelve lines.
-Edges:  mov  si, EDGES
-        mov  cx, NE
-.e:     push cx
-        mov  bx, [esrc]
-        mov  al, [si]
-        xor  ah, ah
-        add  ax, ax
-        add  bx, ax
-        mov  ax, [bx]
-        mov  [p0x], ax
-        mov  ax, [bx+16]        ; the y table sits sixteen bytes after x
-        mov  [p0y], ax
-        mov  bx, [esrc]
-        mov  al, [si+1]
-        xor  ah, ah
-        add  ax, ax
-        add  bx, ax
-        mov  ax, [bx]
-        mov  [p1x], ax
-        mov  ax, [bx+16]
-        mov  [p1y], ax
-        mov  al, [ecol]
-        mov  [col], al
-        push si
-        call Line
-        pop  si
-        add  si, 2
-        pop  cx
-        loop .e
-        ret
+;  In C:
+;
+;      void edges(void)                   /* esrc points at sx or at sxd */
+;      {
+;          int *X = esrc, *Y = esrc + 8;  /* the y table is 16 bytes on   */
+;          for (int e = 0; e < NE; e++) {
+;              int a = EDGES[e*2], b = EDGES[e*2+1];
+;              p0x = X[a];  p0y = Y[a];
+;              p1x = X[b];  p1y = Y[b];
+;              col = ecol;
+;              line();
+;          }
+;      }
+Edges:  mov  si, EDGES          ; SI = &EDGES[0]
+        mov  cx, NE             ; CX = 12 joins
+.e:     push cx                 ; keep the count
+        mov  bx, [esrc]         ; BX = X, whichever table esrc points at
+        mov  al, [si]           ; AL = a, the first corner's number
+        xor  ah, ah             ; AX = a
+        add  ax, ax             ; AX = a * 2: words
+        add  bx, ax             ; BX = &X[a]
+        mov  ax, [bx]           ; AX = X[a]
+        mov  [p0x], ax          ; p0x = X[a]
+        mov  ax, [bx+16]        ; AX = Y[a]: the y table sits sixteen bytes after x
+        mov  [p0y], ax          ; p0y = Y[a]
+        mov  bx, [esrc]         ; BX = X again
+        mov  al, [si+1]         ; AL = b, the second corner's number
+        xor  ah, ah             ; AX = b
+        add  ax, ax             ; AX = b * 2
+        add  bx, ax             ; BX = &X[b]
+        mov  ax, [bx]           ; AX = X[b]
+        mov  [p1x], ax          ; p1x = X[b]
+        mov  ax, [bx+16]        ; AX = Y[b]
+        mov  [p1y], ax          ; p1y = Y[b]
+        mov  al, [ecol]         ; AL = ecol
+        mov  [col], al          ; col = ecol
+        push si                 ; keep SI: the rule is to keep what the loop needs
+        call Line               ; line()
+        pop  si                 ; SI back
+        add  si, 2              ; SI += 2: the next pair
+        pop  cx                 ; the count
+        loop .e                 ; 12 times
+        ret                     ; return
 
 ; ---- Differ: a red dot on every corner the two methods disagree about ----
 ;  "Disagree" means further apart than ONE pixel. A table in 256ths and a
 ;  divide that truncates will not land on the same pixel every time, and
 ;  painting those red would only teach that rounding exists. Two pixels
 ;  apart would be a wrong table. Count the red dots: there are none.
-Differ: xor  di, di
-        mov  cx, NV
-.d:     push cx
-        mov  ax, [sx+di]
-        sub  ax, [sxd+di]
-        cmp  ax, 1
-        jg   .red
-        cmp  ax, -1
-        jl   .red
-        mov  ax, [sy+di]
-        sub  ax, [syd+di]
-        cmp  ax, 1
-        jg   .red
-        cmp  ax, -1
-        jge  .ok
-.red:   mov  byte [dcol], DIFFC
-        mov  ax, [sx+di]
-        mov  bx, [sy+di]
-        push di
-        call Dot
-        pop  di
-.ok:    add  di, 2
-        pop  cx
-        loop .d
-        ret
+;  In C:
+;
+;      void differ(void)
+;      {
+;          for (int i = 0; i < NV; i++) {
+;              int dx = sx[i] - sxd[i], dy = sy[i] - syd[i];
+;              if (dx > 1 || dx < -1 || dy > 1 || dy < -1) {
+;                  dcol = DIFFC;  dot(sx[i], sy[i]);
+;              }
+;          }
+;      }
+Differ: xor  di, di             ; DI = 0  (i * 2)
+        mov  cx, NV             ; CX = 8 corners
+.d:     push cx                 ; keep the count
+        mov  ax, [sx+di]        ; AX = sx[i]
+        sub  ax, [sxd+di]       ; AX = dx = sx[i] - sxd[i]
+        cmp  ax, 1              ; dx > 1 ?
+        jg   .red               ;   yes: a real disagreement
+        cmp  ax, -1             ; dx < -1 ?
+        jl   .red               ;   yes
+        mov  ax, [sy+di]        ; AX = sy[i]
+        sub  ax, [syd+di]       ; AX = dy = sy[i] - syd[i]
+        cmp  ax, 1              ; dy > 1 ?
+        jg   .red               ;   yes
+        cmp  ax, -1             ; dy >= -1 ?
+        jge  .ok                ;   yes: within a pixel, no dot
+.red:   mov  byte [dcol], DIFFC ; dcol = red
+        mov  ax, [sx+di]        ; AX = sx[i]   \  dot(sx[i], sy[i])
+        mov  bx, [sy+di]        ; BX = sy[i]   /
+        push di                 ; keep i: Dot uses DI
+        call Dot                ; dot()
+        pop  di                 ; i back
+.ok:    add  di, 2              ; i++
+        pop  cx                 ; the count
+        loop .d                 ; 8 times
+        ret                     ; return
 
 ; ---- one whole picture ---------------------------------------------------
-Frame:  call Vsync
-        call GClear
-        call Xform
-        call Axis
-        cmp  byte [pmode], 3
-        jne  .one
-        mov  word [esrc], sxd   ; stage 4: the divided cube underneath...
-        mov  byte [ecol], DIVC
-        call Edges
-.one:   mov  word [esrc], sx    ; ...and the drawn one on top
-        mov  byte [ecol], EDGEC
-        call Edges
-        cmp  byte [pmode], 3
-        jne  .out
-        call Differ             ; and the red dots, if there are any
-.out:   ret
+;  In C:
+;
+;      void frame(void)
+;      {
+;          vsync();  gclear();  xform();  axis();
+;          if (pmode == 3) { esrc = sxd; ecol = DIVC;  edges(); }   /* grey under  */
+;          esrc = sx;  ecol = EDGEC;  edges();                      /* white over  */
+;          if (pmode == 3) differ();                                /* red where not */
+;      }
+Frame:  call Vsync              ; vsync()
+        call GClear             ; gclear()
+        call Xform              ; xform()
+        call Axis               ; axis()
+        cmp  byte [pmode], 3    ; pmode == 3 ?
+        jne  .one               ;   no: one cube only
+        mov  word [esrc], sxd   ; esrc = sxd: stage 4, the divided cube underneath...
+        mov  byte [ecol], DIVC  ; ecol = grey
+        call Edges              ; edges()
+.one:   mov  word [esrc], sx    ; esrc = sx: ...and the drawn one on top
+        mov  byte [ecol], EDGEC ; ecol = white
+        call Edges              ; edges()
+        cmp  byte [pmode], 3    ; pmode == 3 ?
+        jne  .out               ;   no: done
+        call Differ             ; differ(): the red dots, if there are any
+.out:   ret                     ; return
 
 ; ---- Spin: turn until a key --------------------------------------------
-Spin:   call Frame
-        mov  al, [stepy]
-        add  [angy], al
-        mov  al, [stepx]
-        add  [angx], al
-        call KeyChk
-        or   al, al
-        jz   Spin
-        ret
+;  In C:   do { frame(); angy += stepy; angx += stepx; } while (!key_check());
+Spin:   call Frame              ; frame()
+        mov  al, [stepy]        ; AL = stepy
+        add  [angy], al         ; angy += stepy
+        mov  al, [stepx]        ; AL = stepx
+        add  [angx], al         ; angx += stepx
+        call KeyChk             ; AL = key_check()
+        or   al, al             ; a key ?
+        jz   Spin               ;   no: another frame
+        ret                     ; return
 
 ; ---- Walk: slide along Z until a key ------------------------------------
 ;  Every [hold] frames, tz moves by [wdz]. At TZFAR it turns back. At TZMIN
 ;  it does what [guard] says: 1 bounce, 2 stop dead, 0 KEEP GOING - and
 ;  keeping going is stage 6, which does not come back.
-Walk:   call Frame
-        dec  byte [hcnt]
-        jnz  .k
-        mov  al, [hold]
-        mov  [hcnt], al
-        mov  al, [wdz]
-        cbw
-        add  [tz], ax
-        cmp  word [tz], TZFAR
-        jl   .n1
-        neg  byte [wdz]
-.n1:    cmp  word [tz], TZMIN
-        jge  .k
-        cmp  byte [guard], 0
-        je   .k                 ; no guard: on towards the trap
-        mov  word [tz], TZMIN   ; the NEAR PLANE: this far and no further
-        cmp  byte [guard], 2
-        je   .stop
-        neg  byte [wdz]         ; bounce
-        jmp  .k
-.stop:  mov  byte [wdz], 0
-.k:     call KeyChk
-        or   al, al
-        jz   Walk
-        ret
+;  In C:
+;
+;      void walk(void)
+;      {
+;          do {
+;              frame();
+;              if (--hcnt == 0) {                  /* every hold frames   */
+;                  hcnt = hold;
+;                  tz += wdz;
+;                  if (tz >= TZFAR) wdz = -wdz;    /* the far end: turn   */
+;                  if (tz < TZMIN && guard) {      /* the near plane...   */
+;                      tz = TZMIN;                 /* ...this far, no more */
+;                      if (guard == 2) wdz = 0;    /* 2: stop dead        */
+;                      else            wdz = -wdz; /* 1: bounce           */
+;                  }                               /* 0: on to the trap   */
+;              }
+;          } while (!key_check());
+;      }
+Walk:   call Frame              ; frame()
+        dec  byte [hcnt]        ; hcnt--
+        jnz  .k                 ; not yet a step: to the key
+        mov  al, [hold]         ; AL = hold
+        mov  [hcnt], al         ; hcnt = hold
+        mov  al, [wdz]          ; AL = wdz
+        cbw                     ; AX = wdz
+        add  [tz], ax           ; tz += wdz
+        cmp  word [tz], TZFAR   ; tz >= TZFAR ?
+        jl   .n1                ;   no
+        neg  byte [wdz]         ;   yes: wdz = -wdz, the far end: turn
+.n1:    cmp  word [tz], TZMIN   ; tz < TZMIN ?
+        jge  .k                 ;   no: to the key
+        cmp  byte [guard], 0    ; guard == 0 ?
+        je   .k                 ;   yes: no guard, on towards the trap
+        mov  word [tz], TZMIN   ; tz = TZMIN: the NEAR PLANE, this far and no further
+        cmp  byte [guard], 2    ; guard == 2 ?
+        je   .stop              ;   yes: stop dead
+        neg  byte [wdz]         ;   no:  wdz = -wdz, bounce
+        jmp  .k                 ; to the key
+.stop:  mov  byte [wdz], 0      ; wdz = 0
+.k:     call KeyChk             ; AL = key_check()
+        or   al, al             ; a key ?
+        jz   Walk               ;   no: another frame
+        ret                     ; return
 
 ; ============================================================================
 ;  THE MODEL - lesson 0E's, with the corners at twenty five instead of
@@ -539,53 +648,70 @@ include 'RECIP.INC'
 include 'DRAW15.INC'
 
 ; ============================================================================
-Boot:   cld
-        mov  ax, 2500h          ; INT 21h fn 25h: set interrupt vector AL
-        mov  dx, Trap           ;  = 0, the divide fault, to DS:DX = Trap.
-        int  21h                ;  From here on, an overflowing IDIV lands
-                                ;  in our handler and not in DOS's, which
-                                ;  would loop on the fault for ever.
-        mov  ax, 0013h
-        int  10h
-        mov  ax, VGA
-        mov  es, ax
+;  In C:
+;
+;      int main(void)
+;      {
+;          int_vector[0] = trap;                      /* DOS fn 25h       */
+;          set_mode(0x13);
+;          pmode = 0; tz = TZHOME; frame(); key();                 /* 1 */
+;          pmode = 1;              frame(); key();                 /* 2 */
+;          tz = TZFAR; wdz = -1; hold = 2; guard = 1; walk();      /* 3 */
+;          pmode = 3; tz = TZHOME; stepy = 1; stepx = 0; spin();   /* 4 */
+;          pmode = 2; stepy = 0; tz = TZFAR; wdz = -1; hold = 2;
+;          guard = 2; walk();                                      /* 5 */
+;          if (lastk == ESC) { set_mode(3); exit(0); }
+;          pmode = 1; tz = TZFAR; wdz = -1; hold = 3; guard = 0;
+;          walk();                          /* 6: never comes back */
+;      }
+Boot:   cld                     ; string ops count UP (STOSW in GClear)
+        mov  ax, 2500h          ; AH = 25h set interrupt vector, AL = 0: the
+        mov  dx, Trap           ; DX = Trap     divide fault. INT 21h fn 25h
+        int  21h                ; int_vector[0] = DS:DX.  In a COM DS is CS,
+                                ;  so DX alone names it. From here on an
+                                ;  overflowing IDIV lands in our handler, not
+                                ;  in DOS's, which would loop on the fault
+        mov  ax, 0013h          ; AX = 13h: 320x200, 256 colours
+        int  10h                ; set_mode(0x13)
+        mov  ax, VGA            ; AX = A000h
+        mov  es, ax             ; ES = the screen, for the whole program
 
 ; ---- 1. flat: lesson 0E's cube, z thrown away ----------------------------
-        mov  byte [pmode], 0
-        mov  word [tz], TZHOME
-        call Frame
-        call Key
+        mov  byte [pmode], 0    ; pmode = 0: flat
+        mov  word [tz], TZHOME  ; tz = TZHOME
+        call Frame              ; frame()
+        call Key                ; key()
 
 ; ---- 2. the divide: the same cube, and the far face is smaller -----------
-        mov  byte [pmode], 1
-        call Frame
-        call Key
+        mov  byte [pmode], 1    ; pmode = 1: the divide
+        call Frame              ; frame()
+        call Key                ; key()
 
 ; ---- 3. it grows: the cube comes towards you, and back ------------------
-        mov  word [tz], TZFAR
-        mov  byte [wdz], -1
-        mov  byte [hold], 2
-        mov  byte [guard], 1    ; bounce off the near plane
-        call Walk
+        mov  word [tz], TZFAR   ; tz = TZFAR: start far away
+        mov  byte [wdz], -1     ; wdz = -1: coming closer
+        mov  byte [hold], 2     ; hold = 2 frames a step
+        mov  byte [guard], 1    ; guard = 1: bounce off the near plane
+        call Walk               ; walk()
 
 ; ---- 4. the table, drawn on the divide - count the red dots --------------
-        mov  byte [pmode], 3
-        mov  word [tz], TZHOME
-        mov  byte [stepy], 1
-        mov  byte [stepx], 0
-        call Spin
+        mov  byte [pmode], 3    ; pmode = 3: both
+        mov  word [tz], TZHOME  ; tz = TZHOME
+        mov  byte [stepy], 1    ; stepy = 1: turning about Y
+        mov  byte [stepx], 0    ; stepx = 0
+        call Spin               ; spin()
 
 ; ---- 5. the near plane: it comes, and it STOPS ---------------------------
-        mov  byte [pmode], 2
-        mov  byte [stepy], 0
-        mov  word [tz], TZFAR
-        mov  byte [wdz], -1
-        mov  byte [hold], 2
-        mov  byte [guard], 2    ; stop dead at the plane
-        call Walk
-        mov  al, [lastk]
-        cmp  al, 27             ; ESC here leaves cleanly. Anything else...
-        je   Bye
+        mov  byte [pmode], 2    ; pmode = 2: the table
+        mov  byte [stepy], 0    ; stepy = 0: still
+        mov  word [tz], TZFAR   ; tz = TZFAR
+        mov  byte [wdz], -1     ; wdz = -1
+        mov  byte [hold], 2     ; hold = 2
+        mov  byte [guard], 2    ; guard = 2: stop dead at the plane
+        call Walk               ; walk()
+        mov  al, [lastk]        ; AL = lastk, the key that ended it
+        cmp  al, 27             ; lastk == ESC ?  ESC here leaves cleanly.
+        je   Bye                ;   yes: Bye.     Anything else...
 
 ; ---- 6. no guard: the divide, unprotected. This stage does not return. ---
 ;      The cube is at the near plane. Take the plane away and keep coming.
@@ -593,15 +719,16 @@ Boot:   cld
 ;      INT 0, and Trap ends the program with three lines of text. That is
 ;      not this program failing. That is the machine telling you what the
 ;      near plane was for, in the only voice it has.
-        mov  byte [pmode], 1
-        mov  word [tz], TZFAR   ; from the far end, all the way in: about
-        mov  byte [wdz], -1     ;  five seconds of approach before the
-        mov  byte [hold], 3     ;  quotient outruns the byte. From the
-        mov  byte [guard], 0    ;  plane it took one second, and a crash
-        call Walk               ;  nobody saw coming teaches nothing.
-                                ; ...and it never gets back here
+        mov  byte [pmode], 1    ; pmode = 1: the divide
+        mov  word [tz], TZFAR   ; tz = TZFAR: from the far end, all the way in -
+        mov  byte [wdz], -1     ; wdz = -1     about five seconds of approach
+        mov  byte [hold], 3     ; hold = 3     before the quotient outruns the
+        mov  byte [guard], 0    ; guard = 0    byte. From the plane it took one
+        call Walk               ; walk()       second, and a crash nobody saw
+                                ;  coming teaches nothing. ...and it never
+                                ;  gets back here
 
-Bye:    mov  ax, 0003h          ; a clean screen back to DOS - reached only
-        int  10h                ;  by ESC at stage 5
-        mov  ax, 4C00h
-        int  21h
+Bye:    mov  ax, 0003h          ; AX = 3: a clean screen back to DOS - reached
+        int  10h                ; set_mode(3)   only by ESC at stage 5
+        mov  ax, 4C00h          ; AH = 4Ch exit, AL = 0 the code
+        int  21h                ; exit(0)

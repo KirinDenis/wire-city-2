@@ -50,10 +50,19 @@ HEAD    = 0Fh                   ; white
 WARM    = 0Eh                   ; yellow: freshly written, like the titles
 
 ; ---- the titles' program, at the titles' addresses -------------------------
-Start:  call Patch              ; 0100: E8 0D 00
+;  In C there is no way to write this program, and that is the lesson:
+;
+;      void patch(void)  { wrd = 0x1234; }          /* ...except the 1234 is a CELL */
+;      void change(void) { *(int *)(0x111) = 0x5678;  patch(); }   /* and this
+;                          writes INTO patch()'s code, so it now stores 5678 */
+;
+;  A C compiler will not let a program write over its own functions. The
+;  8086 has no such rule: code is bytes at an address, and MOV can reach it.
+Start:  call Patch              ; 0100: E8 0D 00      patch()
 Change: mov  word [Patch+1], 5678h
-                                ; 0103: C7 06 11 01 78 56 - the self-patch
-        call Patch              ; 0109: E8 04 00
+                                ; 0103: C7 06 11 01 78 56 - the self-patch:
+                                ;  *(0111h) = 5678h, INTO the mov inside Patch
+        call Patch              ; 0109: E8 04 00      patch() - now storing 5678h
         jmp  Boot               ; 010C: the titles drew these cells blank;
                                 ;  the lesson parks its doorway here. DOS
                                 ;  ENTERS at 0100, so the map RUNS the
@@ -61,12 +70,13 @@ Change: mov  word [Patch+1], 5678h
                                 ;  one is its footprint - and then falls
                                 ;  through here into the frames
         db   1 dup (?)          ; 010F: the rest of the gap
-Patch:  mov  ax, 1234h          ; 0110: B8 34 12
-        db   89h, 06h           ; 0113: the LONG write, typed as bytes -
-        dw   wrd                ;  FASM would shorten it to A3, which has
-                                ;  no register field, and frame 5 pokes
-                                ;  that field. Code is bytes: type them.
-        ret                     ; 0117: C3
+Patch:  mov  ax, 1234h          ; 0110: B8 34 12      AX = 1234h - and 34 12 are
+                                ;  two CELLS, which the frames rewrite
+        db   89h, 06h           ; 0113: mov [wrd], ax - the LONG write, typed as
+        dw   wrd                ;  bytes. FASM would shorten it to A3, which has
+                                ;  no register field, and frame 5 pokes that
+                                ;  field. Code is bytes: type them
+        ret                     ; 0117: C3            return
 
         db   0E8h dup (?)       ; ...and nothing until the word itself
 wrd     dw   ?                  ; 0200: rubbish until somebody writes it
@@ -74,12 +84,14 @@ wrd     dw   ?                  ; 0200: rubbish until somebody writes it
 ; ---- the road: jmp's distance cell picks the branch ------------------------
 ;  A tiny subroutine, its own map printed by frame 6. The distance in
 ;  cell [Road+1] is 0 for Day, 4 for Night - poked at run time.
-Road:   jmp  short RDay         ; EB 00 - the distance cell starts at Day
-RDay:   mov  si, t_day          ; B3-style tiny branches grew printing:
-        jmp  short ROn          ;  each road names itself on the glass
-RNight: mov  si, t_night
-ROn:    call PutS
-        ret
+;  In C:   void road(void) { puts(dist ? "NIGHT " : "DAY "); }   - but `dist` is
+;  not a variable: it is the byte after the jump's opcode, cell 0 of `jmp short`.
+Road:   jmp  short RDay         ; EB 00: the opcode, and the DISTANCE cell - 0
+RDay:   mov  si, t_day          ; SI = "DAY "    each road names itself on the
+        jmp  short ROn          ; over Night      glass, so a poke can be seen
+RNight: mov  si, t_night        ; SI = "NIGHT "
+ROn:    call PutS               ; puts()
+        ret                     ; return
 RDIST   = RNight - RDay         ; what to poke for the Night road
 
 include 'DRAW9.INC'
@@ -108,177 +120,205 @@ t_ow2   db 'owlos.sk',0
 row     dw 0                    ; where the next line goes, in rows
 
 ; ---- one frame's worth of screen bookkeeping -------------------------------
-Line:   push dx                 ; SI = the text; prints at the current row,
-        mov  ax, [row]          ;  two columns in, and moves the row on.
-        mov  bx, ROW            ;  DX is saved: MUL eats it, and Say2 keeps
-        mul  bx                 ;  its second line there
-        mov  di, ax
-        add  di, 2*2
-        call PutS
-        inc  word [row]
-        pop  dx
-        ret
+;  In C:   void line(char *s) { puts_at(row, 2, s);  row++; }
+Line:   push dx                 ; keep DX: MUL eats it, and Say2 keeps its
+        mov  ax, [row]          ; AX = row        second line there
+        mov  bx, ROW            ; BX = 160 bytes a row
+        mul  bx                 ; AX = row * 160
+        mov  di, ax             ; DI = the row start
+        add  di, 2*2            ; DI += column 2
+        call PutS               ; puts()
+        inc  word [row]         ; row++
+        pop  dx                 ; DX back
+        ret                     ; return
 
 ; ---- print the word: its two cells sign by sign, then the whole ------------
 ;  The bytes are shown IN ADDRESS ORDER - 34 12 for 1234h - because the
 ;  screen is the titles' cell strip made real.
-ShowW:  mov  ax, [row]
-        mov  bx, ROW
-        mul  bx
-        mov  di, ax
-        add  di, 6*2
-        mov  byte [attr], WARM
-        mov  al, byte [wrd]     ; the LOW cell first: address order
-        call PutB
-        mov  al, ' '
-        call PutC
-        mov  al, byte [wrd+1]
-        call PutB
-        mov  byte [attr], NORM
-        mov  si, t_asw
-        call PutS
-        mov  ax, [wrd]
-        xchg al, ah             ; XCHG: swap the halves - PutB wants the
-        call PutB               ;  high byte first when printing a WORD
-        xchg al, ah
-        call PutB
-        mov  si, t_ash
-        call PutS
-        add  word [row], 2
-        ret
+;  In C:
+;
+;      void show_w(void)                       /* "34 12   as a word: 1234h" */
+;      {
+;          unsigned char *c = (unsigned char *)&wrd;
+;          attr = WARM;  put_hex(c[0]);  putc(' ');  put_hex(c[1]);   /* address order */
+;          attr = NORM;  puts(t_asw);  put_hex(wrd >> 8);  put_hex(wrd & 255);  puts("h");
+;          row += 2;
+;      }
+ShowW:  mov  ax, [row]          ; AX = row
+        mov  bx, ROW            ; BX = 160 bytes a row
+        mul  bx                 ; AX = row * 160
+        mov  di, ax             ; DI = the row start
+        add  di, 6*2            ; DI += column 6
+        mov  byte [attr], WARM  ; attr = yellow
+        mov  al, byte [wrd]     ; AL = c[0]: the LOW cell first, address order
+        call PutB               ; put_hex(c[0])
+        mov  al, ' '            ; AL = ' '
+        call PutC               ; putc(' ')
+        mov  al, byte [wrd+1]   ; AL = c[1]
+        call PutB               ; put_hex(c[1])
+        mov  byte [attr], NORM  ; attr = NORM
+        mov  si, t_asw          ; SI = "   as a word: "
+        call PutS               ; puts()
+        mov  ax, [wrd]          ; AX = wrd
+        xchg al, ah             ; AL <-> AH: XCHG swaps the halves - PutB wants
+        call PutB               ; put_hex(high)   the high byte first for a WORD
+        xchg al, ah             ; AL <-> AH again
+        call PutB               ; put_hex(low)
+        mov  si, t_ash          ; SI = "h"
+        call PutS               ; puts()
+        add  word [row], 2      ; row += 2
+        ret                     ; return
 t_asw   db '   as a word: ',0
 t_ash   db 'h',0
 
 ; ---- the lower screen, wiped: six frames do not fit 25 rows ---------------
-Fresh:  mov  di, 3*ROW          ; keep the headline, clear the rest
-        mov  cx, (25-3)*80
-        mov  ax, 0720h          ; a space, in grey on black
-        rep  stosw
-        mov  word [row], 3
-        ret
+;  In C:   for (i = 3*80; i < 25*80; i++) text[i] = 0x0720;   row = 3;
+Fresh:  mov  di, 3*ROW          ; DI = row 3: keep the headline, clear the rest
+        mov  cx, (25-3)*80      ; CX = 22 rows of 80 cells
+        mov  ax, 0720h          ; AX = 0720h: a space, in grey on black
+        rep  stosw              ; while (cx--) *es:di++ = ax
+        mov  word [row], 3      ; row = 3
+        ret                     ; return
 
 ; ---- a captioned pair of lines, then a beat --------------------------------
-Say2:   mov  byte [attr], HEAD
-        call Line
-        mov  si, dx
-        mov  byte [attr], NORM
-        call Line
-        ret
+;  In C:   void say2(char *a, char *b) { attr = HEAD; line(a);  attr = NORM; line(b); }
+Say2:   mov  byte [attr], HEAD  ; attr = white
+        call Line               ; line(SI): the first, bright
+        mov  si, dx             ; SI = DX, the second line
+        mov  byte [attr], NORM  ; attr = NORM
+        call Line               ; line(SI): the second, plain
+        ret                     ; return
 
-Boot:   cld
+;  In C:
+;
+;      int main(void)                       /* entered THROUGH Start, which already ran */
+;      {
+;          *(char *)0x10C = 0xC3;           /* a RET over the doorway jmp: change() is  */
+;          set_mode(3); cursor_off();       /*  a callable subroutine again              */
+;          say2(t_r1, t_r2); show_w(); key();                                   /* 1 */
+;          say2(t_c1, t_c2); *(int *)0x111 = 0x1234; patch(); show_w(); key();  /* 2 */
+;          say2(t_p1, t_p2); change(); show_w(); key();                         /* 3 */
+;          fresh(); say2(t_k1, t_k2); *(int *)0x111 = 0x9ABC; patch(); show_w(); key(); /* 4 */
+;          say2(t_g1, t_g2); *(char *)0x110 = 0xBB; *(char *)0x114 = 0x1E;       /* 5 */
+;                            patch(); show_w(); key();
+;          say2(t_j1, t_j2); road(); *(char *)(Road+1) = RDIST; road();          /* 6 */
+;                            *(char *)(Road+1) = 0; road();
+;          ...the signature...  set_mode(3); exit(0);
+;      }
+Boot:   cld                     ; string ops count UP (STOSW, LODSB)
         ; ---- the doorway burns itself: entry used the jmp at 010C once;
         ; poke a ret over it, and Change is a callable subroutine again.
         ; The program repairs its own map by the very trick it teaches.
-        mov  byte [Start+0Ch], 0C3h
+        mov  byte [Start+0Ch], 0C3h ; *(010Ch) = C3h: a RET where the jmp was
         jmp  short .fb          ; the rule: patch, then jump
 .fb:
-        mov  ax, 0003h          ; the text screen, 80x25
-        int  10h
-        call TextOff
-        mov  ax, TEXT
-        mov  es, ax
+        mov  ax, 0003h          ; AX = 3: the text screen, 80x25
+        int  10h                ; set_mode(3)
+        call TextOff            ; cursor_off()
+        mov  ax, TEXT           ; AX = B800h
+        mov  es, ax             ; ES = the text screen
 
         mov  byte [attr], HEAD  ; the headline, and the subtitle under it
-        mov  si, t_head
-        mov  di, 0*ROW + 30*2
-        call PutS
-        mov  byte [attr], 08h
-        mov  si, t_sub
-        mov  di, 1*ROW + 22*2
-        call PutS
-        mov  word [row], 3
+        mov  si, t_head         ; SI = t_head, the first line
+        mov  di, 0*ROW + 30*2   ; DI = row 0, column 30
+        call PutS               ; puts()
+        mov  byte [attr], 08h   ; attr = 08h
+        mov  si, t_sub          ; SI = t_sub, the first line
+        mov  di, 1*ROW + 22*2   ; DI = row 1, column 22
+        call PutS               ; puts()
+        mov  word [row], 3      ; row = 3
 
 ; ---- 1. the footprint -------------------------------------------------------
-        mov  si, t_r1
-        mov  dx, t_r2
-        call Say2
+        mov  si, t_r1           ; SI = t_r1, the first line
+        mov  dx, t_r2           ; DX = t_r2, the second
+        call Say2               ; say2(): the two captions
         call ShowW              ; 78 56: the map ran on the way in, faster
         call Key                ;  than the eye - THIS is the whole lesson
 
 ; ---- 2. the unwind ---------------------------------------------------------
-        mov  si, t_c1
-        mov  dx, t_c2
-        call Say2
-        mov  word [Patch+1], 1234h
+        mov  si, t_c1           ; SI = t_c1, the first line
+        mov  dx, t_c2           ; DX = t_c2, the second
+        call Say2               ; say2(): the two captions
+        mov  word [Patch+1], 1234h ; *(0111h) = 1234h: the poke, into the mov
         jmp  short .f0          ; the rule: patch, then jump
-.f0:    call Patch              ; 1234h lands, swapped
-        call ShowW
-        call Key
+.f0:    call Patch              ; patch(): 1234h lands, swapped
+        call ShowW              ; show_w(): the word, cell by cell
+        call Key                ; key()
 
 ; ---- 3. the self-patch -----------------------------------------------------
-        mov  si, t_p1
-        mov  dx, t_p2
-        call Say2
+        mov  si, t_p1           ; SI = t_p1, the first line
+        mov  dx, t_p2           ; DX = t_p2, the second
+        call Say2               ; say2(): the two captions
         call Change             ; the program rewrites its own cells...
         call ShowW              ; ...and 78 56 says it worked
-        call Key
+        call Key                ; key()
 
 ; ---- 4. your poke ----------------------------------------------------------
         call Fresh              ; page two: the first three frames stand,
                                 ;  read, and make way
-        mov  si, t_k1
-        mov  dx, t_k2
-        call Say2
-        mov  word [Patch+1], 9ABCh
+        mov  si, t_k1           ; SI = t_k1, the first line
+        mov  dx, t_k2           ; DX = t_k2, the second
+        call Say2               ; say2(): the two captions
+        mov  word [Patch+1], 9ABCh ; *(0111h) = 9ABCh: your poke
         jmp  short .f1          ; THE RULE: patch, then jump
-.f1:    call Patch
-        call ShowW
-        call Key
+.f1:    call Patch              ; patch(): 9ABCh lands
+        call ShowW              ; show_w(): the word, cell by cell
+        call Key                ; key()
 
 ; ---- 5. the registers ------------------------------------------------------
-        mov  si, t_g1
-        mov  dx, t_g2
-        call Say2
-        mov  byte [Patch], 0BBh ; mov ax,imm16 becomes mov BX,imm16...
-        mov  byte [Patch+4], 1Eh
-                                ; ...and the write's modrm now says BX too
+        mov  si, t_g1           ; SI = t_g1, the first line
+        mov  dx, t_g2           ; DX = t_g2, the second
+        call Say2               ; say2(): the two captions
+        mov  byte [Patch], 0BBh ; *(0110h) = BBh: mov ax,imm16 becomes mov BX,imm16...
+        mov  byte [Patch+4], 1Eh ; *(0114h) = 1Eh: ...and the write's modrm now
+                                ;  says BX too
         jmp  short .f2          ; the rule again
-.f2:    call Patch
-        call ShowW
-        call Key
+.f2:    call Patch              ; patch(): through BX this time
+        call ShowW              ; show_w(): the word, cell by cell
+        call Key                ; key()
 
 ; ---- 6. the road -----------------------------------------------------------
-        mov  si, t_j1
-        mov  dx, t_j2
-        call Say2
-        mov  ax, [row]
-        mov  bx, ROW
-        mul  bx
-        mov  di, ax
-        add  di, 6*2
-        mov  byte [attr], WARM
-        call Road               ; DAY - the distance cell holds nought
-        mov  byte [Road+1], RDIST
-        jmp  short .f3
-.f3:    call Road               ; NIGHT - the same jump, poked
-        mov  byte [Road+1], 0
-        jmp  short .f4
-.f4:    call Road               ; and DAY again: the road is yours
-        mov  byte [attr], NORM
-        add  word [row], 2
+        mov  si, t_j1           ; SI = t_j1, the first line
+        mov  dx, t_j2           ; DX = t_j2, the second
+        call Say2               ; say2(): the two captions
+        mov  ax, [row]          ; AX = row
+        mov  bx, ROW            ; BX = 160 bytes a row
+        mul  bx                 ; AX = row * 160
+        mov  di, ax             ; DI = the row start
+        add  di, 6*2            ; DI += column 6
+        mov  byte [attr], WARM  ; attr = yellow
+        call Road               ; road(): DAY - the distance cell holds nought
+        mov  byte [Road+1], RDIST ; *(Road+1) = RDIST: the distance to Night
+        jmp  short .f3          ; the rule: patch, then jump
+.f3:    call Road               ; road(): NIGHT - the same jump, poked
+        mov  byte [Road+1], 0   ; *(Road+1) = 0
+        jmp  short .f4          ; the rule
+.f4:    call Road               ; road(): and DAY again - the road is yours
+        mov  byte [attr], NORM  ; attr = NORM
+        add  word [row], 2      ; row += 2
 
-        inc  word [row]         ; the signature, the way every lesson ends
-        mov  byte [attr], HEAD
-        mov  si, t_ow1
-        call Line
-        mov  byte [attr], WARM
-        mov  si, t_ow2
-        call Line
-        mov  byte [attr], NORM
-        mov  si, t_key
-        mov  ax, [row]
-        mov  bx, ROW
-        mul  bx
-        mov  di, ax
-        add  di, 34*2
-        mov  byte [attr], 08h
-        call PutS
-        call Key
+        inc  word [row]         ; row++: the signature, the way every lesson ends
+        mov  byte [attr], HEAD  ; attr = HEAD
+        mov  si, t_ow1          ; SI = t_ow1, the first line
+        call Line               ; line(SI): one row of text
+        mov  byte [attr], WARM  ; attr = WARM
+        mov  si, t_ow2          ; SI = t_ow2, the first line
+        call Line               ; line(SI): one row of text
+        mov  byte [attr], NORM  ; attr = NORM
+        mov  si, t_key          ; SI = t_key, the first line
+        mov  ax, [row]          ; AX = row
+        mov  bx, ROW            ; BX = 160 bytes a row
+        mul  bx                 ; AX = row * 160
+        mov  di, ax             ; DI = the row start
+        add  di, 34*2           ; DI += column 34
+        mov  byte [attr], 08h   ; attr = dark grey
+        call PutS               ; puts(): "- any key -"
+        call Key                ; key()
 
-        mov  ax, 0003h          ; a clean screen back to DOS
-        int  10h
-        mov  ax, 4C00h
-        int  21h
+        mov  ax, 0003h          ; AX = 3: a clean screen back to DOS
+        int  10h                ; set_mode(3)
+        mov  ax, 4C00h          ; AH = 4Ch exit, AL = 0 the code
+        int  21h                ; exit(0)
 
 ; ---- the map must BE the titles' map - or refuse to assemble ---------------
 assert Start  = 100h

@@ -20,14 +20,15 @@ stack 100h                      ; and it gets a stack segment of its own
 ; The segment is called VARS and not DATA because `data` is a word FASM keeps
 ; for itself. Segment names are yours to choose; just not that one.
 segment VARS
-msg     db   'HELLO FROM AN EXE$'
+msg     db   'HELLO FROM AN EXE$' ; the text, and the '$' that ends it
 
+;  In C:   int main(void) { puts("HELLO FROM AN EXE"); return 0; }
 segment CODE
 start:  mov  ax, VARS           ; the text lives in another segment now, so DS
         mov  ds, ax             ; has to be pointed at it. A COM never needs
                                 ; this: there is only one segment to be in.
-        mov  dx, msg
-        mov  ah, 9
-        int  21h
-        mov  ax, 4C00h
-        int  21h
+        mov  dx, msg            ; DX = the address of the text, inside VARS
+        mov  ah, 9              ; DOS function 9: print until '$'
+        int  21h                ; ask DOS to do it
+        mov  ax, 4C00h          ; function 4Ch: exit, code 0
+        int  21h                ; and ask DOS to do that too

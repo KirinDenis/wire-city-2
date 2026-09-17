@@ -1,0 +1,66 @@
+PROBE - font metrics at 640x480, VGA driver
+
+screen is 640 x 480, colours 0..15
+
+font          size   (160,100)   d = 6 cells = 240   sx=...   headline   subtitle      height
+------------------------------------------------------------------------
+     Default    1       72      136      160      384      416       8
+     Default    2      144      272      320      768      832      16
+     Default    3      216      408      480     1152     1248      24
+     Default    4      288      544      640     1536     1664      32
+     Triplex    1      100      174      210      490      512      18
+     Triplex    2      112      193      233      545      569      20
+     Triplex    3      126      217      262      613      640      23
+     Triplex    4      168      290      350      818      854      31
+       Small    1       31       60       72      169      181       5
+       Small    2       34       66       80      188      201       6
+       Small    3       39       75       90      211      226       6
+       Small    4       52      100      120      282      302       9
+   SansSerif    1      108      175      217      476      511      19
+   SansSerif    2      120      194      241      529      568      21
+   SansSerif    3      135      219      271      595      639      24
+   SansSerif    4      180      292      362      794      853      32
+      Gothic    1      100      165      207      411      476      19
+      Gothic    2      112      183      230      456      529      21
+      Gothic    3      126      206      258      513      595      24
+      Gothic    4      168      275      345      685      794      32
+      Script    1      108      180      232      424      513      22
+      Script    2      120      200      258      472      570      24
+      Script    3      135      225      290      531      641      27
+      Script    4      181      301      387      708      855      37
+     Simplex    1      105      156      183      403      445      21
+     Simplex    2      116      173      203      448      494      23
+     Simplex    3      131      195      228      504      556      26
+     Simplex    4      175      260      305      673      742      35
+  TriplexScr    1       97      165      214      491      493      18
+  TriplexScr    2      108      183      238      546      548      20
+  TriplexScr    3      122      206      267      614      617      23
+  TriplexScr    4      163      275      357      819      823      31
+     Complex    1      111      195      237      552      573      21
+     Complex    2      123      216      263      614      637      23
+     Complex    3      138      243      296      690      717      26
+     Complex    4      185      325      395      921      956      35
+    European    1      152      268      338      767      789      33
+    European    2      169      298      376      852      877      36
+    European    3      190      335      423      959      987      41
+    European    4      254      447      564     1279     1316      55
+        Bold    1      159      262      323      751      784      36
+        Bold    2      176      291      359      834      872      40
+        Bold    3      198      327      404      939      981      45
+        Bold    4      265      437      539     1252     1308      60
+
+the page is 640 wide. A caption starting at x=14 may be 560 wide;
+a label inside the drawing may be about 90. Read the columns for
+the two longest samples against those two numbers.
+
+SetRGBPalette: GraphResult = 0   (0 = grOk)
+entry   wanted        read back from the DAC
+    0    63  62  58  ->    63  62  58   same
+    1    46  51  58  ->    46  51  58   same
+    2    56  21  18  ->    56  21  18   same
+    3     6  15  34  ->     6  15  34   same
+    4    34  34  34  ->    34  34  34   same
+    5     7  30  17  ->     7  30  17   same
+    6    50  13  10  ->    50  13  10   same
+
+all seven took: the page can have warm paper and a pale blue rule.

@@ -1,0 +1,9 @@
+.title  Clipping: a wall in front of your eye, and a frame around the glass
+.what   A point behind your eye has no image, and the machine will hand you a number anyway. Flight over a flat lattice painted by a Diamond-Square island, on the modules OWL FLY is built from: the near-plane cut of an edge, the screen clip of a line, the divide fault caught and counted - and one byte that flips the engine between the game's classic arithmetic and the lessons' way, with the frame rate on the glass
+.tier   LESSON
+.main   CLIP.ASM
+.build  FASM CLIP.ASM CLIP.COM
+.run    CLIP.COM
+.uses   IMUL IDIV MUL SHL SHR INT PUSH POP STI CLI LODSB STOSB MOVSW
+.reads  INFOGR.PAS
+.ignore MAKEINFO.BAT

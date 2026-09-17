@@ -96,7 +96,7 @@ STEPT   = 3                     ; ...and how far it turns you. Small: with
                                 ;  one cube out there and nothing else,
                                 ;  turning is how you lose it.
 
-        jmp  Boot
+        jmp  Boot               ; over the routines, to the boot at the bottom
 
 ; ============================================================================
 ;  Rot2 - lesson 12's matrix, GROWN TO WORDS.
@@ -118,37 +118,50 @@ STEPT   = 3                     ; ...and how far it turns you. Small: with
 ;  yaw it is the MODEL rotation; called with the camera's yaw NEGATED it is
 ;  the VIEW rotation. Same four multiplies either way.
 ; ============================================================================
-Rot2:   push ax
-        mov  bx, SINTAB
-        xlatb                   ; AL = sin(a), -127..127
-        cbw                     ; ...widened: the coordinates are words now
-        mov  [tsin], ax
-        pop  ax
-        add  al, 64             ; cos(a) = sin(a + a quarter-turn)
-        xlatb
-        cbw
-        mov  [tcos], ax
-        mov  ax, [tcos]
-        imul word [pa]          ; a*cos - fits AX; DX is only the sign
-        mov  [t2], ax
-        mov  ax, [tsin]
-        imul word [pb]          ; b*sin
-        mov  dx, [t2]
-        sub  dx, ax             ; a' = a*cos - b*sin, in 128ths
-        mov  cl, 7
-        sar  dx, cl             ; /128 as a SHIFT, since lesson 10
-        mov  [t1], dx           ; PARKED - b' still wants the OLD a
-        mov  ax, [tsin]
-        imul word [pa]
-        mov  [t2], ax
-        mov  ax, [tcos]
-        imul word [pb]
-        add  ax, [t2]           ; b' = a*sin + b*cos
-        sar  ax, cl
-        mov  [pb], ax
-        mov  ax, [t1]           ; ...and only now is a' allowed to land
-        mov  [pa], ax
-        ret
+;  In C:
+;
+;      void rot2(int a)                     /* turns the pair (pa, pb) */
+;      {
+;          int s = SINTAB[a];               /* sin * 127, -127..127    */
+;          int c = SINTAB[(a + 64) & 255];  /* cos = sin a quarter on  */
+;          int na = (pa * c - pb * s) >> 7; /* the matrix, row one     */
+;          int nb = (pa * s + pb * c) >> 7; /*             row two     */
+;          pa = na;  pb = nb;               /* both from the OLD pa!   */
+;      }
+;
+;  The `na` is the whole trap of lesson 12: row two needs the old pa, so
+;  row one's answer is parked in t1 until row two is done.
+Rot2:   push ax                 ; keep a
+        mov  bx, SINTAB         ; BX = the table
+        xlatb                   ; AL = SINTAB[a]: sin(a), -127..127
+        cbw                     ; AX = AL, sign and all: the coordinates
+        mov  [tsin], ax         ; tsin = s                  are words now
+        pop  ax                 ; AL = a
+        add  al, 64             ; AL = a + 64: cos(a) = sin(a + a quarter)
+        xlatb                   ; AL = SINTAB[a + 64]  (AL wraps by itself)
+        cbw                     ; AX = AL
+        mov  [tcos], ax         ; tcos = c
+        mov  ax, [tcos]         ; AX = c
+        imul word [pa]          ; AX = pa * c   - fits AX; DX is only the sign
+        mov  [t2], ax           ; t2 = pa * c
+        mov  ax, [tsin]         ; AX = s
+        imul word [pb]          ; AX = pb * s
+        mov  dx, [t2]           ; DX = pa * c
+        sub  dx, ax             ; DX = pa * c - pb * s     in 128ths
+        mov  cl, 7              ; CL = 7
+        sar  dx, cl             ; DX >>= 7: / 128 as a SHIFT, since lesson 10
+        mov  [t1], dx           ; t1 = na   PARKED - nb still wants the OLD pa
+        mov  ax, [tsin]         ; AX = s
+        imul word [pa]          ; AX = pa * s
+        mov  [t2], ax           ; t2 = pa * s
+        mov  ax, [tcos]         ; AX = c
+        imul word [pb]          ; AX = pb * c
+        add  ax, [t2]           ; AX = pa * s + pb * c
+        sar  ax, cl             ; AX >>= 7
+        mov  [pb], ax           ; pb = nb
+        mov  ax, [t1]           ; AX = na
+        mov  [pa], ax           ; pa = na   ...and only now may it land
+        ret                     ; return
 
 ; ============================================================================
 ;  ProjMul - one coordinate through the projection, with no divide.
@@ -166,11 +179,12 @@ Rot2:   push ax
 ;  exact. It works because the answer fits sixteen bits; if it did not, DH
 ;  would hold something and these two MOVs would throw it away in silence.
 ; ============================================================================
+;  In C:   int projmul(int v) { return ((long)v * rcp) >> 8; }
 ProjMul:
-        imul word [rcp]         ; DX:AX = coord * (d/z * 256)
-        mov  al, ah             ; the middle two bytes of the product...
-        mov  ah, dl             ;  ...ARE the product divided by 256
-        ret
+        imul word [rcp]         ; DX:AX = v * rcp   (rcp = d/z * 256)
+        mov  al, ah             ; AL = AH   \  the middle two bytes of the
+        mov  ah, dl             ; AH = DL   /  product ARE the product / 256
+        ret                     ; return AX
 
 ; ============================================================================
 ;  Xform - the whole chain, once per corner, and every step has a name.
@@ -189,225 +203,285 @@ ProjMul:
 ;  Stage 2 changes [objx]. Stage 3 changes [camx]. Nothing else differs,
 ;  and stage 4 is the proof that nothing else needs to.
 ; ============================================================================
-Xform:  mov  byte [ok], 1
-        mov  si, VERTS
-        xor  di, di
-        mov  cx, 8
-.v:     push cx
+;  In C:
+;
+;      int xform(void)                       /* 1 = draw the cube, 0 = drop it */
+;      {
+;          for (int i = 0; i < 8; i++) {
+;              int x = VERTS[i*3], y = VERTS[i*3+1], z = VERTS[i*3+2];
+;              /* MODEL: the cube's own turn, then its place */
+;              pa = x;  pb = z;  rot2(objyaw);   x = pa;  z = pb;   /* about Y */
+;              pa = y;  pb = z;  rot2(MPITCH);   y = pa;  z = pb;   /* about X */
+;              /* VIEW: minus the camera's place, then MINUS its turn */
+;              vx = x + objx - camx;  vy = y + objy - camy;  vz = z + objz - camz;
+;              pa = vx; pb = vz;  rot2(-camyaw);  vx = pa;  vz = pb;
+;              /* the near plane, as a test - and the far one */
+;              if (vz < ZNEAR || vz > ZFAR) return 0;
+;              /* PROJECT: lesson 0F, through the table */
+;              rcp = RECIP[vz];
+;              sx[i] = CX0 + projmul(vx);
+;              sy[i] = CY0 - projmul(vy);       /* paper y up, beam down */
+;              /* off the glass: drop the whole cube - the crude answer */
+;              if (sx[i] < 4 || sx[i] > W-5 || sy[i] < 4 || sy[i] > H-5) return 0;
+;          }
+;          return 1;
+;      }
+;
+;  SI walks VERTS three bytes a corner, DI walks sx/sy two bytes a corner,
+;  and every call pushes both because Rot2 and ProjMul use the registers.
+Xform:  mov  byte [ok], 1       ; ok = 1: innocent until a corner drops
+        mov  si, VERTS          ; SI = &VERTS[0]
+        xor  di, di             ; DI = 0: i * 2, the index into sx/sy
+        mov  cx, 8              ; CX = 8 corners
+.v:     push cx                 ; keep the count across the calls
 
-        mov  al, [si]           ; ---- MODEL: turn the cube on its own ---
-        cbw
-        mov  [pa], ax
-        mov  al, [si+2]
-        cbw
-        mov  [pb], ax
-        mov  al, [objyaw]       ; about Y, so the pair is (x, z)
-        push si
-        push di
-        call Rot2
-        pop  di
-        pop  si
-        mov  ax, [pa]
-        mov  [mx], ax
-        mov  ax, [pb]
-        mov  [mz], ax
-        mov  al, [si+1]         ; ...and its fixed tilt, about X, so the
-        cbw                     ;  pair is (y, z). Two turns and a move:
-        mov  [pa], ax           ;  THAT IS THE MODEL MATRIX, written out.
-        mov  ax, [mz]
-        mov  [pb], ax
-        mov  al, MPITCH
-        push si
-        push di
-        call Rot2
-        pop  di
-        pop  si
-        mov  ax, [pa]
-        mov  [my], ax
-        mov  ax, [pb]
-        mov  [mz], ax
+        mov  al, [si]           ; AL = x    ---- MODEL: turn the cube ------
+        cbw                     ; AX = x
+        mov  [pa], ax           ; pa = x
+        mov  al, [si+2]         ; AL = z
+        cbw                     ; AX = z
+        mov  [pb], ax           ; pb = z
+        mov  al, [objyaw]       ; AL = objyaw: about Y, so the pair is (x, z)
+        push si                 ; keep SI and DI: Rot2 uses BX, CX, DX, AX
+        push di                 ; keep SI and DI: Rot2/ProjMul use the registers
+        call Rot2               ; rot2(objyaw)
+        pop  di                 ; DI back
+        pop  si                 ; SI back
+        mov  ax, [pa]           ; AX = pa
+        mov  [mx], ax           ; mx = x turned
+        mov  ax, [pb]           ; AX = pb
+        mov  [mz], ax           ; mz = z turned
+        mov  al, [si+1]         ; AL = y: ...and its fixed tilt, about X, so
+        cbw                     ; AX = y   the pair is (y, z). Two turns and
+        mov  [pa], ax           ; pa = y   a move: THAT IS THE MODEL MATRIX,
+        mov  ax, [mz]           ; AX = mz  written out
+        mov  [pb], ax           ; pb = mz
+        mov  al, MPITCH         ; AL = MPITCH
+        push si                 ; keep SI and DI: Rot2/ProjMul use the registers
+        push di                 ; (the pair)
+        call Rot2               ; rot2(MPITCH)
+        pop  di                 ; DI back
+        pop  si                 ; SI back
+        mov  ax, [pa]           ; AX = pa
+        mov  [my], ax           ; my = y turned
+        mov  ax, [pb]           ; AX = pb
+        mov  [mz], ax           ; mz = z turned again
 
-        mov  ax, [mx]           ; ---- ...and put it where it stands -----
-        add  ax, [objx]
-        sub  ax, [camx]         ; ---- VIEW: minus where the camera is ---
-        mov  [vx], ax
-        mov  ax, [my]
-        add  ax, [objy]
-        sub  ax, [camy]
-        mov  [vy], ax
-        mov  ax, [mz]
-        add  ax, [objz]
-        sub  ax, [camz]
-        mov  [vz], ax
+        mov  ax, [mx]           ; AX = mx   ---- ...and put it where it stands
+        add  ax, [objx]         ; AX = mx + objx
+        sub  ax, [camx]         ; AX = mx + objx - camx   ---- VIEW: minus
+        mov  [vx], ax           ; vx = AX                  where the camera is
+        mov  ax, [my]           ; AX = my
+        add  ax, [objy]         ; AX = my + objy
+        sub  ax, [camy]         ; AX = my + objy - camy
+        mov  [vy], ax           ; vy = AX
+        mov  ax, [mz]           ; AX = mz
+        add  ax, [objz]         ; AX = mz + objz
+        sub  ax, [camz]         ; AX = mz + objz - camz
+        mov  [vz], ax           ; vz = AX
 
-        mov  ax, [vx]           ; ---- ...and turn by MINUS the yaw ------
-        mov  [pa], ax
-        mov  ax, [vz]
-        mov  [pb], ax
-        mov  al, [camyaw]
-        neg  al                 ; THE INVERSE OF A TURN, ENTIRE. One byte:
-                                ;  transpose a rotation - flip it about its
-                                ;  diagonal - and you have the turn back
-                                ;  the other way. No divide, no determinant.
-        push si
-        push di
-        call Rot2
-        pop  di
-        pop  si
-        mov  ax, [pa]
-        mov  [vx], ax
-        mov  ax, [pb]
-        mov  [vz], ax
+        mov  ax, [vx]           ; AX = vx   ---- ...and turn by MINUS the yaw
+        mov  [pa], ax           ; pa = vx
+        mov  ax, [vz]           ; AX = vz
+        mov  [pb], ax           ; pb = vz
+        mov  al, [camyaw]       ; AL = camyaw
+        neg  al                 ; AL = -camyaw. THE INVERSE OF A TURN, ENTIRE.
+                                ;  One byte: transpose a rotation - flip it
+                                ;  about its diagonal - and you have the turn
+                                ;  back the other way. No divide, no determinant
+        push si                 ; keep SI and DI: Rot2/ProjMul use the registers
+        push di                 ; (the pair)
+        call Rot2               ; rot2(-camyaw)
+        pop  di                 ; DI back
+        pop  si                 ; SI back
+        mov  ax, [pa]           ; AX = pa
+        mov  [vx], ax           ; vx = AX
+        mov  ax, [pb]           ; AX = pb
+        mov  [vz], ax           ; vz = AX
 
-        cmp  word [vz], ZNEAR   ; ---- the near plane, as a TEST ---------
-        jl   .drop              ;      lesson 0F's promise, now that the
-        cmp  word [vz], ZFAR    ;      camera can move, has to be an IF
-        jg   .drop
+        cmp  word [vz], ZNEAR   ; vz < ZNEAR ?  ---- the near plane, as a TEST:
+        jl   .drop              ;   yes: drop     lesson 0F's promise, now that
+        cmp  word [vz], ZFAR    ; vz > ZFAR ?     the camera can move, has to
+        jg   .drop              ;   yes: drop     be an IF
 
-        mov  bx, [vz]           ; ---- PROJECT: lesson 0F, through RECIP -
-        add  bx, bx             ; one word a row
-        mov  ax, [RECIP+bx]
-        mov  [rcp], ax
-        mov  ax, [vx]
-        push si
-        push di
-        call ProjMul
-        pop  di
-        pop  si
-        add  ax, CX0
-        mov  [sx+di], ax
-        mov  ax, [vy]
-        push si
-        push di
-        call ProjMul
-        pop  di
-        pop  si
-        mov  bx, CY0
-        sub  bx, ax             ; THE MINUS: paper y up, the beam draws down
-        mov  [sy+di], bx
+        mov  bx, [vz]           ; BX = vz    ---- PROJECT: lesson 0F, via RECIP
+        add  bx, bx             ; BX = vz * 2: one word a row
+        mov  ax, [RECIP+bx]     ; AX = RECIP[vz]
+        mov  [rcp], ax          ; rcp = AX
+        mov  ax, [vx]           ; AX = vx
+        push si                 ; keep SI and DI: Rot2/ProjMul use the registers
+        push di                 ; (the pair)
+        call ProjMul            ; AX = vx * rcp / 256
+        pop  di                 ; DI back
+        pop  si                 ; SI back
+        add  ax, CX0            ; AX += CX0
+        mov  [sx+di], ax        ; sx[i] = AX
+        mov  ax, [vy]           ; AX = vy
+        push si                 ; keep SI and DI: Rot2/ProjMul use the registers
+        push di                 ; (the pair)
+        call ProjMul            ; AX = vy * rcp / 256
+        pop  di                 ; DI back
+        pop  si                 ; SI back
+        mov  bx, CY0            ; BX = CY0
+        sub  bx, ax             ; BX = CY0 - AX: THE MINUS, paper y up, beam down
+        mov  [sy+di], bx        ; sy[i] = BX
 
-        mov  ax, [sx+di]        ; ---- and off the glass is dropped too --
-        cmp  ax, 4              ;      because Line does not clip, and
-        jl   .drop              ;      clipping is a lesson of its own that
-        cmp  ax, W-5            ;      this course has not reached. We drop
-        jg   .drop              ;      the WHOLE cube - crude, visible, and
-        mov  ax, [sy+di]        ;      honest about being the crude answer.
-        cmp  ax, 4
-        jl   .drop
-        cmp  ax, H-5
-        jg   .drop
+        mov  ax, [sx+di]        ; AX = sx[i]   ---- and off the glass is dropped
+        cmp  ax, 4              ; sx < 4 ?        too, because Line does not
+        jl   .drop              ;   yes: drop     clip, and clipping is a lesson
+        cmp  ax, W-5            ; sx > 315 ?      of its own this course has
+        jg   .drop              ;   yes: drop     not reached. We drop the WHOLE
+        mov  ax, [sy+di]        ; AX = sy[i]      cube - crude, visible, and
+        cmp  ax, 4              ; sy < 4 ?        honest about being the crude
+        jl   .drop              ;   yes: drop     answer
+        cmp  ax, H-5            ; sy > 195 ?
+        jg   .drop              ;   yes: drop
 
-        add  si, 3
-        add  di, 2
-        pop  cx
-        dec  cx                 ; LOOP reaches one signed byte back and this
-        jz   .done              ;  body is longer than that. Count by hand,
-        jmp  .v                 ;  and let a JMP do the reaching.
-.done:  ret
-.drop:  mov  byte [ok], 0
-        pop  cx
-        ret
+        add  si, 3              ; SI += 3: the next corner's bytes
+        add  di, 2              ; DI += 2: the next corner's word
+        pop  cx                 ; CX = the count
+        dec  cx                 ; CX--   LOOP reaches one signed byte back and
+        jz   .done              ; done?   this body is longer than that. Count
+        jmp  .v                 ;   no: next corner   by hand, let a JMP reach
+.done:  ret                     ; return 1  (ok is still 1)
+.drop:  mov  byte [ok], 0       ; ok = 0
+        pop  cx                 ; the count, off the stack
+        ret                     ; return 0
 
 ; ---- Keep: park the eight corners just computed as the OTHER answer -----
-Keep:   xor  di, di
-        mov  cx, 8
-.c:     mov  ax, [sx+di]
-        mov  [sxd+di], ax
-        mov  ax, [sy+di]
-        mov  [syd+di], ax
-        add  di, 2
-        loop .c
-        ret
+;  In C:   for (i = 0; i < 8; i++) { sxd[i] = sx[i];  syd[i] = sy[i]; }
+Keep:   xor  di, di             ; DI = 0  (i * 2)
+        mov  cx, 8              ; CX = 8 corners
+.c:     mov  ax, [sx+di]        ; AX = sx[i]
+        mov  [sxd+di], ax       ; sxd[i] = AX
+        mov  ax, [sy+di]        ; AX = sy[i]
+        mov  [syd+di], ax       ; syd[i] = AX
+        add  di, 2              ; i++
+        loop .c                 ; 8 times
+        ret                     ; return
 
 ; ---- the twelve edges, from whichever pair [esrc] points at ------------
 ;  The y table sits sixteen bytes after the x table, so one routine draws
 ;  either answer - lesson 0F's pointer, kept.
-Edges:  mov  si, EDGES
-        mov  cx, NE
-.e:     push cx
-        mov  bx, [esrc]
-        mov  al, [si]
-        xor  ah, ah
-        add  ax, ax
-        add  bx, ax
-        mov  ax, [bx]
-        mov  [p0x], ax
-        mov  ax, [bx+16]
-        mov  [p0y], ax
-        mov  bx, [esrc]
-        mov  al, [si+1]
-        xor  ah, ah
-        add  ax, ax
-        add  bx, ax
-        mov  ax, [bx]
-        mov  [p1x], ax
-        mov  ax, [bx+16]
-        mov  [p1y], ax
-        mov  al, [ecol]
-        mov  [col], al
-        push si
-        call Line
-        pop  si
-        add  si, 2
-        pop  cx
-        loop .e
-        ret
+;  In C:
+;
+;      void edges(void)                   /* esrc points at sx or at sxd */
+;      {
+;          int *X = esrc, *Y = esrc + 8;  /* the y table is 16 bytes on   */
+;          for (int e = 0; e < NE; e++) {
+;              int a = EDGES[e*2], b = EDGES[e*2+1];
+;              p0x = X[a];  p0y = Y[a];
+;              p1x = X[b];  p1y = Y[b];
+;              col = ecol;
+;              line();
+;          }
+;      }
+Edges:  mov  si, EDGES          ; SI = &EDGES[0]
+        mov  cx, NE             ; CX = 12 joins
+.e:     push cx                 ; keep the count
+        mov  bx, [esrc]         ; BX = X, whichever table esrc points at
+        mov  al, [si]           ; AL = a, the first corner's number
+        xor  ah, ah             ; AX = a
+        add  ax, ax             ; AX = a * 2: words
+        add  bx, ax             ; BX = &X[a]
+        mov  ax, [bx]           ; AX = X[a]
+        mov  [p0x], ax          ; p0x = X[a]
+        mov  ax, [bx+16]        ; AX = Y[a]: the y table sits 16 bytes after
+        mov  [p0y], ax          ; p0y = Y[a]
+        mov  bx, [esrc]         ; BX = X again
+        mov  al, [si+1]         ; AL = b, the second corner's number
+        xor  ah, ah             ; AX = b
+        add  ax, ax             ; AX = b * 2
+        add  bx, ax             ; BX = &X[b]
+        mov  ax, [bx]           ; AX = X[b]
+        mov  [p1x], ax          ; p1x = X[b]
+        mov  ax, [bx+16]        ; AX = Y[b]
+        mov  [p1y], ax          ; p1y = Y[b]
+        mov  al, [ecol]         ; AL = ecol
+        mov  [col], al          ; col = ecol
+        push si                 ; keep SI: Line uses it? No - but it uses
+        call Line               ; line()    everything else, and the rule is
+        pop  si                 ;           to keep what the loop needs
+        add  si, 2              ; SI += 2: the next pair
+        pop  cx                 ; the count
+        loop .e                 ; 12 times
+        ret                     ; return
 
 ; ---- Differ: a red dot on every corner the two answers disagree about --
 ;  More than ONE pixel apart. Two routes through integer arithmetic will
 ;  not always round the same way, and painting that red would teach only
 ;  that rounding exists. Two pixels apart would be a real disagreement.
-Differ: xor  di, di
-        mov  cx, 8
-.d:     push cx
-        mov  ax, [sx+di]
-        sub  ax, [sxd+di]
-        cmp  ax, 1
-        jg   .red
-        cmp  ax, -1
-        jl   .red
-        mov  ax, [sy+di]
-        sub  ax, [syd+di]
-        cmp  ax, 1
-        jg   .red
-        cmp  ax, -1
-        jge  .ok
-.red:   mov  byte [dcol], DIFFC
-        mov  ax, [sx+di]
-        mov  bx, [sy+di]
-        push di
-        call Dot
-        pop  di
-.ok:    add  di, 2
-        pop  cx
-        loop .d
-        ret
+;  In C:
+;
+;      void differ(void)
+;      {
+;          for (int i = 0; i < 8; i++) {
+;              int dx = sx[i] - sxd[i], dy = sy[i] - syd[i];
+;              if (dx > 1 || dx < -1 || dy > 1 || dy < -1) {
+;                  dcol = DIFFC;  dot(sx[i], sy[i]);
+;              }
+;          }
+;      }
+Differ: xor  di, di             ; DI = 0  (i * 2)
+        mov  cx, 8              ; CX = 8 corners
+.d:     push cx                 ; keep the count
+        mov  ax, [sx+di]        ; AX = sx[i]
+        sub  ax, [sxd+di]       ; AX = dx = sx[i] - sxd[i]
+        cmp  ax, 1              ; dx > 1 ?
+        jg   .red               ;   yes: a real disagreement
+        cmp  ax, -1             ; dx < -1 ?
+        jl   .red               ;   yes
+        mov  ax, [sy+di]        ; AX = sy[i]
+        sub  ax, [syd+di]       ; AX = dy = sy[i] - syd[i]
+        cmp  ax, 1              ; dy > 1 ?
+        jg   .red               ;   yes
+        cmp  ax, -1             ; dy >= -1 ?
+        jge  .ok                ;   yes: within a pixel, no dot
+.red:   mov  byte [dcol], DIFFC ; dcol = red
+        mov  ax, [sx+di]        ; AX = sx[i]   \  dot(sx[i], sy[i])
+        mov  bx, [sy+di]        ; BX = sy[i]   /
+        push di                 ; keep i: Dot uses DI
+        call Dot                ; dot()
+        pop  di                 ; i back
+.ok:    add  di, 2              ; i++
+        pop  cx                 ; the count
+        loop .d                 ; 8 times
+        ret                     ; return
 
 ; ---- the eye's axis where it meets the glass: a small yellow cross -----
-Axis:   mov  word [p0x], CX0-5
-        mov  word [p1x], CX0+5
-        mov  word [p0y], CY0
-        mov  word [p1y], CY0
-        mov  byte [col], AXISC
-        call Line
-        mov  word [p0x], CX0
-        mov  word [p1x], CX0
-        mov  word [p0y], CY0-5
-        mov  word [p1y], CY0+5
-        mov  byte [col], AXISC
-        call Line
-        ret
+;  In C:   line(CX0-5, CY0, CX0+5, CY0);  line(CX0, CY0-5, CX0, CY0+5);  in yellow
+Axis:   mov  word [p0x], CX0-5  ; p0x = 155  \
+        mov  word [p1x], CX0+5  ; p1x = 165   > the horizontal stroke
+        mov  word [p0y], CY0    ; p0y = 100   >
+        mov  word [p1y], CY0    ; p1y = 100  /
+        mov  byte [col], AXISC  ; col = yellow
+        call Line               ; line()
+        mov  word [p0x], CX0    ; p0x = 160  \
+        mov  word [p1x], CX0    ; p1x = 160   > the vertical stroke
+        mov  word [p0y], CY0-5  ; p0y = 95    >
+        mov  word [p1y], CY0+5  ; p1y = 105  /
+        mov  byte [col], AXISC  ; col = yellow
+        call Line               ; line()
+        ret                     ; return
 
 ; ---- one whole picture --------------------------------------------------
-Frame:  call Vsync
-        call GClear
-        call Axis
-        call Xform
-        cmp  byte [ok], 0
-        je   .out
-        mov  byte [ecol], EDGEC
-        mov  word [esrc], sx
-        call Edges
+;  In C:
+;
+;      void frame(void)
+;      {
+;          vsync();  gclear();  axis();
+;          if (!xform()) return;             /* a corner dropped: no cube */
+;          ecol = EDGEC;  esrc = sx;  edges();
+;      }
+Frame:  call Vsync              ; vsync()
+        call GClear             ; gclear()
+        call Axis               ; axis()
+        call Xform              ; ok = xform()
+        cmp  byte [ok], 0       ; ok ?
+        je   .out               ;   no: return
+        mov  byte [ecol], EDGEC ; ecol = white
+        mov  word [esrc], sx    ; esrc = sx
+        call Edges              ; edges()
 .out:   ret
 
 ; ============================================================================
@@ -419,132 +493,182 @@ Frame:  call Vsync
 ;  they disagree about. Different numbers going in; the same pixels coming
 ;  out, or the claim of this lesson is false.
 ; ============================================================================
-Frame4: call Vsync
-        call GClear
-        call Axis
-        mov  ax, [swing]        ; the CUBE moved, the camera at home
-        mov  [objx], ax
-        mov  word [camx], 0
-        call Xform
-        mov  al, [ok]
-        mov  [ok1], al
-        call Keep
-        mov  word [objx], 0     ; ...or the CAMERA moved, the cube at home
-        mov  ax, [swing]
-        neg  ax
-        mov  [camx], ax
-        call Xform
-        cmp  byte [ok], 0
-        je   .out
-        cmp  byte [ok1], 0
-        je   .out
-        mov  byte [ecol], OTHERC
-        mov  word [esrc], sxd
-        call Edges
-        mov  byte [ecol], EDGEC
-        mov  word [esrc], sx
-        call Edges
-        call Differ
-.out:   mov  word [objx], 0
-        mov  word [camx], 0
-        ret
+;  In C:
+;
+;      void frame4(void)
+;      {
+;          vsync();  gclear();  axis();
+;          objx = swing;  camx = 0;   ok1 = xform();  keep();   /* cube moved   */
+;          objx = 0;  camx = -swing;  ok  = xform();            /* camera moved */
+;          if (ok && ok1) {
+;              ecol = OTHERC; esrc = sxd; edges();               /* grey under   */
+;              ecol = EDGEC;  esrc = sx;  edges();               /* white over   */
+;              differ();                                         /* red where not */
+;          }
+;          objx = camx = 0;
+;      }
+Frame4: call Vsync              ; vsync()
+        call GClear             ; gclear()
+        call Axis               ; axis()
+        mov  ax, [swing]        ; AX = swing
+        mov  [objx], ax         ; objx = swing: the CUBE moved...
+        mov  word [camx], 0     ; camx = 0      ...the camera at home
+        call Xform              ; ok = xform()
+        mov  al, [ok]           ; AL = ok
+        mov  [ok1], al          ; ok1 = ok
+        call Keep               ; keep(): park that answer in sxd/syd
+        mov  word [objx], 0     ; objx = 0      ...or the cube at home
+        mov  ax, [swing]        ; AX = swing
+        neg  ax                 ; AX = -swing
+        mov  [camx], ax         ; camx = -swing ...and the CAMERA moved
+        call Xform              ; ok = xform()
+        cmp  byte [ok], 0       ; ok ?
+        je   .out               ;   no: nothing to compare
+        cmp  byte [ok1], 0      ; ok1 ?
+        je   .out               ;   no
+        mov  byte [ecol], OTHERC ; ecol = grey
+        mov  word [esrc], sxd   ; esrc = sxd: the parked answer
+        call Edges              ; edges()
+        mov  byte [ecol], EDGEC ; ecol = white
+        mov  word [esrc], sx    ; esrc = sx: this answer, on top
+        call Edges              ; edges()
+        call Differ             ; differ()
+.out:   mov  word [objx], 0     ; objx = 0
+        mov  word [camx], 0     ; camx = 0
+        ret                     ; return
 
 ; ---- Sweep: run [which] to and fro until a key --------------------------
 ;  1 the cube slides, 2 the camera slides, 3 both at once,
 ;  4 the cube turns,  5 the camera turns
-Sweep:  cmp  byte [which], 3
-        jne  .one
-        call Frame4
-        jmp  .step
-.one:   call Frame
-.step:  mov  al, [swd]
-        cbw
-        mov  bx, [swing]
-        add  bx, ax
-        mov  [swing], bx
-        cmp  bx, SWING
-        jle  .n1
-        neg  byte [swd]
-.n1:    cmp  bx, -SWING
-        jge  .n2
-        neg  byte [swd]
-.n2:    mov  al, [which]
-        cmp  al, 1
-        jne  .c2
-        mov  [objx], bx         ; the cube slides
-.c2:    cmp  al, 2
-        jne  .c4
-        mov  ax, bx
-        neg  ax
-        mov  [camx], ax         ; ...or the camera slides the other way
-.c4:    cmp  al, 4
-        jne  .c5
-        mov  al, bl
-        add  al, al
-        add  al, MYAW0
-        mov  [objyaw], al       ; ...or the cube turns where it stands
-.c5:    cmp  al, 5
-        jne  .k
-        mov  ax, bx             ; a QUARTER of the sweep, because turning
-        mov  cl, 2              ;  the camera moves the cube across the
-        sar  ax, cl             ;  glass very fast indeed: past about
-        mov  [camyaw], al       ;  fifteen degrees it is off the edge and
-                                ;  dropped, and a blank screen teaches
-                                ;  nothing. ...or the camera turns, which
-                                ;  is NOT the
-.k:     call KeyChk             ;  same thing at all
-        or   al, al
-        jz   Sweep
-        ret
+;  In C:
+;
+;      void sweep(void)
+;      {
+;          do {
+;              if (which == 3) frame4(); else frame();
+;              swing += swd;                              /* to and fro   */
+;              if (swing >  SWING) swd = -swd;
+;              if (swing < -SWING) swd = -swd;
+;              switch (which) {
+;                  case 1: objx   =  swing;               break;  /* cube slides   */
+;                  case 2: camx   = -swing;               break;  /* camera slides */
+;                  case 4: objyaw =  swing * 2 + MYAW0;   break;  /* cube turns    */
+;                  case 5: camyaw =  swing / 4;           break;  /* camera turns  */
+;              }
+;          } while (!key_check());
+;      }
+Sweep:  cmp  byte [which], 3    ; which == 3 ?
+        jne  .one               ;   no: one answer
+        call Frame4             ;   yes: frame4() - both answers
+        jmp  .step              ; over the plain frame
+.one:   call Frame              ;   no:  frame()
+.step:  mov  al, [swd]          ; AL = swd, +1 or -1
+        cbw                     ; AX = swd
+        mov  bx, [swing]        ; BX = swing
+        add  bx, ax             ; BX = swing + swd
+        mov  [swing], bx        ; swing = BX
+        cmp  bx, SWING          ; swing > SWING ?
+        jle  .n1                ;   no: still inside
+        neg  byte [swd]         ;   yes: swd = -swd, turn round
+.n1:    cmp  bx, -SWING         ; swing < -SWING ?
+        jge  .n2                ;   no: still inside
+        neg  byte [swd]         ;   yes: swd = -swd
+.n2:    mov  al, [which]        ; AL = which
+        cmp  al, 1              ; which == 1 ?
+        jne  .c2                ;   no: not the cube sliding
+        mov  [objx], bx         ;   objx = swing: the cube slides
+.c2:    cmp  al, 2              ; which == 2 ?
+        jne  .c4                ;   no: not the camera sliding
+        mov  ax, bx             ;   AX = swing
+        neg  ax                 ;   AX = -swing
+        mov  [camx], ax         ;   camx = -swing: the camera slides the other way
+.c4:    cmp  al, 4              ; which == 4 ?
+        jne  .c5                ;   no: not the cube turning
+        mov  al, bl             ;   AL = swing (low byte)
+        add  al, al             ;   AL = swing * 2
+        add  al, MYAW0          ;   AL = swing * 2 + MYAW0
+        mov  [objyaw], al       ;   objyaw = AL: the cube turns where it stands
+.c5:    cmp  al, 5              ; which == 5 ?
+        jne  .k                 ;   no: not the camera turning
+        mov  ax, bx             ;   AX = swing
+        mov  cl, 2              ;   CL = 2
+        sar  ax, cl             ;   AX = swing / 4: a QUARTER of the sweep,
+        mov  [camyaw], al       ;   camyaw = AL      because turning the camera
+                                ;  moves the cube across the glass very fast:
+                                ;  past about fifteen degrees it is off the
+                                ;  edge and dropped, and a blank screen
+                                ;  teaches nothing. The camera turns, which
+.k:     call KeyChk             ; AL = key_check()   is NOT the same thing
+        or   al, al             ; a key ?
+        jz   Sweep              ;   no: another frame
+        ret                     ;   yes: return
 
 ; ---- StepXZ: one pace along the way the camera is facing ---------------
-StepXZ: mov  word [pa], 0
-        mov  word [pb], STEPF
-        mov  al, [camyaw]
-        call Rot2
-        ret
+;  In C:   pa = 0;  pb = STEPF;  rot2(camyaw);   - the pace, turned to face
+StepXZ: mov  word [pa], 0       ; pa = 0
+        mov  word [pb], STEPF   ; pb = STEPF: one pace straight ahead
+        mov  al, [camyaw]       ; AL = camyaw
+        call Rot2               ; rot2(camyaw): pa, pb = the pace, turned
+        ret                     ; return
 
 ; ---- Fly: the arrows, one step a key, until ESC ------------------------
 ;  One step per keypress, redrawn between: a great many DOS programs
 ;  worked exactly this way, and it makes the motion deterministic. Arrow
 ;  keys arrive with AL zero and the scan code in AH - that is what an
 ;  EXTENDED key is, and lesson 11 met them at the wire.
-Fly:    call Frame
-        mov  ah, 0
-        int  16h
-        cmp  al, 27
-        je   .out
-        or   al, al
-        jnz  Fly                ; an ordinary key: not ours
-        cmp  ah, 72             ; up
-        je   .fwd
-        cmp  ah, 80             ; down
-        je   .back
-        cmp  ah, 75             ; left
-        je   .left
-        cmp  ah, 77             ; right
-        je   .right
-        jmp  Fly
-.fwd:   call StepXZ
-        mov  ax, [pa]
-        add  [camx], ax
-        mov  ax, [pb]
-        add  [camz], ax
-        jmp  Fly
-.back:  call StepXZ
-        mov  ax, [pa]
-        sub  [camx], ax
-        mov  ax, [pb]
-        sub  [camz], ax
-        jmp  Fly
-.left:  mov  al, [camyaw]
-        sub  al, STEPT
-        mov  [camyaw], al
-        jmp  Fly
-.right: mov  al, [camyaw]
-        add  al, STEPT
-        mov  [camyaw], al
-        jmp  Fly
+;  In C:
+;
+;      void fly(void)
+;      {
+;          for (;;) {
+;              frame();
+;              int k = get_key();                /* AL = char, AH = scan */
+;              if (k == ESC) return;
+;              if (char != 0) continue;          /* not an arrow key     */
+;              switch (scan) {
+;                  case UP:    step_xz(); camx += pa; camz += pb; break;
+;                  case DOWN:  step_xz(); camx -= pa; camz -= pb; break;
+;                  case LEFT:  camyaw -= STEPT; break;
+;                  case RIGHT: camyaw += STEPT; break;
+;              }
+;          }
+;      }
+Fly:    call Frame              ; frame()
+        mov  ah, 0              ; get_key()  (BIOS 16h, service 0: waits)
+        int  16h                ; AL = the character, AH = the scan code
+        cmp  al, 27             ; AL == ESC ?
+        je   .out               ;   yes: return
+        or   al, al             ; AL != 0 ?
+        jnz  Fly                ;   yes: an ordinary key, not ours
+        cmp  ah, 72             ; scan == UP ?
+        je   .fwd               ;   -> .fwd
+        cmp  ah, 80             ; scan == DOWN ?
+        je   .back              ;   -> .back
+        cmp  ah, 75             ; scan == LEFT ?
+        je   .left              ;   -> .left
+        cmp  ah, 77             ; scan == RIGHT ?
+        je   .right             ;   -> .right
+        jmp  Fly                ; anything else: ignored
+.fwd:   call StepXZ             ; pa, pb = one pace, turned
+        mov  ax, [pa]           ; AX = pa
+        add  [camx], ax         ; camx += pa
+        mov  ax, [pb]           ; AX = pb
+        add  [camz], ax         ; camz += pb
+        jmp  Fly                ; back to the top of the loop
+.back:  call StepXZ             ; the same pace...
+        mov  ax, [pa]           ; AX = pa
+        sub  [camx], ax         ; camx -= pa     ...taken backwards
+        mov  ax, [pb]           ; AX = pb
+        sub  [camz], ax         ; camz -= pb
+        jmp  Fly                ; back to the top of the loop
+.left:  mov  al, [camyaw]       ; AL = camyaw
+        sub  al, STEPT          ; AL -= STEPT
+        mov  [camyaw], al       ; camyaw = AL  (a byte: wraps at 256 = a turn)
+        jmp  Fly                ; back to the top of the loop
+.right: mov  al, [camyaw]       ; AL = camyaw
+        add  al, STEPT          ; AL += STEPT
+        mov  [camyaw], al       ; camyaw = AL
+        jmp  Fly                ; back to the top of the loop
 .out:   ret
 
 ; ============================================================================
@@ -619,42 +743,56 @@ include 'RECIP.INC'
 include 'DRAW16.INC'
 
 ; ============================================================================
-Boot:   cld
-        mov  ax, 0013h
-        int  10h
-        mov  ax, VGA
-        mov  es, ax
+;  In C:
+;
+;      int main(void)
+;      {
+;          set_mode(0x13);
+;          frame(); get_key();                       /* 1 */
+;          which = 1; swing = 0; swd = 1; sweep(); objx = 0;     /* 2 */
+;          which = 2; swing = 0; swd = 1; sweep(); camx = 0;     /* 3 */
+;          which = 3; swing = 0; swd = 1; sweep();               /* 4 */
+;          which = 4; swing = 0; swd = 1; sweep(); objyaw = MYAW0; /* 5 */
+;          which = 5; swing = 0; swd = 1; sweep(); camyaw = 0;   /* 6 */
+;          camx = camz = camyaw = 0; fly();                      /* 7 */
+;          set_mode(3);  exit(0);
+;      }
+Boot:   cld                     ; string ops count UP (STOSW in GClear)
+        mov  ax, 0013h          ; AX = 13h: 320x200, 256 colours
+        int  10h                ; set_mode(0x13)
+        mov  ax, VGA            ; AX = A000h
+        mov  es, ax             ; ES = the screen, for the whole program
 
 ; ---- 1. the cube, from a camera at the origin ---------------------------
-        call Frame
-        call Key
+        call Frame              ; frame()
+        call Key                ; get_key()
 
 ; ---- 2. move the CUBE: its model placement changes ----------------------
-        mov  byte [which], 1
-        mov  word [swing], 0
-        mov  byte [swd], 1
-        call Sweep
-        mov  word [objx], 0
+        mov  byte [which], 1    ; which = 1
+        mov  word [swing], 0    ; swing = 0
+        mov  byte [swd], 1      ; swd = 1
+        call Sweep              ; sweep()
+        mov  word [objx], 0     ; objx = 0: the cube back home
 
 ; ---- 3. move the CAMERA: its view matrix changes, the cube untouched ----
-        mov  byte [which], 2
-        mov  word [swing], 0
-        mov  byte [swd], 1
-        call Sweep
-        mov  word [camx], 0
+        mov  byte [which], 2    ; which = 2
+        mov  word [swing], 0    ; swing = 0
+        mov  byte [swd], 1      ; swd = 1
+        call Sweep              ; sweep()
+        mov  word [camx], 0     ; camx = 0: the camera back home
 
 ; ---- 4. both answers on each other, and counted -------------------------
-        mov  byte [which], 3
-        mov  word [swing], 0
-        mov  byte [swd], 1
-        call Sweep
+        mov  byte [which], 3    ; which = 3
+        mov  word [swing], 0    ; swing = 0
+        mov  byte [swd], 1      ; swd = 1
+        call Sweep              ; sweep()
 
 ; ---- 5. turn the CUBE: it spins where it stands -------------------------
-        mov  byte [which], 4
-        mov  word [swing], 0
-        mov  byte [swd], 1
-        call Sweep
-        mov  byte [objyaw], MYAW0
+        mov  byte [which], 4    ; which = 4
+        mov  word [swing], 0    ; swing = 0
+        mov  byte [swd], 1      ; swd = 1
+        call Sweep              ; sweep()
+        mov  byte [objyaw], MYAW0 ; objyaw = MYAW0: the cube's rest turn
 
 ; ---- 6. turn the CAMERA, and watch it NOT be the same thing -------------
 ;      Turning the cube spun it about its own centre. Turning the camera
@@ -663,19 +801,19 @@ Boot:   cld
 ;      across the glass and leaves it. Same instruction, negated; utterly
 ;      different picture. The equivalence of stage 4 was about WHERE
 ;      things are, never about which way they face.
-        mov  byte [which], 5
-        mov  word [swing], 0
-        mov  byte [swd], 1
-        call Sweep
-        mov  byte [camyaw], 0
+        mov  byte [which], 5    ; which = 5
+        mov  word [swing], 0    ; swing = 0
+        mov  byte [swd], 1      ; swd = 1
+        call Sweep              ; sweep()
+        mov  byte [camyaw], 0   ; camyaw = 0: the camera looks straight again
 
 ; ---- 7. fly it ----------------------------------------------------------
-        mov  word [camx], 0
-        mov  word [camz], 0
-        mov  byte [camyaw], 0
-        call Fly
+        mov  word [camx], 0     ; camx = 0    \
+        mov  word [camz], 0     ; camz = 0     > the camera at the origin
+        mov  byte [camyaw], 0   ; camyaw = 0  /
+        call Fly                ; fly()
 
-Bye:    mov  ax, 0003h          ; a clean screen back to DOS
-        int  10h
-        mov  ax, 4C00h
-        int  21h
+Bye:    mov  ax, 0003h          ; AX = 3: text mode, a clean screen for DOS
+        int  10h                ; set_mode(3)
+        mov  ax, 4C00h          ; AH = 4Ch exit, AL = 0 the code
+        int  21h                ; exit(0)

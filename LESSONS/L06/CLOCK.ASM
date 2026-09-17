@@ -41,7 +41,7 @@ W       = 320                   ; the screen, in pixels
 H       = 200
 SQUASH  = 213                   ; 5/6 in 256ths: a pixel is taller than wide
 
-        jmp  Boot
+        jmp  Boot               ; over the tables and routines, to the boot
 
 ; ---- ten clocks: a centre and a radius each, and nothing else --------------
 ;  THE TIME IS NOT IN HERE. There is one time, and ten faces showing it.
@@ -75,53 +75,74 @@ TICKS   dw 0, 21, 43, 64, 85, 107, 128, 149, 171, 192, 213, 235
 ;  A ring of single dots goes gappy as the clock grows: the points are a
 ;  circumference apart, and the circumference grows with the radius. A tick
 ;  does not, because it is a short RAY - solid at any size.
-Face:   mov  word [ti], 0
-.tick:  mov  bx, [ti]
-        add  bx, bx             ; a word to an entry
-        mov  ax, [TICKS+bx]
-        mov  [vang], ax
-        mov  ax, [crad]
-        mov  dx, ax
-        mov  cl, 2
-        sar  dx, cl             ; r/4 ...
-        sub  ax, dx             ; ... so the tick starts three quarters out
-        mov  [vlen], ax
-.out:   call Vec
-        call Plot
-        inc  word [vlen]
-        mov  ax, [vlen]
-        cmp  ax, [crad]
-        jle  .out
-        inc  word [ti]
-        cmp  word [ti], 12
-        jl   .tick
-        ret
+;  In C:
+;
+;      void face(void)
+;      {
+;          for (ti = 0; ti < 12; ti++) {
+;              vang = TICKS[ti];
+;              for (vlen = crad - crad / 4; vlen <= crad; vlen++) { vec(); plot(); }
+;          }
+;      }
+Face:   mov  word [ti], 0       ; ti = 0
+.tick:  mov  bx, [ti]           ; BX = ti
+        add  bx, bx             ; BX = ti * 2: a word to an entry
+        mov  ax, [TICKS+bx]     ; AX = TICKS[ti]
+        mov  [vang], ax         ; vang = TICKS[ti]
+        mov  ax, [crad]         ; AX = crad
+        mov  dx, ax             ; DX = crad
+        mov  cl, 2              ; CL = 2
+        sar  dx, cl             ; DX = crad / 4 ...
+        sub  ax, dx             ; AX = crad - crad / 4: ... so the tick starts three quarters out
+        mov  [vlen], ax         ; vlen = AX
+.out:   call Vec                ; vec()
+        call Plot               ; plot()
+        inc  word [vlen]        ; vlen++
+        mov  ax, [vlen]         ; AX = vlen
+        cmp  ax, [crad]         ; vlen <= crad ?
+        jle  .out               ;   yes: one pixel further out
+        inc  word [ti]          ; ti++
+        cmp  word [ti], 12      ; ti < 12 ?
+        jl   .tick              ;   yes: the next mark
+        ret                     ; return
 
 ; ---- one clock: a centre, a radius, and the three angles of the moment -----
-Clock:  mov  byte [col], 9      ; the face is light blue
-        call Face
-
-        xor  si, si             ; three hands, differing in three numbers
-.hand:  mov  bx, si
-        add  bx, bx             ; SI counts hands, BX counts bytes
-        mov  ax, [angs+bx]
-        mov  [vang], ax         ; this hand's angle...
-        mov  ax, [crad]
-        mov  dx, ax
-        mov  bx, si
-        mov  cl, [SHORTR+bx]
-        sar  dx, cl             ; r/2 for the hour, r/4, r/8
-        sub  ax, dx             ; so the hour hand is the short one
-        mov  [rlen], ax         ; ...and this hand's length
-        mov  al, [HCOL+bx]
-        mov  [col], al
-        push si                 ; SINQ eats SI - lesson 5 warned about it
-        call Ray
-        pop  si
-        inc  si
-        cmp  si, 3
-        jl   .hand
-        ret
+;  In C:
+;
+;      void clock(void)                    /* vcx, vcy, crad = this clock */
+;      {
+;          col = 9;  face();
+;          for (int i = 0; i < 3; i++) {
+;              vang = angs[i];
+;              rlen = crad - (crad >> SHORTR[i]);
+;              col  = HCOL[i];
+;              ray();
+;          }
+;      }
+Clock:  mov  byte [col], 9      ; col = 9: the face is light blue
+        call Face               ; face()
+                                ;
+        xor  si, si             ; i = 0: three hands, differing in three numbers
+.hand:  mov  bx, si             ; BX = i
+        add  bx, bx             ; BX = i * 2: SI counts hands, BX counts bytes
+        mov  ax, [angs+bx]      ; AX = angs[i]
+        mov  [vang], ax         ; vang = angs[i]: this hand's angle...
+        mov  ax, [crad]         ; AX = crad
+        mov  dx, ax             ; DX = crad
+        mov  bx, si             ; BX = i
+        mov  cl, [SHORTR+bx]    ; CL = SHORTR[i]
+        sar  dx, cl             ; DX = crad >> SHORTR[i]: r/2 for the hour, r/4, r/8
+        sub  ax, dx             ; AX = crad - that: so the hour hand is the short one
+        mov  [rlen], ax         ; rlen = AX: ...and this hand's length
+        mov  al, [HCOL+bx]      ; AL = HCOL[i]
+        mov  [col], al          ; col = HCOL[i]
+        push si                 ; keep i: SINQ eats SI - lesson 5 warned about it
+        call Ray                ; ray()
+        pop  si                 ; i back
+        inc  si                 ; i++
+        cmp  si, 3              ; i < 3 ?
+        jl   .hand              ;   yes: the next hand
+        ret                     ; return
 
 ; ---- what time is it, and what angle is that -------------------------------
 ;  INT 21h function 2Ch hands back CH hours, CL minutes, DH seconds, in plain
@@ -132,60 +153,72 @@ Clock:  mov  byte [col], 9      ; the face is light blue
 ;  DIV and lesson 5B took the last one out of the drawing, because those ran
 ;  sixty-four times a frame. This one runs THREE times a frame. Know what an
 ;  instruction costs, then spend it where it does not matter.
-Now:    mov  ah, 2Ch
-        int  21h
-        mov  [hrs], ch
-        mov  [mins], cl
-        mov  [secs], dh
-
-        mov  al, [secs]
-        xor  ah, ah
-        call A60
-        mov  [angs+4], ax       ; the second hand
-
-        mov  al, [mins]
-        xor  ah, ah
-        call A60
-        mov  [angs+2], ax       ; the minute hand
-
-        mov  al, [hrs]          ; and the hour hand, the awkward one
-        xor  ah, ah
-.h12:   cmp  ax, 12             ; 13:00 is one o'clock on a face
-        jl   .h12ok
-        sub  ax, 12
-        jmp  .h12
-.h12ok: mov  bx, 60
-        mul  bx                 ; hours into minutes...
-        mov  bl, [mins]
-        xor  bh, bh
-        add  ax, bx             ; ...plus the minutes: 0..719 round the face,
-        mov  cl, 4              ;  because the hand moves DURING the hour
-        shl  ax, cl             ; *16 (719*16 = 11504, still a word)
-        xor  dx, dx
-        mov  bx, 45
-        div  bx                 ; /45.  *16/45 IS *256/720
-        mov  [angs], ax
-        ret
+;  In C:
+;
+;      void now(void)
+;      {
+;          dos_time(&hrs, &mins, &secs);
+;          angs[2] = a60(secs);
+;          angs[1] = a60(mins);
+;          int h = hrs;  while (h >= 12) h -= 12;
+;          angs[0] = (h * 60 + mins) * 16 / 45;    /* 0..719 * 256 / 720 */
+;      }
+Now:    mov  ah, 2Ch            ; AH = 2Ch: DOS, get the time
+        int  21h                ; CH = hours, CL = minutes, DH = seconds
+        mov  [hrs], ch          ; hrs = CH
+        mov  [mins], cl         ; mins = CL
+        mov  [secs], dh         ; secs = DH
+                                ;
+        mov  al, [secs]         ; AL = secs
+        xor  ah, ah             ; AH = 0: AX = secs
+        call A60                ; AX = a60(secs)
+        mov  [angs+4], ax       ; angs[2] = AX: the second hand
+                                ;
+        mov  al, [mins]         ; AL = mins
+        xor  ah, ah             ; AH = 0: AX = mins
+        call A60                ; AX = a60(mins)
+        mov  [angs+2], ax       ; angs[1] = AX: the minute hand
+                                ;
+        mov  al, [hrs]          ; AL = hrs: and the hour hand, the awkward one
+        xor  ah, ah             ; AH = 0: h = hrs
+.h12:   cmp  ax, 12             ; h >= 12 ?  13:00 is one o'clock on a face
+        jl   .h12ok             ;   no: done
+        sub  ax, 12             ;   yes: h -= 12
+        jmp  .h12               ; and look again
+.h12ok: mov  bx, 60             ; BX = 60
+        mul  bx                 ; AX = h * 60: hours into minutes...
+        mov  bl, [mins]         ; BL = mins
+        xor  bh, bh             ; BH = 0: BX = mins
+        add  ax, bx             ; AX = h * 60 + mins: ...plus the minutes: 0..719 round the face,
+        mov  cl, 4              ; CL = 4:  because the hand moves DURING the hour
+        shl  ax, cl             ; AX *= 16 (719*16 = 11504, still a word)
+        xor  dx, dx             ; DX = 0: the high word of the dividend
+        mov  bx, 45             ; BX = 45
+        div  bx                 ; AX /= 45.  *16/45 IS *256/720
+        mov  [angs], ax         ; angs[0] = AX
+        ret                     ; return
 
 ; ---- 0..59 as an angle, 0..255 ---------------------------------------------
-A60:    mov  cl, 8
-        shl  ax, cl             ; *256 (59*256 = 15104, fits)
-        xor  dx, dx
-        mov  bx, 60
-        div  bx                 ; /60. The divide we can afford
-        ret
+;  In C:   int a60(int n) { return n * 256 / 60; }
+A60:    mov  cl, 8              ; CL = 8
+        shl  ax, cl             ; AX = n * 256 (59*256 = 15104, fits)
+        xor  dx, dx             ; DX = 0: the high word of the dividend
+        mov  bx, 60             ; BX = 60
+        div  bx                 ; AX /= 60. The divide we can afford
+        ret                     ; return AX
 
 ; ---- has anybody pressed anything? Without stopping to wait ----------------
 tick    dw 0                    ; how many turns frame 2 has drawn
-Peek:   mov  ah, 1
+;  In C:   int peek(void) { if (!key_waiting()) return 0;  get_key();  return 1; }
+Peek:   mov  ah, 1              ; AH = 1: BIOS 16h, service 1 - is a key waiting?
         int  16h                ; ZF set means nothing is waiting
-        jz   .none
-        mov  ah, 0
-        int  16h                ; take it, or the next frame sees it again
-        mov  al, 1
-        ret
-.none:  xor  al, al
-        ret
+        jz   .none              ; nothing: return 0
+        mov  ah, 0              ; AH = 0: service 0 - read it
+        int  16h                ; get_key(): take it, or the next frame sees it again
+        mov  al, 1              ; AL = 1
+        ret                     ; return 1
+.none:  xor  al, al             ; AL = 0
+        ret                     ; return 0
 
 ; ---- what Vec is given, and what it hands back -----------------------------
 vcx     dw 160                  ; the centre it measures from
@@ -203,148 +236,169 @@ include 'DRAW.INC'              ; and lessons 3 and 5B's routines
 ; ---- THE RADIUS VECTOR ------------------------------------------------------
 ;  in:  vang the angle, vlen the length, vcx/vcy the centre
 ;  out: vx/vy the point.  Eats AX, BX, CX, DX and SI (SINQ does).
-Vec:    mov  ax, [vang]
+;  In C:
+;
+;      void vec(void)
+;      {
+;          vx = vcx + (sinq(vang) * vlen >> 8);
+;          int up = sinq(vang + 64) * vlen >> 8;      /* cos: a quarter turn on */
+;          vy = vcy - (up * SQUASH >> 8);              /* 5/6, and UP is minus  */
+;      }
+Vec:    mov  ax, [vang]         ; AX = vang
         call SINQ               ; AX = sin(a)*256, because the table is *256
-        mov  bx, [vlen]
-        imul bx                 ; * the length: 256*90 still fits a word
-        mov  cl, 8
-        sar  ax, cl             ; and /256 undoes the table. SAR, because
-        add  ax, [vcx]          ;  half of every circle is negative
-        mov  [vx], ax           ; x = cx + sin(a)*r/256
-
-        mov  ax, [vang]
-        add  ax, 64             ; a quarter turn along the table IS cosine
-        call SINQ
-        mov  bx, [vlen]
-        imul bx
-        mov  cl, 8
-        sar  ax, cl             ; AX = how far UP the point is
-        mov  bx, SQUASH
-        imul bx                 ; the screen is not square: five sixths,
-        mov  cl, 8
-        sar  ax, cl             ;  or the circle comes out an egg
-        neg  ax                 ; UP is minus, because rows count downwards
-        add  ax, [vcy]
-        mov  [vy], ax           ; y = cy - cos(a)*r/256
-        ret
+        mov  bx, [vlen]         ; BX = vlen
+        imul bx                 ; AX = sin * vlen: 256*90 still fits a word
+        mov  cl, 8              ; CL = 8
+        sar  ax, cl             ; AX >>= 8: and /256 undoes the table. SAR, because
+        add  ax, [vcx]          ; AX += vcx:  half of every circle is negative
+        mov  [vx], ax           ; vx = AX: x = cx + sin(a)*r/256
+                                ;
+        mov  ax, [vang]         ; AX = vang
+        add  ax, 64             ; AX = vang + 64: a quarter turn along the table IS cosine
+        call SINQ               ; AX = cos(a)*256
+        mov  bx, [vlen]         ; BX = vlen
+        imul bx                 ; AX = cos * vlen
+        mov  cl, 8              ; CL = 8
+        sar  ax, cl             ; up = AX >> 8: how far UP the point is
+        mov  bx, SQUASH         ; BX = 213
+        imul bx                 ; AX = up * 213: the screen is not square: five sixths,
+        mov  cl, 8              ; CL = 8
+        sar  ax, cl             ; AX >>= 8:  or the circle comes out an egg
+        neg  ax                 ; AX = -AX: UP is minus, because rows count downwards
+        add  ax, [vcy]          ; AX += vcy
+        mov  [vy], ax           ; vy = AX: y = cy - cos(a)*r/256
+        ret                     ; return
 
 ; ---- a ray: ONE angle, every length from the middle outwards ---------------
-Ray:    mov  word [vlen], 0
-.step:  call Vec                ; the same formula, one pixel further out
-        call Plot
-        inc  word [vlen]
-        mov  ax, [vlen]
-        cmp  ax, [rlen]
-        jle  .step
-        ret
+;  In C:   for (vlen = 0; vlen <= rlen; vlen++) { vec(); plot(); }
+Ray:    mov  word [vlen], 0     ; vlen = 0
+.step:  call Vec                ; vec(): the same formula, one pixel further out
+        call Plot               ; plot()
+        inc  word [vlen]        ; vlen++
+        mov  ax, [vlen]         ; AX = vlen
+        cmp  ax, [rlen]         ; vlen <= rlen ?
+        jle  .step              ;   yes: further out
+        ret                     ; return
 
 ; ---- a ring: ONE length, every angle round the circle ----------------------
-Ring:   mov  word [vang], 0
-.p:     call Vec                ; the same formula, one step further round
-        call Plot
-        inc  word [vang]        ; 256 points. At 128 the dots come out two
-        cmp  word [vang], 256   ;  pixels apart and the circle looks dotted
-        jl   .p
-        ret
+;  In C:   for (vang = 0; vang < 256; vang++) { vec(); plot(); }
+Ring:   mov  word [vang], 0     ; vang = 0
+.p:     call Vec                ; vec(): the same formula, one step further round
+        call Plot               ; plot()
+        inc  word [vang]        ; vang++: 256 points. At 128 the dots come out two
+        cmp  word [vang], 256   ; vang < 256 ?  pixels apart and the circle looks dotted
+        jl   .p                 ;   yes: further round
+        ret                     ; return
 
-Boot:   cld                     ; DI counts UP in every STOS
-        mov  ax, 0013h          ; 320x200, one byte a pixel
-        int  10h
-        mov  ax, VGA
-        mov  es, ax             ; ES points at the screen, once, for all of it
+;  In C:
+;
+;      int main(void)
+;      {
+;          set_mode(0x13);
+;          /* 1 */ clear(); eight spokes of ray(); ring(); key();
+;          /* 2 */ for (tick = 0; !peek(); tick++) { retr(); clear(); three rays at tick, 2*tick, 4*tick; }
+;          /* 3 */ while (!peek()) { retr(); clear(); now(); one clock(); }
+;          /* 4 */ while (!peek()) { retr(); clear(); now(); for each of CLK[10]: clock(); }
+;          set_mode(3); exit(0);
+;      }
+Boot:   cld                     ; string ops count UP: DI counts UP in every STOS
+        mov  ax, 0013h          ; AX = 13h: 320x200, one byte a pixel
+        int  10h                ; set_mode(0x13)
+        mov  ax, VGA            ; AX = A000h
+        mov  es, ax             ; ES = the screen, once, for all of it
 
 ; ---- 1. the formula, drawn --------------------------------------------------
-F1:     call Clear
-        mov  word [vang], 0
-        mov  word [rlen], 90
-.spoke: mov  byte [col], 9
-        call Ray                ; a ray IS the vector, over and over, longer
-        mov  ax, [rlen]
-        mov  [vlen], ax
-        call Vec                ; and once more at the far end, for a bright
-        mov  byte [col], 15     ;  dot: THAT is the point the formula gives
-        call Plot
-        add  word [vang], 32    ; an eighth of a turn on
-        mov  ax, [rlen]
-        sub  ax, 9              ; and a little shorter each time
-        mov  [rlen], ax
-        cmp  word [vang], 256
-        jl   .spoke
-
-        mov  word [vlen], 45    ; and now hold the LENGTH still instead and
-        mov  byte [col], 14     ;  turn the angle all the way round: a circle
-        call Ring               ;  is the same formula, asked the other way
-        call Key
+F1:     call Clear              ; clear()
+        mov  word [vang], 0     ; vang = 0
+        mov  word [rlen], 90    ; rlen = 90
+.spoke: mov  byte [col], 9      ; col = 9, light blue
+        call Ray                ; ray(): a ray IS the vector, over and over, longer
+        mov  ax, [rlen]         ; AX = rlen
+        mov  [vlen], ax         ; vlen = rlen
+        call Vec                ; vec(): and once more at the far end, for a bright
+        mov  byte [col], 15     ; col = 15, white:  dot: THAT is the point the formula gives
+        call Plot               ; plot()
+        add  word [vang], 32    ; vang += 32: an eighth of a turn on
+        mov  ax, [rlen]         ; AX = rlen
+        sub  ax, 9              ; AX -= 9: and a little shorter each time
+        mov  [rlen], ax         ; rlen = AX
+        cmp  word [vang], 256   ; vang < 256 ?
+        jl   .spoke             ;   yes: the next spoke
+                                ;
+        mov  word [vlen], 45    ; vlen = 45: and now hold the LENGTH still instead and
+        mov  byte [col], 14     ; col = 14, yellow:  turn the angle all the way round: a circle
+        call Ring               ; ring():  is the same formula, asked the other way
+        call Key                ; key()
 
 ; ---- 2. the same vector, turned ---------------------------------------------
 ;  Three of them at three speeds, which is every turning thing in a game: a
 ;  radar sweep, a rotor, and the second hand two frames from here.
-F2:     mov  word [tick], 0
-.f:     call Retr
-        call Clear
-        mov  ax, [tick]
-        mov  [vang], ax
-        mov  word [rlen], 90
-        mov  byte [col], 9
-        call Ray
-        mov  ax, [tick]
-        add  ax, ax             ; twice round in the same time
-        mov  [vang], ax
-        mov  word [rlen], 60
-        mov  byte [col], 14
-        call Ray
-        mov  ax, [tick]
-        mov  cl, 2
-        shl  ax, cl             ; and four times
-        mov  [vang], ax
-        mov  word [rlen], 35
-        mov  byte [col], 40
-        call Ray
-        inc  word [tick]
-        call Peek
-        cmp  al, 0
-        jne  F3                 ; the short jump goes FORWARDS (lesson 5B)...
-        jmp  .f                 ; ...and JMP does the reaching back
+F2:     mov  word [tick], 0     ; tick = 0
+.f:     call Retr               ; retr()
+        call Clear              ; clear()
+        mov  ax, [tick]         ; AX = tick
+        mov  [vang], ax         ; vang = tick
+        mov  word [rlen], 90    ; rlen = 90
+        mov  byte [col], 9      ; col = 9, light blue
+        call Ray                ; ray()
+        mov  ax, [tick]         ; AX = tick
+        add  ax, ax             ; AX = tick * 2: twice round in the same time
+        mov  [vang], ax         ; vang = tick * 2
+        mov  word [rlen], 60    ; rlen = 60
+        mov  byte [col], 14     ; col = 14, yellow
+        call Ray                ; ray()
+        mov  ax, [tick]         ; AX = tick
+        mov  cl, 2              ; CL = 2
+        shl  ax, cl             ; AX = tick * 4: and four times
+        mov  [vang], ax         ; vang = tick * 4
+        mov  word [rlen], 35    ; rlen = 35
+        mov  byte [col], 40     ; col = 40, red
+        call Ray                ; ray()
+        inc  word [tick]        ; tick++
+        call Peek               ; AL = peek()
+        cmp  al, 0              ; a key ?
+        jne  F3                 ;   yes: the short jump goes FORWARDS (lesson 5B)...
+        jmp  .f                 ;   no: ...and JMP does the reaching back
 
 ; ---- 3. one clock ------------------------------------------------------------
-F3:     call Retr
-        call Clear
-        call Now
-        mov  word [vcx], 160
-        mov  word [vcy], 100
-        mov  word [crad], 80
-        call Clock
-        call Peek
-        cmp  al, 0
-        jne  F4
-        jmp  F3
+F3:     call Retr               ; retr()
+        call Clear              ; clear()
+        call Now                ; now()
+        mov  word [vcx], 160    ; vcx = 160
+        mov  word [vcy], 100    ; vcy = 100
+        mov  word [crad], 80    ; crad = 80
+        call Clock              ; clock()
+        call Peek               ; AL = peek()
+        cmp  al, 0              ; a key ?
+        jne  F4                 ;   yes: on to frame 4
+        jmp  F3                 ;   no: the next frame
 
 ; ---- 4. ten of them ----------------------------------------------------------
 ;  The time is read ONCE, above the loop. A clock is a centre and a radius;
 ;  the moment is not part of it.
-F4:     call Retr
-        call Clear
-        call Now
-        mov  si, CLK
-        mov  bp, NCLK
-.each:  mov  ax, [si]
-        mov  [vcx], ax
-        mov  ax, [si+2]
-        mov  [vcy], ax
-        mov  ax, [si+4]
-        mov  [crad], ax
-        add  si, 6              ; three words to a clock
-        push si                 ; SINQ eats SI. BP survives everything
-        call Clock
-        pop  si
-        dec  bp
-        jnz  .each
-        call Peek
-        cmp  al, 0
-        jne  Bye
-        jmp  F4
+F4:     call Retr               ; retr()
+        call Clear              ; clear()
+        call Now                ; now()
+        mov  si, CLK            ; SI = &CLK[0]
+        mov  bp, NCLK           ; BP = 10 left
+.each:  mov  ax, [si]           ; AX = SI->x
+        mov  [vcx], ax          ; vcx = AX
+        mov  ax, [si+2]         ; AX = SI->y
+        mov  [vcy], ax          ; vcy = AX
+        mov  ax, [si+4]         ; AX = SI->r
+        mov  [crad], ax         ; crad = AX
+        add  si, 6              ; SI++: three words to a clock
+        push si                 ; keep SI: SINQ eats SI. BP survives everything
+        call Clock              ; clock()
+        pop  si                 ; SI back
+        dec  bp                 ; BP--
+        jnz  .each              ; while (BP): the next clock
+        call Peek               ; AL = peek()
+        cmp  al, 0              ; a key ?
+        jne  Bye                ;   yes: leave
+        jmp  F4                 ;   no: the next frame
 
-Bye:    mov  ax, 0003h          ; back to text, 80x25
-        int  10h
-        mov  ax, 4C00h          ; and hand the machine back to DOS
-        int  21h
+Bye:    mov  ax, 0003h          ; AX = 3: back to text, 80x25
+        int  10h                ; set_mode(3)
+        mov  ax, 4C00h          ; AH = 4Ch exit, AL = 0 the code
+        int  21h                ; exit(0): hand the machine back to DOS

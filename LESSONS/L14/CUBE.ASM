@@ -67,7 +67,7 @@ ORGC    = 14                    ; the origin is yellow
 TIPC    = 11                    ; a corner, marked
 ALTC    = 12                    ; the OTHER order, in stage 9: red
 
-        jmp  Boot
+        jmp  Boot               ; over the routines, to the boot at the bottom
 
 ; ============================================================================
 ;  Rot2 - LESSON 12'S MATRIX, bare, and the whole of three dimensions.
@@ -94,34 +94,44 @@ ALTC    = 12                    ; the OTHER order, in stage 9: red
 ;  Note there is no NEG here. The screen's y-flip is not the model's
 ;  business: it happens once, at the projection, and nowhere else.
 ; ============================================================================
-Rot2:   push ax
-        mov  bx, SINTAB
-        xlatb                   ; AL = sin(a), -127..127
-        mov  [tsin], al
-        pop  ax
-        add  al, 64             ; cos(a) = sin(a + a quarter-turn)
-        xlatb
-        mov  [tcos], al
-        mov  al, [tcos]
-        imul byte [pa]          ; a*cos, signed
-        mov  dx, ax
-        mov  al, [tsin]
-        imul byte [pb]          ; b*sin
-        sub  dx, ax             ; a' = a*cos - b*sin, in 128ths
-        mov  cl, 7
-        sar  dx, cl             ; /128 as a SHIFT: the table speaks 128ths
-        mov  [t1], dl           ; PARKED - b' still needs the OLD a
-        mov  al, [tsin]
-        imul byte [pa]          ; a*sin
-        mov  dx, ax
-        mov  al, [tcos]
-        imul byte [pb]          ; b*cos
-        add  dx, ax             ; b' = a*sin + b*cos
-        sar  dx, cl
-        mov  [pb], dl
-        mov  al, [t1]           ; ...and only now is a' allowed to land
-        mov  [pa], al
-        ret
+;  In C:
+;
+;      void rot2(int a)                     /* turns the byte pair (pa, pb) */
+;      {
+;          int s = SINTAB[a];               /* sin * 127, -127..127         */
+;          int c = SINTAB[(a + 64) & 255];  /* cos = sin a quarter turn on  */
+;          int na = (pa * c - pb * s) >> 7; /* the matrix, row one          */
+;          int nb = (pa * s + pb * c) >> 7; /*             row two          */
+;          pa = na;  pb = nb;               /* row two used the OLD pa      */
+;      }
+Rot2:   push ax                 ; keep a
+        mov  bx, SINTAB         ; BX = the table
+        xlatb                   ; AL = SINTAB[a] = s: sin(a), -127..127
+        mov  [tsin], al         ; tsin = s
+        pop  ax                 ; AL = a
+        add  al, 64             ; AL = a + 64: cos(a) = sin(a + a quarter-turn)
+        xlatb                   ; AL = SINTAB[a + 64] = c
+        mov  [tcos], al         ; tcos = c
+        mov  al, [tcos]         ; AL = c
+        imul byte [pa]          ; AX = pa * c, signed
+        mov  dx, ax             ; DX = pa * c
+        mov  al, [tsin]         ; AL = s
+        imul byte [pb]          ; AX = pb * s
+        sub  dx, ax             ; DX = pa * c - pb * s, in 128ths
+        mov  cl, 7              ; CL = 7
+        sar  dx, cl             ; DX >>= 7: /128 as a SHIFT, the table speaks 128ths
+        mov  [t1], dl           ; t1 = na   PARKED - nb still needs the OLD pa
+        mov  al, [tsin]         ; AL = s
+        imul byte [pa]          ; AX = pa * s
+        mov  dx, ax             ; DX = pa * s
+        mov  al, [tcos]         ; AL = c
+        imul byte [pb]          ; AX = pb * c
+        add  dx, ax             ; DX = pa * s + pb * c
+        sar  dx, cl             ; DX >>= 7
+        mov  [pb], dl           ; pb = nb
+        mov  al, [t1]           ; AL = na
+        mov  [pa], al           ; pa = na   ...and only now is it allowed to land
+        ret                     ; return
 
 ; ============================================================================
 ;  Xform - the whole pipeline, once per corner, and it is four short steps.
@@ -136,78 +146,93 @@ Rot2:   push ax
 ;  would spin about the middle of the screen instead, dragging the box
 ;  round in a circle - a different animal, and a common first bug.
 ; ============================================================================
-Xform:  mov  si, VERTS
-        xor  di, di             ; a projected corner is two WORDS
-        mov  cx, NV
-.v:     push cx
-        mov  al, [si]           ; the corner, straight out of the table:
-        mov  [vx3], al          ;  three signed bytes, measured from the
-        mov  al, [si+1]         ;  cube's OWN CENTRE, which is zero
-        mov  [vy3], al
-        mov  al, [si+2]
-        mov  [vz3], al
+;  In C:
+;
+;      void xform(void)
+;      {
+;          for (int i = 0; i < NV; i++) {
+;              vx3 = VERTS[i*3]; vy3 = VERTS[i*3+1]; vz3 = VERTS[i*3+2];
+;              if (!swap) { turn_y(); turn_x(); }        /* the order is the meaning */
+;              else       { turn_x(); turn_y(); }
+;              sx[i] = CX0 + (vx3 + tx);                 /* translate, and project:  */
+;              sy[i] = CY0 - (vy3 + ty);                 /* paper y up, beam down    */
+;              vzs   = vz3 + tz;                         /* z: computed, never read  */
+;          }
+;      }
+Xform:  mov  si, VERTS          ; SI = &VERTS[0]
+        xor  di, di             ; DI = 0: i * 2, a projected corner is two WORDS
+        mov  cx, NV             ; CX = 8 corners
+.v:     push cx                 ; keep the count
+        mov  al, [si]           ; AL = VERTS[i*3]: the corner, straight out of
+        mov  [vx3], al          ; vx3 = x    the table: three signed bytes,
+        mov  al, [si+1]         ; AL = VERTS[i*3+1]   measured from the cube's
+        mov  [vy3], al          ; vy3 = y    OWN CENTRE, which is zero
+        mov  al, [si+2]         ; AL = VERTS[i*3+2]
+        mov  [vz3], al          ; vz3 = z
 
-        push si                 ; ---- the two turns, in the order [swap]
-        push di                 ;      asks for. Stage 9 asks for both.
-        cmp  byte [swap], 0
-        jne  .xf
-        call TurnY
-        call TurnX
-        jmp  .turned
-.xf:    call TurnX
-        call TurnY
+        push si                 ; keep SI and DI   ---- the two turns, in the
+        push di                 ; (the pair)       order swap asks for
+        cmp  byte [swap], 0     ; swap ?
+        jne  .xf                ;   yes: X first
+        call TurnY              ;   no:  turn_y()
+        call TurnX              ;        turn_x()
+        jmp  .turned            ; over the other order
+.xf:    call TurnX              ; turn_x()
+        call TurnY              ; turn_y()
 .turned:
-        pop  di
-        pop  si
+        pop  di                 ; DI back
+        pop  si                 ; SI back
 
-        mov  al, [vx3]          ; ---- translate: the SAME three numbers
-        cbw                     ;  added to every corner, which is why the
-        add  ax, [tx]           ;  shape does not change when it moves
-        add  ax, CX0            ; ---- and project: x goes straight across
-        mov  [sx+di], ax
-        mov  al, [vy3]
-        cbw
-        add  ax, [ty]
-        mov  bx, CY0
-        sub  bx, ax             ; THE MINUS: paper y up, the beam draws down
-        mov  [sy+di], bx
-        mov  al, [vz3]
-        cbw
-        add  ax, [tz]           ; the depth, computed and translated as
-        mov  [vzs], ax          ;  honestly as the other two - AND THEN
-                                ;  NEVER READ AGAIN. That silence is the
-                                ;  projection, and it costs nothing.
-        add  si, 3
-        add  di, 2
-        pop  cx
-        loop .v
-        ret
+        mov  al, [vx3]          ; AL = vx3   ---- translate: the SAME three
+        cbw                     ; AX = vx3   numbers added to every corner,
+        add  ax, [tx]           ; AX = vx3 + tx   which is why the shape does
+        add  ax, CX0            ; AX = CX0 + vx3 + tx   not change when it moves
+        mov  [sx+di], ax        ; sx[i] = AX ---- and project: x straight across
+        mov  al, [vy3]          ; AL = vy3
+        cbw                     ; AX = vy3
+        add  ax, [ty]           ; AX = vy3 + ty
+        mov  bx, CY0            ; BX = CY0
+        sub  bx, ax             ; BX = CY0 - (vy3 + ty): THE MINUS, paper y up,
+        mov  [sy+di], bx        ; sy[i] = BX             the beam draws down
+        mov  al, [vz3]          ; AL = vz3
+        cbw                     ; AX = vz3
+        add  ax, [tz]           ; AX = vz3 + tz: the depth, computed and
+        mov  [vzs], ax          ; vzs = AX   translated as honestly as the other
+                                ;  two - AND THEN NEVER READ AGAIN. That
+                                ;  silence is the projection, and it costs nothing
+        add  si, 3              ; SI += 3: the next corner's bytes
+        add  di, 2              ; DI += 2: the next corner's word
+        pop  cx                 ; the count
+        loop .v                 ; 8 corners
+        ret                     ; return
 
 ; ---- a turn about Y is a flat turn of the (x,z) pair, and nothing else --
-TurnY:  mov  al, [vx3]
-        mov  [pa], al
-        mov  al, [vz3]
-        mov  [pb], al
-        mov  al, [angy]
-        call Rot2
-        mov  al, [pa]
-        mov  [vx3], al
-        mov  al, [pb]
-        mov  [vz3], al
-        ret
+;  In C:   pa = vx3; pb = vz3; rot2(angy); vx3 = pa; vz3 = pb;
+TurnY:  mov  al, [vx3]          ; AL = vx3
+        mov  [pa], al           ; pa = vx3
+        mov  al, [vz3]          ; AL = vz3
+        mov  [pb], al           ; pb = vz3
+        mov  al, [angy]         ; AL = angy
+        call Rot2               ; rot2(angy)
+        mov  al, [pa]           ; AL = pa
+        mov  [vx3], al          ; vx3 = pa
+        mov  al, [pb]           ; AL = pb
+        mov  [vz3], al          ; vz3 = pb
+        ret                     ; return
 
 ; ---- ...and a turn about X is the same routine, handed (y,z) -----------
-TurnX:  mov  al, [vy3]
-        mov  [pa], al
-        mov  al, [vz3]
-        mov  [pb], al
-        mov  al, [angx]
-        call Rot2
-        mov  al, [pa]
-        mov  [vy3], al
-        mov  al, [pb]
-        mov  [vz3], al
-        ret
+;  In C:   pa = vy3; pb = vz3; rot2(angx); vy3 = pa; vz3 = pb;
+TurnX:  mov  al, [vy3]          ; AL = vy3
+        mov  [pa], al           ; pa = vy3
+        mov  al, [vz3]          ; AL = vz3
+        mov  [pb], al           ; pb = vz3
+        mov  al, [angx]         ; AL = angx
+        call Rot2               ; rot2(angx)
+        mov  al, [pa]           ; AL = pa
+        mov  [vy3], al          ; vy3 = pa
+        mov  al, [pb]           ; AL = pb
+        mov  [vz3], al          ; vz3 = pb
+        ret                     ; return
 
 ; ---- the origin, and there are TWO of them --------------------------------
 ;  THE ROOM'S ZERO is the yellow cross, and it is nailed to the middle of
@@ -222,155 +247,201 @@ TurnX:  mov  al, [vy3]
 ;
 ;  The first version drew the yellow cross at the CUBE's centre, so it
 ;  travelled - and that quietly said the room moves. It does not.
-Origin: mov  ax, CX0
-        add  ax, [tx]           ; the cube's own zero: the arrows start here
-        mov  [ocx], ax
-        mov  ax, CY0
-        sub  ax, [ty]
-        mov  [ocy], ax
-        mov  word [p0x], CX0-5  ; ...and the ROOM's zero, which never moves
-        mov  word [p1x], CX0+5
-        mov  word [p0y], CY0
-        mov  word [p1y], CY0
-        mov  byte [col], ORGC
-        call Line
-        mov  word [p0x], CX0
-        mov  word [p1x], CX0
-        mov  word [p0y], CY0-5
-        mov  word [p1y], CY0+5
-        mov  byte [col], ORGC
-        call Line
-        ret
+;  In C:
+;
+;      void origin(void)
+;      {
+;          ocx = CX0 + tx;  ocy = CY0 - ty;        /* the cube's own zero    */
+;          line(CX0-5, CY0, CX0+5, CY0);           /* the room's, a cross,   */
+;          line(CX0, CY0-5, CX0, CY0+5);           /*  which never moves     */
+;      }
+Origin: mov  ax, CX0            ; AX = CX0
+        add  ax, [tx]           ; AX = CX0 + tx
+        mov  [ocx], ax          ; ocx = AX: the cube's own zero, the arrows start here
+        mov  ax, CY0            ; AX = CY0
+        sub  ax, [ty]           ; AX = CY0 - ty
+        mov  [ocy], ax          ; ocy = AX
+        mov  word [p0x], CX0-5  ; p0x = 155  \  the ROOM's zero, which never
+        mov  word [p1x], CX0+5  ; p1x = 165   > moves: the horizontal stroke
+        mov  word [p0y], CY0    ; p0y = 100   >
+        mov  word [p1y], CY0    ; p1y = 100  /
+        mov  byte [col], ORGC   ; col = yellow
+        call Line               ; line()
+        mov  word [p0x], CX0    ; p0x = 160  \
+        mov  word [p1x], CX0    ; p1x = 160   > the vertical stroke
+        mov  word [p0y], CY0-5  ; p0y = 95    >
+        mov  word [p1y], CY0+5  ; p1y = 105  /
+        mov  byte [col], ORGC   ; col = yellow
+        call Line               ; line()
+        ret                     ; return
 
 ; ---- the scaffolding: one green arrow from the centre to each corner ----
 ;  [nvec] says how many of the eight are switched on, so stage 1 can show
 ;  exactly one of them and stage 2 can bring the rest.
-Vecs:   mov  cl, [nvec]
-        xor  ch, ch
-        jcxz .out
-        mov  bl, [vfrom]        ; WHICH corner to start from. Stage 1 shows
-        xor  bh, bh             ;  one, and not corner zero: at this angle
-        add  bx, bx             ;  corner zero sits nearly on the body
-        mov  di, bx             ;  diagonal that points at you, and its
-                                ;  arrow projects to fourteen pixels. A
-                                ;  corner on another diagonal is sixty.
-.a:     push cx
-        mov  ax, [ocx]
-        mov  [p0x], ax
-        mov  ax, [ocy]
-        mov  [p0y], ax
-        mov  ax, [sx+di]
-        mov  [p1x], ax
-        mov  ax, [sy+di]
-        mov  [p1y], ax
-        mov  byte [col], VECC
-        push di
-        call Line
-        pop  di
-        mov  byte [dcol], TIPC  ; and the tip, marked: a CORNER
-        mov  ax, [sx+di]
-        mov  bx, [sy+di]
-        push di
-        call Dot
-        pop  di
-        add  di, 2
-        pop  cx
-        loop .a
-.out:   ret
+;  In C:
+;
+;      void vecs(void)
+;      {
+;          for (int i = vfrom; i < vfrom + nvec; i++) {
+;              p0x = ocx;  p0y = ocy;               /* from the cube's zero */
+;              p1x = sx[i]; p1y = sy[i];            /* ...to the corner     */
+;              col = VECC;  line();
+;              dcol = TIPC; dot(sx[i], sy[i]);      /* and the tip, marked  */
+;          }
+;      }
+Vecs:   mov  cl, [nvec]         ; CL = nvec
+        xor  ch, ch             ; CX = nvec
+        jcxz .out               ; if (nvec == 0) return
+        mov  bl, [vfrom]        ; BL = vfrom: WHICH corner to start from. Stage
+        xor  bh, bh             ; BX = vfrom   1 shows one, and not corner zero:
+        add  bx, bx             ; BX = vfrom * 2   at this angle corner zero sits
+        mov  di, bx             ; DI = i * 2   nearly on the body diagonal that
+                                ;  points at you, and its arrow projects to
+                                ;  fourteen pixels. A corner on another
+                                ;  diagonal is sixty
+.a:     push cx                 ; keep the count
+        mov  ax, [ocx]          ; AX = ocx
+        mov  [p0x], ax          ; p0x = ocx
+        mov  ax, [ocy]          ; AX = ocy
+        mov  [p0y], ax          ; p0y = ocy
+        mov  ax, [sx+di]        ; AX = sx[i]
+        mov  [p1x], ax          ; p1x = sx[i]
+        mov  ax, [sy+di]        ; AX = sy[i]
+        mov  [p1y], ax          ; p1y = sy[i]
+        mov  byte [col], VECC   ; col = green
+        push di                 ; keep i: Line uses DI
+        call Line               ; line()
+        pop  di                 ; i back
+        mov  byte [dcol], TIPC  ; dcol = cyan: the tip, marked - a CORNER
+        mov  ax, [sx+di]        ; AX = sx[i]   \  dot(sx[i], sy[i])
+        mov  bx, [sy+di]        ; BX = sy[i]   /
+        push di                 ; keep i: Dot uses DI
+        call Dot                ; dot()
+        pop  di                 ; i back
+        add  di, 2              ; i++
+        pop  cx                 ; the count
+        loop .a                 ; nvec times
+.out:   ret                     ; return
 
 ; ---- the model, drawn: twelve lines, and the LIST is the whole trick ----
 ;  Nothing here knows what a cube is. It reads pairs of corner numbers and
 ;  joins them. Change the twelve pairs and the same eight corners become a
 ;  different object entirely.
-Edges:  mov  si, EDGES
-        mov  cx, NE
-.e:     push cx
-        mov  bl, [si]           ; from this corner...
-        xor  bh, bh
-        add  bx, bx
-        mov  ax, [sx+bx]
-        mov  [p0x], ax
-        mov  ax, [sy+bx]
-        mov  [p0y], ax
-        mov  bl, [si+1]         ; ...to that one
-        xor  bh, bh
-        add  bx, bx
-        mov  ax, [sx+bx]
-        mov  [p1x], ax
-        mov  ax, [sy+bx]
-        mov  [p1y], ax
-        mov  al, [ecol]
-        mov  [col], al
-        push si
-        call Line
-        pop  si
-        add  si, 2
-        pop  cx
-        loop .e
-        ret
+;  In C:
+;
+;      void edges(void)
+;      {
+;          for (int e = 0; e < NE; e++) {
+;              int a = EDGES[e*2], b = EDGES[e*2+1];
+;              p0x = sx[a];  p0y = sy[a];
+;              p1x = sx[b];  p1y = sy[b];
+;              col = ecol;
+;              line();
+;          }
+;      }
+Edges:  mov  si, EDGES          ; SI = &EDGES[0]
+        mov  cx, NE             ; CX = 12 joins
+.e:     push cx                 ; keep the count
+        mov  bl, [si]           ; BL = a: from this corner...
+        xor  bh, bh             ; BX = a
+        add  bx, bx             ; BX = a * 2: words
+        mov  ax, [sx+bx]        ; AX = sx[a]
+        mov  [p0x], ax          ; p0x = sx[a]
+        mov  ax, [sy+bx]        ; AX = sy[a]
+        mov  [p0y], ax          ; p0y = sy[a]
+        mov  bl, [si+1]         ; BL = b: ...to that one
+        xor  bh, bh             ; BX = b
+        add  bx, bx             ; BX = b * 2
+        mov  ax, [sx+bx]        ; AX = sx[b]
+        mov  [p1x], ax          ; p1x = sx[b]
+        mov  ax, [sy+bx]        ; AX = sy[b]
+        mov  [p1y], ax          ; p1y = sy[b]
+        mov  al, [ecol]         ; AL = ecol
+        mov  [col], al          ; col = ecol
+        push si                 ; keep SI: the rule is to keep what the loop needs
+        call Line               ; line()
+        pop  si                 ; SI back
+        add  si, 2              ; SI += 2: the next pair
+        pop  cx                 ; the count
+        loop .e                 ; 12 times
+        ret                     ; return
 
 ; ---- one whole picture --------------------------------------------------
-Frame:  call Vsync
-        call GClear
-        call Xform
-        call Origin
-        call Vecs
-        cmp  byte [shedge], 0
-        je   .no
-        mov  byte [ecol], EDGEC
-        call Edges
-.no:    ret
+;  In C:   vsync(); gclear(); xform(); origin(); vecs(); if (shedge) { ecol = EDGEC; edges(); }
+Frame:  call Vsync              ; vsync()
+        call GClear             ; gclear()
+        call Xform              ; xform()
+        call Origin             ; origin()
+        call Vecs               ; vecs()
+        cmp  byte [shedge], 0   ; shedge ?
+        je   .no                ;   no: no edges yet
+        mov  byte [ecol], EDGEC ; ecol = white
+        call Edges              ; edges()
+.no:    ret                     ; return
 
 ; ---- Spin: turn until a key, by whatever steps are set ------------------
-Spin:   call Frame
-        mov  al, [stepy]
-        add  [angy], al
-        mov  al, [stepx]
-        add  [angx], al
-        call KeyChk
-        or   al, al
-        jz   Spin
-        ret
+;  In C:   do { frame(); angy += stepy; angx += stepx; } while (!key_check());
+Spin:   call Frame              ; frame()
+        mov  al, [stepy]        ; AL = stepy
+        add  [angy], al         ; angy += stepy
+        mov  al, [stepx]        ; AL = stepx
+        add  [angx], al         ; angx += stepx
+        call KeyChk             ; AL = key_check()
+        or   al, al             ; a key ?
+        jz   Spin               ;   no: another frame
+        ret                     ; return
 
 ; ---- Walk: slide by (dx,dy,dz) until a key, bouncing at the limits ------
 ;  The steps are signed BYTES and the offsets are WORDS, so every one of
 ;  them goes through CBW first - a byte and a word do not add, and the
 ;  assembler is right to refuse.
-Walk:   call Frame
-        mov  al, [wdx]
-        cbw
-        add  [tx], ax
-        mov  al, [wdy]
-        cbw
-        add  [ty], ax
-        mov  al, [wdz]
-        cbw
-        add  [tz], ax
-        mov  ax, [tx]           ; a small pen, so the box stays on glass
-        cmp  ax, 70
-        jle  .l1
-        neg  byte [wdx]
-.l1:    cmp  ax, -70
-        jge  .l2
-        neg  byte [wdx]
-.l2:    mov  ax, [ty]
-        cmp  ax, 50
-        jle  .l3
-        neg  byte [wdy]
-.l3:    cmp  ax, -50
-        jge  .l4
-        neg  byte [wdy]
-.l4:    mov  ax, [tz]
-        cmp  ax, 120
-        jle  .l5
-        neg  byte [wdz]
-.l5:    cmp  ax, -120
-        jge  .l6
-        neg  byte [wdz]
-.l6:    call KeyChk
-        or   al, al
-        jz   Walk
-        ret
+;  In C:
+;
+;      void walk(void)
+;      {
+;          do {
+;              frame();
+;              tx += wdx;  ty += wdy;  tz += wdz;
+;              if (tx >  70 || tx <  -70) wdx = -wdx;    /* a small pen, so  */
+;              if (ty >  50 || ty <  -50) wdy = -wdy;    /*  the box stays   */
+;              if (tz > 120 || tz < -120) wdz = -wdz;    /*  on the glass    */
+;          } while (!key_check());
+;      }
+Walk:   call Frame              ; frame()
+        mov  al, [wdx]          ; AL = wdx, a signed byte...
+        cbw                     ; AX = wdx  ...widened: a byte and a word do
+        add  [tx], ax           ; tx += wdx   not add, the assembler is right
+        mov  al, [wdy]          ; AL = wdy    to refuse
+        cbw                     ; AX = wdy
+        add  [ty], ax           ; ty += wdy
+        mov  al, [wdz]          ; AL = wdz
+        cbw                     ; AX = wdz
+        add  [tz], ax           ; tz += wdz
+        mov  ax, [tx]           ; AX = tx        a small pen, so the box stays
+        cmp  ax, 70             ; tx > 70 ?      on the glass
+        jle  .l1                ;   no
+        neg  byte [wdx]         ;   yes: wdx = -wdx
+.l1:    cmp  ax, -70            ; tx < -70 ?
+        jge  .l2                ;   no
+        neg  byte [wdx]         ;   yes: wdx = -wdx
+.l2:    mov  ax, [ty]           ; AX = ty
+        cmp  ax, 50             ; ty > 50 ?
+        jle  .l3                ;   no
+        neg  byte [wdy]         ;   yes: wdy = -wdy
+.l3:    cmp  ax, -50            ; ty < -50 ?
+        jge  .l4                ;   no
+        neg  byte [wdy]         ;   yes: wdy = -wdy
+.l4:    mov  ax, [tz]           ; AX = tz
+        cmp  ax, 120            ; tz > 120 ?
+        jle  .l5                ;   no
+        neg  byte [wdz]         ;   yes: wdz = -wdz
+.l5:    cmp  ax, -120           ; tz < -120 ?
+        jge  .l6                ;   no
+        neg  byte [wdz]         ;   yes: wdz = -wdz
+.l6:    call KeyChk             ; AL = key_check()
+        or   al, al             ; a key ?
+        jz   Walk               ;   no: another frame
+        ret                     ; return
 
 ; ============================================================================
 ;  THE MODEL. Eight corners, three signed bytes each, and every one of them
@@ -440,92 +511,110 @@ include 'SINTAB.INC'
 include 'DRAW14.INC'
 
 ; ============================================================================
-Boot:   cld
-        mov  ax, 0013h          ; the graphics screen, 320x200
-        int  10h
-        mov  ax, VGA
-        mov  es, ax
+;  In C:
+;
+;      int main(void)
+;      {
+;          set_mode(0x13);
+;          angy = 24; angx = 20; vfrom = 1; nvec = 1; shedge = 0; frame(); key();  /* 1 */
+;          vfrom = 0; nvec = NV;                                  frame(); key();  /* 2 */
+;          shedge = 1;                                            frame(); key();  /* 3 */
+;          nvec = 0;                                              frame(); key();  /* 4 */
+;          stepy = 1; stepx = 0; spin();  stepx = 1; spin();                       /* 5 */
+;          stepy = stepx = 0; angy = 24; angx = 20; vfrom = 0; nvec = NV;
+;          wdx = 2; wdy = 1; wdz = 0; walk();                                      /* 6 */
+;          tx = ty = 0; wdx = wdy = 0; wdz = 3; walk();                            /* 7 */
+;          tz = 0; wdz = 0; nvec = 0; stepy = 1; stepx = 0; spin();                /* 8 */
+;          angy = angx = 40; swap = 0; frame();                                    /* 9 */
+;          swap = 1; xform(); ecol = ALTC; edges(); key();
+;          set_mode(3); exit(0);
+;      }
+Boot:   cld                     ; string ops count UP (STOSW in GClear)
+        mov  ax, 0013h          ; AX = 13h: the graphics screen, 320x200
+        int  10h                ; set_mode(0x13)
+        mov  ax, VGA            ; AX = A000h
+        mov  es, ax             ; ES = the screen, for the whole program
 
 ; ---- 1. the origin, and ONE corner ---------------------------------------
-        mov  byte [angy], 24    ; stood at an angle from the start, or a
-        mov  byte [angx], 20    ;  cube looks like a square and teaches
-        mov  byte [vfrom], 1    ;  nobody anything. And corner ONE, not
-        mov  byte [nvec], 1     ;  zero: at this angle corner zero sits
-        mov  byte [shedge], 0   ;  almost on the body diagonal that points
-                                ;  at you, so its arrow projects to
-                                ;  fourteen pixels and teaches nothing
-                                ;  either. Corner one is sixty out.
-        call Frame
-        call Key
+        mov  byte [angy], 24    ; angy = 24   stood at an angle from the start,
+        mov  byte [angx], 20    ; angx = 20   or a cube looks like a square and
+        mov  byte [vfrom], 1    ; vfrom = 1   teaches nobody anything. And corner
+        mov  byte [nvec], 1     ; nvec = 1    ONE, not zero: at this angle corner
+        mov  byte [shedge], 0   ; shedge = 0  zero sits almost on the body
+                                ;  diagonal that points at you, so its arrow
+                                ;  projects to fourteen pixels and teaches
+                                ;  nothing either. Corner one is sixty out
+        call Frame              ; frame()
+        call Key                ; key()
 
 ; ---- 2. all eight vectors - and still no cube ----------------------------
-        mov  byte [vfrom], 0
-        mov  byte [nvec], NV
-        call Frame
-        call Key
+        mov  byte [vfrom], 0    ; vfrom = 0
+        mov  byte [nvec], NV    ; nvec = 8
+        call Frame              ; frame()
+        call Key                ; key()
 
 ; ---- 3. join them: the edge list arrives ---------------------------------
-        mov  byte [shedge], 1
-        call Frame
-        call Key
+        mov  byte [shedge], 1   ; shedge = 1
+        call Frame              ; frame()
+        call Key                ; key()
 
 ; ---- 4. hide the scaffolding: what an engine actually shows you ----------
-        mov  byte [nvec], 0
-        call Frame
-        call Key
+        mov  byte [nvec], 0     ; nvec = 0
+        call Frame              ; frame()
+        call Key                ; key()
 
 ; ---- 5. turn it: one axis, then two, by the same routine -----------------
-        mov  byte [stepy], 1
-        mov  byte [stepx], 0
-        call Spin               ; about Y alone
-        mov  byte [stepx], 1
-        call Spin               ; and now about two axes at once
+        mov  byte [stepy], 1    ; stepy = 1
+        mov  byte [stepx], 0    ; stepx = 0
+        call Spin               ; spin(): about Y alone
+        mov  byte [stepx], 1    ; stepx = 1
+        call Spin               ; spin(): and now about two axes at once
 
 ; ---- 6. move it: every corner takes the SAME offset ----------------------
-        mov  byte [stepy], 0
-        mov  byte [stepx], 0
-        mov  byte [angy], 24    ; back to the pose stage one stood in. The
-        mov  byte [angx], 20    ;  spin stopped wherever the key landed,
-        mov  byte [vfrom], 0    ;  and a still frame at a random angle
-        mov  byte [nvec], NV    ;  looks like an accident. The arrows come
-                                ;  back too, so you can watch the WHOLE
-                                ;  bundle travel together
-        mov  byte [wdx], 2      ;  the WHOLE bundle travel together
-        mov  byte [wdy], 1
-        mov  byte [wdz], 0
-        call Walk
+        mov  byte [stepy], 0    ; stepy = 0
+        mov  byte [stepx], 0    ; stepx = 0
+        mov  byte [angy], 24    ; angy = 24   back to the pose stage one stood
+        mov  byte [angx], 20    ; angx = 20   in. The spin stopped wherever the
+        mov  byte [vfrom], 0    ; vfrom = 0   key landed, and a still frame at a
+        mov  byte [nvec], NV    ; nvec = 8    random angle looks like an accident.
+                                ;  The arrows come back too, so you can watch
+                                ;  the WHOLE bundle travel together
+        mov  byte [wdx], 2      ; wdx = 2
+        mov  byte [wdy], 1      ; wdy = 1
+        mov  byte [wdz], 0      ; wdz = 0
+        call Walk               ; walk()
 
 ; ---- 7. move it in Z - and watch nothing happen --------------------------
-        mov  word [tx], 0
-        mov  word [ty], 0
-        mov  byte [wdx], 0
-        mov  byte [wdy], 0
-        mov  byte [wdz], 3      ; straight at your face, and back again
-        call Walk
+        mov  word [tx], 0       ; tx = 0
+        mov  word [ty], 0       ; ty = 0
+        mov  byte [wdx], 0      ; wdx = 0
+        mov  byte [wdy], 0      ; wdy = 0
+        mov  byte [wdz], 3      ; wdz = 3: straight at your face, and back again
+        call Walk               ; walk()
 
 ; ---- 8. the wire: turn it slowly and look THROUGH it ---------------------
-        mov  word [tz], 0
-        mov  byte [wdz], 0
-        mov  byte [nvec], 0
-        mov  byte [stepy], 1
-        mov  byte [stepx], 0
-        call Spin
+        mov  word [tz], 0       ; tz = 0
+        mov  byte [wdz], 0      ; wdz = 0
+        mov  byte [nvec], 0     ; nvec = 0
+        mov  byte [stepy], 1    ; stepy = 1
+        mov  byte [stepx], 0    ; stepx = 0
+        call Spin               ; spin()
 
 ; ---- 9. the order of two turns is not free -------------------------------
 ;      The same two angles, applied the other way round, put the corners
 ;      somewhere else. Draw both: white is Y-then-X, red is X-then-Y. If
 ;      turning were like adding, one cube would hide the other.
-        mov  byte [angy], 40
-        mov  byte [angx], 40
-        mov  byte [swap], 0
-        call Frame              ; white: Y first, then X
-        mov  byte [swap], 1
-        call Xform              ; the same numbers, the other order...
-        mov  byte [ecol], ALTC
-        call Edges              ; ...drawn on top, in red
-        call Key
+        mov  byte [angy], 40    ; angy = 40
+        mov  byte [angx], 40    ; angx = 40
+        mov  byte [swap], 0     ; swap = 0
+        call Frame              ; frame(): white, Y first then X
+        mov  byte [swap], 1     ; swap = 1
+        call Xform              ; xform(): the same numbers, the other order...
+        mov  byte [ecol], ALTC  ; ecol = red
+        call Edges              ; edges(): ...drawn on top, in red
+        call Key                ; key()
 
-Bye:    mov  ax, 0003h          ; a clean screen back to DOS
-        int  10h
-        mov  ax, 4C00h
-        int  21h
+Bye:    mov  ax, 0003h          ; AX = 3: a clean screen back to DOS
+        int  10h                ; set_mode(3)
+        mov  ax, 4C00h          ; AH = 4Ch exit, AL = 0 the code
+        int  21h                ; exit(0)

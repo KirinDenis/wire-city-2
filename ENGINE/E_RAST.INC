@@ -484,7 +484,98 @@ CLIPLINE:
 ; ============================================================================
 ;  LINE (Bresenham)   in: sx0,sy0,sx1,sy1, COLOR   ; ES=bufseg
 ; ============================================================================
+; ============================================================================
+;  LINE - (sx0,sy0) to (sx1,sy1) in COLOR; ES = the buffer. Call CLIPLINE
+;  first: this walks every pixel it is given, on the screen or not.
+;
+;  TWO LINES LIVE HERE, and one byte chooses. The one below is lesson 8's:
+;  the two step sizes are written INTO THE INSTRUCTIONS before the loop
+;  starts, so the loop is six instructions with no test in it for which
+;  way the line leans. THE RULE for code that rewrites itself on an 8086:
+;  patch, then JUMP - the prefetch queue has already fetched the old bytes,
+;  and only a jump throws them away. LINEC underneath is the classic
+;  Bresenham the game shipped with: a PUTPIXEL call and a multiply by 320
+;  for every pixel. Both draw the same pixels. A program that declares
+;  `fastp db 1` can flip between them while it runs and watch the frame
+;  counter; a program that declares nothing gets the fast one and never
+;  carries the other.
+;
+;  Register use: preserves everything but AX and BX, the same as LINEC.
+;  Scratch: the includer's lx..lsy, under new duties -
+;      ldx/ldy   |dx| |dy|      lsx/lsy  the two signed steps
+;      lx/ly     the long and the short distance
+; ============================================================================
 LINE:
+if defined fastp
+        cmp  byte [fastp],0
+        je   LINEC
+end if
+        push cx
+        push dx
+        push di
+        mov  ax,[sx1]
+        sub  ax,[sx0]           ; dx, signed...
+        mov  bx,1               ; ...and the step right that goes with it
+        or   ax,ax
+        jns  .dxp
+        neg  ax                 ; the DISTANCE must be positive; its SIGN
+        mov  bx,-1              ;  moves into the step instead
+.dxp:   mov  [ldx],ax
+        mov  [lsx],bx
+        mov  ax,[sy1]
+        sub  ax,[sy0]           ; dy, the same way, but ITS step is a row
+        mov  bx,320
+        or   ax,ax
+        jns  .dyp
+        neg  ax
+        mov  bx,-320
+.dyp:   mov  [ldy],ax
+        mov  [lsy],bx
+        mov  ax,[ldx]           ; the longer distance DRIVES the loop; the
+        cmp  ax,[ldy]           ;  other feeds the debt. Both answers are
+        jb   .ymaj              ;  written into the code
+        mov  [lx],ax            ; x-major: step right every pixel...
+        mov  ax,[ldy]
+        mov  [ly],ax
+        mov  ax,[lsx]
+        mov  [.majs+2],ax       ; ...so the driving ADD gets +-1
+        mov  ax,[lsy]
+        mov  [.mins+2],ax       ; ...and the debt ADD gets +-320
+        jmp  .go
+.ymaj:  mov  [ly],ax            ; y-major: the roles swap, nothing else
+        mov  ax,[ldy]
+        mov  [lx],ax
+        mov  ax,[lsy]
+        mov  [.majs+2],ax
+        mov  ax,[lsx]
+        mov  [.mins+2],ax
+.go:    jmp  short .fl          ; THE RULE: patch, then jump
+.fl:    mov  ax,[sy0]           ; where the line starts: y * 320 + x
+        mov  bx,320
+        mul  bx
+        add  ax,[sx0]
+        mov  di,ax
+        mov  bl,[COLOR]
+        mov  cx,[lx]
+        inc  cx                 ; both ends belong to the line
+        xor  dx,dx              ; DX = the debt, starting clean
+.px:    mov  [es:di],bl
+        add  dx,[ly]            ; every step the debt grows by the short
+        cmp  dx,[lx]            ;  distance - reached the long one?
+        jb   .nod
+        sub  dx,[lx]            ; paid off...
+.mins:  add  di,320             ; ...with one sideways step   (REWRITTEN)
+.nod:
+.majs:  add  di,320             ; the driving step, every pixel (REWRITTEN)
+        loop .px
+        pop  di
+        pop  dx
+        pop  cx
+        ret
+
+if defined fastp
+; ---- LINEC: the classic, kept only for programs that want to compare ------
+LINEC:
         mov  ax,[sx1]
         sub  ax,[sx0]
         mov  word [lsx],1
@@ -538,6 +629,8 @@ LINE:
         add  ax,[lsy]
         mov  [ly],ax
 .sy:   jmp  .loop
+
+end if
 
 ; ============================================================================
 ;  PUTPIXEL  in: AX=x, BX=y, COLOR   ; ES=bufseg   (preserves registers)

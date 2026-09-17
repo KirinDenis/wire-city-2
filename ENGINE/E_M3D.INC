@@ -114,7 +114,53 @@ SETTRIG:
 ;   Each term: imul (->DX:AX) then idiv 256. Inputs are small view offsets
 ;   so |product| < ~500k (fits DX:AX) and |quotient| < ~3000 (fits 16-bit).
 ; ============================================================================
-ROTXZ:  mov  ax,[wdx]
+; ============================================================================
+;  ROTXZ - (wdx,wdz) turned by the heading -> (rc_x,rc_z).
+;
+;  IMUL leaves a THIRTY-TWO bit product in DX:AX, and the sine is in 256ths,
+;  so the answer is that product over 256 - which is its middle two bytes.
+;  AL takes AH, AH takes DL: two moves, and no divide. Lesson 0x10's trick,
+;  four times. ROTXZC below is the game's original with `idiv bx` where
+;  each pair of moves now sits; a program that declares `fastp db 1` can
+;  switch between them, one that declares nothing never assembles it.
+;
+;  ONE DIFFERENCE, on purpose and documented: IDIV rounds toward zero, the
+;  byte shift rounds DOWN, so a negative coordinate can come out one unit
+;  lower than before. A pixel, sometimes. Not a bug.
+; ============================================================================
+ROTXZ:
+if defined fastp
+        cmp  byte [fastp],0
+        je   ROTXZC
+end if
+        mov  ax,[wdx]
+        imul word [hcos]        ; DX:AX = wdx*cos*256
+        mov  al,ah              ; /256: the middle two bytes of the product
+        mov  ah,dl              ;  ARE the product over 256
+        mov  [rc_x],ax
+        mov  ax,[wdz]
+        imul word [hsin]
+        mov  al,ah
+        mov  ah,dl
+        mov  bx,[rc_x]
+        sub  bx,ax
+        mov  [rc_x],bx          ; x' = x*cos - z*sin
+        mov  ax,[wdx]
+        imul word [hsin]
+        mov  al,ah
+        mov  ah,dl
+        mov  [rc_z],ax
+        mov  ax,[wdz]
+        imul word [hcos]
+        mov  al,ah
+        mov  ah,dl
+        mov  bx,[rc_z]
+        add  bx,ax
+        mov  [rc_z],bx          ; z' = x*sin + z*cos
+        ret
+
+if defined fastp
+ROTXZC: mov  ax,[wdx]
         imul word [hcos]    ; DX:AX = wdx*cos*256
         mov  bx,256
         idiv bx                 ; AX = wdx*cos   (the *256 cancels)
@@ -139,6 +185,7 @@ ROTXZ:  mov  ax,[wdx]
         add  bx,ax
         mov  [rc_z],bx
         ret
+end if
 
 ; ============================================================================
 ;  APPLYROLL  bank the scene: rotate a projected point about screen (160,100)

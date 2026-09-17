@@ -50,7 +50,7 @@ CY0     = 100
 NBODY   = 6                     ; the sky, counted
 BROW    = 6                     ; ...and how wide one row of it is
 
-        jmp  Boot
+        jmp  Boot               ; over the routines, to the boot at the bottom
 
 ; ============================================================================
 ;  RotV - THE MATRIX, made flesh: turn the base vector by an angle.
@@ -70,151 +70,192 @@ BROW    = 6                     ; ...and how wide one row of it is
 ;  It carries lesson 10's screen rule: paper y grows up, the beam draws
 ;  DOWN, so the turned y is flipped once, here, and nowhere else.
 ; ============================================================================
-RotV:   push ax
-        mov  bx, SINTAB
-        xlatb                   ; AL = sin(a), -127..127
-        mov  [tsin], al         ; parked: four products want both ratios
-        pop  ax
-        add  al, 64             ; cos(a) = sin(a + a quarter-turn)
-        xlatb
-        mov  [tcos], al
-        mov  al, [tcos]
-        imul byte [bvx]         ; x*cos, sign kept
-        mov  dx, ax
-        mov  al, [tsin]
-        imul byte [bvy]         ; y*sin
-        sub  dx, ax             ; x' = x*cos - y*sin, in 128ths
-        mov  cl, 7
-        sar  dx, cl             ; /128 as a SHIFT: the table speaks in 128ths
-        mov  [vx], dx
-        mov  al, [tsin]
-        imul byte [bvx]         ; x*sin
-        mov  dx, ax
-        mov  al, [tcos]
-        imul byte [bvy]         ; y*cos
-        add  dx, ax             ; y' = x*sin + y*cos
-        sar  dx, cl
-        neg  dx                 ; THE MINUS: screen y grows down the tube
-        mov  [vy], dx
-        ret
+;  In C:
+;
+;      void rotv(int a)                       /* (bvx, bvy) -> (vx, vy)     */
+;      {
+;          int s = SINTAB[a];                 /* sin * 127                  */
+;          int c = SINTAB[(a + 64) & 255];    /* cos = sin a quarter on     */
+;          vx =   (bvx * c - bvy * s) >> 7;   /* the matrix, row one        */
+;          vy = -((bvx * s + bvy * c) >> 7);  /* row two, and THE MINUS:    */
+;      }                                      /*  screen y grows downward   */
+RotV:   push ax                 ; keep a
+        mov  bx, SINTAB         ; BX = the table
+        xlatb                   ; AL = SINTAB[a] = s: sin(a), -127..127
+        mov  [tsin], al         ; tsin = s   parked: four products want both ratios
+        pop  ax                 ; AL = a
+        add  al, 64             ; AL = a + 64: cos(a) = sin(a + a quarter-turn)
+        xlatb                   ; AL = SINTAB[a + 64] = c
+        mov  [tcos], al         ; tcos = c
+        mov  al, [tcos]         ; AL = c
+        imul byte [bvx]         ; AX = bvx * c, sign kept
+        mov  dx, ax             ; DX = bvx * c
+        mov  al, [tsin]         ; AL = s
+        imul byte [bvy]         ; AX = bvy * s
+        sub  dx, ax             ; DX = bvx * c - bvy * s, in 128ths
+        mov  cl, 7              ; CL = 7
+        sar  dx, cl             ; DX >>= 7: /128 as a SHIFT, the table speaks 128ths
+        mov  [vx], dx           ; vx = DX
+        mov  al, [tsin]         ; AL = s
+        imul byte [bvx]         ; AX = bvx * s
+        mov  dx, ax             ; DX = bvx * s
+        mov  al, [tcos]         ; AL = c
+        imul byte [bvy]         ; AX = bvy * c
+        add  dx, ax             ; DX = bvx * s + bvy * c
+        sar  dx, cl             ; DX >>= 7
+        neg  dx                 ; DX = -DX: THE MINUS, screen y grows down the tube
+        mov  [vy], dx           ; vy = DX
+        ret                     ; return
 
 ; ============================================================================
 ;  Tick - one beat of the sky: every body = its parent + the matrix.
 ;  The Sun is row 0 and asks nothing; the table is parents-first, so a
 ;  child always reads a parent that has already moved THIS frame.
 ; ============================================================================
-Tick:   mov  si, BODIES+BROW    ; row 1: the Earth - the Sun stands
-        mov  di, 2              ; word offset of body 1 in bpx/bpy
-        mov  cx, NBODY-1
-.b:     push cx
-        push si
-        push di
-        mov  al, [si+1]         ; the base vector, into the matrix's window
-        mov  [bvx], al
-        mov  al, [si+2]
-        mov  [bvy], al
-        mov  al, [si+3]         ; the body's angle today
-        call RotV
-        pop  di
-        pop  si
-        mov  bl, [si]           ; whose child is it?
-        xor  bh, bh
-        add  bx, bx             ; index -> word offset
-        mov  ax, [bpx+bx]       ; ME = PARENT...
-        add  ax, [vx]           ; ...+ MATRIX x BASE
-        mov  [bpx+di], ax
-        mov  ax, [bpy+bx]
-        add  ax, [vy]
-        mov  [bpy+di], ax
-        mov  al, [si+4]         ; and the angle walks on - a signed step,
-        add  [si+3], al         ;  so one satellite runs the OTHER way
-        add  si, BROW
-        add  di, 2
-        pop  cx
-        loop .b
-        ret
+;  In C:
+;
+;      void tick(void)                /* BODIES[b] = {parent, bx, by, angle, step, ink} */
+;      {
+;          for (int b = 1; b < NBODY; b++) {
+;              bvx = BODIES[b].bx;  bvy = BODIES[b].by;
+;              rotv(BODIES[b].angle);
+;              int par = BODIES[b].parent;
+;              bpx[b] = bpx[par] + vx;              /* ME = PARENT + MATRIX x BASE */
+;              bpy[b] = bpy[par] + vy;
+;              BODIES[b].angle += BODIES[b].step;   /* a byte: it wraps itself     */
+;          }
+;      }
+Tick:   mov  si, BODIES+BROW    ; SI = &BODIES[1]: row 1, the Earth - the Sun stands
+        mov  di, 2              ; DI = b * 2: the word offset of body 1 in bpx/bpy
+        mov  cx, NBODY-1        ; CX = 5 bodies
+.b:     push cx                 ; keep the count
+        push si                 ; keep SI and DI: RotV uses BX, CX, DX
+        push di                 ; (the pair)
+        mov  al, [si+1]         ; AL = BODIES[b].bx
+        mov  [bvx], al          ; bvx = AL: the base vector, into the matrix's window
+        mov  al, [si+2]         ; AL = BODIES[b].by
+        mov  [bvy], al          ; bvy = AL
+        mov  al, [si+3]         ; AL = BODIES[b].angle: the body's angle today
+        call RotV               ; rotv(angle)
+        pop  di                 ; DI back
+        pop  si                 ; SI back
+        mov  bl, [si]           ; BL = par: whose child is it?
+        xor  bh, bh             ; BX = par
+        add  bx, bx             ; BX = par * 2: index -> word offset
+        mov  ax, [bpx+bx]       ; AX = bpx[par]: ME = PARENT...
+        add  ax, [vx]           ; AX += vx:     ...+ MATRIX x BASE
+        mov  [bpx+di], ax       ; bpx[b] = AX
+        mov  ax, [bpy+bx]       ; AX = bpy[par]
+        add  ax, [vy]           ; AX += vy
+        mov  [bpy+di], ax       ; bpy[b] = AX
+        mov  al, [si+4]         ; AL = BODIES[b].step: a signed step, so one
+        add  [si+3], al         ; BODIES[b].angle += step   satellite runs the OTHER way
+        add  si, BROW           ; SI += 6: the next row
+        add  di, 2              ; b++
+        pop  cx                 ; the count
+        loop .b                 ; 5 bodies
+        ret                     ; return
 
 ; ---- Trail: every active body leaves one pixel of ink where it stands ------
-Trail:  mov  si, BODIES
-        xor  di, di
-        mov  cl, [nact]
-        xor  ch, ch
-.p:     push cx
-        mov  ax, [bpy+di]
-        mov  bx, W
-        mul  bx                 ; y * 320: lesson 7's formula, every time
-        add  ax, [bpx+di]
-        mov  bx, ax
-        mov  al, [si+5]         ; the body's own ink
-        mov  [es:bx], al
-        add  si, BROW
-        add  di, 2
-        pop  cx
-        loop .p
-        ret
+;  In C:   for (b = 0; b < nact; b++) screen[bpy[b] * 320 + bpx[b]] = BODIES[b].ink;
+Trail:  mov  si, BODIES         ; SI = &BODIES[0]
+        xor  di, di             ; DI = 0: b * 2
+        mov  cl, [nact]         ; CL = nact
+        xor  ch, ch             ; CX = nact bodies switched on
+.p:     push cx                 ; keep the count
+        mov  ax, [bpy+di]       ; AX = bpy[b]
+        mov  bx, W              ; BX = 320
+        mul  bx                 ; AX = bpy[b] * 320: lesson 7's formula, every time
+        add  ax, [bpx+di]       ; AX = bpy[b] * 320 + bpx[b]
+        mov  bx, ax             ; BX = the offset
+        mov  al, [si+5]         ; AL = BODIES[b].ink: the body's own ink
+        mov  [es:bx], al        ; screen[BX] = ink
+        add  si, BROW           ; SI += 6: the next row
+        add  di, 2              ; b++
+        pop  cx                 ; the count
+        loop .p                 ; nact bodies
+        ret                     ; return
 
 ; ---- Arms: the green vectors, parent to child - lesson 10's arrows, alive --
-Arms:   mov  si, BODIES+BROW
-        mov  di, 2
-        mov  cx, NBODY-1
-.l:     push cx
-        push si
-        push di
-        mov  bl, [si]           ; from the parent...
-        xor  bh, bh
-        add  bx, bx
-        mov  ax, [bpx+bx]
-        mov  [p0x], ax
-        mov  ax, [bpy+bx]
-        mov  [p0y], ax
-        mov  ax, [bpx+di]       ; ...to the child
-        mov  [p1x], ax
-        mov  ax, [bpy+di]
-        mov  [p1y], ax
-        mov  byte [col], VECC
-        call Line               ; lesson 8's line, byte for byte, again
-        pop  di
-        pop  si
-        pop  cx
-        add  si, BROW
-        add  di, 2
-        loop .l
-        ret
+;  In C:
+;
+;      void arms(void)
+;      {
+;          for (int b = 1; b < NBODY; b++) {
+;              int par = BODIES[b].parent;
+;              col = VECC;
+;              line(bpx[par], bpy[par], bpx[b], bpy[b]);   /* parent to child */
+;          }
+;      }
+Arms:   mov  si, BODIES+BROW    ; SI = &BODIES[1]
+        mov  di, 2              ; DI = b * 2, b = 1
+        mov  cx, NBODY-1        ; CX = 5 bodies
+.l:     push cx                 ; keep the count
+        push si                 ; keep SI and DI: Line uses DI
+        push di                 ; (the pair)
+        mov  bl, [si]           ; BL = par: from the parent...
+        xor  bh, bh             ; BX = par
+        add  bx, bx             ; BX = par * 2
+        mov  ax, [bpx+bx]       ; AX = bpx[par]
+        mov  [p0x], ax          ; p0x = bpx[par]
+        mov  ax, [bpy+bx]       ; AX = bpy[par]
+        mov  [p0y], ax          ; p0y = bpy[par]
+        mov  ax, [bpx+di]       ; AX = bpx[b]: ...to the child
+        mov  [p1x], ax          ; p1x = bpx[b]
+        mov  ax, [bpy+di]       ; AX = bpy[b]
+        mov  [p1y], ax          ; p1y = bpy[b]
+        mov  byte [col], VECC   ; col = green
+        call Line               ; line(): lesson 8's, byte for byte, again
+        pop  di                 ; DI back
+        pop  si                 ; SI back
+        pop  cx                 ; the count
+        add  si, BROW           ; SI += 6: the next row
+        add  di, 2              ; b++
+        loop .l                 ; 5 bodies
+        ret                     ; return
 
 ; ---- Marks: a five-pixel Dot for each body, in its own ink ------------------
-Marks:  mov  si, BODIES
-        xor  di, di
-        mov  cx, NBODY
-.d:     push cx
-        push si
-        push di
-        mov  al, [si+5]
-        mov  [dcol], al
-        mov  ax, [bpx+di]
-        mov  bx, [bpy+di]
-        call Dot
-        pop  di
-        pop  si
-        pop  cx
-        add  si, BROW
-        add  di, 2
-        loop .d
-        ret
+;  In C:   for (b = 0; b < NBODY; b++) { dcol = BODIES[b].ink;  dot(bpx[b], bpy[b]); }
+Marks:  mov  si, BODIES         ; SI = &BODIES[0]
+        xor  di, di             ; DI = 0: b * 2
+        mov  cx, NBODY          ; CX = 6 bodies
+.d:     push cx                 ; keep the count
+        push si                 ; keep SI and DI: Dot uses DI
+        push di                 ; (the pair)
+        mov  al, [si+5]         ; AL = BODIES[b].ink
+        mov  [dcol], al         ; dcol = AL
+        mov  ax, [bpx+di]       ; AX = bpx[b]   \  dot(bpx[b], bpy[b])
+        mov  bx, [bpy+di]       ; BX = bpy[b]   /
+        call Dot                ; dot()
+        pop  di                 ; DI back
+        pop  si                 ; SI back
+        pop  cx                 ; the count
+        add  si, BROW           ; SI += 6: the next row
+        add  di, 2              ; b++
+        loop .d                 ; 6 bodies
+        ret                     ; return
 
 ; ---- TrailRun: ink until a key - the maths remembers where it has been -----
+;  In C:
+;
+;      void trail_run(void)
+;      {
+;          gclear();  dcol = 14;  dot(CX0, CY0);         /* the Sun first */
+;          do { vsync(); tick(); trail(); } while (!key_check());
+;      }
 TrailRun:
-        call GClear
-        mov  byte [dcol], 14    ; the Sun first, so the sky has a middle
-        mov  ax, CX0
-        mov  bx, CY0
-        call Dot
-.f:     call Vsync
-        call Tick
-        call Trail
-        call KeyChk
-        or   al, al
-        jz   .f
-        ret
+        call GClear             ; gclear()
+        mov  byte [dcol], 14    ; dcol = 14, yellow: the Sun first, so the sky has a middle
+        mov  ax, CX0            ; AX = CX0   \  dot(CX0, CY0)
+        mov  bx, CY0            ; BX = CY0   /
+        call Dot                ; dot()
+.f:     call Vsync              ; vsync()
+        call Tick               ; tick()
+        call Trail              ; trail()
+        call KeyChk             ; AL = key_check()
+        or   al, al             ; a key ?
+        jz   .f                 ;   no: another frame
+        ret                     ; return
 
 ; ---- what the frames say ---------------------------------------------------
 t_head  db 'THE TRIANGLE THAT TURNS THE SKY',0
@@ -262,110 +303,125 @@ nact    db 2                    ; how much of the sky is switched on
 include 'SINTAB.INC'
 include 'DRAW12.INC'
 
-Boot:   cld
-        mov  ax, 0003h          ; the text screen, 80x25
-        int  10h
-        call TextOff
-        mov  ax, TEXT
-        mov  es, ax
+;  In C:
+;
+;      int main(void)
+;      {
+;          set_mode(3); cursor_off();                      /* 1: the words       */
+;          puts_at(...six lines...); bottom(); key();
+;          set_mode(0x13);
+;          nact = 2;     trail_run();                      /* 2: Sun and Earth   */
+;          nact = 3;     trail_run();                      /* 3: + the Moon      */
+;          nact = NBODY; trail_run();                      /* 4: the whole sky   */
+;          do { vsync(); gclear(); tick(); arms(); marks(); } while (!key_check()); /* 5 */
+;          set_mode(3); cursor_off();                      /* 6: the words       */
+;          puts_at(...); bottom(); key();
+;          set_mode(3); exit(0);
+;      }
+Boot:   cld                     ; string ops count UP (STOSW, LODSB)
+        mov  ax, 0003h          ; AX = 3: the text screen, 80x25
+        int  10h                ; set_mode(3)
+        call TextOff            ; cursor_off()
+        mov  ax, TEXT           ; AX = B800h
+        mov  es, ax             ; ES = the text screen
 
 ; ---- 1. the words ----------------------------------------------------------
-        mov  byte [attr], HEAD
-        mov  si, t_head
-        mov  di, 0*ROW + 24*2
-        call PutS
-        mov  byte [attr], NORM
-        mov  si, t_a1
-        mov  di, 3*ROW + 7*2
-        call PutS
-        mov  si, t_a2
-        mov  di, 4*ROW + 7*2
-        call PutS
-        mov  si, t_a3
-        mov  di, 5*ROW + 7*2
-        call PutS
-        mov  byte [attr], HEAD
-        mov  si, t_a4
-        mov  di, 8*ROW + 7*2
-        call PutS
-        mov  si, t_a5
-        mov  di, 9*ROW + 7*2
-        call PutS
-        mov  byte [attr], NORM
-        mov  si, t_a6
-        mov  di, 11*ROW + 7*2
-        call PutS
-        call Bottom
-        call Key
+        mov  byte [attr], HEAD  ; attr = HEAD
+        mov  si, t_head         ; SI = t_head
+        mov  di, 0*ROW + 24*2   ; DI = row 0, column 24
+        call PutS               ; puts()
+        mov  byte [attr], NORM  ; attr = NORM
+        mov  si, t_a1           ; SI = t_a1
+        mov  di, 3*ROW + 7*2    ; DI = row 3, column 7
+        call PutS               ; puts()
+        mov  si, t_a2           ; SI = t_a2
+        mov  di, 4*ROW + 7*2    ; DI = row 4, column 7
+        call PutS               ; puts()
+        mov  si, t_a3           ; SI = t_a3
+        mov  di, 5*ROW + 7*2    ; DI = row 5, column 7
+        call PutS               ; puts()
+        mov  byte [attr], HEAD  ; attr = HEAD
+        mov  si, t_a4           ; SI = t_a4
+        mov  di, 8*ROW + 7*2    ; DI = row 8, column 7
+        call PutS               ; puts()
+        mov  si, t_a5           ; SI = t_a5
+        mov  di, 9*ROW + 7*2    ; DI = row 9, column 7
+        call PutS               ; puts()
+        mov  byte [attr], NORM  ; attr = NORM
+        mov  si, t_a6           ; SI = t_a6
+        mov  di, 11*ROW + 7*2   ; DI = row 11, column 7
+        call PutS               ; puts()
+        call Bottom             ; bottom(): "- any key -"
+        call Key                ; key()
 
 ; ---- 2. Sun and Earth: one turned vector on a standing centre --------------
-        mov  ax, 0013h          ; the graphics screen, 320x200
-        int  10h
-        mov  ax, VGA
-        mov  es, ax
-        mov  byte [nact], 2
-        call TrailRun           ; the trail is a clean circle: the triangle,
-                                ;  bent round, exactly as promised
+        mov  ax, 0013h          ; AX = 13h: the graphics screen, 320x200
+        int  10h                ; set_mode(0x13)
+        mov  ax, VGA            ; AX = A000h
+        mov  es, ax             ; ES = the graphics screen
+        mov  byte [nact], 2     ; nact = 2: the Sun and the Earth
+        call TrailRun           ; trail_run(): the trail is a clean circle, the
+                                ;  triangle bent round, exactly as promised
 ; ---- 3. the Moon: a turn around a centre that is itself turning ------------
-        mov  byte [nact], 3
-        call TrailRun           ; the Moon's ink is a WAVE round the Sun -
-                                ;  no line of code says wave
+        mov  byte [nact], 3     ; nact = 3
+        call TrailRun           ; trail_run(): the Moon's ink is a WAVE round the
+                                ;  Sun - no line of code says wave
 ; ---- 4. the whole sky: three turns deep ------------------------------------
-        mov  byte [nact], NBODY
-        call TrailRun           ; and the Moon's satellite writes the lace
+        mov  byte [nact], NBODY ; nact = 6
+        call TrailRun           ; trail_run(): the Moon's satellite writes the lace
 ; ---- 5. planetarium: wiped and redrawn, the arms showing --------------------
-.plan:  call Vsync
-        call GClear
-        call Tick
-        call Arms               ; the green vectors CARRY the sky - what
-        call Marks              ;  the trails could never show
-        call KeyChk
-        or   al, al
-        jz   .plan
+.plan:  call Vsync              ; vsync()
+        call GClear             ; gclear()
+        call Tick               ; tick()
+        call Arms               ; arms(): the green vectors CARRY the sky - what
+        call Marks              ; marks()  the trails could never show
+        call KeyChk             ; AL = key_check()
+        or   al, al             ; a key ?
+        jz   .plan              ;   no: another frame
 
 ; ---- 6. the words, closing -------------------------------------------------
-        mov  ax, 0003h
-        int  10h
-        call TextOff
-        mov  ax, TEXT
-        mov  es, ax
-        mov  byte [attr], HEAD
-        mov  si, t_head
-        mov  di, 0*ROW + 24*2
-        call PutS
-        mov  byte [attr], NORM
-        mov  si, t_z1
-        mov  di, 3*ROW + 7*2
-        call PutS
-        mov  si, t_z2
-        mov  di, 4*ROW + 7*2
-        call PutS
-        mov  si, t_z3
-        mov  di, 5*ROW + 7*2
-        call PutS
-        mov  si, t_z4
-        mov  di, 6*ROW + 7*2
-        call PutS
-        mov  byte [attr], HEAD
-        mov  si, t_z5
-        mov  di, 9*ROW + 7*2
-        call PutS
-        mov  si, t_z6
-        mov  di, 10*ROW + 7*2
-        call PutS
-        mov  byte [attr], HEAD
-        mov  si, t_ow1
-        mov  di, 14*ROW + 7*2
-        call PutS
-        mov  byte [attr], 0Eh
-        mov  si, t_ow2
-        mov  di, 15*ROW + 7*2
-        call PutS
-        mov  byte [attr], NORM
-        call Bottom
-        call Key
+        mov  ax, 0003h          ; AX = 3: the text screen
+        int  10h                ; set_mode(3)
+        call TextOff            ; cursor_off()
+        mov  ax, TEXT           ; AX = B800h
+        mov  es, ax             ; ES = the text screen
+        mov  byte [attr], HEAD  ; attr = HEAD
+        mov  si, t_head         ; SI = t_head
+        mov  di, 0*ROW + 24*2   ; DI = row 0, column 24
+        call PutS               ; puts()
+        mov  byte [attr], NORM  ; attr = NORM
+        mov  si, t_z1           ; SI = t_z1
+        mov  di, 3*ROW + 7*2    ; DI = row 3, column 7
+        call PutS               ; puts()
+        mov  si, t_z2           ; SI = t_z2
+        mov  di, 4*ROW + 7*2    ; DI = row 4, column 7
+        call PutS               ; puts()
+        mov  si, t_z3           ; SI = t_z3
+        mov  di, 5*ROW + 7*2    ; DI = row 5, column 7
+        call PutS               ; puts()
+        mov  si, t_z4           ; SI = t_z4
+        mov  di, 6*ROW + 7*2    ; DI = row 6, column 7
+        call PutS               ; puts()
+        mov  byte [attr], HEAD  ; attr = HEAD
+        mov  si, t_z5           ; SI = t_z5
+        mov  di, 9*ROW + 7*2    ; DI = row 9, column 7
+        call PutS               ; puts()
+        mov  si, t_z6           ; SI = t_z6
+        mov  di, 10*ROW + 7*2   ; DI = row 10, column 7
+        call PutS               ; puts()
+        mov  byte [attr], HEAD  ; attr = HEAD
+        mov  si, t_ow1          ; SI = t_ow1
+        mov  di, 14*ROW + 7*2   ; DI = row 14, column 7
+        call PutS               ; puts()
+        mov  byte [attr], 0Eh   ; attr = 0Eh
+        mov  si, t_ow2          ; SI = t_ow2
+        mov  di, 15*ROW + 7*2   ; DI = row 15, column 7
+        call PutS               ; puts()
+        mov  byte [attr], NORM  ; attr = NORM
+        call Bottom             ; bottom(): "- any key -"
+        call Key                ; key()
 
-Bye:    mov  ax, 0003h          ; a clean screen back to DOS
-        int  10h
-        mov  ax, 4C00h
-        int  21h
+Bye:    mov  ax, 0003h          ; AX = 3: a clean screen back to DOS
+        int  10h                ; set_mode(3)
+        mov  ax, 4C00h          ; AH = 4Ch exit, AL = 0 the code
+        int  21h                ; exit(0)

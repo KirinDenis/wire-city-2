@@ -52,8 +52,9 @@ H       = 200                   ; and how many rows there are
         jmp  Boot               ; over the routines the frames share
 
 ; ---- wait for anything -----------------------------------------------------
+;  In C:   void key(void) { if (get_key() == 27) bye(); }
 Key:    mov  ah, 0              ; INT 16h function 0: sleep until a key
-        int  16h
+        int  16h                ; AL = the character
         cmp  al, 27             ; Esc means "that is enough"
         jne  .stay              ; NOT `je Bye`. Bye is the last four lines of
         jmp  Bye                ; the file, far more than 127 bytes away, and
@@ -70,14 +71,15 @@ Key:    mov  ah, 0              ; INT 16h function 0: sleep until a key
 ;
 ; A filled shape is not a new idea. It is the horizontal line from frame 4,
 ; done once per row, with DI moved on by 320 between them.
-Rect:   push di
-        mov  cx, bx
+;  In C:   for (; height--; at += 320) memset(screen + at, colour, width);
+Rect:   push di                 ; keep the row start
+        mov  cx, bx             ; CX = width
         rep  stosb              ; one row - the same single instruction
-        pop  di
+        pop  di                 ; DI = the row start again
         add  di, W              ; down to the next row
-        dec  dx
-        jnz  Rect
-        ret
+        dec  dx                 ; height--
+        jnz  Rect               ; while (height)
+        ret                     ; return
 
 ; ---- a number that looks random --------------------------------------------
 ; Multiply, add, keep the low half, and use it as the seed for the next one.
@@ -90,14 +92,15 @@ Rect:   push di
 ; of a stored picture. It is how a city gets built later in this series, and
 ; how two machines on a network end up in the same world without sending it
 ; to each other.
-Rand:   mov  ax, [seed]
-        mov  bx, 25173
-        mul  bx
-        add  ax, 13849
-        mov  [seed], ax
-        ret
+;  In C:   unsigned rand(void) { return seed = seed * 25173 + 13849; }
+Rand:   mov  ax, [seed]         ; AX = seed
+        mov  bx, 25173          ; BX = 25173
+        mul  bx                 ; AX = seed * 25173, the low half of it
+        add  ax, 13849          ; AX += 13849
+        mov  [seed], ax         ; seed = AX
+        ret                     ; return AX
 
-seed    dw   0
+seed    dw   0                  ; the last number Rand gave out
 
 ; ---- the machine, set up once ----------------------------------------------
 Boot:   cld                     ; string instructions count UPWARDS. Said once
@@ -105,16 +108,17 @@ Boot:   cld                     ; string instructions count UPWARDS. Said once
 
         mov  ax, 0013h          ; mode 13h - 320 x 200, 256 colours
         int  10h                ; the video BIOS, same doorbell as lesson 1
-
-        mov  ax, VGA
+                                ;
+        mov  ax, VGA            ; AX = A000h
         mov  es, ax             ; from here on ES *is* the screen. DS is still
                                 ; us, which is how [seed] keeps working.
 
 ; ---- 1. one dot ------------------------------------------------------------
 ; y = 100, x = 160. The middle. One byte, and that byte is the colour.
-        mov  di, 100*W + 160
-        mov  byte [es:di], 15   ; 15 is white in the default palette
-        call Key
+;  In C:   screen[100 * 320 + 160] = 15;
+        mov  di, 100*W + 160    ; DI = row 100, column 160
+        mov  byte [es:di], 15   ; screen[DI] = 15: white in the default palette
+        call Key                ; key()
 
 ; ---- 2. every colour there is ----------------------------------------------
 ; 64000 bytes, and each is the number after the one before it. Nothing here
@@ -125,13 +129,14 @@ Boot:   cld                     ; string instructions count UPWARDS. Said once
 ; further along than the one above it. The picture is slanted because 320 does
 ; not divide by 256 - and that is proof, on the glass, that this is one long
 ; row of bytes rather than a grid.
-        xor  di, di             ; start of the screen
-        xor  al, al             ; and of the colours
-        mov  cx, W*H            ; 64000 - every byte there is
+;  In C:   for (i = 0; i < 64000; i++) screen[i] = (unsigned char) i;
+        xor  di, di             ; DI = 0: start of the screen
+        xor  al, al             ; AL = 0: and of the colours
+        mov  cx, W*H            ; CX = 64000 - every byte there is
 .pal:   stosb                   ; ES:DI <- AL, then DI steps on by one
-        inc  al                 ; the next byte is the next colour, and at 255
-        loop .pal               ; it rolls round to 0 on its own
-        call Key
+        inc  al                 ; AL++: the next byte is the next colour, and at 255
+        loop .pal               ; while (--cx): it rolls round to 0 on its own
+        call Key                ; key()
 
 ; ---- 3. black, and nothing else --------------------------------------------
 ; STOS, not MOVS. They are easy to confuse and they are not the same job:
@@ -141,11 +146,12 @@ Boot:   cld                     ; string instructions count UPWARDS. Said once
 ;
 ; MOVS is what the next lesson is about: that is how a second screen, drawn
 ; where nobody can see it, gets poured onto this one.
-        xor  di, di
-        xor  ax, ax             ; colour 0 - black
+;  In C:   memset(screen, 0, 64000);
+        xor  di, di             ; DI = 0: the start of the screen
+        xor  ax, ax             ; AX = 0: colour 0 - black, twice
         mov  cx, W*H/2          ; 32000 WORDS, not 64000 bytes: two pixels go
         rep  stosw              ; at a time, and the whole screen goes in one
-        call Key                ; instruction that repeats itself
+        call Key                ; key()   - instruction that repeats itself
 
 ; ---- 4. one line across, one line down -------------------------------------
 ; Look at what these two cost. Across, the pixels are next to each other in
@@ -153,64 +159,71 @@ Boot:   cld                     ; string instructions count UPWARDS. Said once
 ; apart, so it has to be a loop. Same line on the glass; completely different
 ; price - and that difference is why everything in these games is drawn in
 ; horizontal spans.
+;  In C:   memset(screen + 100 * 320 + 60, 15, 200);
+;          for (i = 0; i < 120; i++) screen[(40 + i) * 320 + 160] = 14;
         mov  di, 100*W + 60     ; y = 100, x = 60
-        mov  al, 15
+        mov  al, 15             ; AL = 15, white
         mov  cx, 200            ; 200 pixels across...
         rep  stosb              ; ...and this is the whole line
-
+                                ;
         mov  di, 40*W + 160     ; y = 40, x = 160
-        mov  cx, 120
-.down:  mov  byte [es:di], 14   ; yellow
+        mov  cx, 120            ; CX = 120 pixels down
+.down:  mov  byte [es:di], 14   ; screen[DI] = 14, yellow
         add  di, W              ; the pixel below is 320 bytes further on
-        loop .down
-        call Key
+        loop .down              ; while (--cx)
+        call Key                ; key()
 
 ; ---- 5. an outline, and NO clearing first ----------------------------------
 ; The lines are still underneath. Nothing on this machine is ever cleared
 ; unless you clear it: there is no scene, no display list and nobody tidying
 ; up behind you. The screen holds whatever was last written into it.
-        mov  al, 12             ; red
+;  In C:   memset(screen +  60 * 320 + 40, 12, 240);
+;          memset(screen + 140 * 320 + 40, 12, 240);
+;          for (y = 60; y <= 140; y++) { screen[y * 320 + 40] = 12;  screen[y * 320 + 279] = 12; }
+        mov  al, 12             ; AL = 12, red
         mov  di, 60*W + 40      ; the top edge
-        mov  cx, 240
-        rep  stosb
+        mov  cx, 240            ; CX = 240 pixels
+        rep  stosb              ; while (cx--) *es:di++ = al
         mov  di, 140*W + 40     ; the bottom edge
-        mov  cx, 240
-        rep  stosb
-
+        mov  cx, 240            ; CX = 240 pixels
+        rep  stosb              ; while (cx--) *es:di++ = al
+                                ;
         mov  di, 60*W + 40      ; and the two sides, together, down one loop
-        mov  cx, 81
-.side:  mov  byte [es:di], 12
-        mov  byte [es:di+239], 12
-        add  di, W
-        loop .side
-        call Key
+        mov  cx, 81             ; CX = 81 rows
+.side:  mov  byte [es:di], 12   ; screen[DI] = 12: the left side
+        mov  byte [es:di+239], 12 ; screen[DI + 239] = 12: the right one
+        add  di, W              ; the row below
+        loop .side              ; while (--cx)
+        call Key                ; key()
 
 ; ---- 6. a filled square ----------------------------------------------------
+;  In C:   rect(70 * 320 + 200, 42, 64, 48);
         mov  di, 70*W + 200     ; y = 70, x = 200
         mov  al, 42             ; a green out of the middle of the palette
         mov  bx, 64             ; wide
         mov  dx, 48             ; and tall
-        call Rect
-        call Key
+        call Rect               ; rect()
+        call Key                ; key()
 
 ; ---- 7. two hundred of them ------------------------------------------------
-        mov  si, 200            ; how many
-.one:   call Rand
+;  In C:   for (n = 200; n--; ) { x = rand() & 255;  y = (rand() & 127) + 8;  rect(y * 320 + x, rand(), 48, 40); }
+        mov  si, 200            ; n = 200: how many
+.one:   call Rand               ; AX = rand()
         and  ax, 0FFh           ; x: 0..255, so x+48 is always on the screen
-        mov  di, ax
-        call Rand
+        mov  di, ax             ; DI = x
+        call Rand               ; AX = rand()
         and  ax, 07Fh           ; y: 0..127...
         add  ax, 8              ; ...pushed down clear of the top
-        mov  bx, W
+        mov  bx, W              ; BX = 320
         mul  bx                 ; AX = y * 320. This is the arithmetic again,
-        add  di, ax             ; and it is the only arithmetic there is.
+        add  di, ax             ; DI = y * 320 + x: and it is the only arithmetic there is.
         call Rand               ; AL is now the colour, whatever it is
         mov  bx, 48             ; a fixed size, so nothing here can run off
         mov  dx, 40             ; the edge and wrap onto the next row
-        call Rect
-        dec  si
-        jnz  .one
-        call Key
+        call Rect               ; rect()
+        dec  si                 ; n--
+        jnz  .one               ; while (n)
+        call Key                ; key()
 
 ; ---- the way out -----------------------------------------------------------
 ; Reached by falling off the end of the last frame, so no jump is needed to
@@ -218,5 +231,5 @@ Boot:   cld                     ; string instructions count UPWARDS. Said once
 ; adds a frame immediately ABOVE these four lines, which never move.
 Bye:    mov  ax, 0003h          ; give the text screen back. This program owns
         int  10h                ; the card and nobody will put it right for us
-        mov  ax, 4C00h
-        int  21h
+        mov  ax, 4C00h          ; AH = 4Ch exit, AL = 0 the code
+        int  21h                ; exit(0)
