@@ -1,0 +1,41 @@
+; CLIP.INF - written by SceneDesk for scene S010, the 320x200 edition. The recipe is
+; tracked; the CLIP.OWV it makes is not, until the codec is frozen. The source is
+; named relative to this folder: long, but it holds wherever the warehouse
+; sits beside the repository.
+
+SOURCE     = ..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S010\VIDEO\grok-video-81d38084-ecf1-4d47-822c-c78be319573b.mp4
+OUTPUT     = CLIP.OWV
+WIDTH      = 320
+HEIGHT     = 200
+FPS        = 12
+; 72 frames = six seconds, the unit the footage is generated in: every
+; six-second piece is its own keyframe group, so a clip can later be cut
+; at those boundaries without converting it again.
+KEYEVERY   = 72
+AUDIO      = 22050
+; sixteen bits: the Sound Blaster 16 plays them and eight bits hiss
+AUDIOBITS  = 16
+FIT        = crop
+DITHER     = bayer:bayer_scale=3
+DENOISE    = hqdn3d=4:3:12:9
+TOLERANCE  = 2
+; GRAIN and SNAP buy bitrate with picture, and BOTH ARE OFF: the size
+; problem they were written for is answered by streaming the clips
+; instead, and what the player sees is worth more than the megabytes.
+; They cost the encoder only - the format and the DOS player know
+; nothing of either - so turning them up later needs no new player.
+;
+; GRAIN is how many of a block's 64 pixels may be past TOLERANCE and
+; the block still be left alone: grain is a few pixels, motion is many,
+; and counting them tells the two apart where an average does not.
+; SNAP moves a pixel onto the one before it when it is already that
+; close, so the ordered dither leaves runs for the RLE coder.
+;
+; Measured on S01's second clip: 12.4 MB here, 9.2 MB at GRAIN 8,
+; 5.5 MB at GRAIN 12 with SNAP 2 - and the last one shows.
+GRAIN      = 0
+SNAP       = 0
+SEARCH     = 24
+COPY       = on
+COPYSEARCH = 4
+AUDIOFILTER = highpass=f=50,acompressor=threshold=0.06:ratio=4:attack=5:release=200:makeup=2,alimiter=limit=0.97

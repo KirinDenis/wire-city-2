@@ -24,7 +24,7 @@ if "%TASMDIR%"=="" (
 if /i "%~1"=="RUN" goto run
 
 echo Compiling with Borland Pascal in DOS...
-"%DOSBOX%" -noautoexec -noconsole -c "mount c %CD%" -c "mount d %TASMDIR%" -c "c:" -c "cd LESSONS\L19" -c "D:\BIN\TPC.EXE -B -UD:\UNITS INFOGR.PAS" -c "exit"
+"%DOSBOX%" -noautoexec -noconsole -c "mount c %CD%" -c "mount d %TASMDIR%" -c "c:" -c "cd LESSONS\L19" -c "D:\BIN\TPC.EXE -B -UD:\UNITS INFOGR.PAS > TPC.LOG" -c "exit"
 if not exist LESSONS\L19\INFOGR.EXE goto failed
 echo.
 echo Built LESSONS\L19\INFOGR.EXE.  MAKEINFO RUN films it.
