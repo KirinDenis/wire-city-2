@@ -1,12 +1,12 @@
-; CLIP.INF - written by SceneDesk for scene S012, the 640x400 edition. The recipe is
+; CLIP.INF - written by SceneDesk for scene END_YOU, the 320x200 edition. The recipe is
 ; tracked; the CLIP.OWV it makes is not, until the codec is frozen. The source is
 ; named relative to this folder: long, but it holds wherever the warehouse
 ; sits beside the repository.
 
-SOURCE     = ..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S012\VIDEO\SCN03.mp4
+SOURCE     = ..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\END_YOU\VIDEO\grok-video-005c66eb-6268-4f91-9da7-a6dbb094bb06(4).mp4
 OUTPUT     = CLIP.OWV
-WIDTH      = 640
-HEIGHT     = 400
+WIDTH      = 320
+HEIGHT     = 200
 FPS        = 12
 ; 72 frames = six seconds, the unit the footage is generated in: every
 ; six-second piece is its own keyframe group, so a clip can later be cut

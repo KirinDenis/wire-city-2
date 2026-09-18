@@ -3,7 +3,7 @@
 ; named relative to this folder: long, but it holds wherever the warehouse
 ; sits beside the repository.
 
-SOURCE     = ..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S012\VIDEO\grok-video-43b9131a-03d5-43ad-8693-ea57d859edf6(5).mp4
+SOURCE     = ..\..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S012\VIDEO\SCN03.mp4
 OUTPUT     = CLIP.OWV
 WIDTH      = 320
 HEIGHT     = 200

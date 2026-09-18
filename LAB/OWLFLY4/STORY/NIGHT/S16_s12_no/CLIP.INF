@@ -1,9 +1,9 @@
-; CLIP.INF - written by SceneDesk for scene S012, the 640x400 edition. The recipe is
+; CLIP.INF - written by SceneDesk for scene S16_s12_no, the 640x400 edition. The recipe is
 ; tracked; the CLIP.OWV it makes is not, until the codec is frozen. The source is
 ; named relative to this folder: long, but it holds wherever the warehouse
 ; sits beside the repository.
 
-SOURCE     = ..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S012\VIDEO\SCN03.mp4
+SOURCE     = ..\..\..\..\..\..\OWLFLY4_RES\NIGHT\S16_s12_no\VIDEO\grok-video-7a098f62-3cdd-4059-89aa-f5a7f4caa4ac.mp4
 OUTPUT     = CLIP.OWV
 WIDTH      = 640
 HEIGHT     = 400
