@@ -190,3 +190,15 @@ LAB/OWLFLY4/ENGINE/SHOT*.OWV
 # the bundle: a hundred megabytes of them, rebuilt from the recipes, and the
 # whole reason the bundle got small. Never in git - see docs/pack.ps1.
 docs/owlnight/
+
+# Reference captures are pictures of commercial software's screens. The
+# tool that takes them is ours; what it photographs is not.
+TOOLS/SCRGRAB/SHOTS/
+
+# REFGEN links against Borland's units and dumps what they drew. The source
+# is ours; the binary and its output are not.
+TOOLS/REFGEN/REFGEN.EXE
+TOOLS/REFGEN/REF*.BIN
+TOOLS/REFGEN/REF*.TXT
+TOOLS/REFGEN/REFS.TXT
+TOOLS/REFGEN/*.LOG

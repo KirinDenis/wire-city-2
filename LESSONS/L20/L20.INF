@@ -1,0 +1,7 @@
+.title  Flight: the physics WIRE CITY actually flies on
+.what   The aeroplane stops waiting for you. Four rules out of the game - it always moves forward, the arrows turn it, the turn banks it, and the bank is a rotation the engine was already doing for nothing - plus its own keyboard interrupt, so a held key is a fact and not an event
+.tier   LESSON
+.main   FLY.ASM
+.build  FASM FLY.ASM FLY.COM
+.run    FLY.COM
+.uses   IMUL IDIV IN OUT CLI STI IRET INT PUSH POP AND NEG
