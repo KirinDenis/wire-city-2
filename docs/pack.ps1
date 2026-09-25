@@ -248,6 +248,48 @@ $MAP = @{
       @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`ncls`nHELP.BAT`n" }
     )
   }
+  # LESSON 15 - the relief, and hidden lines. The first lesson bundle that
+  # carries the ENGINE, because from lesson 13 onward the lesson programs
+  # are built out of the same five includes the game is. They go in a folder
+  # called ENGINE and the source is shipped UNCHANGED, still saying
+  # '..\..\ENGINE\E_MATH.INC' - which resolves, because DOS clamps ".." at
+  # the root of a drive and the bundle is mounted as the whole of C:.
+  #
+  # cycles IS NOT max HERE, and that is the point of the lesson. At max the
+  # frame counter is a number about this laptop. At 30000 it reads 70 and
+  # 35, which are the two numbers the lesson explains, and pressing H moves
+  # between them in one step.
+  L21 = @{
+    prefix = "l21"
+    page   = Join-Path $root "docs\l21.html"
+    detect = "l21_v(\d+)\.jsdos"
+    files  = @(
+      @{ p = "LESSONS\L21\RELIEF.ASM";    n = "RELIEF.ASM" },
+      @{ p = "ENGINE\E_8086.INC";         n = "ENGINE/E_8086.INC" },
+      @{ p = "ENGINE\E_MATH.INC";         n = "ENGINE/E_MATH.INC" },
+      @{ p = "ENGINE\E_TERR.INC";         n = "ENGINE/E_TERR.INC" },
+      @{ p = "ENGINE\E_M3D.INC";          n = "ENGINE/E_M3D.INC" },
+      @{ p = "ENGINE\E_RAST.INC";         n = "ENGINE/E_RAST.INC" },
+      @{ p = "LESSONS\L21\WEB\MAKE.BAT";  n = "MAKE.BAT" },
+      @{ p = "LESSONS\L21\WEB\RUN.BAT";   n = "RUN.BAT" },
+      # NOT HELP.BAT. DOSBox has an internal HELP and an internal command
+      # beats a batch file of the same name, extension typed or not, CALL
+      # or not - so a bundle that greets with HELP.BAT greets with DOSBox's
+      # own command list instead. Lesson 5's bundle still does. Measured
+      # 2026-09-25, in real DOSBox, both ways round.
+      @{ p = "LESSONS\L21\WEB\LESSON.BAT"; n = "LESSON.BAT" },
+      @{ p = "LESSONS\L02\WEB\EDIT.BAT";  n = "EDIT.BAT" },
+      @{ p = "TOOLS\FASM\FASM.EXE";       n = "FASM.EXE" },
+      @{ p = "TOOLS\FASM\FASMD.EXE";      n = "FASMD.EXE" },
+      @{ p = "TOOLS\FASM\LICENSE.TXT";    n = "LICENSE.TXT" },
+      @{ p = "TOOLS\CWSDPMI\CWSDPMI.EXE"; n = "CWSDPMI.EXE" },
+      @{ p = "TOOLS\CWSDPMI\cwsdpmi.doc"; n = "CWSDPMI.DOC" }
+    )
+    strings = @(
+      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=30000`n[autoexec]`necho off`nmount c .`nc:`ncls`nLESSON.BAT`n" },
+      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=30000`n[autoexec]`necho off`nmount c .`nc:`ncls`nLESSON.BAT`n" }
+    )
+  }
   # OWL NIGHT, the LAB game, on the unlisted page: the story engine and the
   # whole NIGHT story - every SCENE.INI and every product beside it. The
   # story is a TREE, not a list of files, so it comes in through `trees`:

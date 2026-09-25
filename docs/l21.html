@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 15 - the ground stops being flat</title>
+<link rel="stylesheet" href="jsdos/js-dos.css">
+<style>
+  html,body{margin:0;min-height:100vh;background:#04060f;color:#bcd;font-family:monospace}
+  #wrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px}
+  h1{letter-spacing:2px;color:#bcf;margin:4px;text-shadow:0 0 8px #46c;font-size:18px}
+  #dos{width:min(96vw,1000px);aspect-ratio:4/3;background:#000}
+  .hint{font-size:13px;color:#89b;text-align:center}
+  a{color:#9bf}
+  #about{width:min(96vw,1000px);font-size:13px;line-height:1.55;color:#abc}
+  #about h2{color:#9bf;letter-spacing:2px;margin:18px 0 6px;font-size:14px}
+  #about p{margin:0 0 8px}
+  #about b{color:#dfe}
+  pre{background:#080c18;border-left:3px solid #2a4a7a;color:#dfe;
+      padding:10px 12px;overflow-x:auto;font-size:13px;line-height:1.5;margin:8px 0}
+  .cards{display:flex;flex-wrap:wrap;gap:10px;width:min(96vw,1000px);margin-top:4px}
+  .card{flex:1 1 200px;background:#080c18;border:1px solid #1c2c4a;padding:10px 12px}
+  .card h3{color:#9bf;font-size:13px;margin:0 0 6px;letter-spacing:1px}
+  .card span{color:#89b;font-size:12px}
+  table{border-collapse:collapse;margin:8px 0;font-size:13px}
+  td,th{border:1px solid #1c2c4a;padding:4px 10px;text-align:left}
+  th{color:#9bf;font-weight:normal;letter-spacing:1px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>LESSON 15 &mdash; THE GROUND STOPS BEING FLAT</h1>
+  <div class="hint">click the black screen first to grab the keyboard &middot;
+    <b>this lesson wants a real keyboard</b> &mdash; you are here to fly it and
+    then to change it &middot;
+    <a href="index.html">back to the arcade</a></div>
+  <div id="dos"></div>
+  <div class="hint">Type <b>MAKE</b>, then <b>RUN</b>. Space takes off.
+    Arrows fly it &mdash; <b>down is nose up</b>. <b>H</b> is the one to press.</div>
+
+  <div class="cards">
+    <div class="card">
+      <h3>H &middot; HIDDEN LINES</h3>
+      <span>One byte for each of the 320 screen columns. Press it and the far
+        half of the picture stops being a fishing net. Press it again and it
+        goes back. That is the whole lesson in one key.</span>
+    </div>
+    <div class="card">
+      <h3>F &middot; TWO ENGINES</h3>
+      <span>The patched line against the classic one &mdash; and while H is on,
+        F does nothing at all, because the hiding routine is the only line in
+        the program that knows the array exists.</span>
+    </div>
+    <div class="card">
+      <h3>DOWN &middot; NOSE UP</h3>
+      <span>Not a bug. It is a control column and you pull it towards you to
+        climb. And you cannot fly through a hill: 96 units of clearance above
+        whatever is underneath you, read off the same cache the picture is
+        drawn from.</span>
+    </div>
+    <div class="card">
+      <h3>ESC &middot; LAND</h3>
+      <span>Then <b>EDIT RELIEF.ASM</b>. VEXAG is the one number in the file
+        that is not the game's, and changing it changes the whole flight.</span>
+    </div>
+  </div>
+
+  <div id="about">
+    <h2>WHY THE GROUND LOOKED FLAT, AND WHY ONE SHIFT FIXED IT</h2>
+    <p>The island has been in memory since lesson 0x11. Every node of the
+    lattice takes a byte from it and turns it into a height, with the game's
+    own sum:</p>
+    <pre>h = (H - 88) * 5
+if h &gt; 560 then h = h + (h - 560)     ; the slope doubles up there</pre>
+    <p>Work three bytes through it. 120 gives 160. 200 gives 560. 255 &mdash;
+    the highest the map ever goes &mdash; gives 835, which is over the line, so
+    add the difference back and you have <b>1110</b>. Now put that beside the
+    other number in the program: <b>the nodes are 1024 units apart</b>. The
+    tallest thing on the whole island is barely taller than one step of the
+    grid is wide. It was not a bug, it was arithmetic, and it is exactly what
+    it looked like.</p>
+    <p>So the program lies, in one instruction. <code>VEXAG</code> doubles the
+    height and touches nothing else. It is the only number in the file that is
+    not the game's own, and it is the difference between a landscape you fly
+    over and one you fly <i>between</i>.</p>
+
+    <h2>A WIREFRAME HAS NO FRONT AND NO BACK</h2>
+    <p>The moment the ground has a shape, a hill can be in the way of what is
+    behind it &mdash; and nothing in the program knows that. The near-plane
+    clip throws away what is behind your head. The line clipper throws away
+    what is off the edge of the screen. A ridge four miles away that comes
+    straight through the hill in front of it is neither: it is on the screen
+    and perfectly legal. <b>It is simply behind something, and 64000 bytes in
+    a row do not record that.</b></p>
+
+    <h2>THE FLOATING HORIZON, IN 320 BYTES</h2>
+    <p>Keep one byte for every column of the screen: the height of the highest
+    thing drawn in that column so far. Draw the squares from the eye outwards.
+    A pixel shows if it is above the skyline in its own column, and then it
+    <i>becomes</i> the skyline. That is all of it:</p>
+    <pre>if (y &lt; HOR[x]) {        /* above the skyline: visible */
+    plot;
+    HOR[x] = y;          /* and it IS the skyline now  */
+}</pre>
+    <p>Remember that y grows downward, so <b>above is a smaller number</b>.
+    Walk one column through by hand and it comes out like this. HOR starts at
+    200, the bottom row, so the first thing to arrive always shows:</p>
+    <table>
+      <tr><th>arrives at</th><th>test</th><th>result</th></tr>
+      <tr><td>y = 138</td><td>138 &lt; 200</td><td>draw &mdash; HOR becomes 138</td></tr>
+      <tr><td>y = 151</td><td>151 is not &lt; 138</td><td>hidden, nothing written</td></tr>
+      <tr><td>y = 122</td><td>122 &lt; 138</td><td>draw &mdash; HOR becomes 122</td></tr>
+      <tr><td>y = 130</td><td>130 is not &lt; 122</td><td>hidden</td></tr>
+    </table>
+    <p>Drawing from the eye outwards is the other half of it, and it is a
+    table built once at the boot. The squares are sorted by the <b>square</b>
+    of their distance from the middle, because comparing squares puts them in
+    the same order as comparing distances and costs no square root: 3 across
+    and 4 up gives 9 + 16 = 25, and the real distance is 5.</p>
+
+    <h2>WHAT IT COSTS, AND THE ANSWER IS NOT THE ONE YOU EXPECT</h2>
+    <p>Measured on this program with the retrace wait taken off, the island
+    seeded to a fixed value and the aeroplane parked, so all three rows draw
+    the same picture:</p>
+    <table>
+      <tr><td>see through, the patched line of lesson 8</td><td><b>76</b> frames a second</td></tr>
+      <tr><td>hidden, the skyline</td><td><b>60</b></td></tr>
+      <tr><td>see through, the classic line (F)</td><td><b>53</b></td></tr>
+    </table>
+    <p>Read the last two rows again. <b>60 against 53: the hiding is faster.</b>
+    A pixel it throws out is a pixel it never writes, so the skyline does not
+    cost anything at all &mdash; it saves. The 16 frames went somewhere else
+    entirely: the moment the lesson wrote its own line routine it left lesson
+    8's behind, the one that writes its step sizes into its own instructions.
+    <i>The price of hiding was paid in lesson 8's coin</i>, which is a very
+    different sentence from "hiding is expensive".</p>
+    <p>And the counter in the running program will not say 60. It says
+    <b>35</b>. A frame that waits for the beam takes a whole number of
+    retraces, so the only rates this machine has are 70, 35 and 23. Sixty is
+    under seventy, so it costs two. Press H and watch it fall in one step.</p>
+
+    <h2>AND THEN IT COMES STRAIGHT BACK OUT</h2>
+    <p>This is the one routine in the course that is not in OWL FLY and never
+    was. It is here because it is worth seeing once and worth having in your
+    hand. It loses for a reason that is a better lesson than the algorithm:
+    the array holds <b>one</b> skyline per column. A height field has exactly
+    one. A house with a gap under it has two, and from that moment the array
+    is lying. Fill the ground instead and the far ridge is hidden by the near
+    one for nothing at all &mdash; the paint covers it. You do not pay for
+    hiding, you get it with the colour.</p>
+
+    <h2>CHANGE SOMETHING</h2>
+    <p>The assembler is in the tab with you, which is the point of this page
+    rather than a video of it:</p>
+    <pre>EDIT RELIEF.ASM
+MAKE
+RUN</pre>
+    <p><code>VEXAG</code> is 1, which doubles the height. Try 0 for the game's
+    own ground and see what the lesson is complaining about; try 2 and fly
+    through a canyon. <code>NR</code> is 12 and is how far you can see &mdash;
+    13 costs you half the frame rate, not a twelfth of it, and the comment
+    beside it says why. Reload the page and everything is back as it was, so
+    there is nothing you can break.</p>
+
+    <p><a href="https://github.com/KirinDenis/wire-city-2/tree/main/LESSONS/L21"
+       target="_blank" rel="noopener">the lesson's source and notes</a>
+    &middot; <a href="l05.html">lesson 5</a>
+    &middot; <a href="index.html">back to the arcade</a>
+    &middot; the assembler is <a href="https://flatassembler.net/"
+       target="_blank" rel="noopener">flat assembler</a>, and the DOS is DOSBox
+    compiled to WebAssembly via <a href="https://js-dos.com" target="_blank"
+       rel="noopener">js-dos</a></p>
+  </div>
+</div>
+<script src="coi-serviceworker.js"></script>
+<script src="jsdos/js-dos.js"></script>
+<script>
+(function () {
+  // Everything stays inside this IIFE: the minified js-dos.js READS the
+  // global single-letter variable "g", so a top-level "var g" here breaks
+  // Dos() with createElement('[object Object]').
+  Dos(document.getElementById("dos"), {
+    url: "l21_v4.jsdos",
+    pathPrefix: "jsdos/emulators/",
+    backend: "dosbox",   // pinned: js-dos stores this choice, and only wdosbox is vendored here
+    theme: "dark",
+    imageRendering: "pixelated",
+    scaleControls: 0.2,
+    onEvent: function (e, ci) { if (e === "ci-ready") window.__ci = ci; }
+  });
+})();
+</script>
+</body>
+</html>
+
+
+

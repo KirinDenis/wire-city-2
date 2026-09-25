@@ -1,0 +1,7 @@
+.title  The ground stops being flat: relief, and what is behind a hill
+.what   Every node of the lattice takes its height from the island - and one shift doubles it, because 1024 units between nodes against 1110 at the highest point is why it looked flat. Then hidden lines in 320 bytes, one a screen column, drawn from the eye outwards. Measured, hiding is FASTER than a plain line; the frames it costs went on leaving lesson 8's patched one behind
+.tier   LESSON
+.main   RELIEF.ASM
+.build  FASM RELIEF.ASM RELIEF.COM
+.run    RELIEF.COM
+.uses   IMUL IDIV SHL SHR STOSB REP XOR CMP JLE JGE IN OUT CLI STI IRET

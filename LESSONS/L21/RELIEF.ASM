@@ -1,11 +1,25 @@
 ; ============================================================================
-;  FLY.ASM - Lesson 14. FLIGHT: the physics WIRE CITY actually flies on.
+;  RELIEF.ASM - Lesson 15. THE GROUND STOPS BEING FLAT.
 ;
-;      FASM FLY.ASM FLY.COM
+;      FASM RELIEF.ASM RELIEF.COM
 ;
 ;      1  the island from above - lesson 0x11's map, and the mark where
 ;         you are about to be standing. SPACE takes off
 ;      2  the flight, and it does not wait for you
+;
+;      LEFT / RIGHT  turn, and the world banks into it
+;      DOWN          nose up. UP puts it down - it is a control column
+;      H             hide what is behind the hills, or see through them
+;      F             FAST or CLASSIC arithmetic
+;      ESC           land
+;
+;  AND ONE ALGORITHM THAT IS HERE FOR THIS LESSON ONLY. H switches on the
+;  FLOATING HORIZON - hidden-line removal, in one array of 320 bytes. It
+;  is not in OWL FLY and it never was, and the next lesson replaces it
+;  with something that hides things for nothing by painting over them.
+;  It is shown because it is worth seeing once, worth having in your hand,
+;  and because the reason it loses is a better lesson than the algorithm.
+;  HLINE, near the middle of this file, is all of it.
 ;
 ;  THE SOURCE NOW TRAVELS. Lesson 13 was the first one that assembled
 ;  nothing of its own; this one is the first that starts as a COPY of the
@@ -48,8 +62,9 @@
 ;         adds, it models nothing - no lift, no mass, no aerodynamics -
 ;         and it is completely convincing.
 ;
-;      4. THE UP AND DOWN ARROWS CLIMB.  camy -+ STEPY, clamped to a
-;                                       floor and a ceiling.
+;      4. THE ARROWS CLIMB, THE OTHER WAY ROUND. DOWN puts the nose up,
+;         because the thing in your hand is a stick and you pull it back.
+;         And the floor is not a number any more: it is the ground.
 ;
 ;  AND THE BANK COSTS NOTHING, which is the part worth stopping on. The
 ;  engine has been banking the picture since lesson 13 and you have never
@@ -121,9 +136,30 @@ format binary as 'com'
 FOCAL   = 220                 ; the game's lens: ~72 degrees across
 NEARZ   = 40                  ; the game's near clip plane
 BIAS    = 8192                ; world->cell bias, keeps the cell shift unsigned
-NR      = 10                  ; the lattice reaches ten nodes each way...
-NSIDE   = 2*NR+1              ; ...so it is twenty one nodes across
-CAMY0   = 900                 ; how high the eye starts over the plane
+; ---- HOW FAR YOU CAN SEE, and it is a measured number ---------------------
+;  NR was ten up to lesson 14, and the frame rate read 69 - which was not
+;  headroom, it was the CEILING. A frame that waits for the beam takes a
+;  whole number of retraces, so the rates you can have are 70, then 35,
+;  then 23. There is nothing in between. Measured with the wait taken off,
+;  this program really draws:
+;
+;      NR = 10    96 frames a second
+;      NR = 12    77          - still clear of 70, so the wait holds it there
+;      NR = 13    68          - misses by two, and the picture halves to 35
+;      NR = 14    61
+;
+;  So twelve, and the thirteenth node is not affordable at any price: it
+;  does not cost you nine frames, it costs you thirty five. Lesson 13's
+;  staircase, met from the other side.
+NR      = 12                  ; the lattice reaches twelve nodes each way...
+NSIDE   = 2*NR+1              ; ...so it is twenty five SQUARES across...
+TSIDE   = 2*NR+2              ; ...and twenty six NODES, because every
+                              ;  square draws the edge to its neighbour and
+                              ;  the last one still needs a neighbour to
+                              ;  draw to. One more row, one more column.
+CAMY0   = 500                 ; how high the eye starts. Lower than lesson
+                              ;  14's 900: there is something to fly over
+                              ;  now, and from up there it reads as flat
 
 ; ---- the flight model. Every one of these is CITY.ASM's, and the three
 ;      that measure a DISTANCE are multiplied by four, because the game's
@@ -132,8 +168,30 @@ CAMY0   = 900                 ; how high the eye starts over the plane
 ;      256 steps here and 256 steps there.
 SPEEDV  = 48                  ; forward units a frame. There is no throttle
 STEPY   = 20                  ; climb/dive units a frame
-CAMYMIN = 96                  ; the floor: never through the ground
-CAMYMAX = 1680                ; and the ceiling
+CAMYCL  = 96                  ; HOW CLOSE TO THE GROUND you may get. Not a
+                              ;  height any more - a clearance, measured
+                              ;  from whatever happens to be underneath
+
+; ---- THE ONE NUMBER IN THIS FILE THAT IS NOT THE GAME'S --------------------
+;  VEXAG - vertical exaggeration, as a shift count. 1 doubles every height.
+;
+;  WORLDH gives five units of height for one step of the map, and the nodes
+;  stand a thousand and twenty four apart. So the real landscape is gentle:
+;  a hundred and sixty units of climb across a thousand of ground, which is
+;  a slope of about nine degrees. The game gets away with that because it
+;  FILLS its quads, and a filled slope reads even when it is shallow. A
+;  wireframe does not - the lines simply look straight.
+;
+;  So the heights are doubled here, once, where TERRPREP writes them. It is
+;  a decision about the PICTURE and not about the world, every map that ever
+;  showed a mountain has made it, and it is written down here in one place
+;  with its reason - because a map that quietly lies about its own scale is
+;  a map that lies.
+VEXAG   = 1                   ; 1 = doubled. 0 would be the game's own
+CAMYMAX = 3200                ; and the ceiling - which has to stay ABOVE
+                              ;  the highest ground, or the clamp below
+                              ;  would push the eye down into a mountain.
+                              ;  WORLDH peaks near 1110, doubled is 2220
 TURNV   = 2                   ; heading change a frame, of 256 = a whole turn
 BANKMAX = 30                  ; how far it leans into a turn, of 256
 BANKSTP = 3                   ; and how fast it gets there - and back
@@ -144,6 +202,7 @@ BANKSTP = 3                   ; and how fast it gets there - and back
 SC_ESC  = 01h
 SC_SP   = 39h
 SC_F    = 21h
+SC_H    = 23h
 SC_UP   = 48h                 ; THE UP AND DOWN ARROWS. Not PgUp and PgDn,
 SC_DN   = 50h                 ;  which are 49h and 51h - an easy hour to lose
 SC_LF   = 4Bh
@@ -184,6 +243,7 @@ START:  cld                     ; string ops count UP (STOSW, MOVSW, LODSB)
         or   ax,1               ; AX |= 1     two runs. Never zero: a seed of
         mov  [rseed],ax         ; rseed = AX  nought would breed noughts
         call DSGEN              ; dsgen()     - the island, in one call
+        call ORDPREP            ; ordprep()   - the drawing order, once
 
         xor  ax,ax              ; AX = 0                ---- take INT 0 ----
         mov  es,ax              ; ES = 0: the vector table is at 0000:0000
@@ -326,6 +386,15 @@ FLY:    call SETTRIG            ; settrig(): hsin/hcos from heading, and
         jmp  .esc               ; on to the escape test
 .fup:   mov  byte [fwas],0      ; fwas = 0: F is up, the next press counts
 
+        cmp  byte [KEYS+SC_H],0 ; is H held?
+        je   .hup               ;   no: remember that
+        cmp  byte [hwas],0      ; was it held last frame too?
+        jne  .esc               ;   yes: one press, one flip
+        xor  byte [dohide],1    ; dohide ^= 1 - the skyline, on or off
+        mov  byte [hwas],1      ; hwas = 1
+        jmp  .esc               ; on to the escape test
+.hup:   mov  byte [hwas],0      ; hwas = 0
+
 .esc:   cmp  byte [KEYS+SC_ESC],0   ; is ESC held?
         je   FLY                    ;   no: another frame
         ret                         ;   yes: land
@@ -353,9 +422,10 @@ FLY:    call SETTRIG            ; settrig(): hsin/hcos from heading, and
 ;          else if (roll < 0)  roll = min(roll + BANKSTP, 0);   /* back level */
 ;          else if (roll > 0)  roll = max(roll - BANKSTP, 0);
 ;
-;          if (KEYS[SC_UP]) camy += STEPY;
-;          if (KEYS[SC_DN]) camy -= STEPY;
-;          if (camy < CAMYMIN) camy = CAMYMIN;
+;          if (KEYS[SC_DN]) camy += STEPY;     /* stick back: nose up */
+;          if (KEYS[SC_UP]) camy -= STEPY;
+;          int floor = TWY[NR][NR] + CAMYCL;   /* the ground under you */
+;          if (camy < floor)   camy = floor;
 ;          if (camy > CAMYMAX) camy = CAMYMAX;
 ;
 ;          step_xz();                       /* SPEEDV along the heading */
@@ -414,23 +484,44 @@ PHYS:   mov  word [turn],0      ; turn = 0: which way the stick is held
                                 ;  rsin/rcos at the top of the next frame,
                                 ;  and APPLYROLL tilts every point by it
 
-        ; ---- climb and dive, between a floor and a ceiling ---------------
-        cmp  byte [KEYS+SC_UP],0    ; is the UP arrow held?
+        ; ---- climb and dive, AND THE KEYS ARE THE OTHER WAY ROUND -------
+        ; DOWN climbs and UP dives, which reads wrong on paper and is
+        ; right in the air. Every flight simulator has had it this way
+        ; round, because the thing in your hand is not a lift button. It
+        ; is a stick, and you PULL IT BACK to go up. Lesson 14 had it the
+        ; lift way, and this is the fix.
+        cmp  byte [KEYS+SC_DN],0    ; is DOWN held?      (the stick, back)
         je   .nu                    ;   no
         mov  ax,[camy]              ; AX = camy
-        add  ax,STEPY               ; AX = camy + STEPY
+        add  ax,STEPY               ; AX = camy + STEPY   - and it CLIMBS
         mov  [camy],ax              ; camy = AX
-.nu:    cmp  byte [KEYS+SC_DN],0    ; is the DOWN arrow held?
+.nu:    cmp  byte [KEYS+SC_UP],0    ; is UP held?     (the stick, forward)
         je   .nd                    ;   no
         mov  ax,[camy]              ; AX = camy
-        sub  ax,STEPY               ; AX = camy - STEPY
+        sub  ax,STEPY               ; AX = camy - STEPY   - and it drops
         mov  [camy],ax              ; camy = AX
-.nd:    mov  ax,[camy]          ; AX = camy
-        cmp  ax,CAMYMIN         ; camy >= the floor?
-        jge  .y1                ;   yes
-        mov  ax,CAMYMIN         ;   no: stand on it. There is no crash in
-.y1:    cmp  ax,CAMYMAX         ;    this lesson - the ground is a floor
-        jle  .y2                ; camy <= the ceiling?
+
+        ; ---- and the floor is the GROUND now ----------------------------
+        ; Lesson 14 pinned the height at a flat ninety six, and ninety six
+        ; above a plane at nought is ninety six wherever you are. It is
+        ; not a plane any more.
+        ;
+        ; The floor is whatever TERRPREP cached for the node the eye is
+        ; standing over - the middle one of the block, at (NR, NR) - plus
+        ; a clearance. Fly at a hill and you do not go through it: you are
+        ; carried up its side.
+        ;
+        ; That is not a crash, and a crash is not what this lesson is
+        ; about. It is the difference between scenery and ground.
+.nd:    mov  si,(NR*TSIDE+NR)*2 ; SI = the slot of the node under the eye
+        mov  bx,[TWY+si]        ; BX = the world height of the ground there
+        add  bx,CAMYCL          ; BX += the clearance: the lowest you may be
+        mov  ax,[camy]          ; AX = camy
+        cmp  ax,bx              ; camy >= ground + clearance ?
+        jge  .y1                ;   yes: you are clear of it
+        mov  ax,bx              ;   no: carried up to it
+.y1:    cmp  ax,CAMYMAX         ; camy <= the ceiling ?
+        jle  .y2                ;   yes
         mov  ax,CAMYMAX         ;   no: pinned
 .y2:    mov  [camy],ax          ; camy = AX
 
@@ -622,6 +713,14 @@ FRAME:  mov  ax,cs              ; AX = cs
                                 ; polygon, and SCANPOLY in E_RAST.INC would
                                 ; draw it today. It belongs to the lesson that
                                 ; earns it.
+        push es                 ; keep ES: it is the drawing buffer
+        mov  ax,cs              ; AX = cs
+        mov  es,ax              ; ES = cs: HOR lives in OUR segment
+        mov  di,HOR             ; DI = &HOR[0]
+        mov  al,200             ; AL = 200, the bottom row of the screen
+        mov  cx,320             ; CX = 320 columns
+        rep  stosb              ; the skyline starts at the floor, so the
+        pop  es                 ;  first thing drawn in a column always shows
         mov  word [faults],0    ; faults = 0
         call GRIDC              ; gridc()    - the lattice
         call TALLY              ; tally()    - the red pixels
@@ -693,10 +792,19 @@ HUD:    mov  ax,[fpsv]          ; AX = n = fpsv
         mov  ax,4               ; AX = row 4: under the tally bar
         mov  bx,8               ; BX = column 8
         call TXT                ; txt(4, 8, s)
+        mov  si,HUDH            ; SI = HUDH, the skyline line
+        cmp  byte [dohide],0    ; dohide ?
+        jne  .put2              ;   yes: HIDDEN
+        mov  si,HUDS            ;   no: SI = HUDS, SEE THROUGH
+.put2:  mov  ax,14              ; AX = row 14
+        mov  bx,8               ; BX = column 8
+        call TXT                ; txt(14, 8, s)
         ret                     ; return
 
 HUDF    db '00 FPS   FAST  (F)',0
 HUDC    db '00 FPS   CLASSIC  (F)',0
+HUDH    db 'HIDDEN LINES  (H)',0
+HUDS    db 'SEE THROUGH   (H)',0
 
 ; ---- TXT: AX = y, BX = x, SI = the string; the PC's own 8x8 font ---------
 ;  Straight from EXAMPLES\JET.ASM. The glyphs live at F000:FA6E in every
@@ -791,133 +899,268 @@ TXT:    push es                 ; keep ES and DX for the caller
 ;
 ;      void gridc(void)
 ;      {
-;          camgi = (camx + BIAS) >> 10;             /* the node under the eye */
-;          camgj = (camz + BIAS) >> 10;
-;          for (gj = camgj - NR; gj <= camgj + NR; gj++)
-;              for (gi = camgi - NR; gi <= camgi + NR; gi++) {
-;                  band(gi, gj);                    /* COLOR = this square's */
-;                  nodev(gi, gj, &x0, &z0);         /* its corner            */
-;                  y0 = y1 = -camy;                 /* the plane is at y = 0 */
-;                  nodev(gi + 1, gj, &x1, &z1);     /* east                  */
-;                  draw_edge_3d();
-;                  nodev(gi, gj, &x0, &z0);         /* the corner AGAIN -    */
-;                  y0 = y1 = -camy;                 /*  draw_edge_3d cut it  */
-;                  nodev(gi, gj + 1, &x1, &z1);     /* north                 */
-;                  draw_edge_3d();
-;              }
+;          terrprep();                        /* every node, rotated once */
+;          for (ordk = 0; ordk < NSIDE*NSIDE; ordk++) {
+;                si = TORD[ordk];             /* NEAREST SQUARE FIRST     */
+;                COLOR = TCOL[si / 2];        /* cached, not looked up    */
+;                x0 = TRX[si];  z0 = TRZ[si];  y0 = TWY[si] - camy;
+;                x1 = TRX[si + TSIDE];  z1 = TRZ[si + TSIDE];
+;                y1 = TWY[si + TSIDE] - camy;          /* east  */
+;                draw_edge_3d();
+;                x0 = TRX[si];  z0 = TRZ[si];  y0 = TWY[si] - camy;
+;                x1 = TRX[si + 1];  z1 = TRZ[si + 1];  /* north */
+;                y1 = TWY[si + 1] - camy;
+;                draw_edge_3d();
+;            }
 ;      }
-GRIDC:  mov  ax,[camx]          ; AX = camx
+GRIDC:  call TERRPREP           ; terrprep(): every node rotated ONCE, and
+                                ;  its height looked up once, into the cache
+
+        mov  word [ordk],0      ; ordk = 0: the nearest square first
+
+.rx:    mov  bx,[ordk]          ; BX = ordk
+        add  bx,bx              ; BX = ordk*2: a word to an entry
+        mov  si,[TORD+bx]       ; SI = the slot of the ordk-th nearest square
+        mov  [tsi],si           ; tsi = SI - DRAWEDGE3D eats SI, so keep it
+        mov  di,si              ; DI = the slot
+        shr  di,1               ; DI /= 2: TCOL is bytes
+        mov  al,[TCOL+di]       ; AL = the colour cached for this node
+        mov  [COLOR],al         ; COLOR = AL - and no map lookup down here
+
+        ; ---- the edge going east: (ta,tb) to (ta+1,tb) -------------------
+        ; The east neighbour is one whole row further along the cache, so
+        ; its slot is SI + TSIDE*2. A constant, worked out by the assembler.
+        mov  ax,[TRX+si]        ; AX = TRX[ta][tb]
+        mov  [x0],ax            ; x0 = AX          - ALREADY ROTATED
+        mov  ax,[TRZ+si]        ; AX = TRZ[ta][tb]
+        mov  [z0],ax            ; z0 = AX
+        mov  ax,[TWY+si]        ; AX = the node's world height
+        sub  ax,[camy]          ; AX -= camy: how far below the eye it is
+        mov  [y0],ax            ; y0 = AX      AND THIS IS THE WHOLE LESSON
+        mov  ax,[TRX+si+TSIDE*2]    ; AX = TRX[ta+1][tb]
+        mov  [x1],ax            ; x1 = AX
+        mov  ax,[TRZ+si+TSIDE*2]    ; AX = TRZ[ta+1][tb]
+        mov  [z1],ax            ; z1 = AX
+        mov  ax,[TWY+si+TSIDE*2]    ; AX = its height
+        sub  ax,[camy]          ; AX -= camy
+        mov  [y1],ax            ; y1 = AX
+        call DRAWEDGE3D         ; draw_edge_3d()   - the edge going east
+
+        ; ---- the edge going north: (ta,tb) to (ta,tb+1) ------------------
+        ; The north neighbour is the next word along, so SI + 2. And x0/z0
+        ; are loaded again, because DRAWEDGE3D CUTS and what it cut was
+        ; this same corner.
+        mov  si,[tsi]           ; SI = the slot again - DRAWEDGE3D ate it
+        mov  ax,[TRX+si]        ; AX = TRX[ta][tb]
+        mov  [x0],ax            ; x0 = AX
+        mov  ax,[TRZ+si]        ; AX = TRZ[ta][tb]
+        mov  [z0],ax            ; z0 = AX
+        mov  ax,[TWY+si]        ; AX = its height
+        sub  ax,[camy]          ; AX -= camy
+        mov  [y0],ax            ; y0 = AX
+        mov  ax,[TRX+si+2]      ; AX = TRX[ta][tb+1]
+        mov  [x1],ax            ; x1 = AX
+        mov  ax,[TRZ+si+2]      ; AX = TRZ[ta][tb+1]
+        mov  [z1],ax            ; z1 = AX
+        mov  ax,[TWY+si+2]      ; AX = its height
+        sub  ax,[camy]          ; AX -= camy
+        mov  [y1],ax            ; y1 = AX
+        call DRAWEDGE3D         ; draw_edge_3d()   - the edge going north
+
+        inc  word [ordk]        ; ordk++
+        cmp  word [ordk],NSIDE*NSIDE    ; every square drawn?
+        jl   .rx                ;   no: the next one out
+        ret                     ; return
+
+; ============================================================================
+;  ORDPREP - the drawing order, worked out ONCE at the boot.
+;
+;  A wireframe does not care what order its lines go down in. The thing
+;  coming next does: hidden-line removal only works if everything NEARER
+;  has already been drawn, so the squares have to be walked from the eye
+;  outwards.
+;
+;  The order never changes, because it is a property of the block of
+;  squares and not of where the aeroplane is: the eye is always in the
+;  middle of it. So it is worked out once, into TORD, and after that the
+;  drawing loop just reads a list.
+;
+;  Sorted by the SQUARE of the distance in squares, which is
+;  (ta - NR)^2 + (tb - NR)^2 - no square root, because comparing distances
+;  and comparing their squares put things in the same order. The largest
+;  is 2*NR^2, so the outer loop runs that many times and each pass picks
+;  up everything at exactly that distance. Slow, and it runs once.
+;
+;  THE GAME HAS THIS TABLE TOO, in TERRAIN.INC, and calls it TORD - only
+;  its copy runs the other way, far to near, because a painter works back
+;  to front. Same table, read backwards. That is the next lesson.
+; ============================================================================
+;  In C:
+;
+;      void ordprep(void)
+;      {
+;          int n = 0;
+;          for (int d = 0; d <= 2*NR*NR; d++)
+;              for (int ta = 0; ta < NSIDE; ta++)
+;                  for (int tb = 0; tb < NSIDE; tb++)
+;                      if ((ta-NR)*(ta-NR) + (tb-NR)*(tb-NR) == d)
+;                          TORD[n++] = (ta * TSIDE + tb) * 2;
+;      }
+ORDPREP:
+        mov  word [ordn],0      ; ordn = 0: nothing in the list yet
+        mov  word [ordd],0      ; ordd = 0: start with the nearest
+.dl:    mov  word [ta],0        ; ta = 0
+.al:    mov  word [tb],0        ; tb = 0
+.bl:    mov  ax,[ta]            ; AX = ta
+        sub  ax,NR              ; AX = ta - NR: how far east of the middle
+        imul ax                 ; DX:AX = that, squared  (small: fits AX)
+        mov  bx,ax              ; BX = the square of it
+        mov  ax,[tb]            ; AX = tb
+        sub  ax,NR              ; AX = tb - NR
+        imul ax                 ; AX = that, squared
+        add  ax,bx              ; AX = the square of the distance
+        cmp  ax,[ordd]          ; is it exactly the distance we are on?
+        jne  .nx                ;   no: leave it for a later pass
+
+        mov  ax,[ta]            ; AX = ta     \  the slot, the only place
+        mov  bx,TSIDE           ; BX = TSIDE   > in the program that has to
+        mul  bx                 ; AX = ta*TSIDE   multiply - and it runs
+        add  ax,[tb]            ; AX += tb        once, at the boot
+        add  ax,ax              ; AX *= 2: a word to a slot
+        mov  bx,[ordn]          ; BX = ordn
+        add  bx,bx              ; BX = ordn*2: a word to an entry
+        mov  [TORD+bx],ax       ; TORD[ordn] = the slot
+        inc  word [ordn]        ; ordn++
+
+.nx:    inc  word [tb]          ; tb++
+        cmp  word [tb],NSIDE    ; tb < NSIDE ?
+        jl   .bl                ;   yes
+        inc  word [ta]          ; ta++
+        cmp  word [ta],NSIDE    ; ta < NSIDE ?
+        jl   .al                ;   yes
+        inc  word [ordd]        ; ordd++: the next distance out
+        cmp  word [ordd],2*NR*NR+1  ; past the far corner?
+        jl   .dl                ;   no: another pass
+        ret                     ; return
+
+; ============================================================================
+;  TERRPREP - out of GAMES\OWLFLY3\SRC\TERRAIN.INC, and it is the answer to
+;  a cost lesson 13 owned up to and could not pay.
+;
+;  Up to here every corner went through ROTXZ FOUR times: once as the start
+;  of its own east edge, once as the start of its own north edge, once as
+;  the end of its west neighbour's edge, once as the end of its south
+;  neighbour's. Four rotations of the same point, every frame, because a
+;  square knew nothing about the square next to it.
+;
+;  So rotate every node ONCE, into a table, and let the squares read it.
+;  Four hundred and eighty four nodes, one rotation each, and the drawing
+;  loop then does no arithmetic at all beyond an index.
+;
+;  The height comes with it. HGET does the wrapping, WORLDH turns a map
+;  byte into a world height - sea level at 88, land at five units a step,
+;  mountains above 200 climbing twice as fast - and both are looked up
+;  once per node here instead of once per edge down there.
+; ============================================================================
+;  In C:
+;
+;      void terrprep(void)
+;      {
+;          camgi = (camx + BIAS) >> 10;
+;          camgj = (camz + BIAS) >> 10;
+;          for (ta = 0; ta < TSIDE; ta++)
+;            for (tb = 0; tb < TSIDE; tb++) {
+;              gi = camgi + ta - NR;   gj = camgj + tb - NR;
+;              wdx = gi * 1024 - BIAS - camx;
+;              wdz = gj * 1024 - BIAS - camz;
+;              rotxz();                      /* by the heading, once */
+;              /* the slot walks: not one multiply in either loop */
+;              TRX[ta][tb] = rc_x;
+;              TRZ[ta][tb] = rc_z;
+;              TWY[ta][tb] = worldh(hget(gi, gj)) << VEXAG;
+;            }
+;      }
+TERRPREP:
+        mov  ax,[camx]          ; AX = camx
         add  ax,BIAS            ; AX = camx + BIAS
-        mov  cl,2               ; CL = 2   (shift count)
-        shr  ax,cl              ; AX >>= 2   \  >> 10 in two goes: the 8086
-        mov  cl,8               ;             > shifts by 1 or by CL, and
-        shr  ax,cl              ; AX >>= 8   /  CL cannot be 10 in one CL
-        mov  [camgi],ax         ; camgi = (camx + BIAS) >> 10
+        mov  cl,2               ; CL = 2   \  >> 10 in two goes: the 8086
+        shr  ax,cl              ; AX >>= 2  > shifts by 1 or by CL, and CL
+        mov  cl,8               ; CL = 8   /  cannot be 10 in one go
+        shr  ax,cl              ; AX >>= 8
+        mov  [camgi],ax         ; camgi = the node the eye is over
         mov  ax,[camz]          ; AX = camz
         add  ax,BIAS            ; AX = camz + BIAS
         mov  cl,2               ; CL = 2
         shr  ax,cl              ; AX >>= 2
         mov  cl,8               ; CL = 8
         shr  ax,cl              ; AX >>= 8
-        mov  [camgj],ax         ; camgj = (camz + BIAS) >> 10
+        mov  [camgj],ax         ; camgj = ...and the other axis
 
+        mov  word [tsi],0       ; tsi = 0: the first slot, and it walks
+        mov  word [ta],0        ; ta = 0
+.al:    mov  word [tb],0        ; tb = 0
+.bl:    mov  ax,[camgi]         ; AX = camgi    \  which node this slot is
+        add  ax,[ta]            ; AX += ta       > in map coordinates
+        sub  ax,NR              ; AX -= NR      /
+        mov  [gi],ax            ; gi = camgi + ta - NR
         mov  ax,[camgj]         ; AX = camgj
-        sub  ax,NR              ; AX = camgj - NR
-        mov  [gj],ax            ; gj = camgj - NR           (outer for)
-.rz:    mov  ax,[camgi]         ; AX = camgi
-        sub  ax,NR              ; AX = camgi - NR
-        mov  [gi],ax            ; gi = camgi - NR           (inner for)
+        add  ax,[tb]            ; AX += tb
+        sub  ax,NR              ; AX -= NR
+        mov  [gj],ax            ; gj = camgj + tb - NR
 
-.rx:    mov  ax,[gi]            ; AX = gi   \  band(gi, gj)
-        mov  bx,[gj]            ; BX = gj   /
-        call BAND               ; COLOR = the band of the height at (gi,gj)
-
-        mov  ax,[gi]            ; AX = gi   \  nodev(gi, gj, &x0, &z0)
-        mov  bx,[gj]            ; BX = gj    >
-        mov  di,x0              ; DI = &x0  /  (x0 and z0 sit side by side)
-        call NODEV              ; x0, z0 = the corner, from the eye
-        mov  ax,[camy]          ; AX = camy
-        neg  ax                 ; AX = -camy: the plane is at y = 0, so the
-        mov  [y0],ax            ; y0 = -camy   eye sees it camy below.
-        mov  [y1],ax            ; y1 = -camy   GRID's own two lines
-
-        mov  ax,[gi]            ; AX = gi
-        inc  ax                 ; AX = gi + 1   \  nodev(gi+1, gj, &x1, &z1)
-        mov  bx,[gj]            ; BX = gj        >
-        mov  di,x1              ; DI = &x1      /
-        call NODEV              ; x1, z1 = the corner to the east
-        call DRAWEDGE3D         ; draw_edge_3d()   - the edge going east
-
-        mov  ax,[gi]            ; AX = gi   \  nodev(gi, gj, &x0, &z0) AGAIN:
-        mov  bx,[gj]            ; BX = gj    > DRAWEDGE3D CUTS, and what it
-        mov  di,x0              ; DI = &x0  /  cut was this same corner
-        call NODEV              ; x0, z0 = the corner, fresh
-        mov  ax,[camy]          ; AX = camy
-        neg  ax                 ; AX = -camy
-        mov  [y0],ax            ; y0 = -camy   (the cut moved y0 too)
-        mov  [y1],ax            ; y1 = -camy
-        mov  ax,[gi]            ; AX = gi   \
-        mov  bx,[gj]            ; BX = gj    > nodev(gi, gj+1, &x1, &z1)
-        inc  bx                 ; BX = gj+1 /
-        mov  di,x1              ; DI = &x1
-        call NODEV              ; x1, z1 = the corner to the north
-        call DRAWEDGE3D         ; draw_edge_3d()   - the edge going north
-
-        inc  word [gi]          ; gi++
-        mov  ax,[camgi]         ; AX = camgi
-        add  ax,NR              ; AX = camgi + NR
-        cmp  ax,[gi]            ; gi <= camgi + NR ?
-        jl   .ez                ;   no: this row is done
-        jmp  .rx                ;   yes: next square   (over a JMP: the
-.ez:    inc  word [gj]          ; gj++                  body is > 127 bytes)
-        mov  ax,[camgj]         ; AX = camgj
-        add  ax,NR              ; AX = camgj + NR
-        cmp  ax,[gj]            ; gj <= camgj + NR ?
-        jl   .done              ;   no: all rows done
-        jmp  .rz                ;   yes: next row
-.done:  ret
-
-; ---- NODEV: node (AX = gi, BX = gj) into camera space, at [di] and [di+2] -
-;  Straight out of GRID: the node's world position, minus where the camera
-;  stands, through ROTXZ. The shift is the game's - two then eight, because
-;  the 8086 shifts by one or by CL and 1024 is ten places.
-;  In C:
-;
-;      void nodev(int gi, int gj, int *px, int *pz)
-;      {
-;          wdx = gi * 1024 - BIAS - camx;       /* the node, from the eye  */
-;          wdz = gj * 1024 - BIAS - camz;
-;          rotxz();                              /* turn by the heading:    */
-;          *px = rc_x;                           /*  wdx,wdz -> rc_x,rc_z   */
-;          *pz = rc_z;
-;      }
-;
-;  AX = gi, BX = gj, DI = px on entry; pz is px + 2 because x0/z0 and x1/z1
-;  are declared side by side. ROTXZ is ENGINE\E_M3D.INC and clobbers AX,
-;  BX, DX - not DI, but DI is pushed anyway: a routine that relies on what
-;  a neighbour happens not to touch breaks the day the neighbour changes.
-NODEV:  push di                 ; keep px
-        mov  cl,2               ; CL = 2   (shift count)
-        shl  ax,cl              ; AX = gi << 2   \  * 1024, in two shifts
-        mov  cl,8               ;                 >
-        shl  ax,cl              ; AX = gi << 10  /
-        sub  ax,BIAS            ; AX = gi*1024 - BIAS
-        sub  ax,[camx]          ; AX = gi*1024 - BIAS - camx
-        mov  [wdx],ax           ; wdx = that     (ROTXZ's input)
-        mov  ax,bx              ; AX = gj
+        mov  ax,[gi]            ; AX = gi       \  its world position, as an
+        mov  cl,2               ; CL = 2         > offset from the camera
+        shl  ax,cl              ; AX = gi << 2  /
+        mov  cl,8               ; CL = 8
+        shl  ax,cl              ; AX = gi * 1024
+        sub  ax,BIAS            ; AX -= BIAS
+        sub  ax,[camx]          ; AX -= camx
+        mov  [wdx],ax           ; wdx = how far east of the eye
+        mov  ax,[gj]            ; AX = gj
         mov  cl,2               ; CL = 2
         shl  ax,cl              ; AX = gj << 2
         mov  cl,8               ; CL = 8
-        shl  ax,cl              ; AX = gj << 10
-        sub  ax,BIAS            ; AX = gj*1024 - BIAS
-        sub  ax,[camz]          ; AX = gj*1024 - BIAS - camz
-        mov  [wdz],ax           ; wdz = that
-        call ROTXZ              ; rc_x, rc_z = (wdx, wdz) turned by heading
-        pop  di                 ; DI = px again
+        shl  ax,cl              ; AX = gj * 1024
+        sub  ax,BIAS            ; AX -= BIAS
+        sub  ax,[camz]          ; AX -= camz
+        mov  [wdz],ax           ; wdz = how far north of it
+        call ROTXZ              ; rc_x, rc_z = that, turned by the heading
+
+        mov  si,[tsi]           ; SI = this node's slot
         mov  ax,[rc_x]          ; AX = rc_x
-        mov  [di],ax            ; *px = rc_x
+        mov  [TRX+si],ax        ; TRX[slot] = AX
         mov  ax,[rc_z]          ; AX = rc_z
-        mov  [di+2],ax          ; *pz = rc_z
+        mov  [TRZ+si],ax        ; TRZ[slot] = AX
+
+        push si                 ; keep the slot: HGET and WORLDH are free to
+        mov  bx,[gi]            ; BX = gi   \  eat SI, and one of them does
+        mov  dx,[gj]            ; DX = gj   /  HGET wants x in BX, y in DX
+        call HGET               ; AL = the raw map height, 0..255, wrapped
+        xor  ah,ah              ; AX = AL
+        call WORLDH             ; AX = the world height of that
+        mov  cl,VEXAG           ; CL = the exaggeration, from the top of
+        shl  ax,cl              ; AX <<= CL   this file. Doubled, and said
+                                ;  out loud there rather than hidden here
+        pop  si                 ; SI = the slot again
+        mov  [TWY+si],ax        ; TWY[slot] = AX
+
+        mov  ax,[gi]            ; AX = gi   \  and the colour band, here,
+        mov  bx,[gj]            ; BX = gj   /  once per node
+        call BAND               ; COLOR = the band of the height there
+        mov  si,[tsi]           ; SI = the slot again (BAND ate it)
+        shr  si,1               ; SI /= 2: TCOL is bytes, not words
+        mov  al,[COLOR]         ; AL = COLOR
+        mov  [TCOL+si],al       ; TCOL[slot] = AL
+
+        add  word [tsi],2       ; tsi += a word. The nodes are written in
+                                ;  the order they lie in memory, so the
+                                ;  slot is never worked out - it walks
+        inc  word [tb]          ; tb++
+        cmp  word [tb],TSIDE    ; tb < TSIDE ?
+        jl   .bl                ;   yes: the next node along
+        inc  word [ta]          ; ta++
+        cmp  word [ta],TSIDE    ; ta < TSIDE ?
+        jl   .al                ;   yes: the next row of nodes
         ret                     ; return
 
 ; ---- BAND: COLOR from the height at node (AX = gi, BX = gj) ---------------
@@ -994,13 +1237,183 @@ DRAWEDGE3D:
         jc   .skip              ;         return;     (carry = "rejected")
 .noz:   call PROJ2              ; proj2();
         cmp  byte [doside],0    ; if (doside)
-        je   .no2               ;   no: skip the screen clip
-        call CLIPLINE           ;     if (!clip_line())
+        jne  .clip              ;   yes: clip
+        cmp  byte [dohide],0    ; THE SKYLINE INSISTS ON THE SCREEN CLIP: it
+        je   .no2               ;  keeps one byte a COLUMN, and there are 320
+.clip:  call CLIPLINE           ;     if (!clip_line())
         jc   .skip              ;         return;
-.no2:   mov  ax,[bufseg]        ; ES = the buffer LINE draws into
+.no2:   mov  ax,[bufseg]        ; ES = the buffer the line goes into
         mov  es,ax              ; ES = bufseg
-        call LINE               ; line();
+        cmp  byte [dohide],0    ; is the skyline switched on?
+        je   .plain             ;   no: the engine's line, every pixel of it
+        call HLINE              ;   yes: ours, which asks before each pixel
+        ret                     ; return
+.plain: call LINE               ; line();
 .skip:  ret
+
+; ============================================================================
+;  HLINE - THE FLOATING HORIZON. A line that asks before it draws.
+;
+;  THIS IS THE ONE ROUTINE IN THE COURSE THAT IS NOT IN THE GAME, and it is
+;  here for one lesson only. Read it, take it if you ever want it, and know
+;  that the next lesson throws it away for something cheaper. The reason is
+;  at the bottom of this comment.
+;
+;  THE PROBLEM. A wireframe has no front and no back. Every line is drawn,
+;  so the ridge four miles away comes straight through the hill in front of
+;  it, and what you are looking at is not a landscape - it is a fishing net.
+;  NEARCLIP and CLIPLINE do not help: they throw away what cannot or need
+;  not be drawn, and this line is on the screen and perfectly legal. It is
+;  simply BEHIND something.
+;
+;  THE IDEA, and it is one array. Keep, for every one of the 320 columns of
+;  the screen, the height of the highest thing drawn in it so far - the
+;  SKYLINE. Draw the squares from the eye outwards. A pixel is visible if it
+;  is ABOVE the skyline in its own column; if it is not, something nearer is
+;  already in the way. Draw it, and it becomes the new skyline there.
+;
+;      HOR[x]  starts at 200, the bottom of the screen: nothing drawn yet,
+;              so everything is above it and everything shows.
+;
+;  Remember that y grows DOWNWARD, so "above" is a SMALLER number - lesson
+;  12 drew a house upside down to make that stick.
+;
+;  WHY IT DOES NOT SURVIVE THIS LESSON. It costs a compare and a store per
+;  pixel, which is cheap. What it cannot do is give you a solid world: when
+;  the ground gets FILLED, the far ridge is hidden by the near one for
+;  nothing at all - the paint covers it. You do not pay for hiding, you get
+;  it free with the colour. That is the next lesson, and that is why no
+;  version of OWL FLY has ever contained this routine.
+;
+;  Bresenham underneath, exactly as lesson 5 built it: an error term, a
+;  compare and two adds. Not one multiply in the loop either: the ADDRESS
+;  WALKS, the same trick TERRPREP plays with its slot - a step sideways
+;  adds one to it, a step down adds three hundred and twenty.
+;
+;  One honest note: while the skyline is on, F does nothing. This is the
+;  only line routine in the program that knows HOR exists, and it was not
+;  worth writing twice to keep a switch alive for one lesson.
+;
+;  WHAT IT COSTS, and you can re-measure it in five minutes. Take a copy
+;  of this file and make four edits: seed rseed to a constant instead of
+;  the BIOS tick, NOP out the wait for SPACE on the map screen, NOP out
+;  both calls to WAITVR, and stop calling PHYS after 240 frames. Now the
+;  island is the same island, the aeroplane is parked in the same place,
+;  and the counter is a measurement instead of a multiple of seventy.
+;  Build it once with `dohide` at 1 and once at 0:
+;
+;      see through, lesson 8's patched line      76 frames a second
+;      HIDDEN, this routine                      60
+;      see through, the classic line (F)         53
+;
+;  And at 2500 cycles, where the beam stops hiding anything at all:
+;
+;      see through                                7 frames a second
+;      HIDDEN                                     5
+;
+;  Read those three again, because the obvious conclusion is the wrong
+;  one. The skyline does not cost 16 frames. Against a plain Bresenham it
+;  costs NOTHING - it is FASTER, 60 against 53, because a pixel it throws
+;  out is a pixel it never writes. What cost the 16 frames is that this
+;  routine is a plain Bresenham: the moment we wrote our own line we left
+;  lesson 8's behind, the one that writes its step sizes into its own
+;  instructions. The price of hiding was paid in lesson 8's coin.
+;
+;  And the frame counter will not read 60 in the finished program. It
+;  reads 35 - lesson 13's staircase. 60 is under 70, so a frame that waits
+;  for the beam waits for two of them. Press H in flight and watch the
+;  number fall from 70 to 35 in one step. Nothing in between exists.
+; ============================================================================
+;  In C:
+;
+;      void hline(void)                     /* sx0,sy0 -> sx1,sy1 in COLOR */
+;      {
+;          hdx = abs(sx1-sx0);  hsx = sx1 >= sx0 ? 1 : -1;
+;          hdy = abs(sy1-sy0);  hsy = sy1 >= sy0 ? 1 : -1;
+;          hrow = hsy * 320;                /* one row, in bytes          */
+;          herr = hdx - hdy;  hx = sx0;  hy = sy0;
+;          di = sy0 * 320 + sx0;            /* THE ONLY MULTIPLY THERE IS */
+;          for (;;) {
+;              if (hy < HOR[hx]) {          /* above the skyline: visible  */
+;                  HOR[hx] = hy;            /* and it IS the skyline now   */
+;                  buf[di] = COLOR;
+;              }
+;              if (hx == sx1 && hy == sy1) return;
+;              int e2 = herr * 2;
+;              if (e2 > -hdy) { herr -= hdy;  hx += hsx;  di += hsx;  }
+;              if (e2 <  hdx) { herr += hdx;  hy += hsy;  di += hrow; }
+;          }
+;      }
+HLINE:  mov  ax,[sx1]           ; AX = sx1
+        sub  ax,[sx0]           ; AX = sx1 - sx0
+        mov  word [hsx],1       ; hsx = 1: which way along x
+        jns  .xok               ; not negative ? fine
+        neg  ax                 ; AX = -AX
+        mov  word [hsx],-1      ; hsx = -1
+.xok:   mov  [hdx],ax           ; hdx = AX, always positive
+        mov  ax,[sy1]           ; AX = sy1
+        sub  ax,[sy0]           ; AX = sy1 - sy0
+        mov  word [hsy],1       ; hsy = 1
+        jns  .yok               ; not negative ? fine
+        neg  ax                 ; AX = -AX
+        mov  word [hsy],-1      ; hsy = -1
+.yok:   mov  [hdy],ax           ; hdy = AX
+        mov  ax,320             ; AX = 320, one row down the screen
+        imul word [hsy]         ; DX:AX = 320 * hsy  - so +320 or -320
+        mov  [hrow],ax          ; hrow = AX: what a step in y does to DI
+        mov  ax,[hdx]           ; AX = hdx
+        sub  ax,[hdy]           ; AX = hdx - hdy
+        mov  [herr],ax          ; herr = AX: the error starts as the difference
+        mov  ax,[sx0]           ; AX = sx0
+        mov  [hx],ax            ; hx = sx0
+        mov  ax,[sy0]           ; AX = sy0
+        mov  [hy],ax            ; hy = sy0
+        mov  bx,320             ; BX = 320
+        mul  bx                 ; AX = sy0 * 320  - THE ONLY MULTIPLY IN THE
+        add  ax,[sx0]           ;  WHOLE ROUTINE. After this the address walks
+        mov  di,ax              ; DI = the first pixel
+
+.plot:  mov  bx,[hx]            ; BX = hx, the column this pixel is in
+        mov  al,[HOR+bx]        ; AL = the skyline there
+        xor  ah,ah              ; AX = it, as a word
+        cmp  ax,[hy]            ; skyline <= hy ?  (hy at it or below it)
+        jle  .on                ;   yes: something nearer is in the way
+        mov  ax,[hy]            ; AX = hy
+        mov  [HOR+bx],al        ; HOR[hx] = hy - and this IS the skyline now
+        mov  al,[COLOR]         ; AL = COLOR
+        mov  [es:di],al         ; buf[di] = COLOR
+
+.on:    mov  ax,[hx]            ; AX = hx      \  arrived?
+        cmp  ax,[sx1]           ; hx == sx1 ?   >
+        jne  .step              ;   no: step on/
+        mov  ax,[hy]            ; AX = hy
+        cmp  ax,[sy1]           ; hy == sy1 ?
+        je   .done              ;   yes: return
+.step:  mov  ax,[herr]          ; AX = herr
+        add  ax,ax              ; AX = herr * 2
+        mov  bx,ax              ; e2 = AX
+        mov  ax,[hdy]           ; AX = hdy
+        neg  ax                 ; AX = -hdy
+        cmp  bx,ax              ; e2 > -hdy ?
+        jle  .noX               ;   no: x stays
+        mov  ax,[herr]          ; AX = herr
+        sub  ax,[hdy]           ; AX = herr - hdy
+        mov  [herr],ax          ; herr = AX
+        mov  ax,[hx]            ; AX = hx
+        add  ax,[hsx]           ; AX = hx + hsx
+        mov  [hx],ax            ; hx = AX
+        add  di,[hsx]           ; DI += hsx: a column is ONE byte
+.noX:   cmp  bx,[hdx]           ; e2 < hdx ?
+        jge  .plot              ;   no: y stays, on to the next pixel
+        mov  ax,[herr]          ; AX = herr
+        add  ax,[hdx]           ; AX = herr + hdx
+        mov  [herr],ax          ; herr = AX
+        mov  ax,[hy]            ; AX = hy
+        add  ax,[hsy]           ; AX = hy + hsy
+        mov  [hy],ax            ; hy = AX
+        add  di,[hrow]          ; DI += hrow: a row is 320 of them
+        jmp  .plot              ; the next pixel
+.done:  ret                     ; return
 
 ; ============================================================================
 ;  TRAP0 - INT 0, and lesson 0x0F is the reason this program can be filmed.
@@ -1245,6 +1658,16 @@ MAPVIEW:
         dec  word [gj]          ; gj--
         jns  .row               ; gj >= 0 ? next row  (JNS: -1 sets the sign)
 
+        ; ---- THE WHITE MARK. The bottom end is where you are standing,
+        ; and it runs eight nodes toward the top of the map, which is
+        ; north. So it is both "you are here" and "this is the way you
+        ; will be facing" - the flight starts on heading nought, and
+        ; nought is north.
+        ;
+        ; It is drawn straight up rather than along the heading, and that
+        ; is only honest because this screen is shown ONCE, at the boot,
+        ; before anything has turned. Show the map again in mid-flight and
+        ; the mark would be lying to you.
         mov  ax,[camx]          ; AX = camx             ---- the mark ----
         add  ax,BIAS            ; AX = camx + BIAS
         mov  cl,2               ; CL = 2   (shift count)
@@ -1355,11 +1778,18 @@ camgi   dw 0                    ; ...and which node that is
 camgj   dw 0
 gi      dw 0                    ; the lattice's own counters
 gj      dw 0
+ta      dw 0                    ; ...and the cache's: which node, east
+tb      dw 0                    ; ...and north, counted from the far corner
+tsi     dw 0                    ; the slot GRIDC is working on, kept across
+                                ;  DRAWEDGE3D because that eats SI
+ordk    dw 0                    ; which entry of TORD is being drawn
+ordn    dw 0                    ; ORDPREP: how many are in the list so far
+ordd    dw 0                    ; ORDPREP: the distance it is filling in
 
 x0      dw 0                    ; the edge, and the names are the game's.
-z0      dw 0                    ;  x0/z0 and x1/z1 sit in pairs so that
-x1      dw 0                    ;  NODEV can fill either one through a
-z1      dw 0                    ;  single pointer
+z0      dw 0                    ;  GRIDC fills them out of the cache now,
+x1      dw 0                    ;  and DRAWEDGE3D cuts them in place
+z1      dw 0
 y0      dw 0
 y1      dw 0
 
@@ -1371,6 +1801,20 @@ oldi9   dw 0,0                  ; ...and the INT 9 one. Both go back at QUIT
 turn    dw 0                    ; which way the stick is held: -1, 0 or +1
 fwas    db 0                    ; was F held last frame? - so one press is
                                 ;  one flip and not sixty
+dohide  db 0                    ; THE SKYLINE: 1 = hide what is behind,
+                                ;  0 = draw every line. H flips it in flight.
+                                ;  IT STARTS OFF, because off is what the
+                                ;  game does and what lesson 14 left you
+                                ;  with. H is the reveal, not the default
+hwas    db 0                    ; was H held last frame?
+hsx     dw 0                    ; HLINE: which way along x, +1 or -1
+hsy     dw 0                    ; ...and along y
+hdx     dw 0                    ; how far in x, always positive
+hdy     dw 0                    ; ...and in y
+herr    dw 0                    ; the running error
+hx      dw 0                    ; the pixel it is on
+hy      dw 0
+hrow    dw 0                    ; what one step in y does to the address
 rkey    db 0                    ; REMOTE: the code fed from outside, 0 = none
 rhold   db 0                    ; ...and how many frames it is still held for
 
@@ -1480,3 +1924,21 @@ SINT    dw 0,6,13,19,25,31,38,44,50,56,62,68,74,80,86,92,98,104,109,115
         include '..\..\ENGINE\E_RAST.INC'
 
 HMAP    db 4096 dup(0)          ; the 64x64 heightmap DSGEN fills
+
+; ---- the node cache TERRPREP fills, and GRIDC reads ------------------------
+;  Four hundred and eighty four nodes, three words each: where the node is
+;  after the heading has turned it, and how high the ground is there. Not
+;  quite three kilobytes, and it buys three rotations out of every four.
+TRX     dw TSIDE*TSIDE dup(0)   ; the node, rotated: east of the eye
+TRZ     dw TSIDE*TSIDE dup(0)   ; ...and in front of it
+TWY     dw TSIDE*TSIDE dup(0)   ; ...and the world height of the ground
+TCOL    db TSIDE*TSIDE dup(0)   ; ...and the colour band, so the drawing
+                                ;  loop never touches the map at all
+
+; ---- the drawing order, nearest square first. ORDPREP fills it once -------
+TORD    dw NSIDE*NSIDE dup(0)   ; each entry is a slot, ready to use
+
+; ---- THE SKYLINE. One byte a screen column: how high the highest thing
+;      drawn in it so far reaches. Three hundred and twenty bytes, and that
+;      is the whole of hidden-line removal.
+HOR     db 320 dup(200)         ; wiped to 200 at the top of every frame

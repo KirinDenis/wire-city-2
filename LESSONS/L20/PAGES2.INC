@@ -100,7 +100,7 @@ begin
   Lab(3.9, 16.5, GREEN, '1');   Lab(7.3, 16.5, GREY, '0');
   Lab(10.7, 16.5, GREEN, '1');  Lab(14.1, 16.5, GREY, '0');
   Lab(17.5, 16.5, GREY, '0');   Lab(20.9, 16.5, GREY, '0');
-  Lab(3, 18, INK, 'LEFT and PgUp are held, this instant. Both. No queue, no order,');
+  Lab(3, 18, INK, 'LEFT and UP are held, this instant. Both. No queue, no order,');
   Lab(3, 19, INK, 'nothing waiting to be taken out.');
   if upto < 3 then Exit;
 
@@ -211,7 +211,7 @@ begin
   Lab(0.9, 4.2, INK, 'It always moves forward - 48 times 181 over 256, which is 33.');
   Lab(0.9, 5.2, INK, 'The arrows turn it - and a byte is a circle, so nothing is tested.');
   Lab(0.9, 6.2, INK, 'The turn banks it - and the engine was already banking, for free.');
-  Lab(0.9, 7.2, INK, 'PgUp and PgDn climb - between a floor and a ceiling.');
+  Lab(0.9, 7.2, INK, 'The up and down arrows climb - a floor and a ceiling.');
   Lab(0.9, 8.6, INK, 'And under all four, our own INT 9, because a flight model has to');
   Lab(0.9, 9.6, INK, 'ask whether a key is HELD and the BIOS cannot answer that.');
   if upto < 2 then Exit;

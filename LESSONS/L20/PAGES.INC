@@ -89,7 +89,7 @@ begin
   Lab(3.4, 15.6, GREY, 'four compares and two adds. This is the whole feel.');
 
   Lab(1.6, 17.2, REDPEN, '4');
-  Lab(3.4, 17.2, INK, 'PGUP AND PGDN CLIMB');
+  Lab(3.4, 17.2, INK, 'THE UP AND DOWN ARROWS CLIMB');
   Lab(3.4, 18.3, PEN, 'camy -+ STEPY, between a floor and a ceiling');
   if upto < 2 then Exit;
 
@@ -217,8 +217,8 @@ begin
   SetColor(PENCIL);
   Line(CX(0.9), CY(18), CX(35), CY(18));
   Lab(0.9, 18.6, INK, 'RULE FOUR, and it is a floor and a ceiling:');
-  Lab(0.9, 20, PEN, 'if (KEYS[PgUp]) camy += 20;');
-  Lab(0.9, 21, PEN, 'if (KEYS[PgDn]) camy -= 20;');
+  Lab(0.9, 20, PEN, 'if (KEYS[UP])   camy += 20;');
+  Lab(0.9, 21, PEN, 'if (KEYS[DOWN]) camy -= 20;');
   Lab(0.9, 22, PEN, 'if (camy < 96)   camy = 96;');
   Lab(0.9, 23, PEN, 'if (camy > 1680) camy = 1680;');
   if upto < 4 then Exit;
