@@ -1,0 +1,7 @@
+.title  The ground becomes a surface: the painter, the first crash, and a word that overflows
+.what   Every square of the lattice is filled now, painted far to near so each one covers what was behind it - the painter's algorithm, which is lesson 15's table read backwards. The skyline array and five line routines are gone. A filled hillside ends the flight. Twice the view distance overflowed a 16-bit word when the square block turned 45 degrees, so the view became a circle. Then three speed-ups, each measured: 19 to 27 frames, and one of them bought almost nothing
+.tier   LESSON
+.main   FILL.ASM
+.build  FASM FILL.ASM FILL.COM
+.run    FILL.COM
+.uses   IMUL IDIV SAR SHR AND OR TEST LODSB STOSW MOVSW REP NOP CMP JGE JAE IN OUT CLI STI IRET

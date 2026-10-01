@@ -14,8 +14,18 @@
  *  and one not.
  *
  *  So this editor has NO DIALOGS. None. The file comes from the command
- *  line, F2 saves without asking, Alt-X leaves without asking. There is
- *  nothing to be in the wrong state.
+ *  line, F2 saves without asking, Alt-X leaves without asking - and saves
+ *  on the way out only if something was changed. There is nothing to be in
+ *  the wrong state.
+ *
+ *  AND IT NEVER LOSES A LINE IT WAS GIVEN. Up to 2026-09-27 a file longer
+ *  than MAXLINES was read up to the limit and the rest dropped without a
+ *  word - and Alt-X then saved unconditionally, so merely READING a long
+ *  file cut it short on disk. Lesson 0x16's FILL.ASM was 2115 lines; the
+ *  take read it top to bottom, left, and the build that followed found a
+ *  file of exactly 2000 lines with its data block gone. Now a file that
+ *  does not fit is refused before the screen is touched, and an unchanged
+ *  file is never written back.
  *
  *  AND IT IS PART OF THE COURSE. Written in C first, with Open Watcom -
  *  the compiler lesson 1 already uses - because it has to work before it
@@ -36,7 +46,7 @@
 
 #define COLS      80
 #define ROWS      25
-#define MAXLINES  2000
+#define MAXLINES  4000     /* 16K of far pointers in -ml; see load() */
 #define MAXCOL    250
 
 /* The edit area sits inside the frame: row 0 is the menu, row 1 the top of
@@ -181,7 +191,13 @@ static char *dup(const char *s)
     return p;
 }
 
-static void load(const char *path)
+/* Returns 1 when the file is held WHOLE. Otherwise it is left as it is on
+ * disk and the editor does not open - an editor that shows you part of a
+ * file and saves that part back has deleted the rest:
+ *     0   more than MAXLINES lines
+ *    -1   a line longer than MAXCOL, which fgets would cut in two and a
+ *         save would then write back as two lines */
+static int load(const char *path)
 {
     FILE *f = fopen(path, "r");
     char buf[MAXCOL + 2];
@@ -193,13 +209,24 @@ static void load(const char *path)
         while (nlines < MAXLINES && fgets(buf, sizeof(buf), f))
         {
             n = (int) strlen(buf);
+            if (n > 0 && buf[n - 1] != '\n' && !feof(f))
+            {
+                fclose(f);
+                return -1;              /* a line that did not fit: refuse */
+            }
             while (n > 0 && (buf[n - 1] == '\n' || buf[n - 1] == '\r')) buf[--n] = 0;
             ln[nlines++] = dup(buf);
+        }
+        if (nlines == MAXLINES && fgets(buf, sizeof(buf), f))
+        {
+            fclose(f);
+            return 0;                   /* there is more: refuse, do not cut */
         }
         fclose(f);
     }
     if (nlines == 0) ln[nlines++] = dup("");
     dirty = 0;
+    return 1;
 }
 
 /* CRLF, always. This file is read by DOS tools and shown in DOS editors,
@@ -372,7 +399,7 @@ static void run(void)
 /* ---- the loop ----------------------------------------------------------- */
 int main(int argc, char **argv)
 {
-    int ch;
+    int ch, n;
     union REGS r;
 
     if (argc < 2)
@@ -383,7 +410,14 @@ int main(int argc, char **argv)
     }
     strncpy(fname, argv[1], sizeof(fname) - 1);
     strupr(fname);
-    load(fname);
+    n = load(fname);
+    if (n != 1)
+    {
+        if (n == 0) printf("ED: %s has more than %d lines.\n", fname, MAXLINES);
+        else        printf("ED: %s has a line longer than %d characters.\n", fname, MAXCOL);
+        printf("It was NOT opened, and it has not been touched.\n");
+        return 2;
+    }
 
     r.h.ah = 0; r.h.al = 3; int86(0x10, &r, &r);
     status("");
@@ -420,7 +454,8 @@ int main(int argc, char **argv)
             case 0x3C: if (save()) status("saved"); break;         /* F2  */
             case 0x43: build(); break;                             /* F9  */
             case 0x44: run(); break;                               /* F10 */
-            case 0x2D: save(); r.h.ah = 0; r.h.al = 3;             /* Alt-X */
+            case 0x2D: if (dirty) save();                          /* Alt-X */
+                       r.h.ah = 0; r.h.al = 3;
                        int86(0x10, &r, &r);
                        return 0;
             default: break;

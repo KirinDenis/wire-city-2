@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Embedding OWL FLY III</title>
+<style>
+  body{margin:0;background:#111;color:#ddd;font:15px/1.5 sans-serif}
+  main{max-width:1000px;margin:0 auto;padding:16px}
+  h1{font-size:22px}
+  .game{width:100%;aspect-ratio:4/3;max-height:85vh;border:0;background:#000;display:block}
+  pre{background:#000;color:#9f9;padding:12px;overflow-x:auto;font-size:13px}
+  code{color:#9f9}
+</style>
+</head>
+<body>
+<main>
+  <h1>OWL FLY III on your own site</h1>
+  <p>This is an ordinary host page. Everything below the heading is a single
+  <code>&lt;iframe&gt;</code>: the emulator, the game and the multiplayer link to the
+  relay all live on the embedded page, so the host builds and runs nothing.</p>
+
+  <!-- THE EMBED: this tag is all a host page needs. -->
+  <iframe class="game" id="game"
+          src="https://kirindenis.github.io/wire-city-2/owlfly3_embed.html"
+          allow="fullscreen; gamepad; autoplay; cross-origin-isolated"
+          allowfullscreen
+          title="OWL FLY III"></iframe>
+
+  <h2>Copy this</h2>
+<pre>&lt;iframe src="https://kirindenis.github.io/wire-city-2/owlfly3_embed.html"
+        style="width:100%;aspect-ratio:4/3;border:0;background:#000"
+        allow="fullscreen; gamepad; autoplay; cross-origin-isolated"
+        allowfullscreen title="OWL FLY III"&gt;&lt;/iframe&gt;</pre>
+
+  <p><b>Multiplayer</b> works out of the box: every player on every site that
+  embeds the game meets in the same sky on our relay. To give your players a
+  sky of their own, add a room name: <code>owlfly3_embed.html?room=yoursite</code>.</p>
+  <p>Players click the game once to give it the keyboard. The browser tab must
+  stay visible, because browsers pause hidden tabs and the jet stops with them.</p>
+</main>
+<script>
+  // Local testing only: ?src= points the frame at a local copy, e.g.
+  // embed_example.html?src=http://127.0.0.1:8099/owlfly3_embed.html
+  var src = new URLSearchParams(location.search).get("src");
+  if (src) document.getElementById("game").src = src;
+</script>
+</body>
+</html>

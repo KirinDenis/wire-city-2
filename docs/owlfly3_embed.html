@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OWL FLY III</title>
+<link rel="stylesheet" href="jsdos/js-dos.css">
+<style>
+  /* The game and nothing else: this page lives inside someone else's
+     <iframe>, so it fills whatever box the host gives it. The manual,
+     the title and the links stay on owlfly3.html. */
+  html,body{margin:0;height:100%;background:#000;overflow:hidden}
+  #dos{position:absolute;inset:0 0 18px 0;background:#000}
+  #stat{position:absolute;left:0;right:0;bottom:0;height:18px;
+        font:12px/18px monospace;color:#5f7;background:#04060f;
+        text-align:center;white-space:nowrap;overflow:hidden}
+</style>
+</head>
+<body>
+<div id="dos"></div>
+<div id="stat">wire: connecting&hellip;</div>
+
+<!-- Same plumbing as owlfly3.html, in the same order: cross-origin
+     isolation first, then owlcontrols.js before js-dos captures rAF. -->
+<script src="coi-serviceworker.js"></script>
+<script src="owlcontrols.js"></script>
+<script src="jsdos/js-dos.js"></script>
+<script>
+(function () {
+  // js-dos.js is minified into GLOBAL names (st, ot, ...): a page-level
+  // "var st" overwrites one of its functions and the screen stays black.
+  // Everything this page declares stays inside this function.
+
+  // ?relay= and ?room= work here exactly as on owlfly3.html, so a host
+  // can give its players a private sky: owlfly3_embed.html?room=mysite
+  var params = new URLSearchParams(location.search);
+  var RELAY = params.get("relay")
+           || (location.hostname === "localhost" || location.hostname === "127.0.0.1"
+               ? "ws://localhost:1900"
+               : "wss://view.owlos.sk");
+  var ROOM = params.get("room") || "owlfly3";
+
+  var BUNDLE = "owlfly3_v17.jsdos";
+  var VER = "v" + (BUNDLE.match(/_v(\d+)/) || [0, "?"])[1];
+  var st = document.getElementById("stat");
+  st.textContent = "OWL FLY III " + VER + " - click the screen to grab the keyboard - wire: connecting…";
+
+  var KB = OwlControls.keyboard(
+    [["1 2 3 4 5 6 7", "{enter} h"]],
+    { h: "PAL" });
+
+  Dos(document.getElementById("dos"), {
+    url: BUNDLE,
+    pathPrefix: "jsdos/emulators/",
+    backend: "dosbox",
+    theme: "dark",
+    renderAspect: "4/3",
+    imageRendering: "pixelated",
+    scaleControls: 0.2,
+    softKeyboardLayout: KB.layout,
+    softKeyboardSymbols: KB.symbols,
+    noNetworking: false,
+    onEvent: function (e, ci) {
+      if (e !== "ci-ready") return;
+      window.__ci = ci;
+      OwlControls.mountTouch(ci);
+      ci.networkConnect(0, RELAY + "/ipx/" + ROOM)
+        .then(function () { st.textContent = "OWL FLY III " + VER + " - wire: LIVE - sky \"" + ROOM + "\""; })
+        .catch(function (err) {
+          var why = (err && err.message) ? err.message : "no answer";
+          st.textContent = "OWL FLY III " + VER + " - wire: dark (" + why + ") - solo flight";
+        });
+    }
+  });
+
+  OwlControls.fixPlusMinus(function () { return window.__ci; });
+  OwlControls.watchPanel();
+})();
+</script>
+</body>
+</html>

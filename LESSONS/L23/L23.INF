@@ -1,0 +1,7 @@
+.title  A town on the ground: houses, a byte of fraction, windows that grow, and night
+.what   Blocks of sixteen houses stand on the flat squares of the island, placed by a hash so the town plan costs no memory. Each house shows only the walls that face you, decided by four comparisons in the world. Everything but the island is halved, because the island is exactly one 16-bit word wide - and the position gains a byte of fraction, carried in with ADC. Windows are drawn exactly as big as they are on the screen, so a far one is a lit pixel that grows. N is night, and night is nothing but the palette
+.tier   LESSON
+.main   HOUSES.ASM
+.build  FASM HOUSES.ASM HOUSES.COM
+.run    HOUSES.COM
+.uses   ADC ADD SUB IMUL MUL DIV SAR SHR SHL AND OR TEST CBW NEG XCHG CLC STC LODSB STOSW LOOP CMP JB JAE JGE JLE IN OUT

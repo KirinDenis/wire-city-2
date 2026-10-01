@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 17 - a town on the ground</title>
+<link rel="stylesheet" href="jsdos/js-dos.css">
+<style>
+  html,body{margin:0;min-height:100vh;background:#04060f;color:#bcd;font-family:monospace}
+  #wrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px}
+  h1{letter-spacing:2px;color:#bcf;margin:4px;text-shadow:0 0 8px #46c;font-size:18px}
+  #dos{width:min(96vw,1000px);aspect-ratio:4/3;background:#000}
+  .hint{font-size:13px;color:#89b;text-align:center}
+  a{color:#9bf}
+  #about{width:min(96vw,1000px);font-size:13px;line-height:1.55;color:#abc}
+  #about h2{color:#9bf;letter-spacing:2px;margin:18px 0 6px;font-size:14px}
+  #about p{margin:0 0 8px}
+  #about b{color:#dfe}
+  pre{background:#080c18;border-left:3px solid #2a4a7a;color:#dfe;
+      padding:10px 12px;overflow-x:auto;font-size:13px;line-height:1.5;margin:8px 0}
+  .cards{display:flex;flex-wrap:wrap;gap:10px;width:min(96vw,1000px);margin-top:4px}
+  .card{flex:1 1 200px;background:#080c18;border:1px solid #1c2c4a;padding:10px 12px}
+  .card h3{color:#9bf;font-size:13px;margin:0 0 6px;letter-spacing:1px}
+  .card span{color:#89b;font-size:12px}
+  table{border-collapse:collapse;margin:8px 0;font-size:13px}
+  td,th{border:1px solid #1c2c4a;padding:4px 10px;text-align:left}
+  th{color:#9bf;font-weight:normal;letter-spacing:1px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>LESSON 17 &mdash; A TOWN ON THE GROUND</h1>
+  <div class="hint">click the black screen first to grab the keyboard &middot;
+    <b>this lesson wants a real keyboard</b> &middot;
+    <a href="index.html">back to the arcade</a></div>
+  <div id="dos"></div>
+  <div class="hint">Type <b>MAKE</b>, then <b>RUN</b>. Space takes off, facing the island's biggest town.
+    Arrows fly it &mdash; <b>down is nose up</b>. <b>N</b> is night.</div>
+
+  <div class="cards">
+    <div class="card">
+      <h3>THE TOWN</h3>
+      <span>Blocks of sixteen houses on the flat squares of sand and grass.
+        Nothing is stored: a hash of each square's position decides park or
+        houses, and each house's storeys. The same square always looks the
+        same.</span>
+    </div>
+    <div class="card">
+      <h3>THE WINDOWS</h3>
+      <span>Every pane is drawn exactly as big as it is on the screen, with
+        the perspective corrected. A far window is one lit pixel, and it
+        grows into a pane as you close in. Nothing switches, nothing pops.</span>
+    </div>
+    <div class="card">
+      <h3>THE NIGHT</h3>
+      <span>Press N. Eighty one bytes go to the VGA's DAC and not one pixel is
+        redrawn: every pixel keeps its number, and the numbers mean other
+        colours now.</span>
+    </div>
+  </div>
+
+  <div id="about">
+    <h2>THE WORLD IS AS BIG AS THE REGISTER</h2>
+    <p>The island is 64 squares of 1024 units: <b>65,536</b>, exactly one
+    16-bit word. A house on a square that size would be one house to a
+    hill, and squares twice as big would need a seventeenth bit for every
+    position. So the squares stayed, and everything else &mdash; the houses,
+    the storeys, the hills &mdash; was halved.</p>
+
+    <h2>A BYTE OF FRACTION, AND ADC</h2>
+    <p>The aeroplane moves 11 units a frame. Turn one step, and the sideways
+    part of that is 6&times;11 = 66 two-hundred-and-fifty-sixths of a unit
+    &mdash; which a word rounds to nothing, so the aeroplane turns its nose
+    and flies straight on. So a byte of fraction stands beside each
+    coordinate, and the carry out of it goes into the word with the one new
+    instruction of the lesson:</p>
+    <pre>add  [camxf],bl     ; 200 + 100 = 300: the byte keeps 44, CF = 1
+adc  [camx],ax      ; camx + the whole units + CF</pre>
+    <p><b>ADC</b> is ADD plus the carry flag. The trap: nothing between the
+    two may change CF.</p>
+
+    <h2>WHICH WALLS, AND IN WHAT ORDER</h2>
+    <p>A house shows the walls that face you, decided by four comparisons in
+    the world &mdash; west of the west wall, you see the west wall &mdash;
+    exactly as OWL FLY III's VISFILL does it. A box never shows three walls,
+    and its walls never cover each other, so nothing inside a house is
+    sorted. The sixteen houses of a square are sorted one axis at a time:
+    the distances along a row of columns make a V, so the farthest is always
+    one of the two ends.</p>
+
+    <h2>WHAT IT COSTS, MEASURED</h2>
+    <p>DOSBox at 30,000 cycles, retrace wait on, so the rate steps down a
+    whole retrace at a time:</p>
+    <table>
+      <tr><td>bare ground</td><td><b>23</b> frames a second</td></tr>
+      <tr><td>over the densest town, no windows</td><td><b>17</b></td></tr>
+      <tr><td>over the densest town, windows lit</td><td><b>14</b></td></tr>
+    </table>
+
+    <h2>CHANGE SOMETHING</h2>
+    <pre>EDIT HOUSES.ASM
+MAKE
+RUN</pre>
+    <p><code>HMAX</code> is 4096: the town's edge, where houses rise out of the
+    ground. Push it to 6144, set <code>RH</code> to 8, and count the frames.
+    Reload the page and everything is back as it was.</p>
+
+    <p><a href="https://github.com/KirinDenis/wire-city-2/tree/main/LESSONS/L23"
+       target="_blank" rel="noopener">the lesson's source and notes</a>
+    &middot; <a href="l22.html">lesson 16</a>
+    &middot; <a href="index.html">back to the arcade</a>
+    &middot; the assembler is <a href="https://flatassembler.net/"
+       target="_blank" rel="noopener">flat assembler</a>, and the DOS is DOSBox
+    compiled to WebAssembly via <a href="https://js-dos.com" target="_blank"
+       rel="noopener">js-dos</a></p>
+  </div>
+</div>
+<script src="coi-serviceworker.js"></script>
+<script src="jsdos/js-dos.js"></script>
+<script>
+(function () {
+  // Everything stays inside this IIFE: the minified js-dos.js READS the
+  // global single-letter variable "g", so a top-level "var g" here breaks
+  // Dos() with createElement('[object Object]').
+  Dos(document.getElementById("dos"), {
+    url: "l23_v2.jsdos",
+    pathPrefix: "jsdos/emulators/",
+    backend: "dosbox",   // pinned: js-dos stores this choice, and only wdosbox is vendored here
+    theme: "dark",
+    imageRendering: "pixelated",
+    scaleControls: 0.2,
+    onEvent: function (e, ci) { if (e === "ci-ready") window.__ci = ci; }
+  });
+})();
+</script>
+</body>
+</html>
+

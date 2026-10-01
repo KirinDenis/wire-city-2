@@ -248,6 +248,88 @@ $MAP = @{
       @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[autoexec]`necho off`nmount c .`nc:`ncls`nHELP.BAT`n" }
     )
   }
+  # THE RELIEF, as a DEMO. EXAMPLES\RELIEF.ASM is lesson 15's program copied
+  # out to be flown instead of read, so this bundle is the OPPOSITE of the
+  # L21 one below it: it carries the built .COM and starts it, and no source
+  # and no assembler at all. Two bundles on purpose - a lesson you can reach
+  # the end of without ever running the assembler is not a lesson, and a demo
+  # that makes you type MAKE first is not a demo.
+  #
+  # cycles=30000 for the same reason L21 uses it: at max the frame counter is
+  # a number about the viewer's laptop, and the whole point of pressing H is
+  # watching it fall from 70 to 35 in one step.
+  RELIEF = @{
+    prefix = "relief"
+    page   = Join-Path $root "docs\play.html"
+    detect = "relief_v(\d+)\.jsdos"
+    files  = @(
+      @{ p = "EXAMPLES\RELIEF.COM"; n = "RELIEF.COM" }
+    )
+    strings = @(
+      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=30000`n[autoexec]`necho off`nmount c .`nc:`nRELIEF`n" },
+      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=30000`n[autoexec]`necho off`nmount c .`nc:`nRELIEF`n" }
+    )
+  }
+  # LESSON 17 - a town on the ground. L22's shape exactly: the source
+  # unchanged, the engine in its own folder, LESSON.BAT for the greeting,
+  # cycles=30000 so the frame rates in the header of the source are the
+  # ones the reader sees.
+  L23 = @{
+    prefix = "l23"
+    page   = Join-Path $root "docs\l23.html"
+    detect = "l23_v(\d+)\.jsdos"
+    files  = @(
+      @{ p = "LESSONS\L23\HOUSES.ASM";     n = "HOUSES.ASM" },
+      @{ p = "ENGINE\E_8086.INC";          n = "ENGINE/E_8086.INC" },
+      @{ p = "ENGINE\E_MATH.INC";          n = "ENGINE/E_MATH.INC" },
+      @{ p = "ENGINE\E_TERR.INC";          n = "ENGINE/E_TERR.INC" },
+      @{ p = "ENGINE\E_M3D.INC";           n = "ENGINE/E_M3D.INC" },
+      @{ p = "ENGINE\E_RAST.INC";          n = "ENGINE/E_RAST.INC" },
+      @{ p = "LESSONS\L23\WEB\MAKE.BAT";   n = "MAKE.BAT" },
+      @{ p = "LESSONS\L23\WEB\RUN.BAT";    n = "RUN.BAT" },
+      @{ p = "LESSONS\L23\WEB\LESSON.BAT"; n = "LESSON.BAT" },
+      @{ p = "LESSONS\L02\WEB\EDIT.BAT";   n = "EDIT.BAT" },
+      @{ p = "TOOLS\FASM\FASM.EXE";        n = "FASM.EXE" },
+      @{ p = "TOOLS\FASM\FASMD.EXE";       n = "FASMD.EXE" },
+      @{ p = "TOOLS\FASM\LICENSE.TXT";     n = "LICENSE.TXT" },
+      @{ p = "TOOLS\CWSDPMI\CWSDPMI.EXE";  n = "CWSDPMI.EXE" },
+      @{ p = "TOOLS\CWSDPMI\cwsdpmi.doc";  n = "CWSDPMI.DOC" }
+    )
+    strings = @(
+      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=30000`n[autoexec]`necho off`nmount c .`nc:`ncls`nLESSON.BAT`n" },
+      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=30000`n[autoexec]`necho off`nmount c .`nc:`ncls`nLESSON.BAT`n" }
+    )
+  }
+  # LESSON 16 - the ground filled, far to near, and the first crash. The
+  # same shape as L21 below: the source unchanged, the engine in its own
+  # folder, the greeting called LESSON.BAT because DOSBox owns HELP, and
+  # cycles=30000 so the frame counter means what the lesson says it means.
+  L22 = @{
+    prefix = "l22"
+    page   = Join-Path $root "docs\l22.html"
+    detect = "l22_v(\d+)\.jsdos"
+    files  = @(
+      @{ p = "LESSONS\L22\FILL.ASM";       n = "FILL.ASM" },
+      @{ p = "ENGINE\E_8086.INC";          n = "ENGINE/E_8086.INC" },
+      @{ p = "ENGINE\E_MATH.INC";          n = "ENGINE/E_MATH.INC" },
+      @{ p = "ENGINE\E_TERR.INC";          n = "ENGINE/E_TERR.INC" },
+      @{ p = "ENGINE\E_M3D.INC";           n = "ENGINE/E_M3D.INC" },
+      @{ p = "ENGINE\E_RAST.INC";          n = "ENGINE/E_RAST.INC" },
+      @{ p = "LESSONS\L22\WEB\MAKE.BAT";   n = "MAKE.BAT" },
+      @{ p = "LESSONS\L22\WEB\RUN.BAT";    n = "RUN.BAT" },
+      @{ p = "LESSONS\L22\WEB\LESSON.BAT"; n = "LESSON.BAT" },
+      @{ p = "LESSONS\L02\WEB\EDIT.BAT";   n = "EDIT.BAT" },
+      @{ p = "TOOLS\FASM\FASM.EXE";        n = "FASM.EXE" },
+      @{ p = "TOOLS\FASM\FASMD.EXE";       n = "FASMD.EXE" },
+      @{ p = "TOOLS\FASM\LICENSE.TXT";     n = "LICENSE.TXT" },
+      @{ p = "TOOLS\CWSDPMI\CWSDPMI.EXE";  n = "CWSDPMI.EXE" },
+      @{ p = "TOOLS\CWSDPMI\cwsdpmi.doc";  n = "CWSDPMI.DOC" }
+    )
+    strings = @(
+      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=30000`n[autoexec]`necho off`nmount c .`nc:`ncls`nLESSON.BAT`n" },
+      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=30000`n[autoexec]`necho off`nmount c .`nc:`ncls`nLESSON.BAT`n" }
+    )
+  }
   # LESSON 15 - the relief, and hidden lines. The first lesson bundle that
   # carries the ENGINE, because from lesson 13 onward the lesson programs
   # are built out of the same five includes the game is. They go in a folder

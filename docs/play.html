@@ -98,6 +98,27 @@
                  " gear and brakes all do what they do on a real aeroplane." +
                  " Learn the landing here and OWL FLY stops eating your jets" +
                  " on the way home.</p>"},
+    relief:   {b:"relief_v2.jsdos", t:"THE WIREFRAME RELIEF",
+               s:"SPACE takes off, arrows fly it (down is nose up), H hides the hills, F engine, Esc lands",
+               r:"blob/main/EXAMPLES/RELIEF.ASM",
+               d:"<h2>WHAT THIS IS</h2><p>A height-mapped island drawn as a" +
+                 " lattice, and an aeroplane that never stops moving. The" +
+                 " island is made on the spot by diamond-square, so it is a" +
+                 " new one every time. You cannot fly through a hill.</p>" +
+                 "<h2>WHY IT IS WORTH A LOOK</h2><p><b>Press H.</b> It" +
+                 " switches on a floating horizon: one byte for each of the" +
+                 " 320 screen columns, holding the highest thing drawn in" +
+                 " that column so far, with the squares drawn from the eye" +
+                 " outwards. A pixel shows only if it is above the skyline" +
+                 " in its own column. That is the whole of hidden-line" +
+                 " removal, and the far half of the picture stops being a" +
+                 " fishing net. Now watch the frame counter: it falls from" +
+                 " 70 to 35 in one step, because a frame that waits for the" +
+                 " beam takes a whole number of retraces and there is no 60" +
+                 " to be had. Measured with that wait off, the hiding costs" +
+                 " 76 against 60 &mdash; and against a plain line routine it" +
+                 " is 60 against 53, which means <b>hiding is faster</b>. A" +
+                 " pixel it throws out is a pixel it never writes.</p>"},
     smoke:    {b:"smoke_v7.jsdos", t:"THE FIRE+SMOKE LAB",
                s:"arrows orbit, +/- particle count, W/S physics speed, [ ] zoom, F/G/V/B wind",
                r:"blob/main/EXAMPLES/SMOKE.ASM",
@@ -173,6 +194,7 @@
 </script>
 </body>
 </html>
+
 
 
 

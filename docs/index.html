@@ -211,6 +211,20 @@
         <a class="src" href="https://github.com/KirinDenis/wire-city-2/blob/main/EXAMPLES/AVIO.ASM">source</a>
       </div>
     </div>
+    <div class="card" data-tags="3d">
+      <img src="shots/relief.png" alt="wireframe relief">
+      <h2>THE WIREFRAME RELIEF <span class="kb">16 KB &middot; PRESS H</span></h2>
+      <div class="tags"><span class="tg t3d">3D</span></div>
+      <p>A height-mapped island drawn as a lattice, made on the spot and
+         different every time, with an aeroplane that never stops moving.
+         Press <b>H</b> and the far half stops being a fishing net: hidden
+         lines, in one byte per screen column. Then watch the frame counter
+         fall from 70 to 35 in a single step.</p>
+      <div class="row">
+        <a class="play" href="play.html?g=relief">&#9654; PLAY</a>
+        <a class="src" href="https://github.com/KirinDenis/wire-city-2/blob/main/EXAMPLES/RELIEF.ASM">source</a>
+      </div>
+    </div>
     <div class="card" data-tags="physics">
       <img src="shots/smoke.png" alt="fire and smoke">
       <h2>THE FIRE+SMOKE LAB <span class="kb">5.2 KB</span></h2>
@@ -270,6 +284,32 @@
       <div class="row">
         <a class="play" href="l21.html">&#9654; OPEN THE PROMPT</a>
         <a class="src" href="https://github.com/KirinDenis/wire-city-2/tree/main/LESSONS/L21">source</a>
+      </div>
+    </div>
+    <div class="card">
+      <h2>THE GROUND BECOMES A SURFACE <span class="kb">37 KB &middot; DIVE</span></h2>
+      <p>Lesson 16. Every square is filled now and painted far to near, so
+         the near hill covers the far one without a single test. The ground
+         can end the flight. And the view reaches twice as far &mdash; which
+         broke a 16-bit word the moment the square block turned forty five
+         degrees, so the view became a circle. Three speed-ups after that,
+         each one measured, and one of them bought almost nothing.</p>
+      <div class="row">
+        <a class="play" href="l22.html">&#9654; OPEN THE PROMPT</a>
+        <a class="src" href="https://github.com/KirinDenis/wire-city-2/tree/main/LESSONS/L22">source</a>
+      </div>
+    </div>
+    <div class="card">
+      <h2>A TOWN ON THE GROUND <span class="kb">49 KB &middot; N FOR NIGHT</span></h2>
+      <p>Lesson 17. Blocks of sixteen houses on the flat squares of the
+         island, placed by a hash so the town plan costs no memory, and you
+         take off facing the biggest town. The island is exactly one 16-bit
+         word wide, so everything else was halved &mdash; and the position
+         got a byte of fraction, carried with ADC. Every window is as big as
+         it really is on the screen. And N is night: nothing but the palette.</p>
+      <div class="row">
+        <a class="play" href="l23.html">&#9654; OPEN THE PROMPT</a>
+        <a class="src" href="https://github.com/KirinDenis/wire-city-2/tree/main/LESSONS/L23">source</a>
       </div>
     </div>
   </div>

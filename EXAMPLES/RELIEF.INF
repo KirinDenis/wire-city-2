@@ -1,0 +1,7 @@
+.title  Wireframe relief, and one key that hides the hills
+.what   A height-mapped island drawn as a lattice you fly over. H switches on a floating horizon - one byte a screen column - and the far half of the picture stops being a fishing net
+.tier   EXAMPLE
+.main   RELIEF.ASM
+.build  FASM RELIEF.ASM RELIEF.COM
+.run    RELIEF.COM
+.engine ENGINE\E_8086.INC ENGINE\E_MATH.INC ENGINE\E_TERR.INC ENGINE\E_M3D.INC ENGINE\E_RAST.INC
