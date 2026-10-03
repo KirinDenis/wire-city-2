@@ -1273,8 +1273,6 @@ GBUF    db ' 1.0G',0            ; the G readout scratch
 ftx     dw 0                    ; font cursor x
 fty     dw 0                    ; font cursor y
 NB      db 6 dup(0)             ; number->text scratch for FNUM
-FNAME   db 'CITY.DAT',0
-SFNAME  db 'CPSIDE.DAT',0       ; the 90-degree views; optional, see OWLFLY3.ASM
 ; ---- THE SOUND BANK. Recorded audio, cut by TOOLS\Snd2Dat into SIGNED
 ; 8-bit mono at 11025 Hz - the rate the engine ring already spins at, so a
 ; sound is mixed in as it lies, with no resampling at play time. Signed
@@ -1282,11 +1280,9 @@ SFNAME  db 'CPSIDE.DAT',0       ; the 90-degree views; optional, see OWLFLY3.ASM
 ; signed value into it: storing the deltas means the player is load,
 ; sign-extend, add, and nothing else. Optional the way CPSIDE.DAT is - no
 ; file, no bank, the game runs on in silence.
-SXNAME  db 'SFX.DAT',0
 sfxseg  dw 0                    ; where the bank was loaded (0 = none)
         include 'SFXIDX.INC'   ; SFXN and the SFX_* indices, from Snd2Dat
-RESMSG  db 'CITY.DAT not found - keep it next to CITY.COM',13,10,'$'
-BONDMEM db 'OWL FLY III BOND needs 320K free',13,10,'$'
+BONDMEM db 'OWL FLY III BOND needs 256K free',13,10,'$'
 ; BOND: the line clipper's rectangle (ENGINE\E_RAST.INC reads these when
 ; they exist). Full screen here; SKYGNDF narrows it to the small window on
 ; the world for a cockpit frame, VPANELF/VBLITF open it again.

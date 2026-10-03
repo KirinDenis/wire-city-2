@@ -26,6 +26,12 @@ if (typeof window === 'undefined') {
         if (r.cache === "only-if-cached" && r.mode !== "same-origin") {
             return;
         }
+        // wire-city-2: the course page (/course/) must NOT be isolated - it
+        // frames YouTube, which an isolated page in Firefox cannot - and it
+        // needs no isolation for js-dos. Its page is passed through untouched.
+        if (r.mode === "navigate" && new URL(r.url).pathname.includes("/course/")) {
+            return;
+        }
 
         const request = (coepCredentialless && r.mode === "no-cors")
             ? new Request(r, {

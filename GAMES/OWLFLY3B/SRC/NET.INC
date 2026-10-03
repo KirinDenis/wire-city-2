@@ -806,17 +806,3 @@ RSLOT:  push si
         pop  si
         ret
 
-; ---- THE WINDOW GUARD (sky + net together) ---------------------------------
-; SKYSEG lives at CS+1000h with UISEG at CS+1200h right behind: 8K,
-; not a byte more. The build refuses to overflow instead of letting
-; the neighbour eat the cloud tables (postmortem 2026-07-23) - and
-; the ORG pad below CLAIMS the full window, so the linker parks
-; UISEG exactly at CS+1200h.
-label SKYEND byte
-if ($-BNOISE) > 8176
-        %OUT *** SKYSEG overflows its 8K window before UISEG ***
-        .ERR
-end if
-        rb 1FF0h - $
-        db   16 dup(?)
-

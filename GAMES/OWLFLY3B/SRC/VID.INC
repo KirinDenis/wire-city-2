@@ -695,17 +695,6 @@ hbev    db 0                    ; ...and whether it is even (the bake's
                                 ; density codes expand differently)
 orcnt   db 0                    ; EGA: output rows this source row feeds
 ooff    dw 0                    ; EGA: output row offset in A000
-VCGNAME db 'CPCGA.DAT',0
-VEGNAME db 'CPEGA.DAT',0
-VHGNAME db 'CPHGC.DAT',0
-VSDNCG  db 'CPSCGA.DAT',0       ; the side consoles' marker maps
-VSDNEG  db 'CPSEGA.DAT',0
-VSDNHG  db 'CPSHGC.DAT',0
-vsdnam  dw 0                    ; which of the three rides this card
-vsfh    dw 0                    ; the marker file while transcoding
-vsbn    dw 0                    ; bytes left in the chunk buffer
-vsbp    dw 0                    ; ...and the read cursor in it
-cscp    dw 0                    ; cpsseg, stashed for the transcoder
 ; 4-bit static mask -> 8-bit, two bits per pixel, MSB pixel first
 MEXP    db 000h,003h,00Ch,00Fh,030h,033h,03Ch,03Fh
         db 0C0h,0C3h,0CCh,0CFh,0F0h,0F3h,0FCh,0FFh
@@ -1432,179 +1421,6 @@ VPALSW:                          ; the near core: CGABLT's H key needs it
 .p:    ret
 
 ; ============================================================================
-;  VCGLDF - the picked card's baked panel into scrseg:2000h, one page
-;  past the two minimap pages (scrseg's 64K had 56K spare; there is no
-;  free page above sfxseg). CGA takes CPCGA.DAT (16000 bytes, 2-bit
-;  pixels), EGA takes CPEGA.DAT (32000 bytes, nibbles). No file, or the
-;  drawn-panel fallback, and the game flies on with the plain lookup.
-; ============================================================================
-VCGLDF:
-        mov  byte [cs:vcgok],0
-        cmp  word [pimgo],0
-        je   .no                ; drawn-panel fallback: nothing to compare
-        mov  ax,[scrseg]
-        mov  [cs:cscr],ax
-        mov  al,[vcard]
-        cmp  al,VMHERC
-        je   .hg
-        cmp  al,VMCGA
-        je   .cg
-        cmp  al,VMEGA
-        jb   .no
-        cmp  al,VMV480
-        ja   .no                ; the straight modes carry no bake
-        mov  dx,VEGNAME         ; the whole 16-colour family shares one
-        mov  cx,32000           ; drawn panel
-        mov  word [cs:vsdnam],VSDNEG
-        jmp  .op
-.hg:   mov  dx,VHGNAME         ; the density codes
-        mov  cx,16000
-        mov  word [cs:vsdnam],VSDNHG
-        jmp  .op
-.cg:   mov  dx,VCGNAME
-        mov  cx,16000
-        mov  word [cs:vsdnam],VSDNCG
-.op:   mov  [cs:vbklen],cx
-        push ds
-        mov  ax,cs
-        mov  ds,ax
-        mov  ax,3D00h
-        int  21h
-        jc   .fail
-        mov  bx,ax
-        mov  ds,[cs:cscr]
-        mov  dx,2000h
-        mov  cx,[cs:vbklen]
-        mov  ah,3Fh
-        int  21h
-        mov  si,ax              ; bytes actually read
-        mov  ah,3Eh
-        int  21h
-        cmp  si,[cs:vbklen]
-        jne  .fail
-        pop  ds
-        mov  byte [cs:vcgok],1
-        call VSDTRAN            ; ...and the side consoles, in place
-        retf
-.fail: pop  ds
-.no:   retf
-
-; ============================================================================
-;  VSDTRAN - the F6/F7 side consoles for the retro cards. They exist
-;  only as RLE streams in cpsseg (SIDEBMPF plays them straight onto the
-;  glass), so the bake cannot ride a flat page - instead the streams
-;  are TRANSCODED IN PLACE, once, here: every artwork byte becomes a
-;  MARKER, 200 + colour, a range the 137-entry palette never reaches,
-;  taken from the card's marker map (CPS*.DAT, one flat byte per pixel,
-;  left view then right, streamed through a 1K chunk of the row
-;  scratch). The lookup tables carry entries for the markers - phases
-;  and all, so the CGA checker and the Hercules densities stay
-;  positional even inside a long run. SIDEBMPF never changes: it keeps
-;  copying bytes, the bytes just mean better. A run takes its first
-;  position's marker - a run is one flat patch of one band anyway.
-;  DS = the main segment on entry. No file, and the sides simply stay
-;  on the plain lookup.
-; ============================================================================
-VSDTRAN:
-        cmp  word [cpsseg],0
-        je   .r                  ; no side views loaded: nothing to do
-        mov  ax,[cpsseg]
-        mov  [cs:cscp],ax
-        push ds
-        mov  ax,cs
-        mov  ds,ax
-        mov  dx,[vsdnam]
-        mov  ax,3D00h
-        int  21h
-        pop  ds
-        jc   .r
-        mov  [cs:vsfh],ax
-        mov  word [cs:vsbn],0   ; the chunk buffer starts empty
-        mov  si,[cplo]
-        call VSDONE
-        mov  si,[cpro]          ; the right view follows the left in the
-        call VSDONE             ; file, so the cursor is already there
-        mov  bx,[cs:vsfh]
-        mov  ah,3Eh
-        int  21h
-.r:    ret
-
-; ---- one stream: walk the tokens, substitute the values -------------------
-VSDONE: push ds
-        mov  ds,[cs:cscp]
-.t:    lodsb                   ; token
-        or   al,al
-        jz   .d
-        mov  bl,al
-        and  al,3Fh
-        mov  cl,al
-        xor  ch,ch
-        or   cl,cl
-        jnz  .n
-        lodsw                   ; count 0: a word count follows
-        mov  cx,ax
-.n:    and  bl,0C0h
-        cmp  bl,0C0h
-        je   .skip
-        cmp  bl,80h
-        je   .run
-.lp:   call VSGETB             ; literal: every byte gets its marker
-        mov  [si],al
-        inc  si
-        loop .lp
-        jmp  .t
-.run:  call VSGETB             ; a run takes its first marker...
-        mov  [si],al
-        inc  si
-        dec  cx
-        jcxz .t
-.sk2:  call VSGETB             ; ...and drops the rest of its span
-        loop .sk2
-        jmp  .t
-.skip: jcxz .t
-.sk3:  call VSGETB             ; transparent: consume, drop
-        loop .sk3
-        jmp  .t
-.d:    pop  ds
-        ret
-
-; ---- the next marker-map byte, chunked through the row scratch ------------
-VSGETB: push bx
-        push cx
-        push dx
-        push ds
-        cmp  word [cs:vsbn],0
-        jne  .g
-        mov  ax,cs
-        mov  ds,ax
-        mov  dx,artrow          ; the blit's row scratch is idle at load
-        mov  cx,1024
-        mov  bx,[vsfh]
-        mov  ah,3Fh
-        int  21h
-        jc   .z
-        or   ax,ax
-        jz   .z
-        mov  [vsbn],ax
-        mov  word [vsbp],0
-        jmp  .g
-.z:    pop  ds                 ; starved: hand back black and carry on
-        pop  dx
-        pop  cx
-        pop  bx
-        xor  al,al
-        ret
-.g:    mov  bx,[cs:vsbp]
-        mov  al,[cs:artrow+bx]
-        inc  word [cs:vsbp]
-        dec  word [cs:vsbn]
-        pop  ds
-        pop  dx
-        pop  cx
-        pop  bx
-        ret
-
-; ============================================================================
 ;  VPANELF / VPSIDEF - THE BOND'S COCKPIT, DRAWN. v3 copied a 64000-byte
 ;  photograph into the back buffer every frame (and two RLE photographs for
 ;  the F6/F7 side consoles) and the retro cards then dithered them; the BOND
@@ -1973,6 +1789,73 @@ KRESTF: push ax
         pop  bx
         pop  ax
         retf
+
+; ============================================================================
+;  VFONTF - THE 4x6 FONT, BUILT IN. It used to be resource 1 of CITY.DAT,
+;  read off the disk into a 64K page at start-up and copied from there into
+;  FONTBUF; now the bytes live here and are copied straight in. Same glyphs,
+;  same order (0-9, A-Z, + - : % .), six rows a glyph, three pixels wide.
+;  DS = the main segment.
+; ============================================================================
+VFONTF: push cx
+        push si
+        push di
+        push es
+        mov  ax,ds
+        mov  es,ax
+        mov  si,VFONT
+        mov  di,FONTBUF
+        mov  cx,VFONTN
+        cld
+        rep  movs byte [es:di],[cs:si]
+        pop  es
+        pop  di
+        pop  si
+        pop  cx
+        retf
+VFONT:
+        db 11100000b,10100000b,10100000b,10100000b,11100000b,00000000b ; 0
+        db 01000000b,11000000b,01000000b,01000000b,11100000b,00000000b ; 1
+        db 11100000b,00100000b,11100000b,10000000b,11100000b,00000000b ; 2
+        db 11100000b,00100000b,11100000b,00100000b,11100000b,00000000b ; 3
+        db 10100000b,10100000b,11100000b,00100000b,00100000b,00000000b ; 4
+        db 11100000b,10000000b,11100000b,00100000b,11100000b,00000000b ; 5
+        db 11100000b,10000000b,11100000b,10100000b,11100000b,00000000b ; 6
+        db 11100000b,00100000b,01000000b,01000000b,01000000b,00000000b ; 7
+        db 11100000b,10100000b,11100000b,10100000b,11100000b,00000000b ; 8
+        db 11100000b,10100000b,11100000b,00100000b,11100000b,00000000b ; 9
+        db 01000000b,10100000b,11100000b,10100000b,10100000b,00000000b ; A
+        db 11000000b,10100000b,11000000b,10100000b,11000000b,00000000b ; B
+        db 01100000b,10000000b,10000000b,10000000b,01100000b,00000000b ; C
+        db 11000000b,10100000b,10100000b,10100000b,11000000b,00000000b ; D
+        db 11100000b,10000000b,11000000b,10000000b,11100000b,00000000b ; E
+        db 11100000b,10000000b,11000000b,10000000b,10000000b,00000000b ; F
+        db 01100000b,10000000b,10100000b,10100000b,01100000b,00000000b ; G
+        db 10100000b,10100000b,11100000b,10100000b,10100000b,00000000b ; H
+        db 11100000b,01000000b,01000000b,01000000b,11100000b,00000000b ; I
+        db 00100000b,00100000b,00100000b,10100000b,01000000b,00000000b ; J
+        db 10100000b,11000000b,10000000b,11000000b,10100000b,00000000b ; K
+        db 10000000b,10000000b,10000000b,10000000b,11100000b,00000000b ; L
+        db 10100000b,11100000b,10100000b,10100000b,10100000b,00000000b ; M
+        db 11100000b,10100000b,10100000b,10100000b,10100000b,00000000b ; N
+        db 11100000b,10100000b,10100000b,10100000b,11100000b,00000000b ; O
+        db 11100000b,10100000b,11100000b,10000000b,10000000b,00000000b ; P
+        db 11100000b,10100000b,10100000b,11100000b,00100000b,00000000b ; Q
+        db 11000000b,10100000b,11000000b,10100000b,10100000b,00000000b ; R
+        db 11100000b,10000000b,11100000b,00100000b,11100000b,00000000b ; S
+        db 11100000b,01000000b,01000000b,01000000b,01000000b,00000000b ; T
+        db 10100000b,10100000b,10100000b,10100000b,11100000b,00000000b ; U
+        db 10100000b,10100000b,10100000b,10100000b,01000000b,00000000b ; V
+        db 10100000b,10100000b,10100000b,11100000b,10100000b,00000000b ; W
+        db 10100000b,10100000b,01000000b,10100000b,10100000b,00000000b ; X
+        db 10100000b,10100000b,01000000b,01000000b,01000000b,00000000b ; Y
+        db 11100000b,00100000b,01000000b,10000000b,11100000b,00000000b ; Z
+        db 00000000b,01000000b,11100000b,01000000b,00000000b,00000000b ; plus
+        db 00000000b,00000000b,11100000b,00000000b,00000000b,00000000b ; minus
+        db 00000000b,01000000b,00000000b,01000000b,00000000b,00000000b ; colon
+        db 10100000b,00100000b,01000000b,10000000b,10100000b,00000000b ; percent
+        db 00000000b,00000000b,00000000b,00000000b,01000000b,00000000b ; dot
+VFONTN  = $-VFONT
 
 VPK     = 200                   ; black
 VPC     = 201                   ; frame ink
@@ -2465,20 +2348,3 @@ VPRUN:  mov  ax,[cs:vpy]
                                 ; TOOLS\VidRig emit - regenerate after any
                                 ; PALDAY/PALNITE change
 
-label VIDEND byte
-VIDFREE = 5FF0h - $             ; BOND: the report the other windows print
-if VIDFREE < 256
-        display "VIDSEG free: under 256",13,10
-else if VIDFREE < 1024
-        display "VIDSEG free: 256..1023",13,10
-else if VIDFREE < 4096
-        display "VIDSEG free: 1024..4095",13,10
-else
-        display "VIDSEG free: 4096 or more",13,10
-end if
-        rb 5FF0h - $   ; claim the whole window - TWENTY-FOUR K since the
-                        ; second CGA palette's banks (each growth moved
-                        ; bufseg and resseg up 200h; the note beside
-                        ; resseg keeps the count. CITY.DAT now ends 79
-                        ; paragraphs short of sndseg's guaranteed floor -
-                        ; the NEXT growth must take a page ABOVE instead)

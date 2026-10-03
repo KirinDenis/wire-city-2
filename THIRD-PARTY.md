@@ -20,7 +20,10 @@ build publishes them to anyone who opens the page.
 | CWSDPMI | `TOOLS/CWSDPMI/` | r7 | GPL-2.0, or binary-only with its notice | [DJGPP archive](http://www.delorie.com/pub/djgpp/current/v2misc/) |
 
 `coi-serviceworker.js` carries its own attribution in the first line of the
-file. The others carried nothing, which is what this page fixes.
+file. The others carried nothing, which is what this page fixes. **It is
+modified here** (2026-10-03, one marked block in its fetch handler): it lets
+navigations to `/course/` through untouched, because the course page must not
+be cross-origin isolated - an isolated page in Firefox cannot frame YouTube.
 
 ## flat assembler, and why it is in here at all
 

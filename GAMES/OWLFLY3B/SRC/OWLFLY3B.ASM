@@ -7,10 +7,10 @@
 ;    - FULL and MEDIUM detail: it always flies LOW
 ;    - the Sound Blaster and its sample bank: speaker or silence
 ;    - the 64K-aligned far map the Blaster's DMA needed: the pages are
-;      packed (BONDSCR), and the game ends at CS+5000h, 320K, so it fits
-;      a 512K machine with room to spare. The door checks it (BONDTOP).
-;      (448K at the fork; the drawn cockpit and the Shilkas' going took
-;      two 64K pages each time.)
+;      packed (BONDSCR), and the game ends at CS+3000h, 192K past its
+;      code, so it fits a 512K machine with room to spare. The door
+;      checks it (BONDTOP). (448K at the fork; the drawn cockpit, the
+;      Shilkas, CITY.DAT and the far windows each took a page away.)
 ;  The wire is v3's, byte for byte: a BOND flies in the same sky.
 ;
 ;  Build with FASM (in DOSBox) - MAKE.BAT in this game's folder:
@@ -68,17 +68,21 @@
 ; to 64K boundaries, from (CS+5FFFh) AND F000h, because the Blaster's DMA
 ; ring could not cross one - and that alignment alone could cost 60K and
 ; pushed the top to the 640K line. Without a Blaster nothing needs it:
-;   CS+0000h  CODE, then SKYSEG UISEG SYMSEG TOWNSEG VIDSEG (to CS+2000h)
-;   CS+2000h  bufseg, the back buffer          CS+3000h  resseg, CITY.DAT
-;   CS+4000h  scrseg: the minimap (0..1FFFh) and the radar phosphor
-;             (RDRMAP, F000h) - shcabsg points here too, see SHCABLDF
-;   CS+5000h  the end - BONDTOP, what the door asks DOS for: 320K.
+;   below CS  SKYSEG UISEG SYMSEG TOWNSEG VIDSEG, packed (see the note
+;             beside their includes: the far segments come first)
+;   CS+0000h  CODE, its data, BSS and stack - 64K
+;   CS+1000h  bufseg, the back buffer
+;   CS+2000h  scrseg: the minimap (0..1FFFh) and the radar phosphor
+;             (RDRMAP, F000h) - shcabsg points here too, see SHCABLDF.
+;             It was resseg's page, CITY.DAT's, until the font was built
+;             into the program (VFONTF, 2026-10-03)
+;   CS+3000h  the end - BONDTOP, what the door asks DOS for.
 ; The F6/F7 side views had a page of their own (cpsseg, CPSIDE.DAT) until
 ; the cockpit was drawn instead of photographed - VPSIDEF in VID.INC - and
 ; the Shilka's cabin had one (BONDCAB) until the Shilkas went.
-BONDSCR = 4000h
-BONDCAB = 5000h               ; (unused since 2026-10-03: no Shilka cabin)
-BONDTOP = 5000h
+BONDBUF = 1000h
+BONDSCR = 2000h
+BONDTOP = 3000h
 
 ; ---- world constants -------------------------------------------------------
 FOCAL   = 220                 ; projection focal length: ~72 deg horizontal
@@ -341,6 +345,20 @@ stack CODE:0
 ; before anything can use them.
 include '..\..\..\ENGINE\E_8086.INC'
 
+; ---- BOND: THE FAR SEGMENTS COME FIRST. v3 put CODE first and gave each
+; far segment a fixed window (8K, 16K, 8K, 8K, 24K) at CS+1000h..1FFFh,
+; padded out with zeros, and CODE itself was stored whole - its 22K of
+; BSS and stack included. Here the far segments are packed below CODE,
+; each as long as its code and no longer, and CODE goes last so that its
+; BSS and stack are not in the file at all. Calls between segments are
+; relocated by DOS, so nothing addresses a far segment by arithmetic.
+        include 'SKY.INC'   ; the NEWTON sky, in its own segment
+        include 'NET.INC'   ; continues the segment SKY.INC opened
+        include 'UI.INC'   ; the front door: splash + sky list
+        include 'SYM.INC'   ; the scope's symbols, the profiler
+        include 'TOWN.INC'   ; the aerodrome
+        include 'VID.INC'   ; SELECT VIDEO SYSTEM, the CGA/HGC converters
+
 segment CODE
         ; (the COM-era ORG 100h gap is gone: the segment got tight and
         ; those 256 bytes belong to the STACK now - see the BSS guard)
@@ -379,6 +397,15 @@ MAIN:
         mov  ax,4C01h
         int  21h
 .memok:
+        ; ---- BOND: CLEAR THE BSS. It is no longer in the file (CODE is
+        ; the last segment), so it arrives as whatever the last program
+        ; left in that memory, and v3 was written against the zeros its
+        ; EXE used to carry.
+        mov  di,BSS
+        mov  cx,(BSSEND-BSS+1)/2
+        xor  ax,ax
+        cld
+        rep  stosw
 
         ; ---- the front step: SELECT VIDEO SYSTEM, in text mode. It runs
         ; BEFORE the INT 9 hook below on purpose - the menu reads keys
@@ -397,15 +424,11 @@ MAIN:
         mov  word [tstart],TMED ;  a nearer horizon and nothing else.
 .qd:
 
-        ; back-buffer 64K above the image (maxalloc: we still own it all).
-        ; SKYSEG gets a full 8K window (CS+1000h..CS+11FFh) with
-        ; its own assemble-time guard, and the far map starts past it.
+        ; the back buffer, straight past CODE's 64K: the far segments
+        ; sit below CS now, so nothing stands between (see BONDBUF)
         mov  ax,cs
-        add  ax,2000h           ; past SKYSEG (CS+1000h, 8K), UISEG
-        mov  [bufseg],ax        ; (CS+1200h, SIXTEEN K), SYMSEG (CS+1600h,
-                                ; 8K), TOWNSEG (CS+1800h, 8K) and VIDSEG
-                                ; (CS+1A00h, TWENTY-FOUR K since the second
-                                ; CGA palette) - each with its own guard
+        add  ax,BONDBUF
+        mov  [bufseg],ax
 
         ; hook INT 9
         mov  ax,3509h
@@ -418,145 +441,18 @@ MAIN:
 
         ; (no PIT reprogram, no INT 8 hook - we only read the stock BIOS tick)
 
-        ; ---- load CITY.DAT into its own segment (resources: font, ...) ----
-        ; PAST THE BACK BUFFER, and mind the arithmetic. The buffer is
-        ; 64000 bytes = 0FA0h paragraphs, so it reaches bufseg+0FA0h:
-        ;   buffer 2000h .. 2FA0h   ->   this must start at 3000h.
-        ;
-        ; THIS HAS NOW GONE WRONG TWICE, BOTH TIMES THE SAME WAY. Opening
-        ; SYMSEG pushed the buffer up 200h and it ate the front of the
-        ; loaded CITY.DAT; opening TOWNSEG on 2026-08-03 pushed it up
-        ; another 200h and did it again. The panel is blitted OUT of this
-        ; image, so the world drawn into the BOTTOM of the buffer comes
-        ; straight back up as the TOP of the cockpit, pixel for pixel -
-        ; which looks like a deliberate reflection effect rather than a
-        ; fault, and that is exactly why it gets missed.
-        ; (VIDSEG, 2026-08-18, moved the pair a THIRD 200h, its window
-        ; growing to 16K moved them a FOURTH, and to 24K a FIFTH - each
-        ; time with this note read first, both constants in one edit,
-        ; and the far map walked: sndseg and everything above it align
-        ; from CS+4000h and CS+5000h, and CITY.DAT now ends at
-        ; CS+3FB1h - SEVENTY-NINE paragraphs short of sndseg's floor.
-        ; THE SHELF IS FULL: the next VIDSEG growth cannot come from
-        ; here, it must take a far page instead.)
-        ;
-        ; THE RULE: opening a far segment moves the back buffer, and
-        ; moving the back buffer moves EVERYTHING STACKED ABOVE IT. Walk
-        ; the whole map - resseg here, then sndseg (SOUND.INC, 64K
-        ; aligned from CS+4000h) and scrseg above it - before believing
-        ; the new segment cost nothing.
+        ; ---- BOND: THE GAME OPENS NO FILES. v3 read CITY.DAT (font and
+        ; photo cockpit), CPSIDE.DAT (side views), SFX.DAT (the Blaster's
+        ; samples) and the Shilka's cabin. The cockpit is drawn, there is
+        ; no Blaster and no Shilka, and the 4x6 font is built in: VFONTF
+        ; copies it from VIDSEG into FONTBUF. sfxseg and cpsseg stay 0,
+        ; which their readers take as "none". resseg is pointed at scrseg
+        ; for the retired bake paths that still name it.
         mov  ax,cs
-        add  ax,3000h           ; past the back buffer at CS+2000h
+        add  ax,BONDSCR
         mov  [resseg],ax
-        mov  dx,FNAME
-        mov  ax,3D00h           ; open read-only
-        int  21h
-        jnc  .ropn
-        mov  dx,RESMSG   ; no resource file: say so and exit cleanly
-        mov  ah,9
-        int  21h
-        mov  dx,[oldoff]        ; restore INT 9 before leaving
-        mov  ax,[oldseg]
-        push ds
-        mov  ds,ax
-        mov  ax,2509h
-        int  21h
-        pop  ds
-        mov  ax,4C01h
-        int  21h
-.ropn: mov  bx,ax              ; read the whole file into resseg:0
-        mov  ax,[resseg]
-        push ds
-        mov  ds,ax
-        xor  dx,dx
-        mov  cx,0FFF0h
-        mov  ah,3Fh
-        int  21h
-        pop  ds
-        mov  ah,3Eh             ; close
-        int  21h
-        ; find resource id 1 (font) in the directory and copy it local
-        push es
-        mov  ax,[resseg]
-        mov  es,ax
-        mov  cl,[es:3]          ; entry count
-        xor  ch,ch
-        mov  bx,4               ; first directory entry
-.rfind:
-        cmp  byte [es:bx],1 ; font id
-        je   .rgot
-        add  bx,5
-        loop .rfind
-        pop  es
-        jmp  .rdone            ; no font in file: panel text stays blank
-.rgot: mov  si,[es:bx+1]       ; resource offset
-        mov  cx,[es:bx+3]       ; resource length
-        cmp  cx,256
-        jbe  .rcl
-        mov  cx,256
-.rcl:  push ds
-        mov  ax,[resseg]
-        mov  ds,ax              ; DS:SI = resource data
-        mov  ax,cs
-        mov  es,ax
-        mov  di,FONTBUF  ; ES:DI = local font buffer
-        cld
-        rep  movsb
-        pop  ds
-        pop  es
-.rdone:
-        ; ---- resource 2: the photo cockpit. Remember where it sits and ----
-        ; ---- precompute the blit spans (runs of non-transparent bytes) ----
-        push es
-        mov  ax,[resseg]
-        mov  es,ax
-        mov  cl,[es:3]          ; entry count
-        xor  ch,ch
-        mov  bx,4
-.pf:   cmp  byte [es:bx],2
-        je   .pg
-        add  bx,5
-        loop .pf
-        jmp  .pn               ; no cockpit bitmap: drawn panel fallback
-.pg:   mov  ax,[es:bx+1]
-        mov  [pimgo],ax
-        mov  si,ax              ; walk the 64000 image bytes once
-        xor  bx,bx              ; pixel index
-        mov  di,PSPAN
-.sc:   cmp  bx,64000
-        jae  .sd
-        cmp  byte [es:si],255
-        jne  .sr
-        inc  si
-        inc  bx
-        jmp  .sc
-.sr:   mov  [di],bx            ; span start = buffer offset
-        xor  cx,cx
-.s2:   cmp  bx,64000
-        jae  .se
-        cmp  byte [es:si],255
-        je   .se
-        inc  si
-        inc  bx
-        inc  cx
-        jmp  .s2
-.se:   mov  [di+2],cx          ; span length
-        add  di,4
-        cmp  di,PSPAN+1596 ; keep room for the terminator
-        jb   .sc
-.sd:   mov  word [di],0FFFFh
-.pn:   pop  es
-
-        call SYMSEG:SFXLOADF   ; SFX.DAT: the recorded sounds, one page above
-                                ;  the side views. Optional - no file, no bank
-        call SYMSEG:CPSLOADF   ; CPSIDE.DAT: the two 90-degree views, into a
-                                ; page of their own. It runs once and it is
-                                ; all file handling, so it lives in SYMSEG
-                                ; next to the code that reads it.
-        call SYMSEG:SHCABLDF  ; the Shilka's cabin, into the top page of
-                                ; the far map - SHCAB.DAT or the retro
-                                ; marker bake this card wears. Optional the
-                                ; same way: no file, the seat stays open-air.
+        call VIDSEG:VFONTF
+        call SYMSEG:SHCABLDF  ; the radar phosphor's page (see SHCABLDF)
 
         ; ---- THE FRONT DOOR: video and sound up FIRST, then the wire,
         ; then the splash and the sky list. The world is minted only
@@ -612,8 +508,6 @@ MAIN:
         mov  ax,cs              ; far scratch - the minimap lives there,
         add  ax,BONDSCR         ; not in our crowded 64K. BOND: packed,
         mov  [scrseg],ax        ; no longer 64K-aligned (see BONDSCR)
-        call VIDSEG:VCGLDF   ; CGA only: the baked cockpit page rides
-                                ; one page past the two minimap pages
         call DSTCLR             ; a new world stands up whole
         ; ---- LOW: NO DIAMOND-SQUARE. The pilot's fix, and the right one:
         ; flatten the MAP, not the readers. WORLDH was overridden first and
@@ -1093,15 +987,12 @@ if (BSSEND-START) > 0FDEEh
         .ERR
 end if
 
-        rb 0FFF0h - $   ; claim the segment clean to SP's perch
-        db   14 dup(?)          ; at FFFEh, so the linker parks SKYSEG
-                                ; at CS+1000h, clear of this ground
+        rb 0FFF0h - $   ; claim the segment clean to SP's perch at FFFEh.
+        db   14 dup(?)          ; BOND: CODE is the LAST segment in the file,
+                                ; so all of this - BSS and stack, 22K and
+                                ; more - is reserved, not stored: FASM puts
+                                ; it in the header's minimum allocation and
+                                ; DOS hands it over at load.
 
 
-        include 'SKY.INC'   ; the NEWTON sky, in its own segment
-        include 'NET.INC'   ; moved up: continues the segment SKY.INC opened
-        include 'UI.INC'   ; the front door: splash + sky list
-        include 'SYM.INC'   ; the fourth segment: the scope's symbols
-        include 'TOWN.INC'   ; the fifth: the windows and the traffic
-        include 'VID.INC'   ; the sixth: SELECT VIDEO SYSTEM + retro cards
 

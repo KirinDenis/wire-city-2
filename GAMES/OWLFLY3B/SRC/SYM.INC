@@ -673,23 +673,6 @@ GNDMARK:
 ;  those own the camera, and there is no cockpit around it to look out of.
 ; ============================================================================
 ; ============================================================================
-;  CPSLOADF - load CPSIDE.DAT into a page of its own, once, at startup.
-;
-;  THE PAGE GOES ON TOP, and that is the whole design. Everything from the
-;  back buffer upwards is stacked nose to tail - buffer, resseg, sndseg,
-;  scrseg - so a page opened anywhere below shoves the entire map along, and
-;  that has gone wrong twice in this project (read the note beside resseg in
-;  OWLFLY3.ASM). Past the scratch page nothing is stacked on anything, so this
-;  one costs no other segment a paragraph.
-;
-;  It is also its OWN FILE rather than a third resource in CITY.DAT: that
-;  file is read in one go with CX=0FFF0h and so can never exceed 64K, and
-;  the front panel alone is 64000 of those bytes.
-;
-;  No file, or the wrong file: cpsseg stays 0, the view keys are dead and
-;  the game flies on with the front panel it has always had.
-; ============================================================================
-; ============================================================================
 ;  SPECTUPF - one tick of WATCHING, and SPECTNXT - who to watch.
 ;
 ;  The camera is F4's, unchanged: tgtcam=1 orbits [tgti] at tgaz/tgel/tgrad,
@@ -917,113 +900,6 @@ HITFLSHF:
         cmp  si,200
         jb   .row
 .x:    retf
-
-; ============================================================================
-;  SFXLOADF - the sound bank, into the page ABOVE cpsseg.
-;
-;  That address is not a taste. Opening a far data page anywhere lower moves
-;  the back buffer and everything stacked on it, and that has gone wrong
-;  twice in this project and looked like a graphics effect both times. Past
-;  cpsseg nothing is stacked on anything, which is exactly why CPSIDE.DAT
-;  sits where it does - this is the same shelf, one storey up.
-;
-;  Optional, like CPSIDE.DAT: no file, sfxseg stays zero, SFXPLAY returns
-;  without touching anything and the game runs on with its engine note.
-; ============================================================================
-SFXLOADF:
-        ; OWL FLY III BOND: the samples are the Blaster's, and the BOND has
-        ; no Blaster - the bank is never loaded, and its 64K page above the
-        ; Shilka's cabin is the page a 512K machine does not have. The
-        ; code below the retf stays as the record of what v3 does.
-        mov  word [sfxseg],0
-        retf
-        mov  ax,ds              ; the MAIN segment - see CPSLOADF for why the
-        add  ax,5FFFh           ;  paragraph is never hand-typed
-        and  ax,0F000h          ; scrseg...
-        add  ax,2000h           ; ...past its 64K AND past cpsseg's
-        mov  [sfxseg],ax
-        ; ---- AND IS THERE ROOM UP THERE? This is the highest thing the game
-        ; asks for - about 512K above the code, plus its own 64K - which on a
-        ; 640K machine is close enough to the ceiling to be worth asking
-        ; rather than assuming. The BIOS keeps the answer at 0040:0013 in
-        ; kilobytes; six shifts turn that into the first paragraph past the
-        ; end. Fail it and the bank simply does not load, which the rest of
-        ; this routine already knows how to mean.
-        push es
-        mov  cx,40h
-        mov  es,cx
-        mov  cx,[es:13h]        ; conventional memory, KB
-        pop  es
-        mov  bx,cx
-        mov  cl,6
-        shl  bx,cl              ; ...as a segment
-        mov  cx,ax
-        add  cx,1000h           ; the top of the bank
-        jc   .no               ; wrapped 20 bits: there is certainly no room
-        cmp  cx,bx
-        ja   .no
-        mov  dx,SXNAME
-        mov  ax,3D00h
-        int  21h
-        jc   .no
-        mov  bx,ax
-        push ds
-        mov  ax,[sfxseg]
-        mov  ds,ax
-        xor  dx,dx
-        mov  cx,0FFF0h
-        mov  ah,3Fh
-        int  21h
-        pop  ds
-        mov  ah,3Eh
-        int  21h
-        push es
-        mov  ax,[sfxseg]
-        mov  es,ax
-        cmp  word [es:0],4653h  ; 'SF', little-endian
-        pop  es
-        je   .ok
-.no:   mov  word [sfxseg],0    ; no bank: every effect is a no-op
-.ok:   retf
-
-CPSLOADF:
-        ; BOND: the side views are DRAWN (VPSIDEF in VID.INC) - no
-        ; CPSIDE.DAT, no page for it. cpsseg stays 0, which every reader
-        ; already takes to mean "no photographs". v3's loader follows,
-        ; unreached.
-        mov  word [cpsseg],0
-        retf
-        mov  ax,ds
-        mov  [cpsseg],ax
-        mov  dx,SFNAME
-        mov  ax,3D00h
-        int  21h
-        jc   .no
-        mov  bx,ax
-        push ds
-        mov  ax,[cpsseg]
-        mov  ds,ax
-        xor  dx,dx
-        mov  cx,0FFF0h
-        mov  ah,3Fh
-        int  21h
-        pop  ds
-        mov  ah,3Eh
-        int  21h
-        push es
-        mov  ax,[cpsseg]
-        mov  es,ax
-        cmp  word [es:0],5043h  ; 'CP', little-endian
-        jne  .bad
-        mov  ax,[es:2]
-        mov  [cplo],ax
-        mov  ax,[es:4]
-        mov  [cpro],ax
-        pop  es
-        retf
-.bad:  pop  es
-.no:   mov  word [cpsseg],0
-        retf
 
 SVIEWF:
         cmp  byte [ride],0      ; each seat's keys die with its own art:
@@ -1840,10 +1716,7 @@ BLSQRT: xor  cx,cx
 ;  put in mcos/msin/pdy/pdx. ES = bufseg, DS = the main segment.
 ; ============================================================================
         include 'GEARM.INC'
-if ($-GEARVT) <> (GEARNS*GEARNV*6 + GEARNF*5 + 12)
-        %OUT *** GEARM.INC does not match GEARNS/GEARNV/GEARNF in DATA.INC ***
-        .ERR
-end if
+assert ($-GEARVT) = (GEARNS*GEARNV*6 + GEARNF*5 + 12)   ; GEARM.INC matches DATA.INC
 gvb     dw 0                    ; this step's base in GEARVT
 glx     dw 0                    ; the leg being drawn: where it hangs...
 glz     dw 0
@@ -2488,33 +2361,10 @@ BRLORD  db 0,1,4,5,2,3          ; from above: the low pair of barrels, the
 BRLORDU db 2,3,4,5,0,1          ; ...and the other way about from below
 
 ; ---------------------------------------------------------------------------
-;  SHCABLDF - the Shilka's cabin into the top page of the far map, once at
-;  boot. Moved here from UISEG 2026-08-27 (that window is down to its last
-;  hundred bytes, and a loader that runs once is the coldest code there is),
-;  and it learned to pick WHICH cabin by the card the pilot chose:
-;
-;    SHCAB.DAT   the painted cabin, for the straight 256-colour modes
-;    SHCCGA.DAT  markers for CGA        - the same span skeleton carrying
-;    SHCEGA.DAT  markers for EGA/16-col   200+colour bytes, drawn offline
-;    SHCHGC.DAT  markers for Hercules     by TOOLS\Cab2Dat the way VidRig
-;                                         draws the jet's own panel
-;
-;  The retro blits' lookup tables already know the markers (the side
-;  consoles taught them), so SHCABDRW never changes: it keeps copying
-;  bytes, the bytes just mean better. A missing retro file falls back to
-;  the painted cabin and the plain dithered lookup - worse to look at,
-;  never a hole in the game.
+;  SHCABLDF - the radar phosphor's page, once at boot. In v3 it loaded the
+;  Shilka's cabin (SHCAB.DAT and its CGA/EGA/HGC bakes) into the top page
+;  of the far map; the BOND has no Shilkas and loads nothing.
 ; ---------------------------------------------------------------------------
-SHCABNM db 'SHCAB.DAT',0
-SHCBCG  db 'SHCCGA.DAT',0
-SHCBEG  db 'SHCEGA.DAT',0
-SHCBHG  db 'SHCHGC.DAT',0
-SHSNM   db 'SHSIDE.DAT',0       ; ...and her SIDE consoles, same choir
-SHSBCG  db 'SHSCGA.DAT',0
-SHSBEG  db 'SHSEGA.DAT',0
-SHSBHG  db 'SHSHGC.DAT',0
-SHSHDR  dw 0,0,0                ; 'SS', left length, right length land here
-
 SHCABLDF:
         ; BOND: NO CABIN TO LOAD - there are no Shilkas to sit in. But the
         ; radar tube's phosphor (RDRMAP, 4K at F000h) lives on "the cabin
@@ -2522,7 +2372,7 @@ SHCABLDF:
         ; page is scrseg itself: its F000h shelf was never used (the
         ; minimap is 0..1FFFh; the bake and the Shilka's right stream that
         ; sat above it are gone), and the 64K cabin page is gone with the
-        ; four SHC*/SHS* files - BONDTOP is 5000h now, not 6000h.
+        ; four SHC*/SHS* files.
         mov  ax,ds
         add  ax,BONDSCR
         mov  [shcabsg],ax
@@ -2535,122 +2385,6 @@ SHCABLDF:
         rep  stosw
         pop  es
         retf
-        mov  ax,ds              ; v3's loader, unreached
-        add  ax,BONDCAB
-        mov  [shcabsg],ax
-        mov  dx,SHCBHG          ; densities for the mono card...
-        mov  al,[vcard]
-        cmp  al,VMHERC
-        je   .try
-        mov  dx,SHCBCG          ; ...inks for CGA...
-        cmp  al,VMCGA
-        je   .try
-        mov  dx,SHCBEG          ; ...one drawn cabin for the whole
-        cmp  al,VMMCGA          ;  16-colour family...
-        jb   .try
-        mov  dx,SHCABNM         ; ...and the paint for the straight modes
-.try:  push ds
-        mov  ax,cs
-        mov  ds,ax
-        mov  ax,3D00h           ; open read-only
-        int  21h
-        pop  ds
-        jnc  .rd
-        cmp  dx,SHCABNM         ; a missing bake: fall back to the paint -
-        je   .none              ;  the plain lookup still converts it
-        mov  dx,SHCABNM
-        jmp  .try
-.none: mov  word [shcabsg],0   ; no file at all: the open-air seat stays
-        retf
-.rd:   mov  bx,ax
-        mov  ax,[shcabsg]
-        push ds
-        mov  ds,ax
-        xor  dx,dx
-        mov  cx,RDRMAP          ; one read: the blob is ~42K, and the cap
-        mov  ah,3Fh             ;  stops BELOW the phosphor shelf - a blob
-        int  21h                ;  that ever grew that far would have
-        pop  ds                 ;  loaded itself over the radar's memory
-        mov  ah,3Eh             ; close
-        int  21h
-        push es                 ; ...and the tube starts DARK: this is the
-        mov  es,[shcabsg]      ;  one place that runs before the first
-        mov  di,RDRMAP          ;  frame could read the map
-        xor  ax,ax
-        mov  cx,2048
-        cld
-        rep  stosw
-        pop  es
-        ; ---- and the seat's SIDE CONSOLES (F6/F7), same manners: pick
-        ; the bake by card, fall back to the paint. The left stream lands
-        ; on THIS page below the phosphor shelf, the right in scrseg past
-        ; the retro card bake - the two tails this memory map still has
-        ; (there is no fourth page: the cabin's is the last 64K under the
-        ; 640K ceiling). scrseg itself is not minted until after the
-        ; front door, so its arithmetic is done by hand here, the way
-        ; every loader on this shelf does it.
-        mov  dx,SHSBHG
-        mov  al,[vcard]
-        cmp  al,VMHERC
-        je   .st
-        mov  dx,SHSBCG
-        cmp  al,VMCGA
-        je   .st
-        mov  dx,SHSBEG
-        cmp  al,VMMCGA
-        jb   .st
-        mov  dx,SHSNM
-.st:   push ds
-        mov  ax,cs
-        mov  ds,ax
-        mov  ax,3D00h
-        int  21h
-        pop  ds
-        jnc  .sh
-        cmp  dx,SHSNM           ; a missing bake: fall back to the paint
-        je   .sq
-        mov  dx,SHSNM
-        jmp  .st
-.sh:   mov  bx,ax              ; ---- the header: magic and two lengths
-        push ds
-        mov  ax,cs
-        mov  ds,ax
-        mov  dx,SHSHDR
-        mov  cx,6
-        mov  ah,3Fh
-        int  21h
-        pop  ds
-        cmp  word [cs:SHSHDR],5353h     ; 'SS'
-        jne  .sc
-        mov  cx,[cs:SHSHDR+2]   ; ---- the left stream, under the phosphor
-        cmp  cx,RDRMAP-SHSLOFF  ; a fat stream would load itself over the
-        ja   .sc               ;  radar's memory - go without instead
-        mov  ax,[shcabsg]
-        push ds
-        mov  ds,ax
-        mov  dx,SHSLOFF
-        mov  ah,3Fh
-        int  21h
-        pop  ds
-        mov  cx,[cs:SHSHDR+4]   ; ---- the right stream, in scrseg's tail
-        cmp  cx,10000h-SHSROFF  ; past the page end lies the jet's own
-        ja   .sc               ;  side art - same refusal
-        mov  ax,ds
-        add  ax,BONDSCR         ; scrseg's own arithmetic (BOND: packed)
-        push ds
-        mov  ds,ax
-        mov  dx,SHSROFF
-        mov  ah,3Fh
-        int  21h
-        pop  ds
-        mov  ah,3Eh
-        int  21h
-        mov  byte [shsok],1
-        retf
-.sc:   mov  ah,3Eh             ; a wrong or fat file: close and go without
-        int  21h
-.sq:   retf
-
 ; ---------------------------------------------------------------------------
 ;  RDRPHOSF - THE TUBE ITSELF (2026-08-28). The Shilka's scope stopped
 ;  being a drawing and became PHOSPHOR: a 64x64 charge map on the cabin
@@ -2869,27 +2603,4 @@ BONDBOTSF:
         mov  byte [pst+4],0
         pop  bx
         retf
-
-; ---- THE WINDOW GUARD ------------------------------------------------------
-label SYMEND byte
-SYFREE = 8176 - ($-SYMBASE)     ; the same report UISEG's guard prints
-if SYFREE < 64
-        display "SYMSEG free: under 64 - EVICT before you add",13,10
-else if SYFREE < 128
-        display "SYMSEG free: 64..127",13,10
-else if SYFREE < 256
-        display "SYMSEG free: 128..255",13,10
-else if SYFREE < 512
-        display "SYMSEG free: 256..511",13,10
-else if SYFREE < 1024
-        display "SYMSEG free: 512..1023",13,10
-else
-        display "SYMSEG free: 1024 or more",13,10
-end if
-if ($-SYMBASE) > 8176
-        %OUT *** SYMSEG overflows its 8K window ***
-        .ERR
-end if
-        rb 1FF0h - $   ; claim the whole window, the way SKYSEG does
-        db   16 dup(0)
 

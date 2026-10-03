@@ -99,6 +99,12 @@ polls `BUILD.TXT` and shows FASM's last lines in the Build strip.
 - **Not cross-origin isolated, on purpose.** js-dos builds and runs without
   SharedArrayBuffer; and only a page that is not isolated can frame YouTube
   in Firefox and Safari (`<iframe credentialless>` is Chromium-only).
+  **Beware `../coi-serviceworker.js`**: other pages of the site register it,
+  its scope is the whole site, and it isolated this page too (live, Firefox,
+  2026-10-03: no video, a popup blocked). It now passes `/course/`
+  navigations through; `leaveIsolation()` in course.js updates an old copy
+  of the worker and reloads once; and if the page is still isolated, the
+  video window holds a link instead of a frame - never `window.open`.
 - **The video is a window**: a YouTube iframe laid over an OWLOSUI window
   (`Style.Terminal`, black) after every paint, hidden while covered. While a
   mouse button is down outside it, the iframe lets the mouse through, or a

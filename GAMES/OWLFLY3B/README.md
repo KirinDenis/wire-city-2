@@ -13,7 +13,7 @@ Forked from `GAMES/OWLFLY3` on 2026-10-02. OWL FLY III itself is unchanged.
 | Sound Blaster, PC speaker, silence | PC speaker or silence |
 | a photographed cockpit (64000-byte bitmap, two RLE side views, CGA/HGC bakes) | a cockpit DRAWN from stroke lists: lines, boxes and words (`VPDL`, `VPSL`, `VPSR` in `SRC/VID.INC`) |
 | panel captions dithered to imitate VGA colours | panel colours forced SOLID in the lookups (`BONDLUT`) |
-| far pages aligned to 64K for the Blaster's DMA, top near 640K | packed pages, the game ends at CS+6000h (384K) |
+| far pages aligned to 64K for the Blaster's DMA, top near 640K | packed pages, the game ends at CS+4000h (256K) |
 
 The network is v3's, byte for byte, so a BOND flies in the same sky as
 OWL FLY III.
@@ -24,19 +24,25 @@ OWL FLY III.
 |---|---|
 | 0000h-1FFFh | CODE, SKYSEG, UISEG, SYMSEG, TOWNSEG, VIDSEG |
 | 2000h | back buffer |
-| 3000h | CITY.DAT (now only the 4x6 font) |
-| 4000h | scrseg: the minimap, the Shilka's right stream |
-| 5000h | the Shilka's cabin, left stream and radar map |
-| 6000h | end (`BONDTOP`) |
+| 3000h | scrseg: the minimap (0..1FFFh) and the radar phosphor (F000h) |
+| 4000h | end (`BONDTOP`) |
 
 The game checks PSP:2 against `BONDTOP` before anything else and refuses
 with a message if DOS gave it less.
 
 ## Files
 
-`INSTALL/` holds everything that ships, about 250K: `OWLFLY3B.EXE`,
-`CITY.DAT` (255 bytes), and the Shilka's CGA and Hercules cabins (`SHC*`,
-`SHS*`).
+`INSTALL/` holds everything that ships: `OWLFLY3B.EXE`, 125K, and nothing
+else. The game opens no files. The 4x6 font, once CITY.DAT, is built in
+(`VFONTF` in `SRC/VID.INC`), and v3's loaders for the photo cockpit, the
+side views, the CGA/EGA/HGC bakes, the Blaster samples and the Shilka's
+cabin are deleted.
+
+The EXE is 125K although only about 51K of it is code and data, measured
+by compressing it. There are two reasons. Its six segments are padded to
+fixed windows (64K + 8 + 16 + 8 + 8 + 24), because the whole memory map
+hangs off those addresses. And the code the BOND cut is switched off
+(`ret`/`jmp` at its door) rather than deleted.
 
 ## Build and run
 

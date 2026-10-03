@@ -2,7 +2,7 @@
 REM ============================================================================
 REM MAKEWIN.BAT - build OWL FLY III BOND from Windows, without opening DOSBox.
 REM
-REM   MAKEWIN         the two blobs and the game, as MAKE does inside DOS
+REM   MAKEWIN         the game, as MAKE does inside DOS
 REM
 REM Artwork, models or sounds changed? CONVERT.BAT in this folder runs the
 REM .NET converters that turn them into what the game includes. Their output
@@ -28,7 +28,7 @@ REM lines with a -c exit land every byte, every time. Same tools, same
 REM order, same mount: only the sequencing moved. MAKE.BAT itself is
 REM untouched and stays the build a stranger runs BY HAND inside DOS,
 REM where it works with a visible console and no exit.
-REM And the result is MEASURED - at least 100000 bytes or it did not
+REM And the result is MEASURED - at least 40000 bytes or it did not
 REM happen (a zero-byte EXE passes existence checks everywhere), with
 REM three attempts before giving up.
 set ATTEMPT=0
@@ -42,9 +42,9 @@ REM Redirected, the same ten -c lines have landed every time. It also means
 REM BUILD.LOG holds what the assembler actually said, which is the thing you
 REM want the moment a build starts arguing.
 if exist GAMES\OWLFLY3B\BUILD.LOG del GAMES\OWLFLY3B\BUILD.LOG
-"%DOSBOX%" -noautoexec -c "mount c %CD%" -c "c:" -c "cd GAMES\OWLFLY3B" -c "..\..\TOOLS\CWSDPMI\CWSDPMI.EXE" -c "..\..\TOOLS\FASM\FASM.EXE SRC\RESDAT.ASM INSTALL\CITY.DAT > BUILD.LOG" -c "..\..\TOOLS\CWSDPMI\CWSDPMI.EXE" -c "..\..\TOOLS\FASM\FASM.EXE SRC\OWLFLY3B.ASM INSTALL\OWLFLY3B.NEW >> BUILD.LOG" -c "exit"
+"%DOSBOX%" -noautoexec -c "mount c %CD%" -c "c:" -c "cd GAMES\OWLFLY3B" -c "..\..\TOOLS\CWSDPMI\CWSDPMI.EXE" -c "..\..\TOOLS\FASM\FASM.EXE SRC\OWLFLY3B.ASM INSTALL\OWLFLY3B.NEW > BUILD.LOG" -c "exit"
 if not exist GAMES\OWLFLY3B\INSTALL\OWLFLY3B.NEW goto retry
-for %%A in (GAMES\OWLFLY3B\INSTALL\OWLFLY3B.NEW) do if %%~zA LSS 100000 goto retry
+for %%A in (GAMES\OWLFLY3B\INSTALL\OWLFLY3B.NEW) do if %%~zA LSS 40000 goto retry
 del GAMES\OWLFLY3B\INSTALL\OWLFLY3B.EXE 2>nul
 ren GAMES\OWLFLY3B\INSTALL\OWLFLY3B.NEW OWLFLY3B.EXE
 if exist GAMES\OWLFLY3B\INSTALL\OWLFLY3B.EXE goto built

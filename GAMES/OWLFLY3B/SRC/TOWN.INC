@@ -1676,12 +1676,3 @@ afsz    dw 0
 afq     dw 0                    ; the field being paved, as a word index
 afy1    dw 0                    ; ...and its concrete, camera-relative
 
-; ---- THE WINDOW GUARD ------------------------------------------------------
-label TWNEND byte
-if ($-TOWNBASE) > 8176
-        %OUT *** TOWNSEG overflows its 8K window ***
-        .ERR
-end if
-        rb 1FF0h - $   ; claim the whole window, the way SKYSEG does
-        db   16 dup(0)
-

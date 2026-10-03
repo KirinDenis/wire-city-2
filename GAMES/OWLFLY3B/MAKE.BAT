@@ -3,12 +3,12 @@ REM ============================================================================
 REM MAKE.BAT - assemble OWL FLY III BOND, from inside DOS.
 REM
 REM   cd GAMES\OWLFLY3B
-REM   MAKE            ->  INSTALL\OWLFLY3B.EXE and the two resource blobs
+REM   MAKE            ->  INSTALL\OWLFLY3B.EXE, and that is the whole game
 REM
-REM THREE ASSEMBLIES, and only the last is a program. SRC\RESDAT.ASM and
-REM SRC\SIDEDAT.ASM are artwork, palettes and fonts laid out as bytes: they
-REM assemble to plain blobs the game loads at startup, which is what leaves
-REM room in the segments for the game.
+REM ONE ASSEMBLY. v3 also built CITY.DAT and CPSIDE.DAT, artwork and the
+REM font laid out as bytes; the BOND draws its cockpit in code and carries
+REM its 246-byte font inside the program (VFONTF in SRC\VID.INC), so there
+REM is nothing left to load from disk.
 REM
 REM THIS ONE IS AN EXE, not a COM - the only one here. It carries five
 REM segments end to end: the main one at 64K, then SKYSEG, UISEG, SYMSEG and
@@ -35,15 +35,6 @@ REM "if not exist" catches a FASM that never ran (Illegal command sets
 REM no errorlevel), "if errorlevel 1" catches a FASM that DID run,
 REM CREATED the file and then failed - a host-side file lock once left
 REM a zero-byte EXE here and the exist check alone called it Built.
-echo Assembling the cockpit blob ...
-..\..\TOOLS\CWSDPMI\CWSDPMI.EXE
-..\..\TOOLS\FASM\FASM.EXE SRC\RESDAT.ASM INSTALL\CITY.DAT
-if errorlevel 1 goto failed
-if not exist INSTALL\CITY.DAT goto failed
-
-REM No side views to assemble: the BOND draws its F6/F7 consoles in
-REM code (VPSIDEF in SRC\VID.INC), so there is no CPSIDE.DAT.
-
 echo Assembling SRC\OWLFLY3B.ASM ...
 REM The EXE is written under a .NEW name and RENAMED into place. Writing
 REM INSTALL\OWLFLY3B.EXE directly kept failing on the host side - a

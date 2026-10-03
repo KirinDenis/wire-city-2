@@ -78,6 +78,38 @@ function lessonFromAddress(lessons) {
   return lessons.find(l => l.id === id) ?? lessons.find(l => l.id === id.slice(0, 3)) ?? null;
 }
 
+/**
+ * This page must not be cross-origin isolated: an isolated page in Firefox
+ * cannot frame YouTube. But the site's other pages register
+ * ../coi-serviceworker.js, whose scope is the whole site, and a visitor who
+ * has been to one of them gets this page through it, isolated (seen
+ * 2026-10-03: Firefox, the video window empty, a popup blocked). The worker
+ * now lets /course/ through; a visitor still holding the old one has it
+ * updated here, and the page reloads once. True: a reload is on its way.
+ */
+async function leaveIsolation() {
+  if (!globalThis.crossOriginIsolated || !navigator.serviceWorker?.controller) return false;
+  try {
+    if (sessionStorage.getItem('course.unisolate')) return false;   // tried once this tab: go on as we are
+    sessionStorage.setItem('course.unisolate', '1');
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return false;
+    await reg.update();
+    const next = reg.installing ?? reg.waiting;
+    if (next) {
+      await new Promise(resolve => {
+        next.addEventListener('statechange', () => { if (next.state === 'activated') resolve(); });
+        setTimeout(resolve, 3000);
+      });
+    }
+    log.info('page', 'served isolated by an old service worker: updated it, reloading once');
+    location.reload();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export class CourseApp {
   constructor(owl) {
     this.owl = owl;
@@ -223,6 +255,7 @@ export class CourseApp {
    * sends it here) - or, with none, on the list of lessons.
    */
   async start() {
+    if (await leaveIsolation()) return;
     this.course = await (await fetch(new URL('course.json', import.meta.url))).json();
     log.info('course', `${this.course.lessons.length} lessons`);
     const asked = lessonFromAddress(this.course.lessons);
@@ -380,12 +413,11 @@ export class CourseApp {
     // with its service worker) frames YouTube only with `credentialless`,
     // which Firefox and Safari do not have. js-dos does not need the
     // isolation: without SharedArrayBuffer it built HOUSES.ASM and ran it.
-    // If the page is ever isolated again, the attribute keeps Chromium
-    // working; elsewhere the video goes to a tab.
-    if (crossOriginIsolated && !('credentialless' in HTMLIFrameElement.prototype)) {
-      window.open(`https://www.youtube.com/watch?v=${lesson.video}&t=${at}s`, '_blank', 'noopener');
-      return;
-    }
+    // If the page is isolated all the same (leaveIsolation could not undo an
+    // old service worker), the attribute keeps Chromium working; elsewhere
+    // the window holds a LINK to the video - a click the reader makes, which
+    // no browser blocks, where window.open from here was blocked as a popup.
+    const framed = !crossOriginIsolated || 'credentialless' in HTMLIFrameElement.prototype;
     this.closeVideo();
     const owl = this.owl;
     // Under the DOS PC; YouTube letterboxes itself into whatever shape it gets.
@@ -394,12 +426,23 @@ export class CourseApp {
     // Black, frame and all (Style.Terminal): the video is black round its
     // picture, and a blue frame round black looked like a hole.
     const win = owl.window(title, r.w, r.h, { x: r.x, y: r.y, style: Style.Terminal, closeCmd: Cm.VideoClose, shadow: false });
-    const f = document.createElement('iframe');
-    if (crossOriginIsolated) f.setAttribute('credentialless', '');
-    f.allow = 'autoplay; encrypted-media; fullscreen';
-    f.allowFullscreen = true;
-    f.src = `https://www.youtube.com/embed/${lesson.video}?start=${at}&autoplay=${autoplay ? 1 : 0}`;
-    f.style.cssText = 'position:fixed;z-index:5;border:0;background:#000;visibility:hidden';
+    let f;
+    if (framed) {
+      f = document.createElement('iframe');
+      if (crossOriginIsolated) f.setAttribute('credentialless', '');
+      f.allow = 'autoplay; encrypted-media; fullscreen';
+      f.allowFullscreen = true;
+      f.src = `https://www.youtube.com/embed/${lesson.video}?start=${at}&autoplay=${autoplay ? 1 : 0}`;
+    } else {
+      f = document.createElement('a');
+      f.href = `https://www.youtube.com/watch?v=${lesson.video}&t=${at}s`;
+      f.target = '_blank';
+      f.rel = 'noopener';
+      f.textContent = `▶  ${lesson.title}${lesson.lecture ? ` - lecture ${lesson.lecture}` : ''} - on YouTube`;
+      f.style.cssText = 'display:flex;align-items:center;justify-content:center;text-align:center;padding:1em;box-sizing:border-box;' +
+        'color:#fff;font:16px monospace;text-decoration:none';
+    }
+    f.style.cssText += ';position:fixed;z-index:5;border:0;background:#000;visibility:hidden';
     document.body.append(f);
     // A frame keeps every mouse event that lands on it, and the page never
     // hears the button come up: a window dragged across the video would
