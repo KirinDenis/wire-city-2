@@ -13,6 +13,8 @@ build publishes them to anyone who opens the page.
 | js-dos emulators loader | `docs/jsdos/emulators/emulators.js` | 8.3.20 | GPL-2.0 | [caiiiycuk/js-dos](https://github.com/caiiiycuk/js-dos) |
 | DOSBox, compiled to WebAssembly | `docs/jsdos/emulators/wdosbox.js`, `wdosbox.wasm` | js-dos 8.3.20 build | **GPL-2.0** | [DOSBox](https://www.dosbox.com/), via [js-dos](https://github.com/js-dos) |
 | libzip, compiled to WebAssembly | `docs/jsdos/emulators/wlibzip.js`, `wlibzip.wasm` | js-dos 8.3.20 build | BSD-3-Clause | [libzip](https://libzip.org/) |
+| OWLOSUI web library (the course page's windows, editor and DOS PC host) | `docs/owlosui/` - its `jsdos/` is the same js-dos 8.3.20 as above, with its own `NOTICE.md` | the commit in `docs/owlosui/VERSION.txt` | MIT (`docs/owlosui/LICENSE.txt`) | [KirinDenis/OWLOSUI](https://github.com/KirinDenis/OWLOSUI) |
+| flat assembler and CWSDPMI, for the course page | `docs/course/files/TOOLS/` - copies of the two rows below, each with its licence or notice (`FASM/LICENSE.TXT`, `CWSDPMI/cwsdpmi.doc`), put there by `docs/pack-course.ps1` | as below | as below | as below |
 | coi-serviceworker | `docs/coi-serviceworker.js` | 0.1.7 | MIT | [gzuidhof/coi-serviceworker](https://github.com/gzuidhof/coi-serviceworker) |
 | flat assembler (fasm) | `TOOLS/FASM/` | 1.73.35 | BSD-style | [flatassembler.net](https://flatassembler.net/) |
 | CWSDPMI | `TOOLS/CWSDPMI/` | r7 | GPL-2.0, or binary-only with its notice | [DJGPP archive](http://www.delorie.com/pub/djgpp/current/v2misc/) |

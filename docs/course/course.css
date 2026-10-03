@@ -1,0 +1,3 @@
+/* The page is a screen: black around the cells, nothing else on it. */
+html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+canvas { display: block; }

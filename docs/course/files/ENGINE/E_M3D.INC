@@ -1,0 +1,310 @@
+; E_M3D.INC - WIRE CITY engine: trigonometry, rotation, projection
+; ============================================================================
+;  The 3D core: the quarter-table sine, per-frame trig setup, the yaw
+;  rotate, the perspective projection with overflow guards, and the
+;  screen-space bank (roll) applied to every projected vertex.
+;
+;  CONTRACT: the includer defines
+;     FOCAL equ      - lens focal length, BEFORE this include (immediates)
+;     SINT           - 65 words: sin(0..90 deg)*256 quarter table
+;     heading,pitch,roll                 - attitude angles (256 = circle)
+;     hsin,hcos,rsin,rcos,psin,pcos     dw - SETTRIG outputs
+;     pofs,horiz,swayx,swayy            dw - horizon shift / view float
+;     wdx,wdz,rc_x,rc_z                   dw - ROTXZ in/out
+;     ptmp,rddx,rddy,rsxo               dw - projection scratch
+; ============================================================================
+CLAMPAX:
+        cmp  ax,4000
+        jle  .a1
+        mov  ax,4000
+.a1:   cmp  ax,-4000
+        jge  .a2
+        mov  ax,-4000
+.a2:   ret
+
+; ============================================================================
+;  SINQ  in: AX=angle (any, wrapped to 0..255 = full circle)
+;        out: AX = sin(angle)*256  (range -256..256);  clobbers BX,CX,SI
+;  Quarter table SINT[0..64] + symmetry: q0=+T[idx] q1=+T[64-idx]
+;  q2=-T[idx] q3=-T[64-idx].  cos(a) = SINQ(a+64).
+; ============================================================================
+SINQ:   and  ax,255             ; wrap to one circle
+        mov  bx,ax
+        mov  cl,6
+        shr  bx,cl              ; bx = quadrant 0..3  (angle/64)
+        and  ax,63              ; ax = idx within quadrant 0..63
+        cmp  bx,0
+        je   .q0
+        cmp  bx,1
+        je   .q1
+        cmp  bx,2
+        je   .q2
+        ; q3: -SINT[64-idx]
+        mov  bx,64
+        sub  bx,ax
+        add  bx,bx
+        mov  si,bx
+        mov  ax,[SINT+si]
+        neg  ax
+        ret
+.q0:   add  ax,ax
+        mov  si,ax
+        mov  ax,[SINT+si]
+        ret
+.q1:   mov  bx,64              ; SINT[64-idx]
+        sub  bx,ax
+        add  bx,bx
+        mov  si,bx
+        mov  ax,[SINT+si]
+        ret
+.q2:   add  ax,ax              ; -SINT[idx]
+        mov  si,ax
+        mov  ax,[SINT+si]
+        neg  ax
+        ret
+
+; ============================================================================
+;  SETTRIG  heading -> hsin/hcos, roll -> rsin/rcos (all *256).
+;  Call ONCE per frame before RENDER. Clobbers AX,BX,CX,SI.
+; ============================================================================
+SETTRIG:
+        mov  ax,[heading]
+        call SINQ
+        mov  [hsin],ax
+        mov  ax,[heading]
+        add  ax,64
+        call SINQ
+        mov  [hcos],ax
+        mov  ax,[roll]
+        call SINQ
+        neg  ax                 ; flip roll direction (bank into the turn)
+        mov  [rsin],ax
+        mov  ax,[roll]
+        add  ax,64
+        call SINQ
+        mov  [rcos],ax
+        mov  ax,[pitch]         ; pitch trig for the vertex rotation
+        call SINQ
+        mov  [psin],ax
+        mov  ax,[pitch]
+        add  ax,64
+        call SINQ
+        mov  [pcos],ax
+        ; background horizon shift: pofs = psin*FOCAL/pcos (clamped tangent)
+        mov  ax,[pcos]
+        cmp  ax,48
+        jl   .pbig             ; looking almost straight up/down
+        mov  ax,[psin]
+        mov  bx,FOCAL
+        imul bx
+        idiv word [pcos]
+        jmp  .pset
+.pbig: mov  ax,2600            ; push the horizon far off screen
+        cmp  word [psin],0
+        jge  .pset
+        neg  ax
+.pset: add  ax,[swayy]         ; sky bands ride the view float too
+        mov  [pofs],ax
+        ret
+
+; ============================================================================
+;  ROTXZ  yaw-rotate world-relative (wdx,wdz) -> camera-space (rc_x,rc_z)
+;   in:  wdx,wdz (mem)   out: rc_x,rc_z (mem)   clobbers AX,BX,DX
+;   rc_x = (wdx*hcos - wdz*hsin)/256 ;  rc_z = (wdx*hsin + wdz*hcos)/256
+;   Each term: imul (->DX:AX) then idiv 256. Inputs are small view offsets
+;   so |product| < ~500k (fits DX:AX) and |quotient| < ~3000 (fits 16-bit).
+; ============================================================================
+; ============================================================================
+;  ROTXZ - (wdx,wdz) turned by the heading -> (rc_x,rc_z).
+;
+;  IMUL leaves a THIRTY-TWO bit product in DX:AX, and the sine is in 256ths,
+;  so the answer is that product over 256 - which is its middle two bytes.
+;  AL takes AH, AH takes DL: two moves, and no divide. Lesson 0x10's trick,
+;  four times. ROTXZC below is the game's original with `idiv bx` where
+;  each pair of moves now sits; a program that declares `fastp db 1` can
+;  switch between them, one that declares nothing never assembles it.
+;
+;  ONE DIFFERENCE, on purpose and documented: IDIV rounds toward zero, the
+;  byte shift rounds DOWN, so a negative coordinate can come out one unit
+;  lower than before. A pixel, sometimes. Not a bug.
+; ============================================================================
+ROTXZ:
+if defined fastp
+        cmp  byte [fastp],0
+        je   ROTXZC
+end if
+        mov  ax,[wdx]
+        imul word [hcos]        ; DX:AX = wdx*cos*256
+        mov  al,ah              ; /256: the middle two bytes of the product
+        mov  ah,dl              ;  ARE the product over 256
+        mov  [rc_x],ax
+        mov  ax,[wdz]
+        imul word [hsin]
+        mov  al,ah
+        mov  ah,dl
+        mov  bx,[rc_x]
+        sub  bx,ax
+        mov  [rc_x],bx          ; x' = x*cos - z*sin
+        mov  ax,[wdx]
+        imul word [hsin]
+        mov  al,ah
+        mov  ah,dl
+        mov  [rc_z],ax
+        mov  ax,[wdz]
+        imul word [hcos]
+        mov  al,ah
+        mov  ah,dl
+        mov  bx,[rc_z]
+        add  bx,ax
+        mov  [rc_z],bx          ; z' = x*sin + z*cos
+        ret
+
+if defined fastp
+ROTXZC: mov  ax,[wdx]
+        imul word [hcos]    ; DX:AX = wdx*cos*256
+        mov  bx,256
+        idiv bx                 ; AX = wdx*cos   (the *256 cancels)
+        mov  [rc_x],ax
+        mov  ax,[wdz]
+        imul word [hsin]
+        mov  bx,256
+        idiv bx
+        mov  bx,[rc_x]
+        sub  bx,ax
+        mov  [rc_x],bx
+        mov  ax,[wdx]
+        imul word [hsin]
+        mov  bx,256
+        idiv bx
+        mov  [rc_z],ax
+        mov  ax,[wdz]
+        imul word [hcos]
+        mov  bx,256
+        idiv bx
+        mov  bx,[rc_z]
+        add  bx,ax
+        mov  [rc_z],bx
+        ret
+end if
+
+; ============================================================================
+;  APPLYROLL  bank the scene: rotate a projected point about screen (160,100)
+;   in: AX=sx_raw, DX=sy_raw   out: AX=sx, DX=sy   clobbers BX,SI,rddx/rddy/rsxo
+;   Same *256 / idiv 256 fixed-point rotate as ROTXZ. Applied per vertex
+;   inside PROJPT so all world geometry tilts; HUD/crosshair bypass it.
+; ============================================================================
+APPLYROLL:
+        sub  ax,160             ; rddx,rddy = offset from the view centre
+        mov  [rddx],ax
+        sub  dx,[horiz]         ; roll pivots on the pitch horizon
+        mov  [rddy],dx
+        ; sx = 160 + (rddx*rcos - rddy*rsin)/256
+        mov  ax,[rddx]
+        imul word [rcos]
+        mov  bx,256
+        idiv bx
+        mov  si,ax
+        mov  ax,[rddy]
+        imul word [rsin]
+        mov  bx,256
+        idiv bx
+        mov  bx,si
+        sub  bx,ax
+        add  bx,160
+        mov  [rsxo],bx
+        ; sy = 100 + (rddx*rsin + rddy*rcos)/256
+        mov  ax,[rddx]
+        imul word [rsin]
+        mov  bx,256
+        idiv bx
+        mov  si,ax
+        mov  ax,[rddy]
+        imul word [rcos]
+        mov  bx,256
+        idiv bx
+        mov  bx,si
+        add  bx,ax
+        add  bx,[horiz]
+        mov  ax,[rsxo]
+        mov  dx,bx
+        ret
+
+; ============================================================================
+;  PROJPT  perspective-project one camera-space point, then bank + clamp.
+;   in: AX=rx, DX=ry, CX=rz (>0)   out: AX=sx, DX=sy   clobbers BX,CX,SI,ptmp
+;   sx = 160 + rx*FOCAL/rz ;  sy = 100 - ry*FOCAL/rz ;  then APPLYROLL.
+;   rz must already be >= NEARZ (caller/NEARCLIP guarantees it) so the
+;   divide can't overflow. CLAMPAX bounds results to +/-4000 for safe 2D clip.
+; ============================================================================
+PROJPT: push dx                 ; save ry
+        ; guard: a side point can have |rx| up to ~29000 (grid corner)
+        ; while rz is small; rx*FOCAL/rz would then overflow a 16-bit
+        ; quotient (INT 0). Safe ratio |rx|/rz <= 32767/FOCAL, and past
+        ; rz=256 even the worst |rx| cannot overflow. BOTH constants
+        ; scale with FOCAL - do not hardcode them again.
+        cmp  cx,256
+        jge  .sxok
+        mov  bx,ax
+        or   bx,bx
+        jns  .g1
+        neg  bx                 ; bx = |rx|
+.g1:   push ax
+        mov  ax,cx
+        mov  dx,32767/FOCAL     ; safe |rx|/rz ratio for this lens
+        mul  dx                 ; ax = rz*(32767/FOCAL), rz<256 fits 16-bit
+        cmp  bx,ax
+        pop  ax
+        jbe  .sxok             ; |rx| <= rz*204 -> divide is safe
+        mov  bx,4000            ; would overflow: clamp offscreen, keep sign
+        or   ax,ax
+        jns  .g2
+        neg  bx
+.g2:   mov  ax,bx
+        jmp  .sxadd
+.sxok: mov  bx,FOCAL
+        imul bx                 ; DX:AX = rx*FOCAL
+        idiv cx                 ; AX = rx*FOCAL/rz
+.sxadd:
+        add  ax,160             ; sx_raw (screen centre x = 160)
+        add  ax,[swayx]         ; view float
+        call CLAMPAX            ; clamp BEFORE roll so APPLYROLL can't overflow
+        mov  [ptmp],ax
+        pop  ax                 ; ry
+        cmp  cx,256             ; same overflow guard as rx: pitched vertices
+        jge  .syok             ; can be far above/below at small rz
+        mov  bx,ax
+        or   bx,bx
+        jns  .g3
+        neg  bx
+.g3:   push ax
+        mov  ax,cx
+        mov  dx,32767/FOCAL
+        mul  dx
+        cmp  bx,ax
+        pop  ax
+        jbe  .syok
+        mov  bx,4000
+        or   ax,ax
+        jns  .g4
+        neg  bx
+.g4:   mov  ax,bx
+        jmp  .syadd
+.syok: mov  bx,FOCAL
+        imul bx
+        idiv cx
+.syadd:
+        mov  bx,[horiz]
+        add  bx,[swayy]         ; view float
+        sub  bx,ax              ; sy_raw = horiz - ry*FOCAL/rz
+        mov  ax,bx
+        call CLAMPAX
+        mov  dx,ax
+        mov  ax,[ptmp]          ; AX=sx_raw, DX=sy_raw (both clamped)
+        call APPLYROLL          ; bank the whole scene about (160,horiz)
+        call CLAMPAX            ; final clamp for the 2D clipper
+        mov  [ptmp],ax
+        mov  ax,dx
+        call CLAMPAX
+        mov  dx,ax
+        mov  ax,[ptmp]
+        ret

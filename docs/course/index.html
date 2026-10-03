@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>8086 course</title>
+<meta name="description" content="Writing a DOS game from scratch: every lesson's video, its source in an editor, and a DOS PC that assembles and runs it - in the page.">
+<link rel="stylesheet" href="course.css">
+</head>
+<body>
+<canvas id="screen"></canvas>
+<!-- PROTOTYPE. The windows are OWLOSUI's (../owlosui/, a copy of its web
+     library - see ../owlosui/README.md). Deliberately NOT cross-origin
+     isolated, and no service worker making it so: js-dos builds and runs
+     the lessons without SharedArrayBuffer, and only a page that is not
+     isolated can frame YouTube in Firefox and Safari. -->
+<script type="module">
+  // The diary first: it is listening for errors before anything can make one.
+  import './log.js';
+  import { run } from '../owlosui/owlosui.js';
+  import { CourseApp } from './course.js';
+  run(document.getElementById('screen'), owl => {
+    const app = new CourseApp(owl);
+    window.course = app;
+    app.start().catch(e => app.tell('Course', String(e)));
+    return app;
+  }).catch(e => { document.body.style.color = '#ccc'; document.body.textContent = String(e); });
+</script>
+</body>
+</html>

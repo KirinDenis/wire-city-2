@@ -1,6 +1,15 @@
 <!doctype html>
 <meta charset="utf-8">
 <title>workbench deep link test</title>
+<script>
+// ?l=N - the link under every video, lectures 1 to 17 - goes to the course
+// page now: the lesson's source in an editor, a DOS PC that builds and runs
+// it, and its video. ?e= and ?g= stay here, in the workbench below.
+(function () {
+  var l = new URLSearchParams(location.search).get("l");
+  if (l) location.replace("course/?l=" + encodeURIComponent(l) + location.hash);
+})();
+</script>
 <link rel="stylesheet" href="jsdos/js-dos.css">
 <style>
   body { background:#111; color:#ccc; font:13px monospace; margin:0; padding:8px }

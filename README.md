@@ -125,6 +125,13 @@ EXAMPLES/         the thirteen teaching machines (each states its contract)
 LAB/              the workbenches, one folder each: HOUSE/ (a city block
                   that holds still) and OWLFLY4/ - not shipped
 docs/             the arcade site: gallery, players, bundles, deep dives
+docs/course/      the course page (a prototype): source, DOS PC and video.
+                  course/?l=7 opens lesson 7 - the old lNN.html pages and
+                  wbtest.html?l=N, linked from the videos, now land there.
+                  Its lesson files are copied in by docs/pack-course.ps1
+docs/owlosui/     a copy of OWLOSUI's web library, which the course page is
+                  built on - its own project, github.com/KirinDenis/OWLOSUI;
+                  refreshed by docs/pull-owlosui.ps1, never edited here
 TOOLS/            the assembler, the DPMI host and the converters
                   - see THIRD-PARTY.md for what is whose
 TASM/             the Turbo Assembler originals of everything that has
