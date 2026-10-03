@@ -936,7 +936,7 @@ MSLDRAW1F:
 ;  and it is what a missile should fly into. Clobbers AX, BX.
 ; ---------------------------------------------------------------------------
 LKPOS:  cmp  si,RSLK
-        jb   .grd
+        jb   .pl
         mov  bx,si
         sub  bx,RSLK            ; the encoding IS the word index
         mov  ax,[rsx+bx]
@@ -946,12 +946,6 @@ LKPOS:  cmp  si,RSLK
         mov  [lky],ax
         mov  ax,[rsz+bx]
         mov  [lkz],ax
-        ret
-.grd:  cmp  si,SHKLK           ; a Shilka: its state lives in UISEG, so
-        jb   .pl               ; the door out there fills lkx/lky/lkz
-        mov  bx,si
-        sub  bx,SHKLK
-        call UISEG:SHKLKPOSF
         ret
 .pl:   mov  ax,[pax+si]
         mov  [lkx],ax
@@ -965,16 +959,11 @@ LKPOS:  cmp  si,RSLK
 ;  LKDEAD - is the locked target gone? ZF=0 (NZ) if it is. SI = lock index.
 ; ---------------------------------------------------------------------------
 LKDEAD: cmp  si,RSLK
-        jb   .grd
+        jb   .pl
         mov  bx,si
         sub  bx,RSLK
         shr  bx,1
         cmp  byte [rsst+bx],0
-        ret
-.grd:  cmp  si,SHKLK
-        jb   .pl
-        xor  bx,bx              ; a Shilka cannot be killed yet, so it is
-        cmp  bx,bx              ; never gone. ZF=1 = still there.
         ret
 .pl:   mov  bx,si
         shr  bx,1
@@ -1184,14 +1173,9 @@ LOCKHUD:
 ;  current COLOR: pool name (friendly/hostile by parity) + number.
 ; ---------------------------------------------------------------------------
 CSDRAW: cmp  si,RSLK
-        jb   .grnd
+        jb   .plane
         mov  si,TYPN2    ; a station has no callsign - it IS the
         call FDRAW              ; radar, and TYPN2 already says the word
-        ret
-.grnd: cmp  si,SHKLK
-        jb   .plane
-        mov  si,MSGFLAK  ; nor has a gun battery
-        call FDRAW
         ret
 .plane:
         push si
@@ -1219,7 +1203,7 @@ CSDRAW: cmp  si,RSLK
 
 ; ---- TYPDRAW: the aircraft type tag at ftx/fty. in: SI = plane -----
 TYPDRAW:
-        cmp  si,SHKLK
+        cmp  si,RSLK
         jae  .r                ; ground units said it on the line above
         mov  bx,si
         shr  bx,1

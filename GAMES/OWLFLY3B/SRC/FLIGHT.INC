@@ -1325,7 +1325,7 @@ UIKEYS:
         ; of stack-guard headroom left and the readable ladder cost 28.
         xor  ax,ax              ; ground targets have no heading to sit behind
         mov  bx,100             ; a jet is small: four wingspans out
-        cmp  si,SHKLK
+        cmp  si,RSLK
         jb   .f4pl
         mov  bx,450             ; a Shilka or a mast: clear of the thing
         jmp  .f4rd

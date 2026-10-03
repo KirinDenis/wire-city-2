@@ -642,7 +642,6 @@ MSGNORAD db 'NO RADAR',0        ; the legend under the snow
 TYPN0   db 0                    ; fighters wear no tag
 TYPN1   db 'BOMBER',0
 TYPN2   db 'RADAR',0
-MSGFLAK db 'FLAK',0             ; what a locked Shilka calls itself
 TYPN3   db 'TRANSP',0
 TYPN4   db 'TANKER',0
 TYPTAB  dw TYPN0,TYPN1,TYPN2,TYPN3,TYPN4
@@ -671,7 +670,6 @@ TYPTAB  dw TYPN0,TYPN1,TYPN2,TYPN3,TYPN4
 ; segment, and they have to: MODELDRAW reads them through DS, and DS is
 ; the main segment even out in UISEG. Everything that merely computes -
 ; the sites, the state, the tick and the draw loop - is in UI.INC.
-        include 'STURRM.INC'
 ; the classic eight faces, kept ONLY for the wreck pool (see above)
 MFACE   db 0,1,2,0, 24          ; body top (sun-lit white)
         db 0,3,4,0, 16          ; body bottom (shade)

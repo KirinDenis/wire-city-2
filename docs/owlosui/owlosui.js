@@ -127,7 +127,7 @@ const Op = {
   Find: 0x57, Replace: 0x58, ReplaceAll: 0x59, Editor: 0x5D, GetEditor: 0x5E, Syntax: 0x5F, SyntaxDefine: 0x60,
   Files: 0x1A, SetFiles: 0x25, TakeFiles: 0x26, MarkedNames: 0x28, SetFilesError: 0x29, AddFiles: 0x5A, Unmark: 0x61,
   Place: 0x62, SetTag: 0x65, SetIndicator: 0x66, Console: 0x67, ConsoleWrite: 0x68,
-  Clipboard: 0x69, ClipboardGet: 0x6A, ClipboardPaste: 0x6B, Minimize: 0x6C, TextAppend: 0x6D, GetTextPart: 0x6E,
+  Clipboard: 0x69, ClipboardGet: 0x6A, ClipboardPaste: 0x6B, Minimize: 0x6C, TextAppend: 0x6D, GetTextPart: 0x6E, GetTextBytes: 0x6F,
   Tree: 0x53, TreeChildren: 0x54, TreeExpand: 0x55, TreePath: 0x56,
 };
 
@@ -358,7 +358,7 @@ export class Owlosui {
    * A framed window. x or y of -1 (the default) centres it. Options:
    * style (Style.Document...), parent, closeCmd (what the close box sends
    * instead of closing), shadow, minimize (false: no [↓] box - a modal
-   * window or one without a shadow has none anyway).
+   * window has none anyway).
    */
   window(title, w, h, { x = -1, y = -1, style = Style.Document, parent = 0, closeCmd = 0, shadow = true, minimize = true } = {}) {
     const flags = style | (shadow ? 0 : 0x40) | (minimize ? 0 : 0x80);
@@ -415,19 +415,21 @@ export class Owlosui {
   setReadOnly(id, on) { this.call(Op.SetReadOnly, u16(id), u8(on ? 1 : 0)); }
   /**
    * What a text offers (`Offer` bits) and how it starts: folded, read only,
-   * with classic keys, as hex. The person can change each from the Edit
-   * menu; `editorState` reads them back.
+   * with classic keys, as hex, with line numbers in a grey column, with the
+   * caret's line:column on the bottom edge. The person can change each from
+   * the Edit menu; `editorState` reads them back.
    */
-  editor(id, offers, { wrap = false, readOnly = false, classic = false, hex = false } = {}) {
-    const state = (wrap ? 1 : 0) | (readOnly ? 2 : 0) | (classic ? 4 : 0) | (hex ? 8 : 0);
+  editor(id, offers, { wrap = false, readOnly = false, classic = false, hex = false, numbers = false, position = false } = {}) {
+    const state = (wrap ? 1 : 0) | (readOnly ? 2 : 0) | (classic ? 4 : 0) | (hex ? 8 : 0) | (numbers ? 32 : 0) | (position ? 64 : 0);
     this.call(Op.Editor, u16(id), u8(offers), u8(state));
   }
-  /** { offers, wrap, readOnly, classic, hex, syntax, line, col } - line and column from 0. */
+  /** { offers, wrap, readOnly, classic, hex, syntax, numbers, position, line, col } - line and column from 0. */
   editorState(id) {
     const r = this.call(Op.GetEditor, u16(id));
     const s = r[1];
     return {
       offers: r[0], wrap: !!(s & 1), readOnly: !!(s & 2), classic: !!(s & 4), hex: !!(s & 8), syntax: !!(s & 16),
+      numbers: !!(s & 32), position: !!(s & 64),
       line: readU16(r, 2), col: readU16(r, 4),
     };
   }
@@ -466,6 +468,32 @@ export class Owlosui {
       from += n;
     } while (from < total);
     return new TextDecoder().decode(parts.length === 1 ? parts[0] : bytes(...parts));
+  }
+  /**
+   * A file's bytes as a text the editor shows one glyph a byte, the way a
+   * DOS editor showed a binary: each byte the code page's character for
+   * it, 0Ah the end of a line. With `getTextBytes` it comes back byte for
+   * byte, so a program, a picture, anything, can be opened, changed in the
+   * editor or its hex view, and saved.
+   */
+  textOfBytes(data) {
+    let s = '';
+    for (const b of data) s += b < 128 ? String.fromCharCode(b) : (this.glyphs[b] ?? '?');
+    return s;
+  }
+  /** A text's glyphs as bytes, the lines joined by 0Ah: what `textOfBytes` put in, as a Uint8Array. */
+  getTextBytes(id) {
+    const parts = [];
+    let from = 0, total = 0;
+    do {
+      const r = this.call(Op.GetTextBytes, u16(id), u32(from));
+      total = readU32(r, 0);
+      const n = readU16(r, 4);
+      if (n === 0 && from < total) throw new OwlosuiError(`the bytes of view ${id} stopped at byte ${from} of ${total}`);
+      parts.push(r.subarray(6, 6 + n));
+      from += n;
+    } while (from < total);
+    return parts.length === 1 ? parts[0].slice() : bytes(...parts);
   }
   /** New words for a static, an input, a window's title - or a whole new text for an editor, of any length. */
   setText(id, text) {

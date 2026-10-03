@@ -112,7 +112,6 @@ VMENUF:
         mov  ds,ax
         mov  ax,[63h]           ; active CRTC base: 3B4h = mono family
         pop  ds
-        mov  byte [cs:vcaps],0
         ; BOND: the quiz is one question - mono or colour. A mono machine
         ; owns Hercules, a colour one owns CGA (every colour card speaks
         ; mode 4, the Bondwell's LCD included).
@@ -303,8 +302,8 @@ VSETMDF:
         int  10h                ; - black, cyan, magenta, white. (Mode 5's
                                 ; burst-off palette was tried and renders
                                 ; unpredictably - the pilot's screenshot.)
-        test byte [cs:vcaps],6  ; a REAL CGA wants the intense set said
-        jnz  @f                  ; out loud on 3D9h; a VGA host boots the
+                                ; a REAL CGA wants the intense set said
+                                ; out loud on 3D9h; a VGA host boots the
         mov  dx,3D9h            ; mode bright already - and ignores this
         mov  al,30h             ; port entirely (proven with a probe:
         out  dx,al              ; neither 3D9h nor INT 10h AH=0Bh moves
@@ -534,17 +533,9 @@ vlutoff dw 512                  ; CGA: vpal*1024 + (night? 512 : 0) -
 vpal    db 0                    ; 0 = palette 1 (cyan/magenta), 1 =
                                 ; palette 0 (green/red/yellow); H swaps
 vpedge  db 0                    ; ...on the key's EDGE, once per press
-vcaps   db 0                    ; the hardware quiz: bit0 EGA, bit1 VGA,
-                                ; bit2 MCGA (mono machines skip the bits)
 hoff    dw 1024                 ; Hercules: 0 = day bank, 1024 = night
 hry     dw 0                    ; Hercules: the SCREEN row being written
 orcnt   db 0                    ; Hercules: screen rows this source row feeds
-; the two CGA palettes as ATTRIBUTE values for the VGA-host road,
-; registers 1..3. These are the EGA-style 6-bit codes (secondary bits
-; at 38h), NOT CGA colour numbers - 0Bh in a palette register comes out
-; teal, 3Bh is the light cyan you meant.
-VPATT1  db 3Bh,3Dh,3Fh          ; light cyan, light magenta, white
-VPATT0  db 3Ah,3Ch,3Eh          ; light green, light red, yellow
 
 ; one converted pixel, plain lookup (the front door, or no bake file)
 macro CGPXP
@@ -580,39 +571,17 @@ CGABLT:
         jne  .hdn
         mov  byte [cs:vpedge],1
         xor  byte [cs:vpal],1
-        ; TWO ROADS TO THE SAME PALETTE, split by the hardware quiz. A
-        ; real CGA changes colours on its 3D9h port; a VGA playing this
-        ; mode IGNORES that port AND INT 10h AH=0Bh (proven with a
-        ; bands-probe, 2026-08-18) - there the four colours live in the
-        ; attribute registers, remapped through INT 10h AX=1000h.
-        test byte [cs:vcaps],6
-        jnz  .vgap
+        ; BOND: the CGA road alone. v3 also remapped a VGA host's
+        ; attribute registers (INT 10h AX=1000h), because a VGA playing
+        ; mode 4 ignores 3D9h; the BOND asks no VGA question, so on a VGA
+        ; host H now swaps only the lookup bank.
         mov  dx,3D9h            ; the metal: one byte
         mov  al,30h             ; palette 1 intense
         cmp  byte [cs:vpal],0
         je   @f
         mov  al,10h             ; palette 0 intense
 @@:    out  dx,al
-        jmp  .lut
-.vgap: mov  si,VPATT1          ; the VGA host: attribute regs 1..3
-        cmp  byte [cs:vpal],0
-        je   @f
-        mov  si,VPATT0
-@@:    mov  cx,3
-        mov  bl,1
-.vp:   push cx
-        push si
-        push bx
-        mov  bh,[cs:si]
-        mov  ax,1000h
-        int  10h
-        pop  bx
-        pop  si
-        pop  cx
-        inc  si
-        inc  bl
-        loop .vp
-.lut:  call VPALSW             ; ...and the lookup bank follows
+        call VPALSW             ; ...and the lookup bank follows
         jmp  .hdn
 .hup:  mov  byte [cs:vpedge],0
 .hdn:

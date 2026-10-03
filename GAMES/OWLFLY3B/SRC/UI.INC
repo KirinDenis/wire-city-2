@@ -58,17 +58,6 @@ ujsy    dw 0
 ; unreachable from the one loop that needs it most.
 MMCOLT  db 64 dup(0)            ; dest column -> world node column
 MMROWT  dw 64 dup(0)            ; dest row    -> world row base (node*64)
-; ---- THE SHILKAS. Every word of their state lives HERE, in UISEG, not in
-; the main segment the way the radar stations' did: the two models alone
-; cost that segment 403 of its 597 remaining bytes, and a vehicle that will
-; grow a course, a target and a magazine cannot also rent space there. The
-; price is a cs: on every access - code out here runs with DS = the main
-; segment, so an unprefixed [cs:shkx] would read the wrong 64K and say nothing
-; about it. If a Shilka ever misbehaves, look for a missing cs: first.
-shkx    dw NSHILK dup(0)        ; where each one stands...
-shky    dw NSHILK dup(0)        ;  (shky = the ground under its tracks)
-shkz    dw NSHILK dup(0)
-shkt    db NSHILK dup(0)        ; the turret's bearing - its OWN, and the
 shktgt  dw NSHILK dup(0)        ; who it is shooting at (0FFFFh = the pilot)
 mprow   dw 0                    ; the map row a mark landed on. MMPTY hands
                                 ;  it back in AX and UROW consumes AX, so a
@@ -777,32 +766,6 @@ UROWF:   ; SYMSEG draws on the same glass and needs
 MINIMAP2F:
         call MINIMAP2
         retf
-
-SHKLKPOSF:
-        call SHKLKPOS
-        retf
-SHKTBRGF:   ; in: BX = Shilka index. out: AX = turret
-        mov  al,[cs:shkt+bx]    ; bearing, 0..255. The TGT page draws the
-        xor  ah,ah              ; model with it, so the page shows where
-        retf                     ; the gun actually looks.
-
-; ---------------------------------------------------------------------------
-;  SHKLKPOS - where a locked Shilka is, for the ring, the missile head and
-;  the orbit camera. LKPOS lives in the main segment and cannot see this
-;  vehicle's position - the state is CS-relative to UISEG - so it knocks
-;  here instead. Aimed at half the vehicle's height: the turret, which is
-;  what a missile should fly into and what the eye looks for.
-;   in: BX = the Shilka's WORD index. Writes lkx/lky/lkz (main segment).
-; ---------------------------------------------------------------------------
-SHKLKPOS:
-        mov  ax,[cs:shkx+bx]
-        mov  [lkx],ax
-        mov  ax,[cs:shky+bx]
-        add  ax,SHKTOP/2
-        mov  [lky],ax
-        mov  ax,[cs:shkz+bx]
-        mov  [lkz],ax
-        ret
 
 ; ---------------------------------------------------------------------------
 ;  MMSETUP - decide the window and build the two lookup tables the map and
@@ -3733,7 +3696,7 @@ TGTVIEW:
         ; wireframe: rotate the model by its aspect, project small
         mov  si,[locki]         ; FNUMK's font walk ate SI
         cmp  si,RSLK
-        jb   .tshk
+        jb   .tpl
         mov  word [mvb],RDISHVT ; a station shows its DISH, and
         mov  word [mvn],RDISHNV*6      ; it turns on the page as it
         mov  word [mfb],RDISHFC
@@ -3742,22 +3705,6 @@ TGTVIEW:
         mov  word [tgyc],64            ; It is six times a jet's size:
         mov  ax,[rspin]                    ; stand further off, and centre
         jmp  .tyaw                        ; on the hub, not on the feet
-.tshk: cmp  si,SHKLK
-        jb   .tpl
-        mov  word [mvb],STURRVT ; a Shilka shows its TURRET, on
-        mov  word [mvn],STURRNV*6      ; the bearing it is really at -
-        mov  word [mfb],STURRFC ; and by its own FACES. It used to
-        mov  word [nfc],STURRNF        ; borrow WEDG, the aeroplane edge
-        mov  word [tgzo],150           ; list, which indexes vertices up
-        mov  word [tgyc],40            ; to the 23rd - and the drum has
-        mov  bx,si                         ; EIGHT. The rest of the cache was
-                                           ; last frame's aeroplane, so the
-                                           ; page drew lines off into stale
-                                           ; numbers: the Shilka fell apart
-        sub  bx,SHKLK
-        shr  bx,1
-        call UISEG:SHKTBRGF   ; its turret bearing lives out in UISEG
-        jmp  .tyaw
 .tpl:  mov  word [tgzo],75
         mov  word [tgyc],0
         mov  bx,si
@@ -3826,7 +3773,7 @@ TGTVIEW:
         add  di,2
         cmp  si,[mvn]
         jb   .tv2
-        cmp  word [locki],SHKLK
+        cmp  word [locki],RSLK
         jb   .tedg
         ; ---- the GROUND models have no edge list: walk their FACES and
         ; close each quad. Four lines a face - the MFD can afford it, and

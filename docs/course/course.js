@@ -235,7 +235,10 @@ export class CourseApp {
     // the CRs go back on when it is saved.
     const crlf = text.includes('\r\n');
     const t = this.owl.text(w, crlf ? text.replace(/\r\n/g, '\n') : text);
-    this.owl.editor(t, Offer.All, { readOnly });
+    // Line numbers in a grey column, and the caret's line:column on the
+    // bottom edge: a lesson says "line 120", and FASM reports its errors by
+    // line. The reader can turn either off in Edit.
+    this.owl.editor(t, Offer.All, { readOnly, numbers: true, position: true });
     this.owl.syntax(t, name);
     this.docs.set(w, { text: t, source, path, name, crlf });
     return w;
