@@ -1,3 +1,6 @@
 /* The page is a screen: black around the cells, nothing else on it. */
 html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
 canvas { display: block; }
+/* The DOS picture fills its window (dos.js, picture 'fill'), at any scale;
+   js-dos then smooths it, and lesson graphics are pixels - keep them blocks. */
+[data-owl-own-keys] canvas { image-rendering: pixelated !important; }

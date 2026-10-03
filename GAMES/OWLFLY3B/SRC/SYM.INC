@@ -30,17 +30,11 @@ BQJETF:
 BQSTAF:
         call BQSTA
         retf
-BQSHKF:
-        call BQSHK
-        retf
 TOPSTRIPF:
         call TOPSTRIP
         retf
 BOTSTRIPF:
         call BOTSTRIP
-        retf
-SHKBRGF:
-        call SHKBRG
         retf
 GNDMARKF:
         call GNDMARK
@@ -54,7 +48,6 @@ BQCITYF:
 ; octant comes from the signs, the ratio picks the row.
 SHKATN  db 0,1,3,4,5,6,8,9,10,11,12,13,15,16,17,18,19
         db 20,21,22,23,24,25,25,26,27,28,29,29,30,31,31,32
-
 
 ; ---------------------------------------------------------------------------
 BQPT:   mov  ax,[bqal]
@@ -167,62 +160,6 @@ BQSTA:  mov  word [bqsn],0  ; no rotation: sin 0, cos 256
         call BQSEG
         ret
 
-; ---------------------------------------------------------------------------
-;  BQSHK - a Shilka: a short body across the track, and a BARREL that points
-;  where its turret really points. The turret bearing is already computed
-;  for the 3D model, so on the scope it costs nothing - and it is the one
-;  thing a pilot wants to know about a gun: is it looking at me.
-;  in: bqx/bqy, bqa = the TURRET's bearing relative to our heading, COLOR.
-; ---------------------------------------------------------------------------
-BQSHK:  ; A PICTURE, from the side, and it does not rotate. The plan view
-        ; said which way the turret pointed, but at four pixels nobody read
-        ; it; this says "tracked vehicle with guns" at a glance, which is
-        ; the thing you actually need off a scope. The barrels sit at the
-        ; angle they are famous for.
-        mov  word [bqsn],0
-        mov  word [bqcs],256
-        mov  word [bqal],-3 ; the track run
-        mov  word [bqac],-4
-        mov  ax,-3
-        mov  bx,4
-        call BQSEG
-        mov  word [bqal],-1 ; the hull deck
-        mov  word [bqac],-4
-        mov  ax,-1
-        mov  bx,4
-        call BQSEG
-        mov  word [bqal],-3 ; and its two ends
-        mov  word [bqac],-4
-        mov  ax,-1
-        mov  bx,-4
-        call BQSEG
-        mov  word [bqal],-3
-        mov  word [bqac],4
-        mov  ax,-1
-        mov  bx,4
-        call BQSEG
-        mov  word [bqal],-1 ; the turret drum
-        mov  word [bqac],-2
-        mov  ax,1
-        mov  bx,-2
-        call BQSEG
-        mov  word [bqal],1
-        mov  word [bqac],-2
-        mov  ax,1
-        mov  bx,2
-        call BQSEG
-        mov  word [bqal],1
-        mov  word [bqac],2
-        mov  ax,-1
-        mov  bx,2
-        call BQSEG
-        mov  word [bqal],1  ; the barrels, up and out the way they are
-        mov  word [bqac],2  ; drawn on every photograph of the thing
-        mov  ax,4
-        mov  bx,5
-        call BQSEG
-        ret
-
 ; ============================================================================
 ;  TOPSTRIP / BOTSTRIP - the compact 4x6 readouts for the NO-COCKPIT view.
 ;  That view used to carry BIOS teletype text in the 8x8 ROM font, twice the
@@ -265,8 +202,8 @@ TOPSTRIP:
         mov  si,MSGM2
         call CODE:FDRAWF
 .tsm:
-        cmp  byte [sbok],0  ; sound-mode letter: amber = all sounds,
-        jne  .tsy              ; white = effects only, red = silence
+                                ; sound-mode letter: amber = all sounds,
+                                ; white = effects only, red = silence
         cmp  byte [spkon],0 ;  - the speaker earns the letter too
         je   .tss
 .tsy:  mov  byte [COLOR],97
@@ -420,7 +357,6 @@ SHKBRG: mov  ax,[wdx]
         mov  ax,bx
         ret
 
-
 ; ---------------------------------------------------------------------------
 ;  BQCITY - the CITY on the scope: one small square per built cell, laid
 ;  under everything else so the traffic paints over it. This is what a
@@ -519,7 +455,6 @@ BQCITY: mov  al,[rbsh]
         cmp  [bqcu],ax
         jle  .cu
 .cx:   ret
-
 
 ; ---------------------------------------------------------------------------
 ;  GNDMARK - the IFF marker over a GROUND target: a square if it is ours, a
@@ -654,7 +589,6 @@ GNDMARK:
         call CODE:LINEF
 .gmn:  ret
 .gmx:  ret
-
 
 ; ============================================================================
 ;  LOOKING OUT OF THE SIDE OF THE COCKPIT - the 1980s move, and the reason
@@ -812,39 +746,6 @@ RMARKF:
         retf                     ; Ctrl+D is off: the glass stays clean
 .on:   call PROFMK              ; BOND: the stage is TIMED now, not marked
         retf                    ;  (PROFMK below); the blocks are unreached
-        push es
-        push di
-        push cx
-        push bx
-        push dx
-        mov  cx,0A000h
-        mov  es,cx
-        mov  di,120             ; clear of the corner square, wide of centre
-        xor  ch,ch
-        mov  cl,al
-        jcxz .d
-.blk:  push cx
-        push di
-        mov  dx,8               ; eight rows tall now - the 2px original
-.rw:   mov  cx,6               ;  could not be counted off a screenshot
-        push di
-.px:   mov  byte [es:di],19   ; 19: the red the 2px original used
-        inc  di
-        loop .px
-        pop  di
-        add  di,320
-        dec  dx
-        jnz  .rw
-        pop  di
-        add  di,10              ; six lit, four dark: countable
-        pop  cx
-        loop .blk
-.d:    pop  dx
-        pop  bx
-        pop  cx
-        pop  di
-        pop  es
-        retf
 ; ============================================================================
 ;  HITFLSHF - the world flares red and yellow when something hits you.
 ;
@@ -902,16 +803,8 @@ HITFLSHF:
 .x:    retf
 
 SVIEWF:
-        cmp  byte [ride],0      ; each seat's keys die with its own art:
-        je   .jgate            ;  the turret wants the Shilka consoles,
-        cmp  byte [rdext],0     ;  and the WALK-AROUND folds the neck the
-        jne  .fwd              ;  way every cinema camera below does -
-                                ;  left on, it twisted the orbit 90 off
-                                ;  the vehicle and read as "the camera is
-                                ;  lost somewhere" (pilot, 2026-08-30)
-        cmp  byte [shsok],0     ;  the jet wants CPSIDE.DAT - a head that
-        je   .nokeys           ;  turns onto a missing picture is a bug
-        jmp  .live             ;  report, not a feature
+        jmp  .jgate   ; each seat's keys die with its own art:
+                                ;  the turret wants the Shilka consoles,
 .jgate:                         ; BOND: the jet's consoles are always there -
                                 ;  drawn, not loaded - so no artwork gate
 .live: cmp  byte [dying],0
@@ -1133,71 +1026,10 @@ SVRSTF:
 ;  ES = bufseg on entry.
 ; ============================================================================
 SIDEBMPF:
-        cmp  byte [ride],0      ; the turret seat brings its OWN consoles -
-        jne  .shk              ;  same grammar, different shelves
+                                ; the turret seat brings its OWN consoles -
+                                ;  same grammar, different shelves
         call VIDSEG:VPSIDEF     ; BOND: the jet's consoles are DRAWN (VID.INC);
         retf                    ;  the RLE path below is v3's, left unreached
-        cmp  word [cpsseg],0
-        je   .r
-        cld
-        mov  si,[cplo]
-        cmp  byte [sview],1
-        je   .go
-        mov  si,[cpro]
-.go:   mov  ax,[cpsseg]
-.ld:   push ds
-        mov  ds,ax              ; DS:SI = the stream, ES:DI = the screen
-        xor  di,di
-.t:    lodsb
-        or   al,al
-        jz   .d
-        mov  bl,al
-        and  al,3Fh
-        mov  cl,al
-        xor  ch,ch
-        or   cl,cl
-        jnz  .n
-        lodsw                   ; count 0: a word count follows the token
-        mov  cx,ax
-.n:    and  bl,0C0h
-        cmp  bl,0C0h
-        je   .skip
-        cmp  bl,80h
-        je   .run
-        rep  movsb              ; literal
-        jmp  .t
-.run:  lodsb
-        rep  stosb
-        jmp  .t
-.skip: add  di,cx
-        jmp  .t
-.d:    pop  ds
-.r:    retf
-.shk:  cmp  byte [shsok],0     ; the Shilka's consoles: left below the
-        je   .r                ;  phosphor on the cabin page, right in
-        cld                    ;  scrseg's tail - see SHSLOFF/SHSROFF
-        mov  si,SHSLOFF
-        mov  ax,[shcabsg]
-        cmp  byte [sview],1
-        je   .ld
-        mov  si,SHSROFF
-        mov  ax,[scrseg]
-        jmp  .ld
-
-; ---------------------------------------------------------------------------
-;  SHPNLF - the turret seat's panel slot, one far call from RENDER: the
-;  front cabin with its instruments, or - head turned on F6/F7 - her side
-;  console and nothing else (the screens and plates are on the front
-;  panel, out of shot: the jet's own rule). It lives HERE so the sview
-;  test costs the main segment nothing - RENDER's two far calls became
-;  one, and five bytes CAME BACK.
-; ---------------------------------------------------------------------------
-SHPNLF:
-        cmp  byte [sview],0
-        jne  SIDEBMPF          ; near jump: its RETF answers RENDER's call
-        call UISEG:SHCABF
-        call UISEG:SHINSTF
-        retf
 
 ; ============================================================================
 ;  MMTCOL - the colour of one node's GROUND.  in: BX = node i, DX = node j
@@ -1438,259 +1270,10 @@ MMAPGENF:
         pop  es
         retf
 
-; ============================================================================
-;  BLASTF - THE MOMENT OF DESTRUCTION, which this game never actually had.
-;
-;  What the wreck pool already does is BURNING: six tongues of flame on each
-;  of eight tumbling pieces, a fan of glass shards for two seconds, a smoke
-;  column for fifty. What it never did is EXPLODE. A hit went straight from
-;  an intact aeroplane to a burning one, so the thing you actually aimed at
-;  - the instant it comes apart - was over before it read. That is what the
-;  pilot meant by sixteen frames.
-;
-;  So: a seven-second arc, laid over the burn rather than replacing it.
-;
-;    0.0 - 1.4s   THE FIREBALL. A ball at the breakup point, growing fast
-;                 and rising as it cools - white-hot core, amber shell, then
-;                 red, then the grey of smoke. Two discs, hot inside cool.
-;    1.4 - 6.0s   THE COOK-OFF. Three smaller blasts, at 26, 58 and 96
-;                 ticks, each on a DIFFERENT piece of the wreck - so they go
-;                 off wherever that piece has fallen to by then, which is
-;                 what makes it read as the wreck cooking rather than as one
-;                 explosion stuttering.
-;
-;  It rides the pool, so it covers everything the pool covers: aeroplanes,
-;  buildings, radar stations, the Shilkas. One call site, four bytes of the
-;  main segment, and every kill in the game gets it.
-;
-;  in: DI = wreck slot, ES = bufseg. Preserves DI.
-; ============================================================================
-BLSEC   db 26,58,96             ; when the three cook-offs go
-BLFACE  db 2,5,7                ; ...and which piece each one takes
-BLAGE   dw 0
-BLRW    dw 0                    ; the ball's radius, in world units
-BLRY    dw 0                    ; how far it has risen
-BLC0    db 0                    ; core colour
-BLC1    db 0                    ; shell colour
-BLCX    dw 0                    ; where it landed on the glass, and how big
-BLCY    dw 0
-BLRP    dw 0
-
 BLASTF:
         retf                    ; BOND: no fireball. It is filled discs with a
                                 ;  square root a row, several cook-offs deep,
                                 ;  for seven seconds a wreck - far too dear
-        push di
-        push si
-        mov  ax,[di]
-        mov  [cs:BLAGE],ax
-        cmp  ax,25
-        jae  .sec
-        ; ---- THE FIREBALL: 40 + age*14 of radius, capped, rising age*4
-        mov  si,14
-        imul si
-        add  ax,40
-        cmp  ax,230
-        jle  .r1
-        mov  ax,230
-.r1:   mov  [cs:BLRW],ax
-        mov  ax,[cs:BLAGE]
-        add  ax,ax
-        add  ax,ax
-        mov  [cs:BLRY],ax
-        mov  ax,[cs:BLAGE]      ; and it cools as it goes
-        mov  bl,94              ; white-hot
-        mov  bh,97
-        cmp  ax,5
-        jb   .c1
-        mov  bl,97              ; amber
-        mov  bh,19
-        cmp  ax,13
-        jb   .c1
-        mov  bl,19              ; red
-        mov  bh,12
-        cmp  ax,20
-        jb   .c1
-        mov  bl,12              ; and out into smoke
-        mov  bh,12
-.c1:   mov  [cs:BLC0],bl
-        mov  [cs:BLC1],bh
-        mov  bx,di
-        add  bx,WFP             ; face 0 is where it came apart
-        call BLBALL
-        jmp  .d
-        ; ---- THE COOK-OFF: three of them, each on its own piece
-.sec:  xor  si,si
-.sl:   mov  bl,[cs:BLSEC+si]
-        xor  bh,bh
-        mov  ax,[cs:BLAGE]
-        sub  ax,bx
-        js   .sn               ; not yet
-        cmp  ax,14
-        jae  .sn               ; and long over
-        mov  [cs:BLRY],ax       ; a small one: 24 + age*10, rising
-        push ax
-        mov  bx,10
-        imul bx
-        add  ax,24
-        mov  [cs:BLRW],ax
-        pop  ax
-        mov  bl,94
-        mov  bh,97
-        cmp  ax,4
-        jb   .c2
-        mov  bl,97
-        mov  bh,19
-        cmp  ax,9
-        jb   .c2
-        mov  bl,19
-        mov  bh,12
-.c2:   mov  [cs:BLC0],bl
-        mov  [cs:BLC1],bh
-        mov  al,[cs:BLFACE+si]  ; whichever piece this one belongs to,
-        xor  ah,ah              ; wherever it has fallen to by now
-        mov  bx,12
-        imul bx
-        add  ax,WFP
-        add  ax,di
-        mov  bx,ax
-        push si
-        call BLBALL
-        pop  si
-.sn:   inc  si
-        cmp  si,3
-        jb   .sl
-.d:    pop  si
-        pop  di
-        retf
-
-; ---- BLBALL - project the face record at BX and paint the two discs.
-; Reads BLRW (world radius), BLRY (rise), BLC0/BLC1. Clobbers plenty.
-BLBALL: mov  ax,[bx]
-        sub  ax,[camx]
-        mov  [wdx],ax
-        mov  ax,[bx+4]
-        sub  ax,[camz]
-        mov  [wdz],ax
-        mov  ax,[bx+2]
-        add  ax,[cs:BLRY]
-        sub  ax,[camy]
-        mov  [ctz],ax
-        call CODE:ROTXZF
-        mov  ax,[rc_z]
-        cmp  ax,NEARZ
-        jl   .r                ; behind us
-        mov  [cs:BLRP],ax       ; keep rz: the radius needs it
-        mov  dx,[ctz]
-        mov  ax,[rc_x]
-        mov  cx,[rc_z]
-        call CODE:PPOINTF
-        jc   .r
-        mov  [cs:BLCX],ax
-        mov  [cs:BLCY],dx
-        mov  ax,[cs:BLRW]       ; world radius -> pixels: r*FOCAL/rz
-        mov  bx,FOCAL
-        imul bx
-        idiv word [cs:BLRP]
-        cmp  ax,1
-        jl   .r                ; a pixel or less: not worth the arithmetic
-        cmp  ax,60
-        jle  .b1
-        mov  ax,60              ; and never the whole screen
-.b1:   push ax
-        mov  al,[cs:BLC1]
-        mov  [cs:BLCOL],al
-        pop  ax
-        push ax
-        call BLDISC             ; the cool shell...
-        pop  ax
-        shr  ax,1
-        cmp  ax,1
-        jl   .r
-        push ax
-        mov  al,[cs:BLC0]
-        mov  [cs:BLCOL],al
-        pop  ax
-        call BLDISC             ; ...and the hot core inside it
-.r:    ret
-
-; ---- BLDISC - solid disc, centre BLCX/BLCY, radius AX, colour BLCOL.
-; Row by row, half width = isqrt(r*r - dy*dy). No table and no trig, and the
-; circle comes out round: a fireball drawn as a diamond reads as a diamond.
-; ES = bufseg. Clobbers AX,BX,CX,DX,SI,DI.
-BLDISC: mov  [cs:BLRAD],ax
-        neg  ax
-        mov  si,ax              ; si = dy, walking up from -r
-.row:  mov  ax,[cs:BLCY]
-        add  ax,si
-        cmp  ax,0
-        jl   .next
-        cmp  ax,199
-        jg   .next
-        mov  [cs:BLROW],ax
-        mov  ax,si              ; dy*dy
-        imul si
-        mov  cx,ax
-        mov  ax,[cs:BLRAD]      ; r*r
-        imul ax
-        sub  ax,cx
-        jns  .w1
-        xor  ax,ax
-.w1:   call BLSQRT             ; ax = half width
-        mov  dx,ax
-        add  dx,dx
-        inc  dx                 ; dx = the full span
-        mov  cx,[cs:BLCX]
-        sub  cx,ax              ; cx = its left end
-        jns  .l1
-        add  dx,cx              ; off the left edge: shorten and square up
-        xor  cx,cx
-.l1:   cmp  dx,0
-        jle  .next
-        mov  ax,cx
-        add  ax,dx
-        cmp  ax,320
-        jle  .l2
-        mov  dx,320             ; ...and off the right
-        sub  dx,cx
-        cmp  dx,0
-        jle  .next
-.l2:   mov  ax,[cs:BLROW]      ; di = row*320 + x, as 256 + 64
-        mov  di,ax
-        mov  bx,ax
-        push cx
-        mov  cl,8
-        shl  di,cl
-        mov  cl,6
-        shl  bx,cl
-        pop  cx
-        add  di,bx
-        add  di,cx
-        mov  cx,dx
-        mov  al,[cs:BLCOL]
-        cld
-        rep  stosb
-.next: inc  si
-        mov  ax,[cs:BLRAD]
-        cmp  si,ax
-        jle  .row
-        ret
-
-BLRAD   dw 0
-BLROW   dw 0
-BLCOL   db 0
-
-; ---- BLSQRT - AX = floor(sqrt(AX)), by subtracting the odd numbers.
-BLSQRT: xor  cx,cx
-        mov  bx,1
-.s:    cmp  ax,bx
-        jb   .sd
-        sub  ax,bx
-        add  bx,2
-        inc  cx
-        jmp  .s
-.sd:   mov  ax,cx
-        ret
 
 ; ============================================================================
 ;  THE LANDING GEAR.
@@ -2012,8 +1595,8 @@ RAMPTXTF:
                                 ;  the brakes set, and this would say so over
                                 ;  somebody else's dogfight. A prompt is only
                                 ;  true in the cockpit it belongs to.
-        cmp  byte [ride],0      ; ...and the turret seat is somebody
-        jne  .rx               ;  else's cockpit too: the jet's parking
+                                ; ...and the turret seat is somebody
+                                ;  else's cockpit too: the jet's parking
                                 ;  hint stays in the jet
         cmp  byte [dying],0
         jne  .rx
@@ -2045,51 +1628,6 @@ RAMPTXTF:
         call CODE:FDRAWF
 .rx:   retf
 
-; ============================================================================
-;  *** TEMPORARY: THE FROZEN FRAME SAYS WHERE IT STOPPED ***
-;
-;  A network freeze that keeps its SOUND is a main loop spinning, not a
-;  crash and not memory - the interrupts are plainly alive. The picture is
-;  still on the glass, so the picture can be made to answer: each stage of
-;  the frame stamps a coloured square straight into VIDEO memory, and the
-;  next BLIT wipes it. In flight they flicker. When it wedges, the LAST one
-;  written stays - and its colour names the quarter of the frame that hung.
-;
-;  RED   - INPUT and the physics are done
-;  GREEN - the wire is done (NETPOLL + NETAPPLY, the prime suspect)
-;  AMBER - the render is done
-;  WHITE - the blit is done, the frame closed cleanly
-;
-;  A frozen WHITE means it died early in the next frame; a frozen GREEN
-;  means it died in the render; a frozen RED means it died on the wire.
-;  Each door is five bytes at the call site, which is what the main segment
-;  had to spare - the stage number is baked into the door, not passed.
-;  REMOVE ME once it is caught.
-; ============================================================================
-STGMARK:                        ; AL = colour, a 10x10 SQUARE at the top left
-        cmp  byte [dbgm],0     ;  - it was 8x2 and a frozen screenshot could
-        jne  .on                ;  not name the hue; a square you can see
-        ret                     ;  answers at a glance
-.on:   push es
-        push di
-        push cx
-        push bx
-        mov  cx,0A000h
-        mov  es,cx
-        xor  di,di
-        mov  bx,10              ; ten rows...
-.rw:   mov  cx,10              ; ...of ten pixels
-.m:    mov  [es:di],al
-        inc  di
-        loop .m
-        add  di,320-10
-        dec  bx
-        jnz  .rw
-        pop  bx
-        pop  cx
-        pop  di
-        pop  es
-        ret
 STG0F:
         mov  al,10              ; BOND: the four frame doors are profiler
         call PROFMK             ;  slots 10..13 (see PROFMK)
@@ -2227,140 +1765,6 @@ PROFSHOW:
 .r:    ret
 
 ; ---------------------------------------------------------------------------
-;  SHKBRL - THE SHILKA'S GUNS, SEEN FROM ITS OWN SEAT (2026-08-27).
-;
-;  The engine cannot draw them, and that is not an oversight. NEARZ is 40
-;  units and the whole vehicle is 34 long, so every face of the Shilka a
-;  gunner sits in - hull, drum, dish, barrels - lies inside the near plane
-;  and is clipped away before it is ever projected. The seat has always
-;  looked out over an empty bonnet, and the camera was being tilted at HALF
-;  the barrels' angle to fake the feeling of them moving, which is a picture
-;  with nothing in it that moves.
-;
-;  So the barrels get a lens of their own, and only they do. The same SBARR
-;  model, pitched about the same trunnion by the same angle the world's copy
-;  uses, projected straight onto the glass from an eye at BRLEYD/BRLEYH/
-;  BRLEX: no yaw (the drum's bearing IS the way the camera looks), no near
-;  clip (nothing here can reach that eye), no depth sort. Six faces in a
-;  fixed order - the only thing the angle changes is whether we are looking
-;  down on the guns or up at them, and that is one table swap.
-;
-;  It lives out here because UISEG is full and this is the cleanest kind of
-;  tenant: its one input from the seat is [brlel], the word SHKEYEF leaves
-;  behind every frame it borrows the camera. Everything else it touches -
-;  SBARRVT, SBARRFC, the vertex cache, PX/PY - is main-segment data, and
-;  DS is the main segment out here.
-;
-;  Called after the world and before the cabin, so the panel covers the
-;  barrels' roots the way the real one does. ES = the back buffer.
-; ---------------------------------------------------------------------------
-SHKBRLF:
-        mov  ax,[brlel]         ; the joint, once for all twelve vertices
-        push ax
-        call CODE:SINQF         ; sin * 256
-        mov  [mpsn],ax
-        pop  ax
-        push ax
-        add  ax,64              ; cos: the same table a quarter on
-        call CODE:SINQF
-        mov  [mpcs],ax
-        pop  ax
-        mov  bp,BRLORD          ; looking down on them...
-        cmp  ax,BRLFLIP
-        jl   .ord
-        mov  bp,BRLORDU         ; ...or up at them, past the crossover
-.ord:  xor  si,si              ; the model, six bytes a vertex
-        xor  di,di              ; the screen cache, two
-.v:    mov  ax,[SBARRVT+si+2]  ; about the trunnion, exactly the way
-        sub  ax,SHKTRNY         ;  MODELDRAW turns this model in the world
-        mov  [trnvy2],ax
-        mov  ax,[SBARRVT+si+4]
-        sub  ax,SHKTRNZ
-        mov  [trnvz2],ax
-        mov  ax,[trnvy2]        ; y' = (dy*cos + dz*sin)/256
-        imul word [mpcs]
-        mov  cx,ax
-        mov  ax,[trnvz2]
-        imul word [mpsn]
-        add  ax,cx
-        cwd
-        mov  bx,256
-        idiv bx
-        sub  ax,BRLEYH          ; ...and the lens rides above the trunnion
-        mov  [trnvy],ax
-        mov  ax,[trnvy2]        ; z' = (dz*cos - dy*sin)/256
-        imul word [mpsn]
-        mov  cx,ax
-        mov  ax,[trnvz2]
-        imul word [mpcs]
-        sub  ax,cx
-        cwd
-        mov  bx,256
-        idiv bx
-        add  ax,BRLEYD          ; ...and behind it
-        cmp  ax,BRLNZ
-        jge  .zk
-        mov  ax,BRLNZ           ; the floor - see BRLNZ in DATA.INC
-.zk:   mov  cx,ax              ; the depth, for both of the divides
-        mov  ax,[SBARRVT+si]    ; sx = 160 + (x-BRLEX)*FOCAL/z
-        sub  ax,BRLEX
-        mov  bx,FOCAL
-        imul bx
-        idiv cx
-        add  ax,160
-        mov  [PVX+di],ax
-        mov  ax,[trnvy]         ; sy = horiz - y*FOCAL/z
-        mov  bx,FOCAL
-        imul bx
-        idiv cx
-        neg  ax
-        add  ax,[horiz]
-        mov  [PVY+di],ax
-        add  si,6
-        add  di,2
-        cmp  si,SBARRNV*6
-        jb   .v
-        mov  cx,SBARRNF         ; ...and paint them, far to near
-.f:    push cx
-        push bp
-        mov  bx,bp
-        mov  al,[cs:bx]         ; which face this pass draws
-        xor  ah,ah
-        mov  bx,ax              ; a face record is five bytes
-        add  ax,ax
-        add  ax,ax
-        add  ax,bx
-        mov  bx,SBARRFC
-        add  bx,ax
-        xor  si,si
-.c:    mov  al,[bx+si]         ; its four corners, off the screen cache
-        xor  ah,ah
-        add  ax,ax
-        mov  di,ax
-        mov  ax,[PVX+di]
-        mov  dx,[PVY+di]
-        mov  di,si
-        add  di,di
-        mov  [PX+di],ax
-        mov  [PY+di],dx
-        inc  si
-        cmp  si,4
-        jb   .c
-        mov  al,[bx+4]          ; the model's own paint
-        mov  [COLOR],al
-        mov  word [NPOLY],4
-        call CODE:SCANPLYF      ; screen space already: nothing to clip
-        pop  bp
-        inc  bp
-        pop  cx
-        loop .f
-        retf
-
-BRLORD  db 0,1,4,5,2,3          ; from above: the low pair of barrels, the
-                                ;  cradle cheeks, the top pair nearest
-BRLORDU db 2,3,4,5,0,1          ; ...and the other way about from below
-
-; ---------------------------------------------------------------------------
 ;  SHCABLDF - the radar phosphor's page, once at boot. In v3 it loaded the
 ;  Shilka's cabin (SHCAB.DAT and its CGA/EGA/HGC bakes) into the top page
 ;  of the far map; the BOND has no Shilkas and loads nothing.
@@ -2385,199 +1789,12 @@ SHCABLDF:
         rep  stosw
         pop  es
         retf
-; ---------------------------------------------------------------------------
-;  RDRPHOSF - THE TUBE ITSELF (2026-08-28). The Shilka's scope stopped
-;  being a drawing and became PHOSPHOR: a 64x64 charge map on the cabin
-;  page's top shelf (RDRMAP). UI.INC writes charge - the beam down the
-;  dish's bearing at 15, the returns under the wedge - and this, once a
-;  frame after the cabin art, does what the glass of a real tube does:
-;
-;    GRAIN  a dozen random cells a frame get a whisper of charge (2) -
-;           the noise floor of a receiver turned all the way up. Never
-;           on top of a real echo, and never off the disc: the same
-;           span table that shapes the glass gates the speckle.
-;    DECAY  every other TICK each lit cell loses one step, so a full
-;           charge dies in ~30 ticks - about one sweep of the dish.
-;           The tail behind the beam and the slow death of a blip are
-;           both exactly this number. Gated on the tick, not the frame:
-;           a fast machine must not burn the phosphor faster.
-;    GLASS  the disc repainted from the map through a 16-step ladder of
-;           the panel's own greens - the head white, the tail sinking
-;           back into the dark. The flat art green under it is simply
-;           covered: an unlit tube face is nearly black.
-;
-;  ES = the back buffer (the caller's), DS = main in and out.
-; ---------------------------------------------------------------------------
-RDRLAD  db 107,113,113,128,128,117,117,110,110,127,127,95,95,95,8,8
-RDRSPAN db 27,26,26,26,26,26,26,26,25,25,25,24,24,23,23,22,21,20
-        db 20,19,18,16,15,14,12,10,7,0  ; half-width of the disc, per |dy|
-rdms    dw 0                    ; the map's segment while we work
-rdtko   dw 0                    ; the tick the last grain pass saw
-rdtkc   db 0                    ; ...and the decay divider, 0..RDRDIV-1
-rdsn    dw 0                    ; the turret rotation's sin/cos...
-rdcs    dw 256
-rdrow   dw 0                    ; ...and the rotated walk's row state:
-rdy     dw 0                    ;  screen row base, row index, half-width,
-rdhw    dw 0                    ;  where this row's pixels end
-rdend   dw 0
 RDRDIV  = 5                   ; a decay step every FIFTH tick: an echo
                                 ;  born white dies in 75 ticks - just
                                 ;  under one turn of the slowed dish, so
                                 ;  a blip burns bright when struck and
                                 ;  is fading out as the beam comes round
                                 ;  again. Exactly the pilot's sentence.
-
-RDRPHOSF:
-        mov  ax,[shcabsg]
-        or   ax,ax
-        jz   .x
-        mov  [cs:rdms],ax
-        cld
-        mov  dx,[lasttk]        ; read the clock while DS is still main
-        cmp  dx,[cs:rdtko]
-        je   .rend             ; same tick: the frame repeats, no state
-        mov  [cs:rdtko],dx
-        ; ---- GRAIN, six whispers a TICK (per frame buried the glass
-        ; once the decay slowed: a dot lives ten ticks now) -----------
-        mov  cx,6
-.g:    push cx
-        call CODE:RND16F        ; AX = sixteen random bits
-        mov  bx,ax
-        and  bx,63              ; mx
-        mov  cl,8
-        shr  ax,cl
-        and  ax,63              ; my
-        mov  dx,ax
-        sub  ax,32
-        jns  .g1
-        neg  ax
-.g1:   cmp  ax,27
-        jg   .gn               ; off the tube face
-        mov  si,ax
-        mov  al,[cs:RDRSPAN+si]
-        xor  ah,ah
-        mov  si,bx
-        sub  si,32
-        jns  .g2
-        neg  si
-.g2:   cmp  si,ax
-        jg   .gn               ; outside this row of the disc
-        mov  di,dx              ; cell = my*64 + mx
-        mov  cl,6
-        shl  di,cl
-        add  di,bx
-        push ds
-        mov  ds,[cs:rdms]
-        cmp  byte [di+RDRMAP],0
-        jne  .gs               ; the grain never brightens a real echo
-        mov  byte [di+RDRMAP],2
-.gs:   pop  ds
-.gn:   pop  cx
-        loop .g
-        ; ---- DECAY, one step every RDRDIV ticks ----------------------
-        inc  byte [cs:rdtkc]
-        cmp  byte [cs:rdtkc],RDRDIV
-        jb   .rend
-        mov  byte [cs:rdtkc],0
-        push ds
-        mov  ds,[cs:rdms]
-        mov  si,RDRMAP
-        mov  cx,4096
-.d:    cmp  byte [si],0
-        je   .dn
-        dec  byte [si]
-.dn:   inc  si
-        loop .d
-        pop  ds
-        ; ---- the GLASS: first the WELL the tube sits in - the art's
-        ; green face painted over in true black (the pilot: the square
-        ; under the disc is black on a real set, not green) ------------
-.rend: mov  di,108*320+125     ; the green screen's window, 70 x 60
-        mov  bx,60
-        mov  al,107             ; true black
-.w:    mov  cx,70
-        rep  stosb
-        add  di,320-70
-        dec  bx
-        jnz  .w
-        ; ---- ...then the disc itself, ROTATED to the turret ----------
-        ; The map is north-up (phosphor is memory, and memory cannot be
-        ; rotated without smearing); the GLASS is turret-up. So every
-        ; screen row walks a straight line across the rotated map: the
-        ; four multiplies happen once a row, the walk itself is two adds
-        ; a pixel, 8.8 fixed point. Turn the drum and the afterglow of
-        ; every echo comes round with the picture - which is the point.
-        mov  ax,[rdrot]         ; the turret's bearing (main DS still)
-        push ax
-        call CODE:SINQF
-        mov  [cs:rdsn],ax
-        pop  ax
-        add  ax,64
-        call CODE:SINQF
-        mov  [cs:rdcs],ax
-        push ds
-        mov  ds,[cs:rdms]
-        mov  word [cs:rdrow],(SZRDCY-27)*320+SZRDCX
-        mov  word [cs:rdy],0    ; row 0..54
-.r:    mov  bx,[cs:rdy]
-        sub  bx,27              ; ey: rows below the centre positive
-        mov  ax,bx
-        jns  .r1
-        neg  ax
-.r1:   mov  si,ax
-        mov  al,[cs:RDRSPAN+si]
-        xor  ah,ah
-        mov  [cs:rdhw],ax       ; hw: this row's half-width
-        neg  ax                 ; the row starts at ex = -hw, and the
-        dec  ax                 ;  loop adds BEFORE sampling: pre-step 1
-        imul word [cs:rdcs]    ; u = 8320 + ex*cos - ey*sin (8.8, +128
-        mov  si,ax              ;  so the >>8 truncation rounds)
-        add  si,8320
-        mov  ax,bx
-        imul word [cs:rdsn]
-        sub  si,ax
-        mov  ax,[cs:rdhw]
-        neg  ax
-        dec  ax
-        imul word [cs:rdsn]    ; v = 8320 + ex*sin + ey*cos
-        mov  bp,ax
-        add  bp,8320
-        mov  ax,bx
-        imul word [cs:rdcs]
-        add  bp,ax
-        mov  di,[cs:rdrow]
-        sub  di,[cs:rdhw]
-        mov  ax,[cs:rdhw]
-        add  ax,ax
-        inc  ax                 ; hw*2+1 pixels across
-        add  ax,di
-        mov  [cs:rdend],ax
-        mov  cx,[cs:rdcs]       ; the per-pixel steps live in registers
-        mov  dx,[cs:rdsn]
-.p:    add  si,cx              ; u += cos
-        add  bp,dx              ; v += sin
-        mov  bx,bp
-        and  bx,3F00h
-        shr  bx,1
-        shr  bx,1               ; (v>>8)*64...
-        mov  ax,si
-        mov  al,ah
-        xor  ah,ah
-        add  bx,ax              ; ...+ u>>8: the map cell
-        mov  al,[bx+RDRMAP]     ; its charge (AH stays 0)
-        mov  bx,ax
-        mov  al,[cs:RDRLAD+bx]  ; the green it glows
-        stosb
-        cmp  di,[cs:rdend]
-        jb   .p
-        mov  ax,[cs:rdrow]
-        add  ax,320
-        mov  [cs:rdrow],ax
-        inc  word [cs:rdy]
-        cmp  word [cs:rdy],55
-        jb   .r
-        pop  ds
-.x:    retf
 
 ; ============================================================================
 ;  BONDBOTSF - the BOND's war is two a side. v3 fields forty jets - every

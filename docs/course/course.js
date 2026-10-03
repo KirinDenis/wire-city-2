@@ -183,11 +183,10 @@ export class CourseApp {
   // ------------------------------------------------------------ the desktop
 
   /**
-   * Where the four windows of a lesson go, in cells - the lesson opens as
-   * the pilot drew it, 2026-10-02. The left column: the source, and under
-   * it a strip with FASM's words. The right column: the DOS PC on top, its
-   * inside as near 4:3 in pixels as the cells allow, and the lesson's
-   * video under it. Nothing overlaps, so nothing hides a title.
+   * Where the four windows of a lesson go, in cells. The left column: the
+   * DOS PC on top, its inside as near 4:3 in pixels as the cells allow, and
+   * the lesson's video under it. The right column: the source, and under it
+   * a strip with FASM's words. Nothing overlaps; why this way round, below.
    */
   layout() {
     const W = this.owl.width, H = this.owl.height;
@@ -204,11 +203,20 @@ export class CourseApp {
     let ih = Math.round(((R - 2) * cw * 3) / 4 / ch);
     ih = Math.min(ih, Math.floor(D * 0.55) - 2);     // the video keeps the rest, near half
     const B = 6;                                     // FASM says two lines; room for an error's three
+    // Every window has its shadow, two columns to the right and a row below.
+    // So the DOS PC and the video are on the LEFT and the source on the
+    // RIGHT (the pilot's idea, 2026-10-03): the editor's shadow falls off
+    // the screen, never on the video - a shadow over the video counts as
+    // covering it, and the video was hidden while the editor was in front -
+    // and the left column's shadows fall on the editor, which does not mind.
+    // DOS's shadow may fall on the video's title - it does not hide the
+    // video, and the pilot likes the look (2026-10-03). One row is left under
+    // the editor, so its shadow keeps off the Build strip's title.
     return {
-      editor: { x: 0, y: 1, w: W - R, h: D - B },
-      build: { x: 0, y: 1 + D - B, w: W - R, h: B },
-      dos: { x: W - R, y: 1, w: R, h: ih + 2 },
-      video: { x: W - R, y: 1 + ih + 2, w: R, h: D - (ih + 2) },
+      dos: { x: 0, y: 1, w: R, h: ih + 2 },
+      video: { x: 0, y: 1 + ih + 2, w: R, h: D - (ih + 2) },
+      editor: { x: R, y: 1, w: W - R, h: D - B - 1 },
+      build: { x: R, y: 1 + D - B, w: W - R, h: B },
     };
   }
 
@@ -222,7 +230,7 @@ export class CourseApp {
   /** An editor in the left column, coloured as its name says; `source` and `path` say where Save puts it. */
   addDoc(name, text, source, path, { readOnly = false } = {}) {
     const r = this.layout().editor;
-    const w = this.owl.window(`${name} - ${source?.title ?? 'new'}`, r.w, r.h, { x: r.x, y: r.y, closeCmd: Cm.Close, shadow: false });
+    const w = this.owl.window(`${name} - ${source?.title ?? 'new'}`, r.w, r.h, { x: r.x, y: r.y, closeCmd: Cm.Close });
     // A DOS file ends its lines with CR LF; the editor wants LF alone, and
     // the CRs go back on when it is saved.
     const crlf = text.includes('\r\n');
@@ -391,7 +399,7 @@ export class CourseApp {
     const owl = this.owl;
     if (!this.buildWin) {
       const r = this.layout().build;
-      this.buildWin = owl.window('Build', r.w, r.h, { x: r.x, y: r.y, style: Style.Dialog, closeCmd: Cm.BuildClose, shadow: false });
+      this.buildWin = owl.window('Build', r.w, r.h, { x: r.x, y: r.y, style: Style.Dialog, closeCmd: Cm.BuildClose });
       this.buildText = owl.staticText(this.buildWin, 1, 1, '', r.w - 4, r.h - 3);
     }
     owl.setText(this.buildText, text);
@@ -425,7 +433,7 @@ export class CourseApp {
     const title = `${lesson.id}${lesson.lecture ? ` - lecture ${lesson.lecture}` : ''}`;
     // Black, frame and all (Style.Terminal): the video is black round its
     // picture, and a blue frame round black looked like a hole.
-    const win = owl.window(title, r.w, r.h, { x: r.x, y: r.y, style: Style.Terminal, closeCmd: Cm.VideoClose, shadow: false });
+    const win = owl.window(title, r.w, r.h, { x: r.x, y: r.y, style: Style.Terminal, closeCmd: Cm.VideoClose });
     let f;
     if (framed) {
       f = document.createElement('iframe');

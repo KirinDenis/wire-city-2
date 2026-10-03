@@ -6,15 +6,23 @@ that assembles it with FASM and runs it, and its **video**. A prototype,
 started 2026-10-02, live at `https://kirindenis.github.io/wire-city-2/course/`.
 
 ```
-+-- PIXEL.ASM (editor) ------------+-- DOS: BUILD.BAT --------------+
-|                                  |  the lesson, built and running |
-|                                  +-- L03 - lecture 3 -------------+
-|                                  |  its YouTube video             |
-+-- Build -------------------------+                                |
-|  FASM's words, what to press     |                                |
-+----------------------------------+--------------------------------+
++-- DOS: BUILD.BAT --------------+-- PIXEL.ASM (editor) ------------+
+|  the lesson, built and running |                                  |
++-- L03 - lecture 3 -------------+                                  |
+|  its YouTube video             |                                  |
+|                                +-- Build -------------------------+
+|                                |  FASM's words, what to press     |
++--------------------------------+----------------------------------+
 F1 Lessons  F2 Save  F9 Build+run  Ctrl-F9 Run  ...  Right Ctrl: keys back
 ```
+
+The source is on the RIGHT on purpose: every window has a shadow (two
+columns right, a row down), and a shadow over the video counts as covering
+it, which hides the video. On the right, the editor's shadow falls off the
+screen; DOS's and the video's fall on the editor, which does not mind.
+DOS's shadow also falls on the video's title, which does not hide the video
+and looks right. One row is left under the editor, so its shadow keeps off
+the Build strip's title.
 
 ## Addresses — the videos link here, do not break them
 

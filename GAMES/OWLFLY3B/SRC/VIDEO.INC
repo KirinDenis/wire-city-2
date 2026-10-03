@@ -36,33 +36,16 @@ CLEARBUF:
         cmp  word [sinr],0  ; banked: the grain must turn with the
         je   .lvl              ; world - per-pixel walk, not the tile
         mov  byte [wdith],1
-.lvl:  cmp  byte [qual],2      ; LOW: no sky ramp and no ground - one flat
-        je   .flat              ; field, and the stroked mesh draws the
-        call SKYSEG:SKYFILL     ; horizon itself. BGND paints all 64000
-        ret                     ; pixels every frame and walks them ONE BY
-                                ; ONE when the world is banked, which makes
-                                ; it the dearest thing in the frame on a
-                                ; slow machine. This is the cheapest fill
-                                ; there is: 32000 words and done.
+.lvl:  jmp  .flat   ; LOW: no sky ramp and no ground - one flat
+                                ; field, and the stroked mesh draws the
 .flat: call VIDSEG:SKYGNDF     ; BOND: a sky and a ground, cut along the
         ret                     ;  horizon - LOW's one flat field was both
 
 ; ============================================================================
 ;  COPY BACK-BUFFER -> A000:0000
 ; ============================================================================
-BLIT:   cmp  byte [vcard],6     ; VGA and MCGA: the straight copy below.
-        jb   .cnv               ; Anything older converts the frame in
-        push ds                 ; VIDSEG - the renderer never knows
-        mov  ax,[bufseg]
-        mov  ds,ax
-        mov  ax,0A000h
-        mov  es,ax
-        xor  si,si
-        xor  di,di
-        mov  cx,32000
-        rep  movsw
-        pop  ds
-        ret
+BLIT:   jmp  .cnv   ; VGA and MCGA: the straight copy below.
+                                ; Anything older converts the frame in
 .cnv:  call VIDSEG:VBLITF
         ret
 

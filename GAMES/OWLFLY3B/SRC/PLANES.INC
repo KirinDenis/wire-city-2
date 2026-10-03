@@ -17,7 +17,6 @@ PLANESUPD:
         add  ax,RSPINV
         and  ax,255
         mov  [rspin],ax
-        call UISEG:SHKTICKF   ; and the Shilkas' turrets turn on it too
         xor  si,si              ; plane (words)
 .pl:
         mov  bx,si              ; the dead stay dead - attrition war
@@ -415,55 +414,10 @@ PLANESDRAW:
         sub  ax,[camy]
         mov  [pdy],ax
         ; ---- contrail: TLN dots behind the jet (haze colour) ----
-        cmp  byte [qual],2      ; LOW: no contrails. Sixteen dots a jet, each
-        je   .trd               ;  one a rotate and a projection, on every
+        jmp  .trd   ; LOW: no contrails. Sixteen dots a jet, each
+                                ;  one a rotate and a projection, on every
                                 ;  aircraft in the sky - and a machine that
                                 ;  needs LOW has better uses for them.
-        cmp  word [pidx],NPLANE*2   ; the ghost slot has no ring in BSS -
-        jae  .trd                  ;  a parked jet trails nothing anyway
-        mov  bx,si
-        add  bx,bx
-        add  bx,bx              ; si*4
-        mov  ax,bx
-        add  ax,ax
-        add  bx,ax              ; si*12: ring = TLN(12)*2 bytes per jet
-        mov  [pfc],bx           ; slot base (TLN=16)
-        mov  word [tpi],0
-.tr:   mov  bx,[pfc]
-        add  bx,[tpi]
-        mov  ax,[TLX+bx]
-        sub  ax,[camx]
-        mov  [wdx],ax
-        mov  ax,[TLZ+bx]
-        sub  ax,[camz]
-        mov  [wdz],ax
-        push bx
-        call ROTXZ
-        pop  bx
-        mov  dx,[TLY+bx]
-        sub  dx,[camy]
-        mov  ax,[rc_x]
-        mov  cx,[rc_z]
-        call PPOINT
-        jc   .trn
-        cmp  ax,0
-        jl   .trn
-        cmp  ax,319
-        jg   .trn
-        cmp  dx,0
-        jl   .trn
-        cmp  dx,199
-        jg   .trn
-        mov  [dsx],ax
-        mov  ax,dx
-        call ROW320
-        add  di,[dsx]
-        mov  al,8               ; white vapour, 2 px - visible on the sky
-        mov  [es:di],al
-        mov  [es:di+1],al
-.trn:  add  word [tpi],2
-        cmp  word [tpi],TLN*2
-        jb   .tr
 .trd:  mov  si,[pidx]          ; PROJPT inside PPOINT clobbers SI
         cmp  word [pdz],BONDJLOD ; BOND: far off, the IFF marker IS the jet -
         jg   .mdone            ;  a MODELDRAW is ~60 ms on an 8088
@@ -741,7 +695,6 @@ PLANESDRAW:
         jb   .pd
         ret
 
-
 ; ---------------------------------------------------------------------------
 ;  MODELDRAW - draw the CURRENT model (mvb/mvn/mfb/nfc) at camera-space
 ;  pdx/pdy/pdz, yawed by msin/mcos: transform the vertices into the PV
@@ -933,15 +886,6 @@ MODELDRAW:
         jb   .df
         ret
 
-; ---------------------------------------------------------------------------
-;  THE FAR SEGMENT'S DOOR HOME. The radar stations live in UISEG (the
-;  stack guard's rent, the way MINIMAP2F went), and a far segment cannot
-;  near-call into CODE. These four are all it needs from home; seven
-;  bytes each, against the hundreds the station code would cost here.
-; ---------------------------------------------------------------------------
-MODELDRAWF:
-        call MODELDRAW
-        retf
 ROTXZF:
         call ROTXZ
         retf
@@ -951,12 +895,6 @@ SINQF:
 HBLDF:   ; the scope asks the world what stands in a
         call HBLD               ; cell. There is no list of buildings in
         retf                     ; this game - they are computed from the
-RND16F:   ; the Shilkas fire from UISEG and need the
-        call RND16              ; same dice and the same death the jets use
-        retf
-CRASHF:
-        call CRASHHANDLE
-        retf
 TERRHF:
         call TERRH
         retf
@@ -966,21 +904,6 @@ WRKATF:
 PPOINTF:
         call PPOINT             ; the station lock-scan projects out there
         retf
-; ---- the way home for TOWNSEG: the windows live out there now and the
-; rasterizer cannot. Three doors, seven bytes each, and the main segment
-; got five hundred back for them.
-PROJPTF:
-        call PROJPT
-        retf
-SCANPLYF:
-        call SCANPOLY
-        retf
-PUTPIXF:
-        call PUTPIXEL
-        retf
-DRAWBOXF:
-        call DRAWBOX            ; the traffic is boxes on the road, drawn by
-        retf                     ; the same routine the buildings are
 FLBSEEDF:
         call FLBSEED            ; PLAYERRESET moved out to UISEG and still
         retf                     ; wants a fresh black box on the way past
@@ -1507,10 +1430,6 @@ MSLUPD1:
         mov  [rhz],ax
         mov  byte [rhdmg],RSMDMG
         call UISEG:RSHITF
-        or   ax,ax
-        jnz  .mbk
-        mov  byte [rhdmg],SHKMDMG
-        call UISEG:SHKHITF   ; ...and so does a gun battery
         or   ax,ax
         jz   .mbp
 .mbk:
@@ -2053,99 +1972,8 @@ WRECKDRAW:
         ; ---- the glass goes first: a burst of window shards thrown
         ; out of the block in the opening second, bright against the
         ; smoke and gone by the time the fire settles.
-        cmp  byte [qual],2      ; LOW: no shards. The fireball says the
-        je   .wgd               ;  building died; the confetti is a luxury
-        cmp  word [di],45
-        jae  .wgd
-        mov  bx,di
-        add  bx,WFP             ; face 0 record = the breakup spot
-        mov  word [wfi],0
-.wgl:  mov  ax,[wfi]           ; shards fan out on even angles
-        mov  cx,21
-        imul cx
-        push ax
-        call SINQ               ; sideways
-        mov  cx,[di]            ; radius grows with the wreck's age
-        mov  dx,cx
-        add  cx,cx
-        add  cx,cx
-        add  cx,cx
-        add  cx,dx              ; age*9
-        add  cx,10
-        mov  [wfh],cx
-        imul cx
-        mov  cx,256
-        idiv cx
-        mov  cx,ax              ; keep dx-of-flight
-        pop  ax
-        push cx
-        add  ax,64
-        call SINQ               ; ...and the other axis
-        imul word [wfh]
-        mov  cx,256
-        idiv cx
-        mov  dx,ax
-        pop  cx
-        mov  ax,[bx]            ; world x = piece + fan
-        add  ax,cx
-        sub  ax,[camx]
-        mov  [wdx],ax
-        mov  ax,[bx+4]
-        add  ax,dx
-        sub  ax,[camz]
-        mov  [wdz],ax
-        mov  ax,[di]            ; the arc: up fast, then falling back
-        mov  cx,7
-        imul cx
-        mov  cx,[di]
-        push ax
-        mov  ax,cx
-        imul cx
-        mov  cx,5
-        cwd
-        idiv cx
-        mov  cx,ax
-        pop  ax
-        sub  ax,cx              ; age*7 - age*age/5
-        add  ax,[bx+2]
-        sub  ax,[camy]
-        mov  [ctz],ax
-        push bx
-        push di
-        call ROTXZ
-        mov  dx,[ctz]
-        mov  ax,[rc_x]
-        mov  cx,[rc_z]
-        call PPOINT
-        pop  di
-        pop  bx
-        jc   .wgn
-        cmp  ax,1
-        jl   .wgn
-        cmp  ax,317
-        jg   .wgn
-        cmp  dx,1
-        jl   .wgn
-        cmp  dx,197
-        jg   .wgn
-        push bx
-        push di
-        mov  [dsx],ax
-        mov  ax,dx
-        call ROW320
-        add  di,[dsx]
-        mov  al,8               ; a splinter of lit glass...
-        test word [wfi],1
-        jz   .wgc
-        mov  al,5               ; ...and one of amber pane
-.wgc:  mov  [es:di],al
-        mov  [es:di+1],al
-        mov  [es:di+320],al
-        pop  di
-        pop  bx
-.wgn:  inc  word [wfi]
-        cmp  word [wfi],14
-        jb   .wgl
+        jmp  .wgd   ; LOW: no shards. The fireball says the
+                                ;  building died; the confetti is a luxury
 .wgd:
         mov  word [wcc],0   ; a plume off EVERY face, not every third
 .wsm:  mov  ax,[wcc]
@@ -2163,106 +1991,8 @@ WRECKDRAW:
         jmp  .wfm              ;  BOND: no flames at all (was jae): six
                                 ;  tongues a face, each a rotate, a projection
                                 ;  and five multiplies, every frame
-        mov  ax,[bx]
-        sub  ax,[camx]
-        mov  [wdx],ax
-        mov  ax,[bx+4]
-        sub  ax,[camz]
-        mov  [wdz],ax
-        mov  ax,[bx+2]
-        sub  ax,[camy]
-        add  ax,6
-        mov  [ctz],ax           ; ry for later
-        push bx
-        push di
-        call ROTXZ
-        mov  dx,[ctz]
-        mov  ax,[rc_x]
-        mov  cx,[rc_z]
-        call PPOINT
-        pop  di
-        pop  bx
-        jc   .wfm
-        cmp  ax,0
-        jl   .wfm
-        cmp  ax,318
-        jg   .wfm
-        cmp  dx,0
-        jl   .wfm
-        cmp  dx,190
-        jg   .wfm
-        push bx
-        push di
-        mov  [wpsx],ax          ; the fire's root on the glass
-        mov  [wpsy],dx
-        ; A real flame instead of the old lone 2x2 block: six tongues
-        ; per face, each with its own flicker phase, licking upward and
-        ; cooling as it climbs - white-hot palette 94 at the root,
-        ; amber above it, red at the tips.
-        mov  word [wfi],0
-.wfl:  mov  ax,[wfi]           ; phase = t*3 + tongue*51 + face*29
-        mov  cx,51
-        imul cx
-        mov  bx,ax
-        mov  ax,[wcc]
-        mov  cx,29
-        imul cx
-        add  bx,ax
-        mov  ax,[lasttk]
-        mov  cx,3
-        imul cx
-        add  ax,bx
-        and  ax,63
-        mov  [wfh],ax
-        mov  bx,ax              ; sideways wander: (phase & 7) - 3
-        and  bx,7
-        sub  bx,3
-        add  bx,[wpsx]
-        mov  [dsx],bx
-        mov  ax,[wfh]           ; and the climb: up to 8 rows of tongue
-        mov  cl,3
-        shr  ax,cl
-        mov  bx,[wpsy]
-        sub  bx,ax
-        mov  [dsy],bx
-        mov  ax,[wfh]           ; the tongue thins as it rises
-        mov  cl,4
-        shr  ax,cl
-        mov  cx,3
-        sub  cx,ax              ; 3,2,1 pixels wide
-        jcxz .wfn
-        mov  bl,94              ; the root burns white-hot...
-        mov  ax,[wfh]
-        cmp  ax,24
-        jb   .wfc
-        mov  bl,97              ; ...amber in the body...
-        cmp  ax,44
-        jb   .wfc
-        mov  bl,19              ; ...and red at the tip
-.wfc:  mov  ax,[dsy]
-        cmp  ax,1
-        jl   .wfn
-        cmp  ax,197
-        jg   .wfn
-        mov  ax,[dsx]
-        cmp  ax,1
-        jl   .wfn
-        cmp  ax,316
-        jg   .wfn
-        mov  ax,[dsy]           ; two rows of it, so it reads as flame
-        push cx                 ; (HLINE2 eats CX in its rep stosb)
-        call HLINE2
-        pop  cx
-        mov  ax,[dsy]
-        dec  ax
-        call HLINE2
-.wfn:  inc  word [wfi]
-        cmp  word [wfi],6
-        jb   .wfl
-        pop  di
-        pop  bx
-.wfm:  cmp  byte [qual],2      ; LOW: no smoke column either. Four swaying
-        je   .wsn               ;  puffs per wreck, every frame, for as long
+.wfm:  jmp  .wsn   ; LOW: no smoke column either. Four swaying
+                                ;  puffs per wreck, every frame, for as long
                                 ;  as fifty seconds - the dearest thing a
                                 ;  kill leaves behind.
         ; smoke: the SMOKE.ASM lab's column, on the game's budget.
@@ -2273,156 +2003,6 @@ WRECKDRAW:
         ; for free. The smoke outlasts the embers now - 900 ticks, near
         ; fifty seconds - so a kill leaves a mark on the landscape you can
         ; still navigate by after the fire has died down.
-        cmp  word [di],900
-        jae  .wsn
-        mov  [ctx],bx           ; the face record: HLINE2 eats BX
-        push di
-        mov  word [wpi],0
-.wpf:  mov  ax,[wcc]           ; phase = (t*2 + plume*43 + puff*32)&127
-        mov  cx,43
-        imul cx
-        mov  cx,[wpi]
-        push cx
-        mov  cl,5
-        shl  cx,cl
-        pop  bx
-        add  ax,cx
-        mov  cx,[lasttk]
-        add  cx,cx
-        add  ax,cx
-        and  ax,127
-        mov  [wph],ax
-        ; sway: sin(phase*4 + puff*64) * (phase/16) / 256 - the higher,
-        ; the wider the wander
-        mov  cl,6
-        shl  bx,cl              ; puff*64
-        add  ax,ax
-        add  ax,ax
-        add  ax,bx
-        call SINQ
-        mov  cx,[wph]
-        mov  bx,cx
-        mov  cl,4
-        sar  bx,cl
-        imul bx
-        mov  bx,256
-        idiv bx
-        mov  bx,[ctx]
-        add  ax,[bx]            ; world x = piece + sway
-        sub  ax,[camx]
-        mov  [wdx],ax
-        mov  ax,[bx+4]
-        sub  ax,[camz]
-        mov  [wdz],ax
-        mov  ax,[wph]           ; world y = piece + 10 + phase*3
-        mov  cx,ax
-        add  ax,ax
-        add  ax,cx
-        add  ax,10
-        add  ax,[bx+2]
-        sub  ax,[camy]
-        mov  [ctz],ax
-        call ROTXZ
-        mov  ax,[rc_z]
-        cmp  ax,40              ; radius wants a sane depth
-        jge  .wz1
-        mov  ax,40
-.wz1:  mov  [wpz],ax
-        mov  dx,[ctz]
-        mov  ax,[rc_x]
-        mov  cx,[rc_z]
-        call PPOINT
-        jc   .wpn
-        mov  [wpsx],ax
-        mov  [wpsy],dx
-        mov  ax,[wph]           ; the puff swells as it rises:
-        mov  cl,2               ; r = 3 + phase/4 world units...
-        sar  ax,cl
-        add  ax,3
-        mov  cx,220
-        imul cx
-        idiv word [wpz]     ; ...projected: r*220/z
-        or   ax,ax
-        jz   .wpn
-        cmp  ax,18
-        jle  .wr1
-        mov  ax,18
-.wr1:  mov  [wpr],ax
-        mov  bl,3               ; the cooling ramp: dark at the fire...
-        mov  ax,[wph]
-        cmp  ax,40
-        jb   .wc1
-        mov  bl,2
-        cmp  ax,88
-        jb   .wc1
-        mov  bl,1               ; ...pale where it thins out
-.wc1:  mov  [wpc],bl
-        ; The puff is a lumpy six-sided flake that TURNS as it climbs.
-        ; The old fixed lens drew the same chevron every time, so a
-        ; column read as a row of check-marks instead of smoke.
-        mov  ax,[wph]           ; spin: rises with the phase, per
-        mov  cx,3               ; petal so no two flakes turn together
-        imul cx
-        mov  cx,[wpi]
-        push ax
-        mov  ax,cx
-        mov  cx,37
-        imul cx
-        pop  cx
-        add  ax,cx
-        mov  [wprot],ax
-        mov  word [NPOLY],6
-        mov  word [wvk],0
-.wpg:  mov  ax,[wvk]           ; vertex angle = k*42 + spin
-        mov  cx,42
-        imul cx
-        add  ax,[wprot]
-        and  ax,255
-        mov  [wang],ax
-        mov  ax,[wvk]           ; ragged edge: r*(2..5)/5 per vertex
-        mov  cx,53
-        imul cx
-        add  ax,[wph]
-        and  ax,3
-        add  ax,2
-        imul word [wpr]
-        mov  cx,5
-        idiv cx
-        mov  [wrad],ax
-        mov  ax,[wang]
-        call SINQ
-        imul word [wrad]
-        mov  cx,256
-        idiv cx
-        add  ax,[wpsx]
-        mov  si,[wvk]
-        add  si,si
-        mov  [PX+si],ax
-        mov  ax,[wang]
-        add  ax,64
-        call SINQ
-        imul word [wrad]
-        mov  cx,256
-        idiv cx
-        mov  bx,[wpsy]
-        sub  bx,ax
-        mov  si,[wvk]
-        add  si,si
-        mov  [PY+si],bx
-        inc  word [wvk]
-        cmp  word [wvk],6
-        jb   .wpg
-        mov  al,[wpc]
-        mov  [COLOR],al
-        call SCANPOLY
-.wpn:  inc  word [wpi]
-        cmp  word [wpi],20  ; twenty petals to a column - a burning
-                                ; vehicle should be findable from the air
-                                ; by its smoke alone, which is how you find
-                                ; one in life
-        jb   .wpf
-        pop  di
-        mov  bx,[ctx]
 .wsn:  inc  word [wcc]
         cmp  word [wcc],NFACE
         jb   .wsm
@@ -2823,27 +2403,7 @@ TRCUPD: xor  bx,bx
         call BCHK
         jnz  .thn              ; already rubble: sail through
         call HBLD
-        cmp  word [bstreet],3
-        jne  .nocar            ; ---- a street: is there a bus on it? ----
-        call TOWNSEG:CELLY1F  ; the car stands where the DRAWN one does:
-        mov  [gbase],dx         ;  the centre of the bent road (see WORLD)
-        pop  di
-        push di
-        mov  ax,[tcx+di]
-        mov  [hitx],ax
-        mov  ax,[tcy+di]
-        mov  [hity],ax
-        mov  ax,[tcz+di]
-        mov  [hitz],ax
-        call TOWNSEG:CARHITF   ; O(1): given the cell, where its vehicle is
-        jnc  .thn              ; right now is arithmetic, not a search
-        mov  ah,40              ; a car going up is a small bang
-        mov  cx,1800
-        call SFXBOOM
-        pop  di
-        pop  bx
-        mov  byte [trcact+bx],0
-        jmp  .n
+        jmp  .nocar            ; BOND: no traffic, so nothing on a street to hit
 .nocar:
         cmp  word [bstreet],0
         jne  .thn
@@ -2903,12 +2463,8 @@ TRCUPD: xor  bx,bx
         mov  byte [rhdmg],1 ; one shell, one point
         push bx
         call UISEG:RSHITF
+.hit:  pop  bx
         or   ax,ax
-        jnz  .hit
-        mov  byte [rhdmg],1
-        call UISEG:SHKHITF   ; the batteries stop shells too - and until
-.hit:  pop  bx                 ; now nothing did, so they could be shot at
-        or   ax,ax              ; all day for no effect
         jz   .n
         mov  byte [trcact+bx],0 ; the round is spent in the lattice
 .n:    inc  bx
@@ -3768,8 +3324,8 @@ PLAYERDRAW:
 DEATHTXT:
         cmp  byte [dying],0
         je   .no
-        cmp  byte [ride],0      ; the turret seat: the wreck's prompt is
-        jne  .no               ;  not painted over another vehicle's
+                                ; the turret seat: the wreck's prompt is
+                                ;  not painted over another vehicle's
                                 ;  glass - it waits for the pilot's return
         mov  ax,[lasttk]
         test ax,4

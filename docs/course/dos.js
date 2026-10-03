@@ -142,7 +142,7 @@ export class CourseDos {
   openWindow(rect) {
     const owl = this.owl;
     if (this.win) owl.close(this.win);
-    this.win = owl.window('DOS', rect.w, rect.h, { x: rect.x, y: rect.y, closeCmd: this.closeCmd, shadow: false });
+    this.win = owl.window('DOS', rect.w, rect.h, { x: rect.x, y: rect.y, closeCmd: this.closeCmd });
     owl.staticText(this.win, 2, 1, 'The DOS PC is switching on. Its picture lies over this window, and is taken away ' +
       'while a menu or another window is over it - DOS keeps running.', rect.w - 6, 4);
     owl.windowStatus(this.win, { label: '~Right Ctrl~ Keys back', cmd: 0 });
@@ -182,7 +182,11 @@ export class CourseDos {
       this.crashed = false;
       this.pulling = false;      // a pull stuck on the old machine is forgotten
       const files = [...DRIVE_C.map(f => ({ path: f.path, contents: f.contents.slice() })), ...(await this.gates.files())];
-      await this.box.start(this.win, { conf: conf(line), files, what: this.what, keepRunning: true, picture: 'sharp' });
+      // 'fill': the picture as big as the window, at 4:3. DosBox's 'sharp'
+      // takes only whole multiples of the frame, and a window a few pixels
+      // short of 400 showed 320x200 at x1, a stamp in a black field (the
+      // pilot, 2026-10-03). The pixels stay blocks, not blur: course.css.
+      await this.box.start(this.win, { conf: conf(line), files, what: this.what, keepRunning: true, picture: 'fill' });
       await this.gates.started();
       this.box.grab();
     } catch (e) {

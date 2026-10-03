@@ -69,26 +69,6 @@ VMTEXT  db 13,10
         db 13,10
         db '  PRESS 1..2, OR ARROWS AND ENTER',13,10,0
 
-; ---- the second screen: how much of it the machine is asked to work out ---
-;  Three levels, and they are conditions that SKIP WORK - not other
-;  renderers. FULL is this game exactly as it has always been.
-;  The three items sit on CONSECUTIVE rows, 5, 6 and 7 - so item n lands on
-;  row n+4, which is the card menu's own arithmetic, and VMMOVE/VMMARK drive
-;  the chevron here without a line of new drawing code.
-QMTEXT  db 13,10
-        db '  OWL FLY III',13,10
-        db 13,10
-        db '  GRAPHICS DETAIL',13,10
-        db 13,10
-        db '    1) FULL     everything, as the game was born',13,10
-        db '    2) MEDIUM   a nearer horizon: the world to 12 nodes, not 20',13,10
-        db '    3) LOW      WIRE: flat ground, no filled faces, no glass',13,10
-        db 13,10
-        db '  The physics, the war and every instrument are the same in all',13,10
-        db '  three. Only how much of the picture gets worked out changes.',13,10
-        db 13,10
-        db '  PRESS 1..3, OR ARROWS AND ENTER',13,10,0
-
 ; ---- the third screen: what the machine is asked to sound like ------------
 ;  The same manners as the other two: digits, arrows, ENTER takes the
 ;  chevron. The Blaster row is QUIZZED like the video cards are - a DSP
@@ -231,55 +211,6 @@ VMENUF:
         mov  ah,bl              ; AL = card, AH = 0 FULL / 1 MEDIUM / 2 LOW,
         retf                    ;  DL = 0 BLASTER / 1 SPEAKER / 2 NO SOUND
 
-; ---- QMENU: the detail screen. Digits only, and ENTER means FULL ----------
-;  No chevron and no quiz here: all three levels exist on every machine, so
-;  there is nothing to grey out and nothing to walk over. A player who does
-;  not care presses ENTER and gets the game as it has always been.
-QMENU:  mov  ah,0Fh             ; re-enter the mode: cleared, black, home
-        int  10h
-        xor  ah,ah
-        int  10h
-        mov  si,QMTEXT
-        call VMPUTS
-        mov  byte [cs:vmsel],1  ; the chevron starts on FULL, and vmsel is
-        call VMMARK             ;  free now - the card it was choosing has
-                                ;  already been taken
-.k:    xor  ah,ah
-        int  16h
-        cmp  al,0Dh             ; ENTER takes whatever the chevron is on
-        je   .take
-        cmp  al,'1'
-        jb   .ext
-        cmp  al,'3'
-        ja   .ext
-        sub  al,'0'             ; a digit moves the chevron AND takes it,
-        mov  bl,al              ;  so the eye sees what the key did
-        call VMMOVE
-        jmp  .take
-.ext:  or   al,al              ; extended keys: AL 0, or E0h from an
-        jz   .e1                ;  enhanced BIOS, with the scan code in AH
-        cmp  al,0E0h
-        jne  .k
-.e1:   cmp  ah,48h             ; up
-        je   .up
-        cmp  ah,50h             ; down
-        jne  .k
-        mov  bl,[cs:vmsel]
-        cmp  bl,3
-        jae  .k
-        inc  bl
-        call VMMOVE
-        jmp  .k
-.up:   mov  bl,[cs:vmsel]
-        cmp  bl,1
-        jbe  .k
-        dec  bl
-        call VMMOVE
-        jmp  .k
-.take: mov  al,[cs:vmsel]      ; row 1..3 -> level 0..2
-        dec  al
-        ret
-
 ; ---- SMENU: the sound screen. Returns AL = 1 speaker / 2 none -------------
 ;  BOND: two rows and no quiz - the speaker and silence are never refused,
 ;  every PC since the first one has both. The codes stay v3's (1 and 2)
@@ -320,34 +251,6 @@ SMENU:  mov  ah,0Fh             ; re-enter the mode: cleared, black, home
         call VMMOVE
         jmp  .k
 .take: mov  al,[cs:vmsel]      ; row 1 speaker, row 2 none - v3's codes
-        ret
-
-; ---- SPROBE: is a DSP listening at 220h? AL = 1 yes / 0 no ----------------
-;  SBINIT's own reset pulse, asked a boot earlier: reset, then wait for
-;  the 0AAh hello. Nothing is left running - SBINIT will do it all again
-;  for real if the pilot picks the Blaster.
-SPROBE: mov  dx,226h
-        mov  al,1
-        out  dx,al
-        in   al,dx
-        in   al,dx
-        in   al,dx
-        in   al,dx
-        xor  al,al
-        out  dx,al
-        mov  cx,4000
-.w:    mov  dx,22Eh
-        in   al,dx
-        test al,80h
-        jz   .nx
-        mov  dx,22Ah
-        in   al,dx
-        cmp  al,0AAh
-        je   .yes
-.nx:   loop .w
-        xor  al,al
-        ret
-.yes:  mov  al,1
         ret
 
 ; ---- VMMOVE: the chevron to item BL (erase old, mark new) ------------------
@@ -394,14 +297,8 @@ VMAT:   mov  ah,02h             ; cursor to DH row, DL column
 ; ============================================================================
 VSETMDF:
         call BONDLUT            ; BOND: the panel's colours SOLID, first
-        mov  al,[vcard]
-        cmp  al,VMMCGA
-        jb   .retro
-        mov  ax,0013h           ; VGA and MCGA: mode 13h IS MCGA's mode -
-        int  10h                ; the game as born, untouched
-        retf
-.retro: cmp  al,VMCGA
-        jne  .todo
+        cmp  byte [vcard],VMCGA
+        jne  .herc
         mov  ax,0004h           ; THE CLASSIC: mode 4, palette 1, intense
         int  10h                ; - black, cyan, magenta, white. (Mode 5's
                                 ; burst-off palette was tried and renders
@@ -412,27 +309,6 @@ VSETMDF:
         mov  al,30h             ; port entirely (proven with a probe:
         out  dx,al              ; neither 3D9h nor INT 10h AH=0Bh moves
 @@:    retf                     ; a VGA's mode-4 colours)
-.todo: cmp  al,VMEGA
-        jb   .herc              ; only Hercules sits below the EGA family
-        mov  ah,0               ; the three 16-colour planar modes:
-        cmp  al,VMEGA
-        jne  @f
-        mov  al,10h             ; EGA 640x350 (128K card + EGA monitor)
-@@:    cmp  al,VMEGLO
-        jne  @f
-        mov  al,0Dh             ; EGA 320x200 (ANY EGA, any monitor)
-@@:    cmp  al,VMV480
-        jne  @f
-        mov  al,12h             ; VGA 640x480 (VGA only)
-@@:    int  10h
-        push es
-        mov  ax,cs
-        mov  es,ax
-        mov  dx,EPAL            ; the curated sixteen + border, through
-        mov  ax,1002h           ; the BIOS - raw attribute ports would
-        int  10h                ; break on a VGA host exactly the way
-        pop  es                 ; the CGA DAC did
-        retf
 .herc:
         ; HERCULES HAS NO BIOS MODE - the 6845 is programmed by hand,
         ; the way every Hercules program ever did it. Config port first
@@ -522,7 +398,7 @@ BONDLUT:
         ; into a cyan sky. The panel's own inks are set after this, by
         ; BLTAB, and may use cyan again: the panel is on black.
         mov  di,VLUT+1
-        mov  cx,16*256-1
+        mov  cx,8*256-1
 .cy:   cmp  byte [es:di],1
         jne  .cn
         mov  byte [es:di],3
@@ -532,17 +408,17 @@ BONDLUT:
         mov  dx,BLTABN
 .row:  mov  bl,[cs:si]         ; the index...
         xor  bh,bh
-        mov  al,[cs:si+1]       ; ...its CGA ink into all 16 VLUT tables
+        mov  al,[cs:si+1]       ; ...its CGA ink into all 8 VLUT tables
         mov  di,VLUT
         add  di,bx
-        mov  cx,16
+        mov  cx,8
 .vl:   mov  [es:di],al
         add  di,256
         loop .vl
-        mov  al,[cs:si+2]       ; ...its Hercules dots into all 16 HLUT
+        mov  al,[cs:si+2]       ; ...its Hercules dots into all 8 HLUT
         mov  di,HLUT
         add  di,bx
-        mov  cx,16
+        mov  cx,8
 .hl:   mov  [es:di],al
         add  di,256
         loop .hl
@@ -587,12 +463,7 @@ VBLITF:
         mov  [cs:vplast],al     ; next frame may go partial only after this
         mov  byte [cs:vpran],0
         VRSET 0,200,0,80        ; (the default, for every road below)
-        mov  bl,[vcard]
-        cmp  bl,VMCGA
-        je   .reg
-        cmp  bl,VMHERC
-        jne  .old
-.reg:  or   al,al
+        or   al,al
         jz   .one              ; not a cockpit frame: the whole screen
         cmp  byte [cs:vpart],0
         jne  .part
@@ -616,20 +487,6 @@ VBLITF:
 .part: VRSET VPG0,VPG1,WINX0/4,(WINX1-WINX0)/4  ; the window alone
 .one:  call VCONV
         retf
-.old:  mov  al,bl              ; v3's road for the other cards
-        cmp  al,VMEGA
-        jne  @f
-        mov  byte [cs:vgeom],0  ; 640x350: rows walk 2-into-3
-        jmp  EGABLT
-@@:    cmp  al,VMV480
-        jne  @f
-        mov  byte [cs:vgeom],1  ; 640x480: every row exactly twice
-        jmp  EGABLT
-@@:    cmp  al,VMEGLO
-        jne  @f
-        mov  byte [cs:vgeom],2  ; 320x200: one to one, shrunk bytes
-        jmp  EGABLT
-@@:    retf
 vpprev  db 0                    ; vplast as it was BEFORE this frame
 vwcnt   db 0                    ; full frames, for the profiler's walls
 
@@ -669,93 +526,26 @@ VCONV:  cmp  byte [vcard],VMCGA
 ;  Even rows land at B800:0000, odd at B800:2000, 80 bytes a row,
 ;  4 pixels a byte, MSB first.
 ; ============================================================================
-cbuf    dw 0                    ; stashes of the main-segment words, taken
-cres    dw 0                    ; at entry while DS still points home
-cimg    dw 0
-cscr    dw 0
+cbuf    dw 0                    ; bufseg, taken while DS still points home
 cy      dw 0                    ; the row being converted
-dib     dw 0                    ; the row's first output byte, for bakrow
-vlutoff dw 1024                 ; CGA: vpal*2048 + (night? 1024 : 0) -
+vlutoff dw 512                  ; CGA: vpal*1024 + (night? 512 : 0) -
                                 ; four banks (day is set by the first
                                 ; APPLYPALF at takeoff)
 vpal    db 0                    ; 0 = palette 1 (cyan/magenta), 1 =
                                 ; palette 0 (green/red/yellow); H swaps
 vpedge  db 0                    ; ...on the key's EDGE, once per press
-elutoff dw 256                  ; EGA: 0 = day, 256 = night, same switch
-vcgok   db 0                    ; the bake is in and the artwork exists
-vbklen  dw 0                    ; how many bytes the bake file owes us
-vgeom   db 0                    ; EGABLT's shape: 0 = 640x350 (2 rows in
-                                ; 3), 1 = 640x480 (every row twice),
-                                ; 2 = 320x200 (one to one, shrunk bytes)
 vcaps   db 0                    ; the hardware quiz: bit0 EGA, bit1 VGA,
                                 ; bit2 MCGA (mono machines skip the bits)
-hoff    dw 2048                 ; Hercules: 0 = day bank, 2048 = night
+hoff    dw 1024                 ; Hercules: 0 = day bank, 1024 = night
 hry     dw 0                    ; Hercules: the SCREEN row being written
-hbev    db 0                    ; ...and whether it is even (the bake's
-                                ; density codes expand differently)
-orcnt   db 0                    ; EGA: output rows this source row feeds
-ooff    dw 0                    ; EGA: output row offset in A000
-; 4-bit static mask -> 8-bit, two bits per pixel, MSB pixel first
-MEXP    db 000h,003h,00Ch,00Fh,030h,033h,03Ch,03Fh
-        db 0C0h,0C3h,0CCh,0CFh,0F0h,0F3h,0FCh,0FFh
+orcnt   db 0                    ; Hercules: screen rows this source row feeds
 ; the two CGA palettes as ATTRIBUTE values for the VGA-host road,
 ; registers 1..3. These are the EGA-style 6-bit codes (secondary bits
 ; at 38h), NOT CGA colour numbers - 0Bh in a palette register comes out
 ; teal, 3Bh is the light cyan you meant.
 VPATT1  db 3Bh,3Dh,3Fh          ; light cyan, light magenta, white
 VPATT0  db 3Ah,3Ch,3Eh          ; light green, light red, yellow
-; the EGA packer's plane tables: entry index = first*16+second (two
-; colours 0..15), TPHp gives the byte's high nibble (pixels 0-1, each
-; DOUBLED to two bits), TPLp the low (pixels 2-3), one table per plane.
-; Pure bit arithmetic, so FASM computes them at assemble time.
-macro TPTAB maskH, maskL, p
-{
-  repeat 256
-    db (((%-1) shr (4+p)) and 1)*maskH + (((%-1) shr p) and 1)*maskL
-  end repeat
-}
-TPH0:   TPTAB 0C0h,30h,0
-TPH1:   TPTAB 0C0h,30h,1
-TPH2:   TPTAB 0C0h,30h,2
-TPH3:   TPTAB 0C0h,30h,3
-TPL0:   TPTAB 0Ch,03h,0
-TPL1:   TPTAB 0Ch,03h,1
-TPL2:   TPTAB 0Ch,03h,2
-TPL3:   TPTAB 0Ch,03h,3
-; the 320-wide fold: a DOUBLED plane byte's four bit-pairs back to four
-; single bits, so mode 0Dh reuses the whole 640 packer and then halves
-SHRK:
-  repeat 256
-    db (((%-1) shr 7) and 1) shl 3 + (((%-1) shr 5) and 1) shl 2 + (((%-1) shr 3) and 1) shl 1 + (((%-1) shr 1) and 1)
-  end repeat
-; the Hercules bake expander for EVEN screen rows: each 2-bit density
-; code becomes its even-row dot pair - 0 off, quarter off, half -> the
-; right dot, full -> both. (On ODD rows every code IS its own pattern -
-; quarter -> right, half -> left, full -> both - so odd rows read the
-; baked byte raw and no table exists for them.)
-HBEXP:
-  repeat 256
-    db ((((%-1) shr 7) and 1)*(1+(((%-1) shr 6) and 1)*2)) shl 6 + ((((%-1) shr 5) and 1)*(1+(((%-1) shr 4) and 1)*2)) shl 4 + ((((%-1) shr 3) and 1)*(1+(((%-1) shr 2) and 1)*2)) shl 2 + ((((%-1) shr 1) and 1)*(1+((%-1) and 1)*2))
-  end repeat
-artrow  rb 320                  ; this row of the artwork (copied per row
-bakrow  rb 160                  ; so the pixel loops need only CS; the
-crow    rb 320                  ; EGA bake is nibbles, hence 160), the
-epln    rb 320                  ; final-colour row and the four plane rows
 
-; one converted pixel, artwork-compared: bit is the static-mask bit
-macro CGPX bit
-{
-        lodsb
-        cmp  al,[cs:bp]
-        jne  @f
-        or   dh,bit
-@@:     inc  bp
-        xlat [cs:bx]
-        shl  dl,1
-        shl  dl,1
-        or   dl,al
-        xor  bh,1
-}
 ; one converted pixel, plain lookup (the front door, or no bake file)
 macro CGPXP
 {
@@ -828,45 +618,12 @@ CGABLT:
 .hdn:
         mov  ax,[bufseg]
         mov  [cs:cbuf],ax
-        mov  ax,[resseg]
-        mov  [cs:cres],ax
-        mov  ax,[pimgo]
-        mov  [cs:cimg],ax
-        mov  ax,[scrseg]
-        mov  [cs:cscr],ax
         mov  ax,0B800h
         mov  es,ax
         cld
         mov  ax,[cs:vr0]        ; BOND: from the first row this frame
         mov  [cs:cy],ax         ;  converts (VBLITF sets vr0/vr1)
 .row:
-        cmp  byte [cs:vcgok],0
-        je   .noart
-        ; ---- pass A: this row of the artwork and of the bake, into CS,
-        ; so the pixel loop below never needs a fourth segment ----
-        push es
-        mov  ax,cs
-        mov  es,ax
-        mov  ax,[cs:cy]
-        mov  cx,320
-        mul  cx
-        add  ax,[cs:cimg]
-        mov  si,ax
-        mov  ds,[cs:cres]
-        mov  di,artrow
-        mov  cx,160
-        rep  movsw
-        mov  ax,[cs:cy]
-        mov  cx,80
-        mul  cx
-        add  ax,2000h           ; the bake sits past the two map pages
-        mov  si,ax
-        mov  ds,[cs:cscr]
-        mov  di,bakrow
-        mov  cx,40
-        rep  movsw
-        pop  es
-.noart:
         ; ---- pass B: convert the row ----
         mov  ax,[cs:cy]
         mov  cx,320
@@ -881,50 +638,15 @@ CGABLT:
         jz   .ev
         add  ax,2000h
 .ev:   mov  di,ax
-        mov  [cs:dib],ax
         mov  bx,VLUT
         add  bx,[cs:vlutoff]
         test byte [cs:cy],1
         jz   .t0
-        add  bx,512
-.t0:   mov  bp,artrow
+        add  bx,256             ; BOND: odd rows, the next table (no x phase)
+.t0:
         add  si,[cs:vcx4]       ; BOND: the window's columns only (VBLITF)
         add  di,[cs:vc0]
         mov  cx,[cs:vcn]
-        cmp  byte [cs:vcgok],0
-        je   .plain
-.mb:   xor  dx,dx
-        CGPX 8
-        CGPX 4
-        CGPX 2
-        CGPX 1
-        or   dh,dh
-        jz   .dyn
-        cmp  dh,0Fh
-        je   .sta
-        push bx                 ; mixed byte: bake and lookup share it
-        mov  bl,dh
-        xor  bh,bh
-        mov  ah,[cs:MEXP+bx]
-        mov  bx,di
-        sub  bx,[cs:dib]
-        mov  al,[cs:bakrow+bx]
-        pop  bx
-        and  al,ah
-        not  ah
-        and  dl,ah
-        or   al,dl
-        jmp  .put
-.sta:  push bx
-        mov  bx,di
-        sub  bx,[cs:dib]
-        mov  al,[cs:bakrow+bx]
-        pop  bx
-        jmp  .put
-.dyn:  mov  al,dl
-.put:  stosb
-        loop .mb
-        jmp  .rowd
 .plain:
         shr  cx,1               ; BOND: two bytes a turn - the loop's own
 .pl2:  xor  dx,dx              ;  17 clocks paid half as often (vcn is
@@ -947,252 +669,6 @@ CGABLT:
         mov  ax,[cs:cy]
         cmp  ax,[cs:vr1]        ; BOND: to the last
         jb   .row
-        pop  es
-        pop  ds
-        pop  bp
-        pop  di
-        pop  si
-        pop  dx
-        pop  cx
-        pop  bx
-        pop  ax
-        retf
-
-; ============================================================================
-;  EGABLT - the finished 320x200x256 frame onto EGA mode 10h: 640x350,
-;  the picture 640x300 (width doubled, 2 source rows into 3 output
-;  rows), letterboxed 25 lines top and bottom, the curated sixteen,
-;  and NO dither anywhere - the pilot's call, so the lookup is flat.
-;
-;  Three passes per source row, each simple enough to hold in three
-;  segment registers:
-;    A: the artwork row and the baked row into CS (as CGABLT does);
-;    0: the FINAL COLOUR row into cs:crow - lookup for what differs
-;       from the artwork, the drawn grey bake for what matches (the
-;       same recognition trick as CGA: no masks, no gates);
-;    1: crow packed into four plane rows (cs:epln) - two table
-;       lookups per plane per FOUR output pixels, tables computed at
-;       assemble time;
-;    2: the plane rows out to A000 through the sequencer map mask,
-;       once per output row (twice for even source rows).
-; ============================================================================
-EGABLT:
-        push ax
-        push bx
-        push cx
-        push dx
-        push si
-        push di
-        push bp
-        push ds
-        push es
-        mov  ax,[bufseg]        ; DS is the main segment on entry
-        mov  [cs:cbuf],ax
-        mov  ax,[resseg]
-        mov  [cs:cres],ax
-        mov  ax,[pimgo]
-        mov  [cs:cimg],ax
-        mov  ax,[scrseg]
-        mov  [cs:cscr],ax
-        cld
-        mov  word [cs:cy],0
-        mov  word [cs:ooff],2000 ; 640x350: 25 letterbox rows * 80 bytes
-        cmp  byte [cs:vgeom],1
-        jne  @f
-        mov  word [cs:ooff],3200 ; 640x480: 40 letterbox rows * 80
-@@:    cmp  byte [cs:vgeom],2
-        jne  @f
-        mov  word [cs:ooff],0    ; 320x200: no letterbox, 40-byte rows
-@@:
-.row:
-        cmp  byte [cs:vcgok],0
-        je   .noart
-        ; ---- pass A: artwork row and baked row into CS ----
-        push es
-        mov  ax,cs
-        mov  es,ax
-        mov  ax,[cs:cy]
-        mov  cx,320
-        mul  cx
-        add  ax,[cs:cimg]
-        mov  si,ax
-        mov  ds,[cs:cres]
-        mov  di,artrow
-        mov  cx,160
-        rep  movsw
-        mov  ax,[cs:cy]
-        mov  cx,160
-        mul  cx
-        add  ax,2000h           ; the bake sits past the two map pages
-        mov  si,ax
-        mov  ds,[cs:cscr]
-        mov  di,bakrow
-        mov  cx,80
-        rep  movsw
-        pop  es
-.noart:
-        ; ---- pass 0: the final-colour row into cs:crow ----
-        push es
-        mov  ax,cs
-        mov  es,ax
-        mov  ax,[cs:cy]
-        mov  cx,320
-        mul  cx
-        mov  si,ax
-        mov  ds,[cs:cbuf]
-        mov  di,crow
-        mov  bx,ELUT
-        add  bx,[cs:elutoff]
-        mov  bp,artrow
-        mov  cx,320
-        cmp  byte [cs:vcgok],0
-        je   .q0
-.p0:   lodsb
-        cmp  al,[cs:bp]
-        jne  .dl
-        push bx                 ; the artwork: its baked nibble
-        mov  bx,di
-        sub  bx,crow            ; x
-        shr  bx,1               ; CF = x&1: odd pixel rides the low nibble
-        mov  al,[cs:bakrow+bx]
-        jc   .lo
-        shr  al,1
-        shr  al,1
-        shr  al,1
-        shr  al,1
-        jmp  .ns
-.lo:   and  al,0Fh
-.ns:   pop  bx
-        jmp  .pw
-.dl:   xlat [cs:bx]            ; anything drawn over it: the lookup
-.pw:   inc  bp
-        stosb
-        loop .p0
-        jmp  .pack
-.q0:   lodsb                   ; no bake file: the whole row converts
-        xlat [cs:bx]
-        stosb
-        loop .q0
-.pack:
-        ; ---- pass 1: crow -> four plane rows, all inside CS ----
-        mov  ax,cs
-        mov  ds,ax
-        mov  si,crow
-        mov  di,epln
-        xor  bh,bh
-        mov  cx,80
-.p1:   lodsb
-        mov  dl,al
-        shl  dl,1
-        shl  dl,1
-        shl  dl,1
-        shl  dl,1
-        lodsb
-        or   dl,al              ; first pair of colours
-        lodsb
-        mov  dh,al
-        shl  dh,1
-        shl  dh,1
-        shl  dh,1
-        shl  dh,1
-        lodsb
-        or   dh,al              ; second pair
-        mov  bl,dl
-        mov  al,[TPH0+bx]
-        mov  bl,dh
-        or   al,[TPL0+bx]
-        mov  [di],al
-        mov  bl,dl
-        mov  al,[TPH1+bx]
-        mov  bl,dh
-        or   al,[TPL1+bx]
-        mov  [di+80],al
-        mov  bl,dl
-        mov  al,[TPH2+bx]
-        mov  bl,dh
-        or   al,[TPL2+bx]
-        mov  [di+160],al
-        mov  bl,dl
-        mov  al,[TPH3+bx]
-        mov  bl,dh
-        or   al,[TPL3+bx]
-        mov  [di+240],al
-        inc  di
-        loop .p1
-        cmp  byte [cs:vgeom],2
-        jne  .noshr
-        ; ---- 320-wide only: fold the doubled plane rows in half. The
-        ; planes pack down contiguously (40 bytes each), so pass 2's
-        ; flow from plane to plane survives unchanged. ----
-        mov  si,epln
-        mov  di,epln            ; reader stays ahead of the writer
-        mov  bx,SHRK
-        mov  cx,160             ; 4 planes x 40 output bytes
-.sh:   lodsb
-        xlatb
-        shl  al,1
-        shl  al,1
-        shl  al,1
-        shl  al,1
-        mov  ah,al
-        lodsb
-        xlatb
-        or   al,ah
-        stosb
-        loop .sh
-.noshr:
-        pop  es                  ; ES back to whatever the caller... no -
-        push es                  ; keep the stack balanced; A000 goes in
-        mov  ax,0A000h           ; fresh either way
-        mov  es,ax
-        ; ---- pass 2: the plane rows out - once, twice, or 2-into-3 ----
-        mov  al,2
-        cmp  byte [cs:vgeom],1
-        je   .rc                 ; 640x480: every source row twice
-        cmp  byte [cs:vgeom],2
-        jne  .g0
-        mov  al,1                ; 320x200: once
-        jmp  .rc
-.g0:   test byte [cs:cy],1     ; 640x350: even source rows paint two
-        jz   .rc
-        dec  al
-.rc:   mov  [cs:orcnt],al
-.wrow: mov  si,epln
-        mov  bp,[cs:ooff]
-        mov  bl,1               ; plane mask walks 1,2,4,8
-.pl:   mov  dx,3C4h
-        mov  al,2
-        out  dx,al
-        inc  dx
-        mov  al,bl
-        out  dx,al
-        mov  di,bp
-        mov  cx,40
-        cmp  byte [cs:vgeom],2
-        jne  @f
-        mov  cx,20              ; 40-byte rows in the 320-wide mode
-@@:    rep  movsw              ; DS=CS: epln flows plane to plane
-        shl  bl,1
-        cmp  bl,10h
-        jb   .pl
-        mov  ax,80
-        cmp  byte [cs:vgeom],2
-        jne  @f
-        mov  ax,40
-@@:    add  [cs:ooff],ax
-        dec  byte [cs:orcnt]
-        jnz  .wrow
-        pop  es
-        inc  word [cs:cy]
-        cmp  word [cs:cy],200
-        jb   .row
-        ; leave the map mask open on all four planes, the BIOS default
-        mov  dx,3C4h
-        mov  al,2
-        out  dx,al
-        inc  dx
-        mov  al,0Fh
-        out  dx,al
         pop  es
         pop  ds
         pop  bp
@@ -1234,12 +710,6 @@ HGCBLT:
         push es
         mov  ax,[bufseg]        ; DS is the main segment on entry
         mov  [cs:cbuf],ax
-        mov  ax,[resseg]
-        mov  [cs:cres],ax
-        mov  ax,[pimgo]
-        mov  [cs:cimg],ax
-        mov  ax,[scrseg]
-        mov  [cs:cscr],ax
         mov  ax,0B000h
         mov  es,ax
         cld
@@ -1252,32 +722,6 @@ HGCBLT:
         add  ax,24
         mov  [cs:hry],ax        ; the first picture row under the box
 .row:
-        cmp  byte [cs:vcgok],0
-        je   .noart
-        ; ---- pass A: this row of the artwork and of the bake ----
-        push es
-        mov  ax,cs
-        mov  es,ax
-        mov  ax,[cs:cy]
-        mov  cx,320
-        mul  cx
-        add  ax,[cs:cimg]
-        mov  si,ax
-        mov  ds,[cs:cres]
-        mov  di,artrow
-        mov  cx,160
-        rep  movsw
-        mov  ax,[cs:cy]
-        mov  cx,80
-        mul  cx
-        add  ax,2000h
-        mov  si,ax
-        mov  ds,[cs:cscr]
-        mov  di,bakrow
-        mov  cx,40
-        rep  movsw
-        pop  es
-.noart:
         mov  al,2               ; even source rows paint two screen rows
         test byte [cs:cy],1
         jz   .rc
@@ -1297,17 +741,11 @@ HGCBLT:
         mul  bx
         add  di,ax
         add  di,5               ; 40 dots of left box
-        mov  [cs:dib],di
-        mov  ax,[cs:hry]
-        and  al,1
-        xor  al,1
-        mov  [cs:hbev],al       ; 1 when the screen row is even
         mov  ax,[cs:hry]
         and  ax,3
         mov  bx,ax
-        add  bx,bx              ; (y&3)*2 tables of 256...
         mov  cl,8
-        shl  bx,cl              ; ...= (y&3)*512
+        shl  bx,cl              ; (y&3)*256: BOND, one table a row phase
         add  bx,HLUT
         add  bx,[cs:hoff]
         ; ---- source row in, converted bits out ----
@@ -1316,52 +754,9 @@ HGCBLT:
         mul  cx
         mov  si,ax
         mov  ds,[cs:cbuf]
-        mov  bp,artrow
         add  si,[cs:vcx4]       ; BOND: the window's columns only (VBLITF)
         add  di,[cs:vc0]
         mov  cx,[cs:vcn]
-        cmp  byte [cs:vcgok],0
-        je   .plain
-.mb:   xor  dx,dx
-        CGPX 8
-        CGPX 4
-        CGPX 2
-        CGPX 1
-        or   dh,dh
-        jz   .dyn
-        cmp  dh,0Fh
-        je   .sta
-        push bx                 ; mixed byte: bake and lookup share it
-        mov  bl,dh
-        xor  bh,bh
-        mov  ah,[cs:MEXP+bx]
-        mov  bx,di
-        sub  bx,[cs:dib]
-        mov  al,[cs:bakrow+bx]
-        cmp  byte [cs:hbev],0
-        je   @f
-        mov  bx,HBEXP           ; even rows expand the density codes
-        xlat [cs:bx]
-@@:    pop  bx
-        and  al,ah
-        not  ah
-        and  dl,ah
-        or   al,dl
-        jmp  .put
-.sta:  push bx
-        mov  bx,di
-        sub  bx,[cs:dib]
-        mov  al,[cs:bakrow+bx]
-        cmp  byte [cs:hbev],0
-        je   @f
-        mov  bx,HBEXP
-        xlat [cs:bx]
-@@:    pop  bx
-        jmp  .put
-.dyn:  mov  al,dl
-.put:  stosb
-        loop .mb
-        jmp  .rowd
 .plain:
         shr  cx,1               ; BOND: two bytes a turn - the loop's own
 .pl2:  xor  dx,dx              ;  17 clocks paid half as often (vcn is
@@ -1408,16 +803,14 @@ VPALSWF:
         retf
 VPALSW:                          ; the near core: CGABLT's H key needs it
         mov  word [cs:vlutoff],0 ; too, and a far proc cannot be near-called
-        mov  word [cs:elutoff],0
         mov  word [cs:hoff],0
         cmp  byte [daymode],0
         jne  .d
-        mov  word [cs:vlutoff],1024
-        mov  word [cs:elutoff],256
-        mov  word [cs:hoff],2048
+        mov  word [cs:vlutoff],512
+        mov  word [cs:hoff],1024
 .d:    cmp  byte [cs:vpal],0   ; the CGA hardware palette picks its own
         je   .p                  ; pair of banks on top of day/night
-        add  word [cs:vlutoff],2048
+        add  word [cs:vlutoff],1024
 .p:    ret
 
 ; ============================================================================

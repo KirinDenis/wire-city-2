@@ -19,143 +19,10 @@
 ;  and starts the eternal loop; the speaker path arms the PIT driver at
 ;  the foot of this file; NO SOUND touches not one port - a machine whose
 ;  220h decodes to some other card entirely is left in peace.
-SBINIT: mov  al,[sndsel]
-        cmp  al,1
-        jb   .sb                ; 0 = the Blaster, as the game was born
-        ja   .no                ; 2 = NO SOUND
-        jmp  SPKINIT            ; 1 = the speaker
+SBINIT: cmp  byte [sndsel],1     ; BOND: 1 = the speaker, 2 = NO SOUND -
+        jne  .no                ;  the Blaster is not on the menu
+        jmp  SPKINIT
 .no:   ret
-.sb:   mov  dx,226h            ; DSP reset pulse
-        mov  al,1
-        out  dx,al
-        in   al,dx
-        in   al,dx
-        in   al,dx
-        in   al,dx
-        xor  al,al
-        out  dx,al
-        mov  cx,4000            ; wait for the 0AAh hello
-.rst:  mov  dx,22Eh
-        in   al,dx
-        test al,80h
-        jz   .nx
-        mov  dx,22Ah
-        in   al,dx
-        cmp  al,0AAh
-        je   .got
-.nx:   loop .rst
-        ret                     ; no Blaster: silence, the game runs on
-.got:
-        ; ---- a 64K-aligned segment right after CS+4000h: the physical
-        ; address is a multiple of 65536, so the 32K loop can never
-        ; cross a DMA page boundary
-        mov  ax,cs
-        add  ax,4FFFh
-        and  ax,0F000h
-        mov  [sndseg],ax
-        ; ---- the NEWTON turbine: GENERATED, not loaded. ENGINE.RAW ----
-        ; retired; GENBED (in the sky segment) cuts the tuned bed fresh
-        ; every launch, pristine copy in the top half included
-        call SKYSEG:GENBEDF
-        mov  byte [sbok],1
-        ; ---- 8237 DMA channel 1: auto-init, read from memory ----
-        mov  al,05h
-        out  0Ah,al             ; mask channel 1
-        xor  al,al
-        out  0Ch,al             ; clear the flip-flop
-        mov  al,59h
-        out  0Bh,al             ; mode: auto-init, read, channel 1
-        xor  al,al
-        out  02h,al             ; address 0 (the segment is page-aligned)
-        out  02h,al
-        mov  ax,SNDN-1
-        out  03h,al             ; count low
-        mov  al,ah
-        out  03h,al             ; count high
-        mov  ax,[sndseg]
-        mov  cl,12
-        shr  ax,cl
-        out  83h,al             ; page
-        mov  al,01h
-        out  0Ah,al             ; unmask channel 1
-        ; ---- mask IRQ 7: the loop needs no servicing ----
-        in   al,21h
-        mov  [sbmsk],al
-        or   al,80h
-        out  21h,al
-        ; ---- DSP: speaker on, pitch, block size, auto-init go ----
-        mov  ah,0D1h
-        call SBWR
-        mov  ah,40h
-        call SBWR
-        mov  ah,162             ; ~10.6 kHz to start
-        call SBWR
-        mov  ah,48h             ; block size SNDN-1
-        call SBWR
-        mov  ax,SNDN-1
-        mov  ah,al
-        call SBWR
-        mov  ax,SNDN-1
-        call SBWR               ; high byte (already in AH)
-        mov  ah,1Ch             ; 8-bit PCM, auto-init, forever
-        call SBWR
-.ret:  ret
-
-
-; ============================================================================
-;  ONE-SHOT EFFECTS - mixed straight into the spinning engine ring.
-;  The 8237 tells us where the beam is (current-count register); effects
-;  are added ~60 ms AHEAD of it, play once as the beam sweeps through,
-;  and SNDHEAL erases them BEHIND the beam from the pristine copy kept
-;  in the top half of the sample segment. No second channel, no mixer -
-;  the ring itself is the mixer.
-; ============================================================================
-
-; ---- SNDHEAL: heal the ring behind the beam from the pristine copy -------
-SNDHEAL:push cx
-        push dx
-        push si
-        push di
-        call SFXRAW
-        mov  ax,bx
-        sub  ax,64              ; stay just behind the beam
-        and  ax,SNDN-1
-        mov  cx,ax
-        sub  cx,[sbrst]
-        and  cx,SNDN-1
-        cmp  cx,4096            ; cap a burst after a long stall
-        jbe  .n1
-        mov  cx,4096
-.n1:   jcxz .done
-        mov  di,[sbrst]
-        mov  ax,di
-        add  ax,cx
-        and  ax,SNDN-1
-        mov  [sbrst],ax
-        mov  bl,[sndmod]
-        push ds
-        push es
-        mov  ax,[sndseg]
-        mov  ds,ax
-        mov  es,ax
-        cld
-.cp:   cmp  bl,2
-        jne  .sil
-        mov  si,di
-        add  si,SNDN            ; the clean loop lives in the top half
-        movsb
-        jmp  .nx
-.sil:  mov  al,80h             ; engine muted: heal to flat silence
-        stosb
-.nx:   and  di,SNDN-1
-        loop .cp
-        pop  es
-        pop  ds
-.done: pop  di
-        pop  si
-        pop  dx
-        pop  cx
-        ret
 
 ; ============================================================================
 ;  SFXPLAY - mix one RECORDED sound into the ring. AL = which, AH = volume
@@ -176,57 +43,8 @@ SNDHEAL:push cx
 ;  The one hard rule is that a sound must be shorter than the ring, or the
 ;  beam laps its own tail; Snd2Dat enforces it at build time and says so.
 ; ============================================================================
-SFXPLAY:cmp  byte [sbok],0
-        je   .r
-        cmp  byte [sndmod],0
-        je   .r
-        cmp  word [sfxseg],0
-        je   .r                ; no bank on disk: silence, the game runs on
-        push ax
-        push bx
-        push cx
-        push dx
-        push si
-        push di
-        push bp
-        push ds
-        push es
-        mov  bl,ah              ; the shift, out of the way of SFXRAW
-        xor  ah,ah
-        mov  si,ax
-        add  si,si
-        add  si,si
-        add  si,4               ; index entry: past 'SF' and the count
-        push bx
-        call SFXRAW             ; BX = where the beam is now
-        lea  di,[bx+700]        ; ~60 ms ahead of it
-        and  di,SNDN-1
-        pop  bx
-        mov  ax,[sndseg]        ; READ BOTH SEGMENTS FIRST - the moment DS
-        mov  dx,[sfxseg]        ;  moves, no main-segment word is reachable
-        mov  es,ax
-        mov  ds,dx
-        mov  cx,[si+2]          ; how long this one is...
-        mov  si,[si]            ; ...and where it starts
-        jcxz .x
-        mov  bp,cx              ; the count rides BP: CL is the shift
-.m:    lodsb                   ; DS:SI = the bank
-        cbw                     ; signed 8-bit delta -> 16
-        mov  cl,bl
-        sar  ax,cl
-        mov  dx,ax
-        call SFXMB              ; ES:DI, adds, clamps, advances, wraps
-        dec  bp
-        jnz  .m
-.x:    pop  es
-        pop  ds
-        pop  bp
-        pop  di
-        pop  si
-        pop  dx
-        pop  cx
-        pop  bx
-        pop  ax
+SFXPLAY:jmp  .r
+
 .r:    ret
 
 ; ---- SFXPOP: the cannon --------------------------------------------------
@@ -294,8 +112,8 @@ SFXDETH:cmp  byte [spkon],0
         ret
 
 ; ---- SFXBM2: an explosion at world (DX,BX) - loudness falls with range ----
-SFXBM2: cmp  byte [sbok],0
-        jne  .on
+SFXBM2:
+
         cmp  byte [spkon],0
         jne  .on
         ret
@@ -359,8 +177,8 @@ SFXBEEP:cmp  byte [spkon],0
 ; ---- SNDBEEP: the caution lamps sing, each its own note (tick-side) -------
 ; one lamp per 16-tick slot, so at worst it is a slow round-robin choir:
 ; STALL urgent and high, FUEL mid, TERRAIN a low horn, LOCK a top blip
-SNDBEEP:cmp  byte [sbok],0
-        jne  .on
+SNDBEEP:
+
         cmp  byte [spkon],0
         jne  .on
         ret
@@ -406,8 +224,8 @@ SNDBEEP:cmp  byte [sbok],0
 ; "effects only" flattens the engine bed in the ring at once (effects are
 ; still mixed in over silence); "silence" is the DSP speaker switch, the
 ; DMA loop keeps spinning underneath so any mode is one keypress away.
-SNDTOG: cmp  byte [sbok],0
-        jne  .sb
+SNDTOG:
+
         cmp  byte [spkon],0
         jne  .pk
         ret
@@ -420,114 +238,15 @@ SNDTOG: cmp  byte [sbok],0
         jnz  .p2
         call SPKGOFF            ; silence NOW, not at the next frame
 .p2:   ret
-.sb:   mov  al,[sndmod]
-        dec  al
-        jns  .m1
-        mov  al,2
-.m1:   mov  [sndmod],al
-        or   al,al
-        jnz  .on
-        mov  ah,0D3h            ; mode 0: hardware speaker off
-        call SBWR
-        ret
-.on:   mov  ah,0D1h            ; speaker back on
-        call SBWR
-        push cx
-        push si
-        push di
-        push es
-        mov  bx,[sndseg]
-        mov  es,bx
-        xor  di,di
-        cld
-        cmp  byte [sndmod],2
-        je   .cp
-        mov  ax,8080h           ; effects only: flatten the engine bed now
-        mov  cx,SNDN/2
-        rep  stosw
-        jmp  .fin
-.cp:   push ds                 ; full sound: bring the engine back at once
-        mov  ds,bx
-        mov  si,SNDN
-        mov  cx,SNDN/2
-        rep  movsw
-        pop  ds
-.fin:  pop  es
-        pop  di
-        pop  si
-        pop  cx
-.r:    ret
 
 ; ---- SNDENG: once per frame - one knob, the pitch --------------------------
 SNDENG: cmp  byte [paused],0    ; a frozen world holds its breath -
         jne  .r0                ;  PAUSND shut the voice at the door
-        cmp  byte [sbok],0
-        jne  .sb
+
         cmp  byte [spkon],0
         je   .r0
         jmp  SPKENG             ; the speaker: same job, one wave
 .r0:   ret
-.sb:   call SNDHEAL            ; erase spent effects behind the beam
-        cmp  byte [dying],0
-        je   .live
-        mov  bx,[dytick]        ; the fall: wind down to a slow groan
-        mov  cl,1
-        shr  bx,cl
-        mov  ax,150
-        sub  ax,bx
-        cmp  ax,60
-        jge  .wr
-        mov  ax,60
-        jmp  .wr
-.live: mov  ax,[throt]         ; the lever: target N2 = throt*4 (0..256)
-        add  ax,ax
-        add  ax,ax
-        cmp  byte [abon],0
-        je   .sp0
-        add  ax,24              ; the burner leans on the spool
-.sp0:  mov  bx,ax              ; THE SPOOL: the note chases the lever
-        sub  bx,[sbn2]          ; the way a real turbine does - about a
-        mov  ax,bx              ; second to wind up, never a step
-        sar  ax,1
-        sar  ax,1
-        sar  ax,1
-        sar  ax,1
-        jnz  .sp1
-        or   bx,bx              ; the last fifteen counts still walk in,
-        jz   .sp2              ; one a frame, or the settle never lands
-        mov  ax,1
-        or   bx,bx
-        jns  .sp1
-        neg  ax
-.sp1:  add  [sbn2],ax
-.sp2:  mov  ax,[sbn2]          ; TC = 90 + n2/4: idle 90, military 154,
-        sar  ax,1               ; the burner tops out at 160 - the tuned
-        sar  ax,1               ; bed's own range from NEWTON's ENG
-        add  ax,90
-        mov  bx,[mlvl]          ; manoeuvre loading: the airflow works the
-        mov  cl,3               ; intake - the note sags under g...
-        shr  bx,cl
-        sub  ax,bx
-        push ax
-        mov  ax,[lasttk]        ; ...and wavers at ~2 Hz while it lasts
-        add  ax,ax
-        and  ax,7
-        sub  ax,4
-        imul word [mlvl]
-        mov  bx,64
-        cwd
-        idiv bx
-        mov  bx,ax
-        pop  ax
-        add  ax,bx
-.wr:   cmp  ax,[sbtc]
-        je   .r
-        mov  [sbtc],ax
-        mov  ah,40h
-        call SBWR
-        mov  ah,byte [sbtc]
-        call SBWR
-.r:    ret
 
 ; (GENBED moved to SKY.INC - one-shot startup code belongs in the far
 ; segment; the main 64K pays for every byte with stack headroom)
@@ -536,23 +255,8 @@ SNDENG: cmp  byte [paused],0    ; a frozen world holds its breath -
 SBOFF:  cmp  byte [spkon],0
         je   .sb
         call SPKGOFF            ; the gate shut is all it needs
-.sb:   cmp  byte [sbok],0
-        je   .r
-        mov  ah,0D3h            ; speaker off
-        call SBWR
-        mov  dx,226h            ; reset stops the DMA loop
-        mov  al,1
-        out  dx,al
-        in   al,dx
-        in   al,dx
-        xor  al,al
-        out  dx,al
-        in   al,21h             ; give IRQ 7 back as we found it
-        and  al,7Fh
-        mov  ah,[sbmsk]
-        and  ah,80h
-        or   al,ah
-        out  21h,al
+.sb:    jmp  .r
+
 .r:    ret
 
 ; ============================================================================
@@ -708,17 +412,11 @@ SPKGOFF:in   al,61h
 ;  nothing at all: SPKENG re-opens the gate on the next live frame.
 PAUSND: cmp  byte [paused],0
         je   .back
-        cmp  byte [sbok],0
-        je   .pk
-        mov  ah,0D3h
-        call SBWR
+        jmp  .pk
+
 .pk:   cmp  byte [spkon],0
         je   .r
         jmp  SPKGOFF
-.back: cmp  byte [sbok],0
-        je   .r
-        cmp  byte [sndmod],0
-        je   .r
-        mov  ah,0D1h
-        call SBWR
+.back:  jmp  .r
+
 .r:    ret

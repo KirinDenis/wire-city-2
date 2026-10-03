@@ -670,7 +670,6 @@ RBLIPS: cmp  byte [swtr],0  ; EMISSIONS OFF is the same picture as a
 .rmn:  inc  si
         cmp  si,NAMSL
         jb   .rml
-        call UISEG:SHKBLIPF   ; the flak, with its barrels where they point
         call UISEG:RSBLIPF   ; last, over everything: the ground radars
         ret                     ; the blip engine is done
 .rblip:                        ; plot one amber spark from wdx/wdz

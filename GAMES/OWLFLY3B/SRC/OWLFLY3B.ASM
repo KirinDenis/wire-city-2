@@ -329,7 +329,6 @@ SC_Y    = 15h                 ; Y: noise jammer
 WRKSZ   = 300                 ; wreck slot size (see the BSS block)
 WCL     = 292                 ; face colours inside a slot
 BSSCLR  = 2488                ; (BSSEND-WRK)/2 - keep in sync with BSS!
-SNDN    = 8000h               ; sound ring length (ENGINE\E_SND.INC contract)
 FLBN    = 32                  ; black box: samples (every 2nd tick, ~3.5 s)
 FLBSZ   = 384                 ; FLBN * 12 bytes (x,y,z,hdg,pitch,roll)
 WFP     = 4                   ; face records inside a slot
@@ -415,14 +414,11 @@ MAIN:
         ; plan in Skill\VIDTASK.md).
         call VIDSEG:VMENUF      ; -> AL = the internal card code (VID.INC),
         mov  [vcard],al         ;    AH = the detail level from its second
-        mov  [qual],ah          ;    screen: 0 FULL, 1 MEDIUM, 2 LOW
-        mov  [sndsel],dl        ;    DL = its third screen: 0 BLASTER,
-                                ;    1 PC SPEAKER, 2 NO SOUND - SBINIT reads it
-        mov  word [tstart],0    ; FULL and LOW both walk the whole mesh -
-        cmp  ah,1               ;  LOW strokes it instead of filling it.
-        jne  .qd                ;  MEDIUM starts the walk later, which is
-        mov  word [tstart],TMED ;  a nearer horizon and nothing else.
-.qd:
+        mov  [sndsel],dl        ;    DL = its sound screen: 1 PC SPEAKER,
+                                ;    2 NO SOUND - SBINIT reads it. (AH is
+                                ;    always LOW: the BOND has no other
+                                ;    detail, so every v3 "qual" test is
+                                ;    gone and only the LOW road is left.)
 
         ; the back buffer, straight past CODE's 64K: the far segments
         ; sit below CS now, so nothing stands between (see BONDBUF)
@@ -521,15 +517,13 @@ MAIN:
         ; and AFINITF's plains clamp becomes a no-op, so the aerodromes sit
         ; on the same plane as everything else. The world stands at
         ; (140-88)*5 = 260 units, everywhere, for everyone.
-        cmp  byte [qual],2
-        jne  .dsg
+
         mov  bx,HMAP
         mov  cx,4096
 .dsf:  mov  byte [bx],140
         inc  bx
         loop .dsf
         jmp  .dsd
-.dsg:  call DSGEN              ; build the Diamond-Square world heightmap
 .dsd:
         call UISEG:AFINITF   ; ...then IRON THE AERODROMES INTO IT, before
                                 ; anything is baked off it. The block table
@@ -556,8 +550,7 @@ MAIN:
         ; afy - the world height of each strip's concrete, measured off the
         ; 116 ground a moment ago - is restamped to match. One plane,
         ; 260 units, for absolutely everything.
-        cmp  byte [qual],2
-        jne  .nfl
+
         mov  bx,HMAP
         mov  cx,4096
 .rfl:  mov  byte [bx],140
@@ -571,7 +564,6 @@ MAIN:
 .nfl:
         call SYMSEG:MMAPGENF   ; bake the minimap from it
         call BRDGEN             ; draw the front line on the war
-        call SKYSEG:SKYBAKE   ; cut this run's sky: ramp + cloud coats
 
         ; (video mode went up before the menu - the world just draws)
 
@@ -593,7 +585,6 @@ MAIN:
         ; model is BAKED into the image by Obj2Inc at build time)
 
         call UISEG:RSTAINITF   ; plant the two ground radar stations
-        call UISEG:SHKINITF   ; and the six Shilkas over the lines
         ; ---- AI traffic: two squadrons scattered around the player ----
         call RESPAWNALL
         cmp  byte [gbots],0 ; a botless sky is a clean arena:
@@ -626,41 +617,9 @@ GAMELOOP:
         xor  byte [paused],1
         call PAUSND             ; quiet going in, the voice back out
 .npz:
-        ; --- TAB: change seats. Two units, one pilot: the jet flies its
-        ; hands-off trim while you crew the Shilka, and the Shilka goes
-        ; back to its own AI the moment you leave it. The latch, like
-        ; ESC above: a tap between frames must not vanish.
-        mov  al,[KHIT+SC_TAB]
-        or   al,[KHIT+SC_F8]    ; three doors, one seat: Tab on iron, F8
-        or   al,[KHIT+SC_0]     ;  beside the view keys - and '0', because
-        jz   .nrd               ;  a browser's key map was measured to
-        mov  byte [KHIT+SC_TAB],0   ;  swallow whole rows of specials and
-        mov  byte [KHIT+SC_F8],0    ;  the digits were the row that always
-        mov  byte [KHIT+SC_0],0     ;  arrived
-        cmp  byte [spect],0     ; not from the watching seat,
-        jne  .nrd
-        cmp  byte [paused],0    ;  and not while the world stands still
-        jne  .nrd
-        cmp  byte [ride],0
-        je   .rdgate
-        mov  byte [ride],0      ; back to the jet: ALWAYS allowed - even
-        mov  byte [rdext],0     ;  back to a wreck (the vehicle reverts to
-        call UISEG:SHKDROPF  ;  its own AI, mid-stride; the walk-around
-        jmp  .nrd               ;  folds with the seat)
-.rdgate:
-        cmp  byte [dying],0     ; ENTERING is the gated door: never out
-        jne  .nrd               ;  of a falling jet,
-        cmp  byte [mcact],0     ;  and not off the back of a missile
-        jne  .nrd
-        call UISEG:SHKPICKF  ; the nearest living friendly vehicle
-        cmp  ax,0FFFFh
-        je   .nrd               ; nobody to crew: stay in the jet
-        mov  byte [ride],1
-        mov  byte [rdext],0     ; the cabin first, always
-        mov  byte [chsview],0   ; the cinema rigs are the JET's: fold
-        mov  byte [tgtcam],0    ;  them away before the turret camera
-        mov  byte [mslcam],0    ;  borrows the six
-.nrd:  call UIKEYS             ; cameras, zooms, pages - every frame
+        ; (BOND: no TAB seat change - there is no Shilka to crew, so
+        ; [ride] is always 0 and every turret-seat road is gone)
+        call UIKEYS             ; cameras, zooms, pages - every frame
         ; --- physics: one INPUT step per BIOS tick elapsed since last frame ---
         push es
         mov  ax,40h
@@ -758,8 +717,8 @@ GAMELOOP:
 
         ; --- render (runs as fast as it can; speed no longer tied to it) ---
         call LERPSET            ; draw BETWEEN the ticks: silk, not jerks
-        cmp  byte [ride],0      ; the chase rig is the jet's: while the
-        jne  .nchs              ;  turret owns the camera it stays folded
+                                ; the chase rig is the jet's: while the
+                                ;  turret owns the camera it stays folded
         call CHASESET           ; F3: swap in the chase camera
 .nchs:
         cmp  byte [paused],0    ; a frozen world: the lights hold and
@@ -773,25 +732,8 @@ GAMELOOP:
         ; LERPRST cannot be trusted with it, it only restores on the
         ; frames it interpolated. SVIEWF comes AFTER the borrow, so
         ; F6/F7 turn the TURRET's head, exactly as they turn the jet's.
-        cmp  byte [ride],0
-        je   .ncam
-        mov  ax,[camx]
-        mov  [rsvx],ax
-        mov  ax,[camy]
-        mov  [rsvy],ax
-        mov  ax,[camz]
-        mov  [rsvz],ax
-        mov  ax,[heading]
-        mov  [rsvh],ax
-        mov  ax,[pitch]
-        mov  [rsvp],ax
-        mov  ax,[roll]
-        mov  [rsvr],ax
-        cmp  byte [rdext],0     ; inside, or walking around her?
-        je   .rcin
-        call UISEG:SHKEXTF   ; the orbit: you drive what you look at
         jmp  .ncam
-.rcin: call UISEG:SHKEYEF   ; the crewed vehicle's turret, looking out
+
 .ncam:
         call SYMSEG:SVIEWF   ; F6/F7 and Ctrl+arrows: look 90 left/right,
                                 ; which is a turn of [heading] and nothing
@@ -804,24 +746,12 @@ GAMELOOP:
         call SYMSEG:RMARKF
         call RENDER
         call SYMSEG:SVRSTF   ; nose back down the centreline
-        cmp  byte [ride],0      ; CHASESET was folded away above, so its
-        jne  .nchr              ;  restore must stay folded too
+                                ; CHASESET was folded away above, so its
+                                ;  restore must stay folded too
         call CHASERST           ; give the pilot's world back to physics
 .nchr:
-        cmp  byte [ride],0
-        je   .ncam2
-        mov  ax,[rsvx]          ; the jet takes its camera back
-        mov  [camx],ax
-        mov  ax,[rsvy]
-        mov  [camy],ax
-        mov  ax,[rsvz]
-        mov  [camz],ax
-        mov  ax,[rsvh]
-        mov  [heading],ax
-        mov  ax,[rsvp]
-        mov  [pitch],ax
-        mov  ax,[rsvr]
-        mov  [roll],ax
+        jmp  .ncam2
+
 .ncam2:
         call LERPRST            ; ...and the true un-lerped state too
         call SETTRIG            ; ...AND THE TRIG THAT GOES WITH IT. INPUT
@@ -891,7 +821,6 @@ QUIT:
 
         include '..\..\..\ENGINE\E_MATH.INC'   ; engine: LCG random
         include '..\..\..\ENGINE\E_TERR.INC'   ; engine: Diamond-Square world
-        include '..\..\..\ENGINE\E_SND.INC'   ; engine: DSP write, DMA beam, ring mix
         include 'VIDEO.INC'   ; palette DAC, background bands, blit
         include 'M3D.INC'   ; the 3D-edge pipeline (game side)
         include '..\..\..\ENGINE\E_M3D.INC'   ; engine: trig, rotation, projection
@@ -905,7 +834,6 @@ QUIT:
         include 'HUD.INC'   ; text HUD and world minimap blit
         include 'PLANES.INC'   ; AI jets in the sky
         include 'SOUND.INC'   ; Sound Blaster engine noise
-
 
 ; ============================================================================
 ;  Key-state table (at the very end)
@@ -993,6 +921,4 @@ end if
                                 ; more - is reserved, not stored: FASM puts
                                 ; it in the header's minimum allocation and
                                 ; DOS hands it over at load.
-
-
 

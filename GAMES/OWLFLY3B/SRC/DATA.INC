@@ -19,7 +19,8 @@ vcard   db 7                    ; the INTERNAL card code the front step
 ;  What each one costs was measured before it was written: the bill is
 ;  FILLED AREA, not effects. Smoke and trails are single-digit percentages
 ;  against a terrain mesh that paints all 64000 pixels.
-qual    db 0                    ; 0 FULL, 1 MEDIUM, 2 LOW ("wire")
+qual    db 2                    ; 2 LOW, always: the BOND has no other detail.
+                                ; E_RAST.INC in ENGINE reads it: LOW strokes
 
 ; ---- the near plane the EDGE clipper uses, and why it is not a constant ----
 ;  NEARZ (40) is right for models: a wing tip may pass a metre from the
@@ -35,15 +36,6 @@ qual    db 0                    ; 0 FULL, 1 MEDIUM, 2 LOW ("wire")
 ;  The cost is the nearest quarter-cell of grid, straight under the nose.
 nzmin   dw NEARZ
 gndy    dw 0                    ; where GRID's plane sits: the ground height
-                                ; under the aircraft, not world zero - so
-                                ; the runway, the hangars and the buildings
-                                ; you are actually near stand ON it.
-tstart  dw 0                    ; where the terrain walk BEGINS in TORD.
-                                ; TORD is sorted far -> near, so starting
-                                ; later draws a smaller world: 0 keeps all
-                                ; 1600 quads, TMED keeps the nearest 576 -
-                                ; radius 20 against radius 12, and the cost
-                                ; goes with the square.
 TMED    = 1600 - 576
                                 ; 6 and 7 are ONE path - mode 13h IS
                                 ; MCGA's mode. Everything below 6
@@ -69,9 +61,6 @@ GEARNS  = 6                   ; steps of travel, and the vertices a leg has.
 GEARNV  = 16                  ;  The guard beside the include in SYM.INC
 GEARNF  = 4                   ;  checks GEARM.INC against these three.
 abrk    db 0                    ; B: the airbrake
-prevfl  db 0                    ; ...their key-down edges
-prevgr  db 0
-prevbr  db 0
 vstl    dw VSTALL               ; stall speed AS FLOWN: flaps lower it
 ; ---- WHAT THE JET IS STANDING ON, which it never used to have an opinion
 ; about. Six bytes here and the whole ground school out in UISEG (GNDSCH).
@@ -125,7 +114,6 @@ fuel    dw FUELMAX              ; remaining fuel (burn 1/tick)
 rho     dw 256                  ; air density factor 64..256 (from altitude)
 teff    dw 0                    ; effective thrust this tick (scratch)
 fwd     dw 0                    ; forward units this tick = vel/16 (scratch)
-vrate   dw 0                    ; climb/dive rate this tick (scratch)
 horiz   dw 100                  ; fixed view centre row (real pitch rotates
                                 ; the world now; kept for projection maths)
 pitch   dw 0                    ; pitch angle, signed -64..64 (64 = straight up)
@@ -136,7 +124,6 @@ throt   dw 42                   ; throttle 0..64 (start at 65%: full
                                 ; military power outruns the AI jets)
 abon    db 0                    ; afterburner active this tick
 cockpit db 1                    ; 1 = instrument panel shown (C toggles)
-prevc   db 0                    ; previous C-key state (edge detect)
 mapt    dw 123                  ; minimap top row (rises above the panel)
 mmzs    db 0                    ; map zoom as a SHIFT: 0/1/2 = 1/2/4 px a node
 mmcol0  dw 0                    ; the window's top-left node, column...
@@ -145,12 +132,6 @@ mmspx   dw 0                    ; how many nodes fit across at this zoom...
 mmspy   dw 0                    ;  ...and down. Both change with mmzs.
 resseg  dw 0                    ; segment CITY.DAT is loaded into (CS+2C00h)
 pimgo   dw 1                    ; cockpit bitmap in resseg (0 = none).
-                                ;  BOND: 1, "the drawn cockpit is up" -
-                                ;  CITY.DAT carries no bitmap any more
-cpsseg  dw 0                    ; CPSIDE.DAT's own page, ABOVE scrseg so that
-                                ; opening it moves nothing (0 = not loaded)
-cplo    dw 0                    ; the left view's RLE stream in it
-cpro    dw 0                    ; ...and the right's
 sview   db 0                    ; 0 forward, 1 looking left, 2 looking right.
                                 ; The saved heading and the four key edges
                                 ; that go with it are CS-relative in SYMSEG:
@@ -206,15 +187,7 @@ uidl    dw 0                    ; ...and the tick it stops listening at
 gbots   db 1                    ; 1 = the 20v20 war flies with us
 ggid    dw 0                    ; which sky we are in (the host's pid)
 gname   db 9 dup(0)             ; our sky's name (8 + NUL)
-kprev   db 84 dup(0)            ; the menu's key-edge memory (DS, plain)
 rzsh    db 9                    ; radar zoom shift: 6 close .. 10 far. It
-                                ;  used to stop at 8 (256 units a pixel);
-                                ;  two closer steps were added so that at
-                                ;  full zoom the whole scope is knife range
-                                ;  and every contact earns its aeroplane
-prevz   db 0                    ; Z / X edge memory (the scope zoom)
-prevxx  db 0
-prevk2  db 0                    ; K edge memory (the map zoom)
 rgk     dw 0                    ; the radar grid's walkers
 rgj     dw 0
 pspd    dw 15                   ; AI speed of the plane being ticked
@@ -685,7 +658,6 @@ TYPTAB  dw TYPN0,TYPN1,TYPN2,TYPN3,TYPN4
 ; bowl read as a foreign object (user's call, 2026-07-28). Both stand at
 ; the station's feet: the tower spans y 0..40, the dish y 26..58, so one
 ; position draws both and the dish alone takes the spin.
-        include 'RBASEM.INC'
         include 'RDISHM.INC'
 ; ---- the ZSU-23-4 "Shilka", baked from res\SHULL.OBJ and res\STURR.OBJ.
 ; Two models, one vehicle, the station's trick again: the CHASSIS on the
@@ -699,10 +671,7 @@ TYPTAB  dw TYPN0,TYPN1,TYPN2,TYPN3,TYPN4
 ; segment, and they have to: MODELDRAW reads them through DS, and DS is
 ; the main segment even out in UISEG. Everything that merely computes -
 ; the sites, the state, the tick and the draw loop - is in UI.INC.
-        include 'SHULLM.INC'
         include 'STURRM.INC'
-        include 'SDISHM.INC'
-        include 'SBARRM.INC'
 ; the classic eight faces, kept ONLY for the wreck pool (see above)
 MFACE   db 0,1,2,0, 24          ; body top (sun-lit white)
         db 0,3,4,0, 16          ; body bottom (shade)
@@ -877,8 +846,6 @@ TLN     = 12                  ; contrail points per plane
 tlh     dw 0                    ; shared ring head (byte offset, step 2)
 locki   dw 0FFFFh               ; locked plane (0FFFFh = no lock)
 lockd   dw 0                    ; lock scan: best distance so far
-prevt   db 0                    ; Enter key edge detector
-prevm   db 0                    ; M key edge detector
 mfdmode db 0                    ; centre MFD page: 0 MAP / 1 SIT / 2 TGT
 rbcx    dw 0                    ; RBLIPS: scope centre column
 rbcy    dw 0                    ; RBLIPS: scope centre row
@@ -959,8 +926,6 @@ ghpst   db 1                    ; the ghost slot's state: dead until the
                                 ;  render arms it (see pdlim in the pax
                                 ;  block - only PLANESDRAW looks here)
 pammo   db 4                    ; player missiles on the rails
-mrel    dw 0                    ; reload timer (one missile per ~20 s)
-prevf   db 0                    ; fire key edge detector
 msact   db 0                    ; missile in flight?
 msx     dw 0                    ; missile world position
 msy     dw 0
@@ -1024,9 +989,7 @@ fcnt    dw 0                    ; frames since the last physics burst
 fprev   dw 0                    ; frames the previous interval lasted
 chsview db 0                    ; F3 chase camera on?
 tgtcam  db 0                    ; F4 orbit camera on the locked target
-prevt4  db 0                    ; F4 edge detector
 mslcam  db 0                    ; F5: ride the next missile?
-prevf5  db 0                    ; F5 edge detector
 mcact   db 0                    ; 0 off, 1 riding, 2 watching the kill
 mcret   dw 0                    ; aftermath timer (~3 s)
 mch     dw 0                    ; camera course (servo-follows the missile)
@@ -1034,7 +997,6 @@ mimx    dw 0                    ; where the missile ended (the grave)
 mimy    dw 0
 mimz    dw 0
 MSGM2   db 'M',0
-sbok    db 0                    ; Blaster found AND ENGINE.RAW loaded?
 sndsel  db 0                    ; the third front-step screen: 0 Blaster,
                                 ;  1 PC speaker, 2 no sound at all
 spkon   db 0                    ; the speaker path is live (sndsel said 1)
@@ -1045,26 +1007,6 @@ spkdv   dw 0                    ; ...its current PIT divisor
 spklc   dw 7                    ; the noise generator (a small LCG): the
                                 ;  square wave's only way to sound broken
 paused  db 0                    ; ESC: the world stands still, the glass
-                                ;  stays alive - views, radar, map, MFD
-rdext   db 0                    ; F3 while riding: the WALK-AROUND view -
-                                ;  camera orbits the vehicle (Q/E swing,
-                                ;  Z/X dolly) and the hands stay on the
-                                ;  controls: you drive what you look at
-ride    db 0                    ; TAB: 0 = the jet, 1 = crewing the Shilka.
-                                ;  Two units, one pilot: the one without a
-                                ;  human keeps itself (hands-off trim in the
-                                ;  air, the vehicle's own AI on the ground)
-SHFUEL  db 'FUEL',0             ; the Shilka's status screen speaks in
-SHAMMO  db 'AMMO',0             ;  the panel font, and the panel font
-SHMAG   db 'MAG',0              ;  reads its words from THIS segment
-SHDAM   db 'DAM',0
-NBSH    db 6 dup(0)             ; where its numbers are typeset
-rsvx    dw 0                    ; the jet's camera, parked while the render
-rsvy    dw 0                    ;  borrows the six for the turret seat -
-rsvz    dw 0                    ;  LERPRST only restores on the frames it
-rsvh    dw 0                    ;  interpolated, so the borrow keeps its
-rsvp    dw 0                    ;  own copy
-rsvr    dw 0
 shcabsg dw 0                    ; where the Shilka cabin blob sits (0 =
                                 ;  none). In the MAIN segment because two
                                 ;  far segments share it: SYMSEG loads it
@@ -1090,20 +1032,6 @@ RDRMAP  = 0F000h              ; the radar tube's PHOSPHOR: a 64x64 charge
 ; would write over the phosphor or the jet's own side art.
 SHSLOFF = 0A800h              ; the LEFT stream, on the cabin page
 SHSROFF = 0A000h              ; the RIGHT stream, in scrseg
-shsok   db 0                    ; 1 = both streams landed (SHCABLDF's tail
-                                ;  loads them; SYMSEG draws, so the flag
-                                ;  lives here where both segments can see)
-rdrot   dw 0                    ; the crewed TURRET's bearing, handed from
-                                ;  SHINST (UISEG) to RDRPHOSF (SYMSEG) the
-                                ;  same way brlel travels: the scope is
-                                ;  turret-up, so the render rotates the
-                                ;  north-up phosphor map by this much
-brlel   dw 0                    ; the crewed barrels' elevation, handed from
-                                ;  SHKEYEF (UISEG) to SHKBRL (SYMSEG) on the
-                                ;  frames the seat owns the camera. Two far
-                                ;  segments cannot read each other, and this
-                                ;  is the only word of the seat the gun
-                                ;  overlay needs
 MSGP2   db 'P',0                ; the pause letter on the panel
 tapup   db 0                    ; the tap rescue (the 486 report): a
 tapdn   db 0                    ;  flight key pressed AND released
@@ -1122,16 +1050,9 @@ pvk     db 7 dup(0)             ; was each held at the LAST frame's look?
 fpsn    dw 0                    ; frames counted this second...
 fpst    dw 0                    ; ...since this BIOS tick...
 fpsv    dw 0                    ; ...and the number the glass shows
-sbmsk   db 0                    ; saved IRQ7 mask bit
-sbtc    dw 0                    ; current DSP time constant
 mlvl    dw 0                    ; manoeuvre loading (smoothed, 0..48)
-sbrst   dw 0                    ; ring-heal cursor (behind the DMA beam)
-sfa16   dw 0                    ; SFX: amplitude, 8.8 fixed point
-sfdec   dw 0                    ; SFX: amplitude decay per sample
 lastbp  dw 0                    ; last tick a lamp beeped on
 sndmod  db 2                    ; 2 = all sounds, 1 = effects only
-                                ;  (engine muted), 0 = silence
-prevsk  db 0                    ; V key edge detector (sound)
 MSGS3   db 'S',0                ; panel sound-mode letter
 mprvp   dw 0                    ; previous pitch (for the delta)
 mprvr   dw 0                    ; previous roll
@@ -1140,27 +1061,9 @@ qramp   dw 0                    ; elevator ramp: a tap is a feather (2/8
 gq      dw 0                    ; the ramp SIGNED, for the HUD's G meter
                                 ;  (+pull, -push, 0 hands-off)
 vvy     dw 0                    ; climb per tick, world units (the IVV)
-; ---- wreck smoke: the puff column's walkers (code in PLANES.INC) -----------
-wpi     dw 0                    ; which puff of the four
-wph     dw 0                    ; its phase up the column, 0..127
-wpz     dw 0                    ; its camera depth (for the radius)
-wpr     dw 0                    ; its screen radius
-wpsx    dw 0                    ; its screen centre
-wpsy    dw 0
-wpc     db 0                    ; its grey of the cooling ramp
 pfrac   dw 0                    ; pitch fraction accumulator (eighths)
 hfrac   dw 0                    ; heading fraction accumulator (eighths)
-sndseg  dw 0
 scrseg  dw 0                    ; far scratch segment (holds the minimap)                    ; sample loop segment (64K-aligned)
-; (ENGFN retired 2026-07-23: GENBED generates the NEWTON turbine bed)
-; ---- GENBED: the turbine generator's state --------------------------------
-bm1     dw 0                    ; bed: lowpass pole states
-bm2     dw 0
-bm3     dw 0
-bm4     dw 0
-praw    dw 0                    ; bed: previous raw sum (the muffler)
-warmc   dw 2048                 ; bed: warm-up samples to discard
-xtt     db 0                    ; bed: crossfade scratch
 sbn2    dw 0                    ; the audio spool: the note chases the
                                 ;  lever from 0 - startup whine for free
 ; ---- THE FRONT DOOR IS THE WAR. Arrive at a sky somebody is already
@@ -1196,7 +1099,6 @@ bpx     dw 0                    ; WRKFILL input: breakup position
 bpy     dw 0
 bpz     dw 0
 bph     dw 0                    ; WRKFILL input: breakup heading
-MSGCR2  db 'CRASH',0
 MSGPS2  db 'PRESS SPACE',0
 ; ---- the ramp prompt (RAMPTXT). Centred by hand at 4 px a character on a
 ; 320-wide screen: ftx = 160 - 2*length.
@@ -1204,9 +1106,6 @@ MSGBRK  db 'BRAKES ON',0        ; 9 chars  -> 142
 MSGBRK2 db 'PRESS B TO RELEASE',0 ; 18     -> 124... 110 leaves it clear of
                                 ;  the left annunciator column
 MSGBRK3 db 'W THROTTLE  A BURNER',0 ; 20   -> 120
-; (the spectator's caption moved to UI.INC with SPECTXTF - UBIG reads its
-;  strings from its own segment, and 56 bytes came back here for it)
-prevv   db 0                    ; F3 edge detector
 svx     dw 0                    ; pilot's world, saved during the chase
 svy     dw 0
 svz     dw 0
@@ -1238,7 +1137,6 @@ tsch    dw 0                    ; team score: friendlies downed
 psc     dw 0                    ; personal kills
 php     db NPLANE dup(3)        ; hit points: 2..5 cannon hits to down
 gunam   dw 250                  ; cannon rounds
-gunreg  dw 0                    ; belt regen timer
 guntik  db 0                    ; tracers on screen while > 0
 hitfx   dw 0FFFFh               ; plane flashing from a cannon hit
 hitft   dw 0                    ; ...and for how many ticks
@@ -1273,14 +1171,6 @@ GBUF    db ' 1.0G',0            ; the G readout scratch
 ftx     dw 0                    ; font cursor x
 fty     dw 0                    ; font cursor y
 NB      db 6 dup(0)             ; number->text scratch for FNUM
-; ---- THE SOUND BANK. Recorded audio, cut by TOOLS\Snd2Dat into SIGNED
-; 8-bit mono at 11025 Hz - the rate the engine ring already spins at, so a
-; sound is mixed in as it lies, with no resampling at play time. Signed
-; because the ring holds unsigned bytes centred on 80h and SFXMB ADDS a
-; signed value into it: storing the deltas means the player is load,
-; sign-extend, add, and nothing else. Optional the way CPSIDE.DAT is - no
-; file, no bank, the game runs on in silence.
-sfxseg  dw 0                    ; where the bank was loaded (0 = none)
         include 'SFXIDX.INC'   ; SFXN and the SFX_* indices, from Snd2Dat
 BONDMEM db 'OWL FLY III BOND needs 256K free',13,10,'$'
 ; BOND: the line clipper's rectangle (ENGINE\E_RAST.INC reads these when
@@ -1296,58 +1186,14 @@ clipy1  dw 199
 ; and an instrument that is always on the glass stops being an instrument and
 ; becomes clutter a player has to learn to ignore.
 dbgm    db 0                    ; 1 = the marks are drawn
-prevdb  db 0                    ; ...and the key's own edge
 daymode db 1                    ; 1 = day palette, 0 = night (N key toggles)
-prevn   db 0                    ; previous N-key state (edge detect)
 bcol    db 0                    ; terrain patch colour chosen by HBLD
-; ---- the NEWTON sky: the hot variables (the code and its tables live -------
-; in SKY.INC, in their own segment; these ~90 bytes stay here so the
-; per-pixel loops read them through DS with no prefix)
-dbase   db 0                    ; dither: ramp shade in play
-dfrac   db 0                    ; dither: its fraction
-PATT    db 16 dup(0)            ; the row's 16-pixel pattern
 pmrow   dw -9999                ; MKPATT: the row its anchor was cut for
-pf0     dw 0                    ; ...that anchor's tile row
-pt0     dw 0                    ; ...and phase, plus the walking copy
-pti     dw 0
-cdup    dw 320                  ; the twin pixel's offset, across the line
-cfv     dw 0                    ; a cloud row's f (whole part)
-cxv     dw 0                    ; CLSEG: the walk's screen x and y...
-cyv     dw 0
-cxe     dw 0                    ; ...their 8.8 errors...
-cye     dw 0
-dxi     dw 0                    ; ...the step, split whole and fraction
-dxf     dw 0
-dyi     dw 0
-dyf     dw 0
-crb     dw 0                    ; ...the current row's base offset
-ctrow   dw 0                    ; ...and the tile row, fixed per segment
 wdith   db 0                    ; 1 = spans get the per-pixel world grain
-wt8     dw 0                    ; the span's world coords, 8.8
-wf8     dw 0
 hcur    dw 100                  ; the horizon pivot: row, column, and the
 cx0     dw 160                  ; frame's roll pair (copied from rsin/rcos)
 sinr    dw 0
 cosr    dw 256
-mrow    dw 0                    ; BGND: current row and its buffer base
-rowb    dw 0
-fmv     dw 0                    ; f at the pivot column of the row
-spa     dw 0                    ; the span: start, length, sky-or-ground
-spanl     dw 0
-sptype  db 0
-qcn     dw 0                    ; clouds: visible count, scratch, and the
-qcb     dw 0                    ; one being drawn (d, u, index, t, f,
-qcd     dw 0                    ; scale, rows, step, walkers, width)
-qcu     dw 0
-qci     dw 0
-qct     dw 0
-qcf     dw 0
-qcs     dw 0
-qch     dw 0
-qcp     dw 0
-qcr     dw 0
-qcw     dw 0
-qcv     dw 0
 wdx2    dw 0                    ; WCAM2: world delta in, camera pair out
 wdz2    dw 0
 cldu    dw 0
@@ -1370,8 +1216,8 @@ LBUF    db '   ',0              ; ladder label scratch
 ; 64x64 nodes on a TORUS (indices wrap &63) -> seamlessly tiles our toroidal
 ; 256-cell world: 1 node = 4x4 cells. Generated once at startup by DSGEN.
 rseed   dw 21845                ; LCG state (re-seeded from the clock at boot)
-dss     dw 0                    ; DS: current side length
-dsh     dw 0                    ; DS: half side
+dss     dw 0                    ; DS: current side length  (E_TERR's DSGEN
+dsh     dw 0                    ; DS: half side            assembles, never runs)
 dsx     dw 0                    ; DS: loop x / scratch
 dsy     dw 0                    ; DS: loop y / scratch
 dsamp   dw 0                    ; DS: noise amplitude (power of two)
@@ -1382,9 +1228,6 @@ dsac    dw 0                    ; DS: accumulator
 ; ---- 3D terrain mesh state (one node = 4 cells = 1024 world units) ---------
 NR      = 20                  ; terrain draw radius in nodes around camera
 NSIDE   = 41                  ; cached node grid side (2*NR+1)
-tnx     dw 0                    ; camera node x = (camx+BIAS)>>10
-tnz     dw 0                    ; camera node z
-tidx    dw 0                    ; index into TORD
 tta     dw 0                    ; node-grid loop a (0..NSIDE-1)
 ttb     dw 0                    ; node-grid loop b
 gbase   dw 0                    ; ground height under the current cell (world)
@@ -1398,8 +1241,6 @@ puffk   dw 0                    ; smoke puff loop counter
 sbh     dw 0                    ; superblock hash (district decisions)
 bdist   dw 0                    ; district: 0/3 residential, 1 downtown, 2 industry
 PUFO    dw 0,21,42              ; smoke puff phase offsets (loop of 64)
-SIY     dw 4 dup(0)             ; stashed face Y (PITCH4 mutates IY/IZ, and a
-SIZ     dw 4 dup(0)             ; fill+stroke pair would pitch them twice)
 
 ; building draw order: every cell in [-24..24]^2 sorted by squared
 ; distance DESCENDING (painter far -> near). Replaces both the old bucket
@@ -1649,172 +1490,7 @@ bschm   dw 0                    ; wall colour scheme index 0..3
 wallL   db 0                    ; current lit wall colour (N/S faces)
 wallS   db 16                   ; current shaded wall colour (E/W faces)
 WSCH    db 0,16, 20,21, 22,23, 24,25 ; scheme pairs: grey/blue/red/white
-thmax   dw 0                    ; max raw H of the quad corners (colour pick)
 ; TRX/TRZ/TWH/TH: per-frame caches, in BSS past the image (see OWLFLY3.ASM)
-
-; terrain quad draw order: (di,dj) pairs, di,dj in [-20..19], sorted by
-; squared distance of the quad centre DESCENDING (painter, far -> near)
-TORD    db -20,19, 19,19, 19,-20, -20,-20, 18,19, -19,19, 19,-19, 19,18, -19,-20, -20,18
-        db -20,-19, 18,-20, 19,17, -18,19, -18,-20, -20,-18, -20,17, 19,-18, 17,-20, 17,19
-        db 18,18, -19,-19, -19,18, 18,-19, -17,19, -20,16, -20,-17, 19,-17, 16,-20, 19,16
-        db -17,-20, 16,19, 17,18, -18,18, -19,-18, -19,17, 17,-19, -18,-19, 18,17, 18,-18
-        db 15,19, 19,15, 15,-20, -16,19, -20,15, -20,-16, -16,-20, 19,-16, -17,18, 18,-17
-        db 18,16, -19,16, -19,-17, -17,-19, 16,-19, 16,18, 17,17, -18,17, -18,-18, 17,-18
-        db 14,19, -15,19, 19,-15, 19,14, 14,-20, -20,14, -20,-15, -15,-20, 18,15, -19,15
-        db -19,-16, -16,18, 15,18, -16,-19, 18,-16, 15,-19, -18,16, -17,-18, 16,17, 16,-18
-        db -18,-17, 17,16, -17,17, 17,-17, -20,-14, 13,19, -14,19, 19,13, -20,13, -14,-20
-        db 19,-14, 13,-20, 18,-15, 14,18, -19,-15, 14,-19, -19,14, -15,18, -15,-19, 18,14
-        db 17,15, 17,-16, -18,-16, 15,17, -16,17, 15,-18, -18,15, -16,-18, 16,16, -17,16
-        db -17,-17, 16,-17, -20,-13, 12,-20, 19,-13, 12,19, -13,-20, -13,19, -20,12, 19,12
-        db 18,-14, 13,18, 18,13, -14,18, -14,-19, -19,13, -19,-14, 13,-19, -18,-15, -18,14
-        db -15,-18, 14,17, 17,-15, 17,14, -15,17, 14,-18, -17,-16, 15,-17, 11,19, -16,-17
-        db -20,11, -17,15, -20,-12, 19,-12, -16,16, 16,-16, -12,-20, 11,-20, 15,16, -12,19
-        db 16,15, 19,11, 18,-13, -13,-19, -19,-13, -19,12, 12,-19, -13,18, 18,12, 12,18
-        db -20,10, 19,10, -11,-20, 19,-11, 10,19, -11,19, -20,-11, 10,-20, -14,17, 13,-18
-        db -14,-18, 13,17, 17,-14, 17,13, -18,-14, -18,13, 16,-15, -17,-15, 14,16, -17,14
-        db 16,14, -15,-17, -15,16, 14,-17, -16,-16, -16,15, 15,-16, 15,15, 11,18, -12,18
-        db -12,-19, 11,-19, 18,-12, 18,11, -19,-12, -19,11, -10,19, -20,9, 19,9, 19,-10
-        db -10,-20, 9,19, 9,-20, -20,-10, 12,17, -18,12, 12,-18, -13,17, 17,-13, -13,-18
-        db 17,12, -18,-13, 13,-17, 13,16, -14,16, -17,13, 16,-14, -14,-17, -17,-14, 16,13
-        db -11,18, 19,-9, -19,10, -11,-19, 19,8, -9,19, -9,-20, 8,-20, -20,8, 10,-19
-        db 10,18, -20,-9, 18,10, 18,-11, -19,-11, 8,19, 15,-15, 14,-16, -16,14, -15,-16
-        db 15,14, -16,-15, 14,15, -15,15, -12,17, -18,-12, 17,11, -12,-18, 11,17, 11,-18
-        db 17,-12, -18,11, -8,19, 19,7, -20,7, 7,19, -8,-20, 19,-8, 7,-20, -20,-8
-        db -10,18, -19,9, -19,-10, 9,-19, 18,9, 9,18, -10,-19, 18,-10, -13,-17, 16,12
-        db 12,16, -13,16, -17,12, 16,-13, 12,-17, -17,-13, -20,-7, -16,13, 13,15, -7,-20
-        db -7,19, -16,-14, 6,19, 19,-7, 15,13, 19,6, -14,15, -20,6, 6,-20, 15,-14
-        db -14,-16, 13,-16, 14,-15, 14,14, -15,-15, -15,14, -18,-11, -11,-18, 10,17, -11,17
-        db -18,10, 10,-18, 17,10, 17,-11, 8,-19, -9,18, 8,18, 18,-9, -19,8, -9,-19
-        db -19,-9, 18,8, -6,19, -20,-6, 5,-20, -6,-20, 5,19, -20,5, 19,5, 19,-6
-        db 16,11, 11,-17, 11,16, -12,16, -17,11, 16,-12, -12,-17, -17,-12, -5,-20, 19,4
-        db 19,-5, 4,19, -20,4, -5,19, 4,-20, -20,-5, -8,18, 18,-8, 18,7, -19,-8
-        db 7,-19, 7,18, -8,-19, -19,7, -10,-18, -10,17, -13,-16, 15,-13, -18,9, -16,-13
-        db 17,9, 17,-10, 15,12, -16,12, 9,17, -13,15, -18,-10, 12,-16, 9,-18, 12,15
-        db 3,19, 3,-20, 19,-4, -15,-14, -4,-20, 19,3, -4,19, -20,-4, -20,3, -14,-15
-        db -14,14, -15,13, 13,-15, 14,13, 13,14, 14,-14, -20,-3, -3,19, 19,2, -3,-20
-        db 19,-3, 2,19, -20,2, 2,-20, -7,18, 18,-7, -7,-19, 6,18, -19,6, 18,6
-        db -19,-7, 6,-19, -20,-2, -20,1, 10,-17, 10,16, 19,-2, 19,1, 16,-11, -2,19
-        db -11,-17, 1,-20, 1,19, -2,-20, -11,16, -17,-11, -17,10, 16,10, 0,-20, 19,0
-        db 19,-1, -1,-20, 0,19, -1,19, -20,-1, -20,0, -18,8, -18,-9, 17,8, -9,-18
-        db 17,-9, 8,-18, 8,17, -9,17, -12,15, 15,11, -6,-19, 15,-12, -19,-6, -12,-16
-        db 5,-19, -16,-12, 5,18, 18,-6, 18,5, -6,18, -16,11, 11,-16, -19,5, 11,15
-        db -13,-15, 14,12, -13,14, 12,-15, -15,-13, 12,14, -15,12, 14,-13, 13,-14, 13,13
-        db -14,-14, -14,13, 16,9, -17,-10, 4,18, 16,-10, 18,-5, -5,18, 7,-18, -18,-8
-        db -10,16, 7,17, 17,-8, 18,4, -19,-5, 17,7, -19,4, -17,9, -10,-17, -18,7
-        db -5,-19, -8,-18, 9,-17, 9,16, 4,-19, -8,17, -4,18, 3,-19, -4,-19, 18,-4
-        db 18,3, 3,18, -19,-4, -19,3, -16,10, 15,10, -11,-16, 15,-11, -16,-11, 10,15
-        db 10,-16, -11,15, 17,6, 17,-7, -7,17, -7,-18, 18,2, 18,-3, -3,18, 2,18
-        db -19,2, -18,-7, 6,-18, 6,17, -19,-3, -18,6, 2,-19, -3,-19, -9,-17, 1,-19
-        db 8,16, -17,8, -19,1, -19,-2, 8,-17, 1,18, 18,-2, 16,-9, -9,16, -2,18
-        db -2,-19, 16,8, 18,1, -17,-9, -15,-12, 14,-12, 0,-19, 14,11, 11,-15, 0,18
-        db 11,14, -1,18, -1,-19, -12,14, -12,-15, -15,11, 18,0, -19,-1, -19,0, 18,-1
-        db -14,-13, 12,13, -14,12, -13,-14, 13,-13, 13,12, 12,-14, -13,13, -18,-6, -18,5
-        db 17,-6, -6,-18, 5,17, -6,17, 17,5, 5,-18, -16,-10, 9,-16, 9,15, -16,9
-        db 15,9, -10,-16, 15,-10, -10,15, 7,-17, -17,-8, 7,16, 16,-8, -17,7, 16,7
-        db -8,16, -8,-17, 4,17, -5,17, -18,4, -5,-18, 4,-18, 17,-5, -18,-5, 17,4
-        db -11,14, 14,-11, -15,10, 10,14, 14,10, 10,-15, -15,-11, -11,-15, -18,-4, -4,17
-        db -4,-18, 17,-4, 3,17, -18,3, 3,-18, 17,3, -17,-7, -7,16, 11,-14, -17,6
-        db 16,6, -14,11, 6,16, 13,-12, -12,13, 13,11, -7,-17, 11,13, -12,-14, 16,-7
-        db 6,-17, -14,-12, 15,-9, 8,-16, -3,-18, -18,-3, 15,8, -16,-9, 8,15, 17,-3
-        db -9,-16, -3,17, -16,8, -13,-13, 12,12, 2,-18, 17,2, 12,-13, 2,17, -18,2
-        db -9,15, -13,12, -2,17, 1,17, 17,-2, 17,1, -18,-2, -18,1, 1,-18, -2,-18
-        db 0,17, -18,-1, -1,-18, -18,0, -1,17, 0,-18, 17,-1, 17,0, 16,-6, 16,5
-        db -17,-6, -17,5, 5,16, -6,16, -6,-17, 5,-17, -10,-15, -10,14, 9,-15, 14,9
-        db -15,9, -15,-10, 14,-10, 9,14, -8,-16, 15,-8, 15,7, -16,7, 7,-16, 7,15
-        db -16,-8, -8,15, 4,-17, 13,10, -11,13, -11,-14, -14,10, 13,-11, 16,-5, -5,16
-        db -14,-11, 10,13, -5,-17, -17,4, 16,4, 4,16, 10,-14, -17,-5, 11,-13, -13,-12
-        db -12,12, 11,12, 12,-12, 12,11, -12,-13, -13,11, -17,3, 3,-17, -4,16, 16,3
-        db -17,-4, 16,-4, -4,-17, 3,16, 14,-9, -16,6, -15,-9, 6,-16, -9,14, -7,15
-        db -15,8, -7,-16, 6,15, -9,-15, 8,-15, 15,6, 14,8, 8,14, 15,-7, -16,-7
-        db 16,2, -3,16, -17,-3, 2,-17, -3,-17, 2,16, 16,-3, -17,2, 16,-2, -17,-2
-        db 1,16, 16,1, -2,-17, -17,1, -2,16, 1,-17, -14,-10, -17,-1, -14,9, -10,13
-        db -17,0, -1,-17, 9,-14, -10,-14, 16,-1, 0,-17, 16,0, 0,16, 13,9, -1,16
-        db 13,-10, 9,13, -6,-16, -16,5, 15,5, -6,15, 5,-16, 5,15, 15,-6, -16,-6
-        db -15,7, -13,-11, 14,7, 10,-13, 10,12, -8,14, 14,-8, 12,-11, 7,-15, -11,12
-        db -8,-15, -13,10, -15,-8, 12,10, 7,14, -11,-13, -12,-12, -12,11, 11,11, 11,-12
-        db -5,15, 4,-16, -5,-16, -16,-5, 15,4, 4,15, -16,4, 15,-5, -9,13, 13,8
-        db -14,8, 8,13, -9,-14, -14,-9, 13,-9, 8,-14, 6,-15, 14,-7, 15,3, 6,14
-        db 15,-4, -4,15, 14,6, -16,3, 3,-16, -4,-16, -7,14, -16,-4, -7,-15, 3,15
-        db -15,6, -15,-7, -10,12, -3,-16, 2,-16, 9,12, 2,15, 15,2, -16,-3, 9,-13
-        db -16,2, 15,-3, -13,9, -10,-13, -3,15, -13,-10, 12,-10, 12,9, -11,-12, -12,-11
-        db 15,1, 1,-16, 11,-11, -12,10, 11,10, -2,-16, 1,15, 10,-12, -2,15, 10,11
-        db -16,-2, -11,11, -16,1, 15,-2, 15,0, -16,0, -1,-16, -16,-1, -1,15, -15,-6
-        db -6,-15, -6,14, -15,5, 5,-15, 0,15, 0,-16, 14,-6, 15,-1, 14,5, 5,14
-        db 7,-14, -8,-14, -14,7, -8,13, -14,-8, 13,7, 7,13, 13,-8, 14,4, -5,-15
-        db 4,14, 14,-5, 4,-15, -15,4, -15,-5, -5,14, 12,8, -9,12, 12,-9, 8,-13
-        db -13,8, -9,-13, 8,12, -13,-9, 6,-14, 6,13, -14,-7, 13,6, -14,6, -7,13
-        db 13,-7, -7,-14, 3,-15, 3,14, 11,9, -15,3, -12,-10, 11,-10, 14,3, 14,-4
-        db -4,-15, -4,14, -15,-4, 9,11, 9,-12, -12,9, -10,11, -10,-12, -11,-11, -11,10
-        db 10,10, 10,-11, 14,2, -15,-3, 2,-15, -15,2, -3,-15, 14,-3, 2,14, -3,14
-        db -15,-2, -15,1, 12,-8, 12,7, 7,12, 7,-13, 5,-14, 5,13, -13,-8, 13,5
-        db 14,-2, 14,1, 13,-6, -13,7, -14,5, -14,-6, 1,-15, -2,14, -8,-13, 1,14
-        db -8,12, -2,-15, -6,13, -6,-14, -1,14, -1,-15, -15,0, 14,0, 0,-15, 14,-1
-        db -15,-1, 0,14, 8,-12, -9,11, -12,-9, 11,8, 8,11, -9,-12, 11,-9, -12,8
-        db 13,4, -14,-5, -14,4, -5,-14, -5,13, 4,13, 4,-14, 13,-5, -11,9, 10,-10
-        db -10,-11, 10,9, 9,-11, -11,-10, -10,10, 9,10, -7,12, 6,-13, -7,-13, 12,-7
-        db -13,6, 6,12, 12,6, -13,-7, -14,3, -4,13, -4,-14, 3,-14, 13,3, 13,-4
-        db 3,13, -14,-4, 11,-8, 13,2, 7,11, 2,-14, 11,7, -12,-8, 7,-12, 13,-3
-        db -14,2, -14,-3, -3,-14, -3,13, -12,7, 2,13, -8,-12, -8,11, -6,12, -13,-6
-        db 5,12, -6,-13, 5,-13, 12,5, 12,-6, -13,5, 1,-14, 1,13, -14,-2, -2,13
-        db -2,-14, -14,1, 13,1, 13,-2, -1,13, -14,-1, 8,10, 0,-14, 10,8, 8,-11
-        db -14,0, -1,-14, 13,-1, 10,-9, -11,8, 13,0, -9,-11, 0,13, -9,10, -11,-9
-        db -10,-10, 9,9, -10,9, 9,-10, -13,-5, 12,4, -13,4, -5,-13, 4,12, 12,-5
-        db -5,12, 4,-13, -7,-12, -12,6, 6,-12, 11,-7, -7,11, 11,6, 6,11, -12,-7
-        db -4,-13, 12,-4, -13,3, 3,-13, 3,12, 12,3, -4,12, -13,-4, 7,-11, -8,-11
-        db 10,-8, 7,10, -11,7, -8,10, 10,7, -11,-8, 5,11, 11,-6, 2,12, 9,-9
-        db -10,8, 5,-12, -13,2, -12,-6, 9,8, -6,-12, -6,11, -9,9, -12,5, 12,2
-        db -9,-10, -3,12, 8,-10, 2,-13, 12,-3, -3,-13, 8,9, -10,-9, -13,-3, 11,5
-        db 12,-2, 12,1, 1,-13, -2,12, -13,-2, 1,12, -2,-13, -13,1, -1,-13, -13,-1
-        db -1,12, 12,-1, 12,0, 0,-13, 0,12, -13,0, 10,-7, -5,-12, 6,-11, -12,4
-        db -7,-11, 11,4, 11,-5, -11,-7, 4,11, -12,-5, 10,6, -11,6, -5,11, -7,10
-        db 6,10, 4,-12, -8,-10, 7,9, 9,-8, -10,-8, 7,-10, -8,9, 9,7, -10,7
-        db -9,8, 11,3, -4,11, 8,8, 8,-9, 11,-4, -12,-4, -4,-12, 3,-12, 3,11
-        db -12,3, -9,-9, -11,-6, 10,-6, 5,10, -11,5, -6,10, 5,-11, 10,5, -6,-11
-        db -12,2, 11,2, 2,11, 11,-3, -3,11, -3,-12, 2,-12, -12,-3, 1,-12, -2,-12
-        db 11,-2, 1,11, 11,1, -12,-2, -12,1, -2,11, -10,6, -1,-12, 9,6, 6,9
-        db 0,-12, -12,0, 9,-7, 11,0, -7,-10, -10,-7, -7,9, 11,-1, 0,11, -12,-1
-        db 6,-10, -1,11, 10,4, 10,-5, -11,4, -11,-5, -5,10, 4,10, 4,-11, -5,-11
-        db -9,7, -8,-9, -8,8, 8,7, -9,-8, 7,-9, 7,8, 8,-8, 10,3, 10,-4
-        db 3,-11, 3,10, -4,10, -11,3, -11,-4, -4,-11, -10,5, -10,-6, -6,9, -6,-10
-        db 9,5, 5,9, 5,-10, 9,-6, -3,10, 2,-11, -11,-3, 2,10, -11,2, 10,2
-        db -3,-11, 10,-3, 8,6, 8,-7, -7,-9, -7,8, -9,-7, 6,-9, -9,6, 6,8
-        db -8,-8, 1,-11, -11,-2, 10,1, 7,7, 10,-2, 7,-8, -2,-11, -2,10, -8,7
-        db -11,1, 1,10, 4,-10, 0,10, -1,10, -1,-11, -5,9, -5,-10, 10,0, 9,-5
-        db 4,9, 0,-11, -10,4, -11,0, -11,-1, 9,4, -10,-5, 10,-1, 3,-10, -10,-4
-        db 3,9, 9,3, 5,-9, 5,8, -10,3, -4,-10, -9,5, -4,9, -9,-6, 8,-6
-        db -6,8, 9,-4, -6,-9, 8,5, 6,-8, -7,7, -7,-8, -8,-7, 7,-7, 7,6
-        db 6,7, -8,6, 2,-10, -10,2, 9,-3, 9,2, -3,9, -10,-3, -3,-10, 2,9
-        db 9,-2, -9,-5, -10,-2, 1,9, 4,-9, 4,8, -2,-10, -2,9, -9,4, 9,1
-        db -5,-9, -5,8, -10,1, 1,-10, 8,-5, 8,4, -10,0, 9,-1, -1,-10, 0,-10
-        db 9,0, 0,9, -1,9, -10,-1, -8,5, -6,7, 5,-8, -8,-6, 7,-6, 7,5
-        db -6,-8, 5,7, -7,6, 6,-7, 6,6, 3,-9, -4,8, -7,-7, 8,-4, -9,-4
-        db 3,8, -4,-9, 8,3, -9,3, -3,8, -3,-9, 8,-3, -9,-3, -9,2, 2,-9
-        db 2,8, 8,2, -5,7, -8,-5, -8,4, 7,4, 7,-5, -5,-8, 4,-8, 4,7
-        db -2,-9, -9,1, -9,-2, 8,1, -2,8, 1,8, 8,-2, 1,-9, -6,-7, -7,5
-        db -6,6, 6,-6, 5,6, 5,-7, -1,-9, 6,5, 0,8, -7,-6, 0,-9, -1,8
-        db -9,-1, -9,0, 8,0, 8,-1, 7,-4, -4,7, -8,-4, 3,-8, -4,-8, 3,7
-        db 7,3, -8,3, 7,2, 2,7, 7,-3, -5,6, 4,6, -8,-3, 2,-8, -7,4
-        db 6,-5, 6,4, 4,-7, -5,-7, -3,7, -8,2, -3,-8, -7,-5, -6,5, -6,-6
-        db 5,-6, 5,5, -8,-2, 7,1, -2,7, -8,1, 7,-2, -2,-8, 1,-8, 1,7
-        db 7,-1, 7,0, 0,7, 0,-8, -8,-1, -1,-8, -8,0, -1,7, -7,3, 3,-7
-        db 6,-4, 6,3, -4,6, 3,6, -4,-7, -7,-4, -6,-5, -5,5, -6,4, 4,5
-        db -5,-6, 5,4, 4,-6, 5,-5, 6,-3, -7,2, 6,2, -7,-3, -3,6, 2,-7
-        db 2,6, -3,-7, 6,1, -7,-2, 6,-2, -2,6, -7,1, 1,-7, -2,-7, 1,6
-        db -6,-4, 3,-6, -7,0, 0,6, 0,-7, -1,6, 3,5, -6,3, -7,-1, 5,-4
-        db 6,0, -1,-7, -4,-6, 5,3, -4,5, 6,-1, 4,-5, 4,4, -5,-5, -5,4
-        db 5,2, -6,2, -6,-3, -3,5, 2,5, -3,-6, 5,-3, 2,-6, -2,-6, 4,-4
-        db 5,1, -2,5, -4,4, -4,-5, 1,5, 4,3, -5,-4, 3,-5, -6,1, 3,4
-        db -5,3, 1,-6, 5,-2, -6,-2, 5,0, 0,-6, -1,-6, -1,5, 0,5, -6,0
-        db -6,-1, 5,-1, 2,-5, 4,-3, 4,2, -3,4, -5,2, -5,-3, 2,4, -3,-5
-        db 3,3, -4,3, -4,-4, 3,-4, 4,1, 1,-5, 4,-2, 1,4, -2,-5, -5,-2
-        db -2,4, -5,1, -1,-5, -1,4, -5,-1, 0,4, -5,0, 0,-5, 4,-1, 4,0
-        db 3,2, -3,-4, 3,-3, 2,-4, -3,3, 2,3, -4,2, -4,-3, 3,1, -2,-4
-        db 1,-4, -4,-2, 1,3, -2,3, 3,-2, -4,1, 0,3, 2,2, 0,-4, 2,-3
-        db 3,-1, 3,0, -1,-4, -1,3, -3,2, -4,0, -4,-1, -3,-3, -2,2, -2,-3
-        db -3,-2, 2,1, -3,1, 2,-2, 1,2, 1,-3, -3,-1, -3,0, 0,2, 2,0
-        db -1,2, 0,-3, -1,-3, 2,-1, 1,1, 1,-2, -2,1, -2,-2, -2,-1, 0,1
-        db 0,-2, -1,1, -1,-2, -2,0, 1,0, 1,-1, -1,-1, 0,0, 0,-1, -1,0
-
 
 camx    dw 0
 camy    dw 120
@@ -1867,7 +1543,6 @@ cdi     dw 0                    ; cell from camera (was 'di' - clashed with reg)
 cdj     dw 0
 ring    dw 0                    ; current d^2 painter bucket
 bstreet dw 0
-rlod    dw 0                    ; road detail: 0 = a quad per cell, 1 = per 2x2
 bhw     dw 0
 bhd     dw 0
 bhgt2   dw 0
@@ -1884,34 +1559,6 @@ maxrz   dw 0
 FRX     dw 4 dup(0)             ; footprint corners (camera-space X)
 FRZ     dw 4 dup(0)             ; footprint corners (camera-space Z)
 pk      dw 0                    ; polygon/loop counter (ENGINE E_RAST too)
-; (wqx/wqy retired 2026-07-27: the glass is interpolated in camera
-;  space now, so the projected-corner cache died with the old grid)
-; (wfu/wfv/wtc*/wbc*/wg* retired 2026-08-03 with the old WINFACE: the
-;  glass is a quad on the wall now, built from a corner lattice in BSS,
-;  and none of the old per-pane scratch survived the move to TOWNSEG)
-; ---- the new pane geometry (TOWNSEG's WINFACEF). The wall is a
-; parallelogram, so a lattice of corners comes out of one row of column
-; offsets and one column of row offsets, by addition. These are the two
-; edge vectors and the cursors; the lattice itself is in BSS.
-wux     dw 0                    ; U: along the wall, in camera space
-wuy     dw 0
-wuz     dw 0
-wvx     dw 0                    ; V: up the wall
-wvy     dw 0
-wvz     dw 0
-wi      dw 0                    ; lattice cursors
-wj      dw 0
-wlx     dw 0                    ; the lattice point being projected
-wly     dw 0
-wlz     dw 0
-wbase   dw 0                    ; the cell's bottom-left lattice slot
-wcxc    dw 0                    ; the pane's centre on screen
-wcyc    dw 0
-fbx0    dw 0                    ; the WALL's projected box: cull + detail
-fbx1    dw 0
-fby0    dw 0
-fby1    dw 0
-wquad   db 0                    ; 1 = this wall gets pane quads, 0 = dots
 roofc   db 17                   ; the top face: 17 for a building, its own
                                 ; paint for a vehicle
 ; ---- traffic (TOWNSEG's TRAFFICF). No vehicle list: a vehicle is a
@@ -1921,35 +1568,6 @@ caradv  dw 0                    ; whole blocks the platoons have banked
 ctick   dw 0                    ; the traffic clock: last BIOS tick seen,
 cfrac   dw 0                    ; where interpolation had got to inside it,
 cstep   dw 0                    ; and this frame's share
-vcen    dw 0                    ; the avenue's centre line
-vcell   dw 0                    ; this cell's start along the lane
-vstart  dw 0                    ; the clock step this lane's green begins
-voff    dw 0                    ; how far into its cell a vehicle is
-vadv    dw 0                    ; cells the platoon has advanced
-vlane   dw 0                    ; which lane, for the hash
-vslot   dw 0                    ; which vehicle on it
-vaxis   dw 0                    ; 0 = length runs along Z, 1 = along X
-vdir    dw 1                    ; +1 or -1 along that axis
-vtype   dw 0                    ; 0..4 car, 5 bus, 6..7 truck
-vh      dw 0                    ; this vehicle's hash
-vcx0    dw 0                    ; its centre, before a two-box body moves it
-vcz0    dw 0
-vmode   dw 0                    ; 0 = the renderer is asking, 1 = a bullet
-vhitf   dw 0                    ; ...and the bullet's answer
-hitx    dw 0                    ; where the round is, for that question
-hity    dw 0
-hitz    dw 0
-vhl     dw 0                    ; the struck vehicle's half extents
-vhw     dw 0
-vhh     dw 0
-vtx     dw 0                    ; ...resolved onto the world axes
-vtz     dw 0
-wvk     dw 0                    ; smoke flake: vertex counter
-wang    dw 0                    ; ...its angle
-wrad    dw 0                    ; ...and this vertex's ragged radius
-wprot   dw 0                    ; the flake's own spin
-wfi     dw 0                    ; fire: which tongue of the flame
-wfh     dw 0                    ; fire/glass: the flicker hash
 
 ; quarter sine table: SINT[i] = round(256*sin(i*90/64 deg)), i=0..64
 SINT    dw 0,6,13,19,25,31,38,44,50,56,62,68,74,80,86,92,98,104,109,115
@@ -1973,10 +1591,6 @@ tnum    dw 0
 tden    dw 0
 
 tmpi    dw 0                    ; INPUT: turn direction (-1/0/+1)
-tmpsx   dw 0
-tmpsy   dw 0
-wr      db 0                    ; the pane's row and column: the only two
-wc      db 0                    ; of the old window scratch still standing
 
 cdx     dw 0
 cdy     dw 0
@@ -1995,7 +1609,6 @@ lsy     dw 0
 lerr    dw 0
 
 COLOR   db 0
-HCOL    db 8
 
 ; palette: 12 colors, DAC values 0..63 (R,G,B) - indigo / cornflower
 ; Two 18-colour palettes (DAC 0..63), toggled with the N key.
@@ -2016,41 +1629,17 @@ NPALCOLD = 120                ; 31 game + 63 cockpit + glow + 2 IFF +
 ;  The tables and the loader live in UI.INC as APPLYPALF.)
 
 STARN   = 16                  ; stars as DIRECTIONS: azimuth, elevation
-STARTAB dw 10,18, 35,40, 60,12, 85,55, 110,30, 135,60, 160,22, 185,45
-        dw 210,15, 235,58, 5,35, 50,28, 75,56, 100,10, 200,50, 150,38
 
 MSGTITLE db 'WIRE CITY',0
 MSGALT   db 'ALT ',0
-MSGHDG   db 'HDG ',0
-MSGT     db 'T ',0
-MSGSPD   db '  SPD ',0
-MSGFUE   db '  FUEL ',0
-MSGTHR   db '  THR ',0
 MSGSPD2  db 'SPD',0
 MSGTHR2  db 'THR',0
 MSGFUE2  db 'FUEL',0
 MSGHDG2  db 'HDG',0
 MSGAB    db '+',0
 MSGMIN2  db '-',0              ; VERT is the one readout that goes negative
-MSGSTL   db 'STALL',0
-MSGTER   db 'TERR',0
-MSGAB2   db 'AB',0
-MSGD20   db '20',0
-MSGD0    db '0',0
-MSGRDR   db 'RDR OFF',0
-MSGH2    db 'H',0
 MSGABON  db 'AB ON',0
 MSGTIM   db 'T',0              ; the no-cockpit strip's clock label. It used
-                               ;  to borrow MSGT2, the TERR lamp's letter -
-                               ;  two unrelated things sharing one byte
-; (MSGT2/F2/S2/L2 - the four one-letter caution labels - went with LAMP2.
-;  SIDEPNL keeps its words in UISEG, where there is room for whole ones.)
-lampx    dw 0                   ; lamp/bar scratch: x or lit-count
-lampy    dw 0                   ; lamp y / bar x
 lampc    db 0                   ; current lamp/segment colour
 lgnd     dw 0                   ; last ground height under the jet (TERR lamp)
-MSGHELP  db ' ESC',0
-MSGCRASH db '*** CRASH ***',0
-MSGREST  db 'SPACE = RESTART',0
-
 

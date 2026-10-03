@@ -284,25 +284,6 @@ DRAWBOX:
 PUFFBOX:
         ret                     ; BOND: no chimney smoke - three filled boxes
                                 ;  a chimney, for nothing the pilot needs
-        call ROTCUL
-        jc   .r
-        mov  ax,[gbase]
-        add  ax,[boxb]
-        sub  ax,[camy]
-        mov  [bry0],ax
-        mov  ax,[gbase]
-        add  ax,[boxt]
-        sub  ax,[camy]
-        mov  [bry1],ax
-        mov  byte [COLOR],12 ; horizon-haze grey reads as smoke
-        mov  ax,[gbase]
-        add  ax,[boxt]
-        cmp  [camy],ax
-        jle  .nf
-        call FACETOPC
-        call FACEFILL
-.nf:   call MEGAFILL           ; flat fill that keeps the smoke colour
-.r:    ret
 
 ; ----- render one city cell (cdi,cdj relative to camera cell) ---------------
 ;  Looks up the building for cell (camgi+cdi, camgj+cdj), rotates its 4
@@ -324,7 +305,6 @@ RENDERCELL:
         cmp  ax,3
         jne  .notroad
         jmp  .ret              ; BOND: a street is NOTHING - no tarmac, no
-        jmp  .ret              ;  traffic (was call ROADCELL, the same three
                                 ;  bytes; ROADCELL is left unreached)
 .notroad:
         mov  byte [roofc],17
@@ -515,89 +495,6 @@ RENDERCELL:
 .ret:  ret
 
 ; ============================================================================
-;  ROADCELL - one city street cell: the tarmac, then the traffic on it.
-;  The tarmac is cut off at ROADR / ROADZ, the traffic much nearer at CARZ -
-;  past that a car is one pixel and costs a whole box.
-;  TWO LEVELS OF DETAIL (see the constants in OWLFLY3.ASM): out past ROADLOD a
-;  quad covers a 2x2 GROUP of cells instead of one, and only the group's
-;  even/even anchor draws it. That is an exact merge, not a simplification -
-;  an avenue is two cells wide and every one of those groups is road all the
-;  way through - and it is what lets the road reach the whole walk.
-;  The surface is bent onto the terrain corner by corner by ROADYF; the
-;  flat gbase is now only what the VEHICLES stand on.
-; ============================================================================
-ROADCELL:
-        mov  ax,[cdi]           ; ---- the cheap cull FIRST. Everything below
-        or   ax,ax              ; costs four rotations and a big fill, and
-        jns  .d1               ; there are a thousand street cells in the
-        neg  ax                 ; walk. Chebyshev on the cell offsets: no
-.d1:   mov  bx,ax              ; multiply, no projection, just two compares.
-        mov  ax,[cdj]
-        or   ax,ax
-        jns  .d2
-        neg  ax
-.d2:   cmp  ax,bx
-        jle  .d3
-        mov  bx,ax
-.d3:   cmp  bx,ROADR           ; bx = the distance in CELLS, and it decides
-        jg   .x                ; the level of detail as well as the cull
-        mov  word [rlod],0
-        cmp  bx,ROADLOD
-        jle  .one
-        mov  ax,[gi]            ; ---- grouped: the 2x2 block of cells whose
-        or   ax,[gj]            ; corner is even. Only that corner draws;
-        test ax,1               ; the other three are inside its quad.
-        jnz  .x
-        mov  word [rlod],1
-.one:  mov  ax,[gi]            ; cell centre: gi*256 + 128 - BIAS ...
-        mov  cl,8
-        shl  ax,cl
-        add  ax,128
-        cmp  word [rlod],0
-        je   .c1
-        add  ax,128             ; ...and a group's centre is a cell further
-.c1:   sub  ax,BIAS
-        mov  [wcx],ax
-        mov  ax,[gj]
-        mov  cl,8
-        shl  ax,cl
-        add  ax,128
-        cmp  word [rlod],0
-        je   .c2
-        add  ax,128
-.c2:   sub  ax,BIAS
-        mov  [wcz],ax
-        mov  ax,128             ; the full cell, edge to edge - or the full
-        cmp  word [rlod],0  ; group, which is two of them
-        je   .c3
-        mov  ax,256
-.c3:   mov  [bhw],ax
-        mov  [bhd],ax
-        call ROTCUL
-        jc   .r
-        mov  ax,[minrz]
-        cmp  ax,ROADZ
-        jg   .r
-        mov  byte [COLOR],ASPHALT
-        call FACETOPC           ; the quad, flat...
-        call TOWNSEG:ROADYF   ; ...and now bent onto the ground, corner by
-        call FACEFILL           ; corner (see TOWN.INC: it used to take ONE
-                                ; height for the whole cell, which on a
-                                ; slope is a slab hovering over the hill)
-        cmp  word [rlod],0
-        jne  .r                ; grouped detail is too far out for traffic
-        mov  ax,[minrz]
-        cmp  ax,CARZ
-        jg   .r                ; tarmac reaches further than the traffic
-        call TOWNSEG:CELLY1F  ; the ground the vehicles stand on: the
-        mov  [gbase],dx         ;  CENTRE of the bent road, not the node
-                                ;  height the whole cell used to share
-        mov  word [vmode],0 ; draw them, do not test them
-        call TOWNSEG:TRAFFICF
-.r:
-.x:    ret
-
-; ============================================================================
 ;  ROTCUL - shared box setup: world bounds from (wcx,wcz,bhw,bhd), rotate the
 ;  4 footprint corners into camera space (FRX/FRZ), track min/max rz, and
 ;  cull. out: CF=1 -> box entirely behind/beyond, skip drawing.
@@ -769,17 +666,7 @@ EDGEWIN:
         mov  al,[scol]          ; windows change COLOR - restore per face
         mov  [COLOR],al
         call FACESTROKE
-        cmp  byte [qual],2      ; LOW: boxes and nothing but boxes. The
-        je   .x                 ;  glass is a per-wall pass of its own and
+        jmp  .x   ; LOW: boxes and nothing but boxes. The
+                                ;  glass is a per-wall pass of its own and
                                 ;  the city has hundreds of walls in it.
-        mov  ax,[NPOLY]         ; the wall never made it through the clip
-        cmp  ax,3
-        jl   .x
-        cmp  word [bhw],50  ; no windows on spikes/chimneys/lintels
-        jl   .x
-        mov  ax,[boxt]
-        sub  ax,[boxb]
-        cmp  ax,60              ; nor on flat slabs
-        jl   .x
-        call TOWNSEG:WINFACEF
 .x:    ret
