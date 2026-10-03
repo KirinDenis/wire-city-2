@@ -1,6 +1,7 @@
 # WIRE CITY 86 — the DOS arcade
 
 ### ▶ Play: https://kirindenis.github.io/wire-city-2/
+### ⌨ Learn: [the lessons, in your browser](https://kirindenis.github.io/wire-city-2/course/) — the source, a DOS PC that builds and runs it, and the video
 ### 💬 Community: [facebook.com/groups/OWLOS](https://www.facebook.com/groups/OWLOS)
 
 Real games in real **8086 assembly** (VGA mode 13h — and, in the newest one,
@@ -87,23 +88,47 @@ A video series that builds a DOS game from nothing, one constraint at a time —
 [LESSONS/](LESSONS/). Every lesson is one small program you can read in an
 evening, and each one is built to hand over **one fact about the machine**.
 
-**▶ Watch** is the video. **⌨ Build it** is a workbench instead of a video of
-one: a DOS prompt in your browser tab with the assembler already on the disk —
-type `MAKE` and you have built what the lesson builds. Nothing is installed and
-nothing is downloaded; reload the page and the machine is clean again.
+**▶ Watch** is the video. **⌨ Open it** is the lesson itself, on
+**[the course page](https://kirindenis.github.io/wire-city-2/course/)**: its
+source in an editor, a DOS PC beside it that assembles it with FASM and runs
+it, and the video under the PC. Change a line, press **F9**, and see what the
+change did. Nothing is installed; what you edit stays in your browser until
+you reset the lesson.
 
-**[▶ The whole series as a playlist](https://www.youtube.com/playlist?list=PLYAv8-EdgIF8)**
+**[▶ The whole series as a playlist](https://www.youtube.com/playlist?list=PLYAv8-EdgIF8)** ·
+**[⌨ every lesson in your browser](https://kirindenis.github.io/wire-city-2/course/)** ·
+**[💬 questions in the group](https://www.facebook.com/groups/OWLOS)**
+
+The lecture numbers are the videos' own, and from 0D on they count in hex —
+as the machine does — so 10, 11 and 12 each name two lessons. The links never
+mix them up.
 
 | Lesson | The fact it hands over | |
 |---|---|---|
 | **1 — the screen is memory** | Two addresses — `B800` for text, `A000` for pixels — and why `far` exists. Written in C and Pascal: the only one that is not assembly, and the only one that needs a compiler you install yourself. | [▶ watch](https://www.youtube.com/watch?v=bi9Kjp8gQ8I) |
-| **2 — the file *is* the program** | COM against EXE: eighteen bytes, one source line decides which file comes out — and you can patch those bytes by hand and watch the program change its mind. | [▶ watch](https://www.youtube.com/watch?v=G_GIAm2QHFk) · [⌨ build it](https://kirindenis.github.io/wire-city-2/l02.html) |
-| **3 — the screen, one byte at a time** | Mode 13h from assembly: a dot, then every colour there is — and why that picture comes out slanted. | [▶ watch](https://www.youtube.com/watch?v=2-bmdJWxBUM) · [⌨ build it](https://kirindenis.github.io/wire-city-2/l03.html) |
-| **4 — the arithmetic underneath everything** | A program cannot even show you a number until it can divide. Fixed point, and why `MUL` and `DIV` are the instructions you cannot afford. | [▶ watch](https://www.youtube.com/watch?v=l2u1JP2zqoE) |
-| **5 — sixty-five numbers, and what they are for** | A sine table instead of floating point: a circle is 256 steps, an angle wraps with `AND`, and a quarter of the table is the whole of it. | [▶ watch](https://www.youtube.com/watch?v=mLUMi9wG0bU) · [⌨ build it](https://kirindenis.github.io/wire-city-2/l05.html) |
-| **5B — a ring with no multiply in it** | Lesson 4's debt, paid: 70 is three shifts and two adds. Both rings are drawn on one screen and every coordinate compared, so the claim is checked rather than asserted. | [▶ watch](https://www.youtube.com/watch?v=vebo-_sgv18) |
-| **6 — ten clocks, and one formula** | The radius vector. Hold the length and turn the angle — that is a circle. Hold the angle and grow the length — that is a clock hand. Ten live clocks, one formula, and the formula 3D is built on. | [▶ watch](https://www.youtube.com/watch?v=alGTDwpsHFI) |
-| **7 — memory is one line, the screen is not** | Where that line folds is the whole difference: across, the bytes are neighbours and one instruction writes them all; down, they never are. | [▶ watch](https://www.youtube.com/watch?v=dVpH3NbW6d0) |
+| **2 — the file *is* the program** | COM against EXE: eighteen bytes, one source line decides which file comes out — and you can patch those bytes by hand and watch the program change its mind. | [▶ watch](https://www.youtube.com/watch?v=G_GIAm2QHFk) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=2) |
+| **3 — the screen, one byte at a time** | Mode 13h from assembly: a dot, then every colour there is — and why that picture comes out slanted. | [▶ watch](https://www.youtube.com/watch?v=2-bmdJWxBUM) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=3) |
+| **4 — the arithmetic underneath everything** | A program cannot even show you a number until it can divide. Fixed point, and why `MUL` and `DIV` are the instructions you cannot afford. | [▶ watch](https://www.youtube.com/watch?v=l2u1JP2zqoE) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=4) |
+| **5 — sixty-five numbers, and what they are for** | A sine table instead of floating point: a circle is 256 steps, an angle wraps with `AND`, and a quarter of the table is the whole of it. | [▶ watch](https://www.youtube.com/watch?v=mLUMi9wG0bU) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=5) |
+| **5B — a ring with no multiply in it** | Lesson 4's debt, paid: 70 is three shifts and two adds. Both rings are drawn on one screen and every coordinate compared, so the claim is checked rather than asserted. | [▶ watch](https://www.youtube.com/watch?v=vebo-_sgv18) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=5b) |
+| **6 — ten clocks, and one formula** | The radius vector. Hold the length and turn the angle — that is a circle. Hold the angle and grow the length — that is a clock hand. Ten live clocks, one formula, and the formula 3D is built on. | [▶ watch](https://www.youtube.com/watch?v=alGTDwpsHFI) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=6) |
+| **7 — memory is one line, the screen is not** | Where that line folds is the whole difference: across, the bytes are neighbours and one instruction writes them all; down, they never are. | [▶ watch](https://www.youtube.com/watch?v=dVpH3NbW6d0) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=7) |
+| **8 — the program that rewrites itself** | Slanted lines, and JIT by its old name: instead of asking the same question every pixel, rewrite the `ADD` once and drop the question. | [▶ watch](https://www.youtube.com/watch?v=OCKsV-xFkZw) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=8) |
+| **9 — self-modifying code** | The titles' own program, run for real: patched live, and the word it spells appears on the glass. | [▶ watch](https://www.youtube.com/watch?v=AH9QQLRfbmY) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=9) |
+| **10 — the square that is not there** | Four radius vectors become vertices, edges and a turning wireframe — and the three transformations, which are all a "square" ever was. | [▶ watch](https://www.youtube.com/watch?v=o2dWVRA_34w) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=10) |
+| **11 — the keyboard is a computer** | Scan codes at port `60h`, the BIOS and its 16-cell buffer, the DOS line — and a square driven by our own `INT 9`. | [▶ watch](https://www.youtube.com/watch?v=re79gf-iXZU) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=11) |
+| **12 — the triangle that turns the sky** | Sin and cos out of the school triangle, the rotation matrix out of two anchor arrows — and a solar system out of one routine. | [▶ watch](https://www.youtube.com/watch?v=r4Q3AOGO12A) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=12) |
+| **0D — the arm that adds up** | A robot arm in one table: every link inherits its parent's place *and* its turn, and because every joint turns about the same axis, the angles simply add. | [▶ watch](https://www.youtube.com/watch?v=7zeXgvwWWNw) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=13) |
+| **0E — the first cube** | Eight corners and twelve pairs saying which to join: a model is a list of vectors and a list of joins, and moving it is transforming the vectors. | [▶ watch](https://www.youtube.com/watch?v=dg58XkBBf4g) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=14) |
+| **0F — perspective is one divide** | Two similar triangles make `x' = x*d/z`: one `IDIV` per coordinate, then the same with no divide through a table — and the near plane, which is the difference between a table that lies and a divide that traps. | [▶ watch](https://www.youtube.com/watch?v=KFMzcN5s6Wg) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=15) |
+| **10 — move the camera, or move the world** | The view and projection matrices by their classical names — and why a picture cannot tell you whether the cube moved or the camera did. | [▶ watch](https://www.youtube.com/watch?v=9A4hX6_eqns) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=16) |
+| **11 — a landscape out of random numbers** | A game ships a recipe, not a world: one multiply and one add make a random number, and Diamond-Square turns them into a 64×64 island — integers only, minted fresh on every key. | [▶ watch](https://www.youtube.com/watch?v=ht7Y--vCT_c) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=17) |
+| **12 — the notebook** | From a right triangle to a 3D camera with a pencil and paper — no assembly at all, and every step of the engine to come. | [▶ watch](https://www.youtube.com/watch?v=5T7SJsfj8pc) |
+| **13 — clipping** | A point behind your eye has no image, and the machine hands you a number anyway: the near-plane cut, the screen clip, the divide fault caught and counted — on the modules OWL FLY is built from. | [▶ watch](https://www.youtube.com/watch?v=3ORV2DEfTpI) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=19) |
+| **14 — flight** | The aeroplane stops waiting for you: four rules out of WIRE CITY, and a keyboard interrupt of its own, so a held key is a fact and not an event. | [▶ watch](https://www.youtube.com/watch?v=trGxGJ9T_xs) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=20) |
+| **15 — the ground stops being flat** | Relief on the lattice, and hidden lines in 320 bytes, drawn from the eye outwards — measured, and hiding turned out *faster* than a plain line. | [▶ watch](https://www.youtube.com/watch?v=VcVytWCQ5dw) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=21) |
+| **16 — the ground becomes a surface** | Every square filled, painted far to near — the painter's algorithm. The first crash into a hillside, and a 16-bit word that overflowed when the view turned 45°. | [▶ watch](https://www.youtube.com/watch?v=vUmCzxGhyxQ) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=22) |
+| **17 — a town on the ground** | Houses placed by a hash, so the town plan costs no memory; a byte of fraction carried with `ADC`; windows as big as they really are; and night, which is nothing but the palette. | [▶ watch](https://www.youtube.com/watch?v=uro4Zu2EWps) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=23) |
 
 ## Reading
 
