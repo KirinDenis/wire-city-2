@@ -202,3 +202,7 @@ TOOLS/REFGEN/REF*.BIN
 TOOLS/REFGEN/REF*.TXT
 TOOLS/REFGEN/REFS.TXT
 TOOLS/REFGEN/*.LOG
+
+# The course tour's take files: its script and rendered narration, copied in
+# from the lecture rig for a recording (docs/course/tour.js). Not published.
+docs/course/tour/

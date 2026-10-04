@@ -1,18 +1,22 @@
 // The 8086 course, in OWLOSUI. PROTOTYPE, 2026-10-02.
 //
 // A lesson opens whole: its source in an editor that colours assembler, its
-// video, and a DOS PC that assembles the source with FASM and runs it.
+// video, and a DOS PC that assembles the source with FASM and runs it. And
+// the student works with files as on a real PC: New, Open, Save, Save as;
+// a two-panel commander over this browser's storage; a full DOS PC with its
+// own commander, settings and network - and the three OWL FLY games.
 //
 //   Lessons   every lesson, its video and a few words on it; Open puts its
 //             files on drive A: of the DOS PC, the source in the editor, and
 //             builds and runs it
-//   F9        save, build with FASM on the DOS PC, run - FASM's words in the
-//             Build strip; Ctrl+F9 runs again without building
-//   Watch     the lesson's video, in a window of its own
+//   F9        save, build the .ASM in front with FASM on the DOS PC, run it -
+//             FASM's words in the Build strip; Ctrl+F9 runs again
+//   Commander Enter on an .ASM builds and runs it, on a .COM or .EXE runs it
 //
 // Built on OWLOSUI's library alone - ../owlosui/, a copy of OWLOSUI's lib/js
-// taken by ../pull-owlosui.ps1 (https://github.com/KirinDenis/OWLOSUI) -
-// and nothing of its examples: the DOS PC is ./dos.js, the diary ./log.js.
+// (and the four lib/dos files its DOS PC needs) taken by ../pull-owlosui.ps1
+// (https://github.com/KirinDenis/OWLOSUI). Its apps/ are the commander, the
+// documents, the DOS PC, the console and the log; this file adds the course.
 //
 // WHERE THE FILES GO. A:\LESSONS\Lnn\ the lesson's own files, A:\ENGINE\
 // the five engine files (the sources say ..\..\ENGINE\, which from
@@ -21,28 +25,32 @@
 //
 // TWO THINGS FASM NEEDS IN THIS PC, both found by testing (wire-city-2/
 // .claude/skills/owlosui-lessons/references/gaps.md, item 7): core=normal
-// (dos.js), because a FASM macro kills js-dos's dynamic core, and
-// FASM -m 4096, because FASM grabbing CWSDPMI's virtual memory kills it too.
+// (the DOS PC's default now), because a FASM macro kills js-dos's dynamic
+// core, and FASM -m 4096, because FASM grabbing CWSDPMI's virtual memory
+// kills it too.
 
-import { sub, line, Style, Offer } from '../owlosui/owlosui.js';
+import { sub, line, Style } from '../owlosui/owlosui.js';
 import { BrowserStorage } from '../owlosui/files/browser.js';
-import { CourseDos } from './dos.js';
-import { log } from './log.js';
+import { CommanderTool, ASSOCIATIONS } from '../owlosui/apps/commander.js';
+import { Documents, DocCm } from '../owlosui/apps/documents.js';
+import { DosTool, DosCm } from '../owlosui/apps/dos.js';
+import { DosBox } from '../owlosui/dosbox/dosbox.js';
+import { unzip } from '../owlosui/dosbox/unzip.js';
+import { ConsoleWindow } from '../owlosui/apps/console.js';
+import { log, watchWindows } from '../owlosui/apps/log.js';
 
 const Cm = {
-  Exit: 2, Save: 3, About: 4, Dismiss: 5,
+  Exit: 2, About: 4, Dismiss: 5, Commander: 6, Console: 7,
   Next: 30, Zoom: 31, Close: 32, Cascade: 33, Tile: 34, Previous: 35, List: 36, SizeMove: 37, Minimize: 38,
-  Lessons: 600, Build: 601, Run: 602, Watch: 603, Reset: 604, Keys: 605, DosOff: 606,
-  Open: 610, ListWatch: 611, ListClose: 612, BuildClose: 613, VideoClose: 614, DosClose: 615,
+  Lessons: 600, Build: 601, Run: 602, Watch: 603, Reset: 604,
+  Open: 610, ListWatch: 611, ListClose: 612, BuildClose: 613, VideoClose: 614,
 };
-// What the page fetches for a lesson, copied into docs by ../pack-course.ps1:
-// GitHub Pages serves docs/ alone.
-const SITE = new URL('files/', import.meta.url);
-const A = '/DOS A Drive/', B = '/DOS B Drive/';
+// Drive A: of the DOS PC: this folder of the browser's storage. The course
+// disk (disk.zip, made by ../pack-course.ps1) is unpacked into it once.
+const A = '/DOS A Drive/';
+const DISK_VERSION = `${A}COURSE.VER`;
 // FASM's memory in KB; ?m=N on the page tries another (testing the crash).
 const FASM_KB = Number(new URLSearchParams(globalThis.location?.search ?? '').get('m')) || 4096;
-const TOOLS = [['FASM.EXE', 'TOOLS/FASM/FASM.EXE'], ['CWSDPMI.EXE', 'TOOLS/CWSDPMI/CWSDPMI.EXE']];
-const ENGINE = ['E_8086.INC', 'E_MATH.INC', 'E_TERR.INC', 'E_M3D.INC', 'E_RAST.INC'];
 
 /**
  * The speed every lesson runs at, set by GO.BAT with DOSBox's own
@@ -54,14 +62,71 @@ const ENGINE = ['E_8086.INC', 'E_MATH.INC', 'E_TERR.INC', 'E_M3D.INC', 'E_RAST.I
  */
 const LESSON_CYCLES = 30000;
 
-/** What the Build strip says when js-dos dies under a lesson (dos.js). */
+/**
+ * The games the course builds towards, on the DOS menu - each unpacked onto
+ * C:\GAMES from the same bundle its own page plays. `page` is that page:
+ * the bundle's name is read from it, because docs/pack.ps1 gives every
+ * release a new name (owlfly3_v17.jsdos...) and retires the old one. The
+ * networked ones join the same sky as their own page: `room`.
+ */
+const GAMES = [
+  { key: 'owlfly', label: 'OWL ~F~LY', name: 'OWL FLY', page: 'owlfly.html', bundle: /owlfly_v\d+\.jsdos/,
+    dir: 'OWLFLY', exe: 'FLYOWL.COM', hint: 'The first one: a city at night, in 64K, one segment' },
+  { key: 'owlfly2', label: 'OWL FLY ~I~I', name: 'OWL FLY II', page: 'owlfly2.html', bundle: /owlfly2_v\d+\.jsdos/,
+    dir: 'OWLFLY2', exe: 'FLYOWL2.EXE', room: 'owlfly2', hint: 'Multiplayer over the network - the same sky as its own page' },
+  { key: 'owlfly3', label: 'OWL FLY II~I~', name: 'OWL FLY III', page: 'owlfly3.html', bundle: /owlfly3_v\d+\.jsdos/,
+    dir: 'OWLFLY3', exe: 'OWLFLY3.EXE', room: 'owlfly3', hint: 'Every video card back to Hercules; multiplayer, the same sky as its own page' },
+];
+const RELAY = ['localhost', '127.0.0.1'].includes(globalThis.location?.hostname) ? 'ws://localhost:1900' : 'wss://view.owlos.sk';
+
+/**
+ * The DOS PC's settings are kept per page. A first visit to the course gets
+ * the picture 'sharp' - whole multiples of DOS's pixels - in a window made to
+ * fit 640x400 exactly (layout()): the DOS commander's text was hard to read
+ * stretched by 'fill' to a fraction (the pilot, 2026-10-04), and 320x200
+ * graphics come out at x2. And the network only for what asks for it, not
+ * for every lesson build. A new key, so a visitor who got 'fill' gets this.
+ */
+const SETTINGS_KEY = 'course.dosbox.2';
+function courseSettings() {
+  try {
+    if (!localStorage.getItem(SETTINGS_KEY)) localStorage.setItem(SETTINGS_KEY, JSON.stringify({ picture: 'sharp', always: false }));
+  } catch { /* storage refused: the library's defaults */ }
+}
+
+/**
+ * The DOS commander, started with the toolkit behind it (C:\OWL.BAT, the
+ * library's): the course disk A:\ on the left, C:\ on the right. /STEP: to
+ * run a program it steps out of memory, leaving the program's lines in
+ * RUNPROG.BAT in the folder it was started in - C:\, here, so nothing is
+ * written to the student's disk - and is started again afterwards. A program
+ * then has all of DOS's memory, as from the prompt; OWL FLY III needs it.
+ */
+const COMMANDR_BAT = `@echo off
+C:
+cd \\
+:again
+call C:\\OWL.BAT A:\\TOOLS\\COMMANDR\\COMMANDR.EXE /STEP A:\\ C:\\
+if not exist C:\\RUNPROG.BAT goto done
+call C:\\RUNPROG.BAT
+del C:\\RUNPROG.BAT
+goto again
+:done
+`;
+
+/** What the Build strip says when js-dos dies under a lesson. */
 const CRASHED = 'The DOS PC crashed (js-dos: RuntimeError: unreachable) - it happens now and then, cause not found yet.\n' +
   'F9 builds again on a fresh machine.';
 
-async function bytes(path) {
-  const r = await fetch(new URL(path, SITE));
-  if (!r.ok) throw new Error(`${path}: ${r.status}`);
-  return new Uint8Array(await r.arrayBuffer());
+/** The course disk, fetched and unpacked once a visit: [{ path, contents }]. */
+let diskFiles = null;
+async function courseDisk(url) {
+  if (!diskFiles) {
+    const r = await fetch(new URL(url, import.meta.url));
+    if (!r.ok) throw new Error(`the course disk (${url}): ${r.status}`);
+    diskFiles = (await unzip(new Uint8Array(await r.arrayBuffer()))).filter(f => !f.path.endsWith('/'));
+  }
+  return diskFiles;
 }
 
 /**
@@ -113,34 +178,81 @@ async function leaveIsolation() {
 export class CourseApp {
   constructor(owl) {
     this.owl = owl;
+    watchWindows(owl);
+    courseSettings();
     this.browser = new BrowserStorage();
-    this.dos = new CourseDos(owl, this.browser, { closeCmd: Cm.DosClose });
-    this.dos.onCrash = () => this.showBuild(CRASHED);
-    this.docs = new Map();            // editor window -> { text, source, path, name, crlf }
-    this.box = 0;                     // the message box, while one is up
+    // Files in editors: New, Open, Save, Save as - placed where the layout
+    // puts the source.
+    this.documents = new Documents(owl, {
+      places: [{
+        label: "~T~his browser's storage...", source: this.browser,
+        hint: 'Files this browser keeps for this page; its folder DOS A Drive is drive A: of the DOS PC',
+        saveHint: 'Under a name and in a folder you choose - a copy on A: builds with F9 under its own name',
+      }],
+      defaultSource: this.browser, closeCmd: Cm.Close,
+      place: () => this.layout().editor,
+    });
+    // Two panels over this browser's storage. Enter on an .ASM assembles it
+    // and runs it; on a .COM or .EXE runs it, at the lessons' speed.
+    this.commander = new CommanderTool(owl, {
+      sources: [this.browser], closeCmd: Cm.Close,
+      open: (name, text, source, path, options) => this.documents.add(name, text, source, path, options),
+      quietKeys: [{ cmd: Cm.Lessons, key: 'F1' }, { cmd: Cm.Close, key: 'F3', alt: true }, { cmd: Cm.Exit, key: 'x', alt: true }],
+      run: (source, dir, name) => this.runFile(source, dir, name),
+      associations: { ...ASSOCIATIONS, asm: ({ source, dir, name }) => this.buildFile(source, dir, name) },
+    });
+    // The DOS PC (OWLOSUI's DosTool - a DOS PC and nothing more): C: with the
+    // toolkit, A: and B: the browser's floppy folders, and the games -
+    // unpacked onto C:\GAMES once their bundles' names are read (start()).
+    // It starts into OUR DOS commander, A:\TOOLS\COMMANDR on the course disk
+    // (a copy of an OWLOSUI example - see its README), and a lesson's
+    // program, run from the page, gives way to it when it ends.
+    this.dos = new DosTool(owl, {
+      storage: this.browser, commander: this.commander,
+      open: (name, text, source, path, options) => this.documents.add(name, text, source, path, options),
+      dosFiles: new URL('../owlosui/dos/', import.meta.url),
+      settingsKey: SETTINGS_KEY, network: { relay: RELAY, room: 'owlfly3' },
+      starts: {
+        commander: { name: 'the commander', label: '~C~ommander on DOS', reread: true, line: 'call C:\\COMMANDR.BAT',
+          hint: 'The DOS file manager: the course disk A: on the left, C: on the right. Enter runs a program, F4 edits' },
+        ...Object.fromEntries(GAMES.map(g => [g.key, {
+          name: g.name, label: g.label, hint: g.hint, network: !!g.room,
+          line: `call C:\\${g.dir}.BAT\ncall C:\\COMMANDR.BAT`,
+        }])),
+      },
+      start: 'commander', returnTo: 'commander',
+      written: {
+        'C/COMMANDR.BAT': COMMANDR_BAT,
+        ...Object.fromEntries(GAMES.map(g => [`C/${g.dir}.BAT`, `@echo off\ncd \\GAMES\\${g.dir}\n${g.exe}\ncd \\\n`])),
+      },
+    });
+    this.dos.box.on(what => { if (what === 'crashed') this.showBuild(CRASHED); });
+    this.console = new ConsoleWindow(owl, { state: async () => this.state() });
     this.course = null;
     this.lesson = null;
     this.list = new LessonsWindow(this);
     this.buildWin = 0;
     this.video = null;
+    this.box = 0;
     log.info('page', `the core is running: ${owl.width}x${owl.height} cells`);
 
     owl.menuBar(
       sub('~F~ile',
-        { label: '~S~ave', cmd: Cm.Save, shortcut: 'F2', hint: 'The source in front, onto drive A:' },
+        ...this.documents.fileMenu(),
         line(),
         { label: 'E~x~it', cmd: Cm.Exit, shortcut: 'Alt+X', hint: 'Leave the course' }),
       sub('~L~essons',
         { label: '~L~essons...', cmd: Cm.Lessons, shortcut: 'F1', hint: 'Every lesson of the course, its video and its source' },
         line(),
-        { label: '~B~uild and run', cmd: Cm.Build, shortcut: 'F9', hint: 'Save, assemble with FASM on the DOS PC, and run what it made' },
-        { label: '~R~un', cmd: Cm.Run, shortcut: 'Ctrl+F9', hint: 'Run the lesson as it was last built' },
+        { label: '~B~uild and run', cmd: Cm.Build, shortcut: 'F9', hint: 'Save, assemble the .ASM in front with FASM on the DOS PC, and run what it made' },
+        { label: '~R~un', cmd: Cm.Run, shortcut: 'Ctrl+F9', hint: 'Run it again as it was last built' },
         { label: '~W~atch the video', cmd: Cm.Watch, hint: 'The lesson on YouTube, in a window of its own' },
         line(),
         { label: 'Re~s~et this lesson', cmd: Cm.Reset, hint: "The lesson's files as the course ships them - your changes go" }),
-      sub('~D~OS',
-        { label: '~K~eyboard to DOS', cmd: Cm.Keys, hint: 'Or click the DOS picture; Right Ctrl gives it back' },
-        { label: 'Switch ~o~ff', cmd: Cm.DosOff, hint: 'The DOS PC off and its window closed; F9 switches it on again' }),
+      sub('~T~ools',
+        { label: 'Co~m~mander', cmd: Cm.Commander, hint: "Two panels over this browser's storage - DOS A Drive is A:. Enter on an .ASM builds and runs it" },
+        { label: 'C~o~nsole', cmd: Cm.Console, hint: 'Everything the page and the DOS PC did since it opened - for a bug report' }),
+      sub('~D~OS', ...this.dos.menu()),
       sub('~W~indow',
         { label: '~S~ize/Move', cmd: Cm.SizeMove, shortcut: 'Ctrl+F5' },
         { label: '~Z~oom', cmd: Cm.Zoom, shortcut: 'F5' },
@@ -156,7 +268,7 @@ export class CourseApp {
     );
     owl.statusLine(
       { label: '~F1~ Lessons', cmd: Cm.Lessons, key: 'F1' },
-      { label: '~F2~ Save', cmd: Cm.Save, key: 'F2' },
+      { label: '~F2~ Save', cmd: DocCm.Save, key: 'F2' },
       { label: '~F9~ Build+run', cmd: Cm.Build, key: 'F9' },
       { label: '~Ctrl-F9~ Run', cmd: Cm.Run, key: 'F9', ctrl: true },
       { label: '~F5~ Zoom', cmd: Cm.Zoom, key: 'F5' },
@@ -180,6 +292,19 @@ export class CourseApp {
     }
   }
 
+  /** The editors, by window: { text, source, path, name, crlf, binary }. */
+  get docs() { return this.documents.docs; }
+
+  /** Console > F4: what the course is doing now, a line each. */
+  state() {
+    const d = this.dos;
+    return [
+      `course: lesson ${this.lesson?.id ?? 'none'}, builds ${this.lastTarget ? `${this.lastTarget.dir}${this.lastTarget.asm}` : 'its own program'}`,
+      `dos: ${d.box.running ? `on, running ${d.program?.name ?? d.started}` : 'off'}${d.box.crashed ? ', CRASHED' : ''}, picture ${d.settings.picture}, cycles ${d.settings.cycles}`,
+      `editors: ${[...this.docs.values()].map(x => x.path ?? x.name).join(', ') || 'none'}`,
+    ];
+  }
+
   // ------------------------------------------------------------ the desktop
 
   /**
@@ -197,11 +322,14 @@ export class CourseApp {
       const all = { x: 0, y: 1, w: Math.max(W, 12), h: Math.max(H - 2, 4) };
       return { editor: all, dos: all, build: all, video: all };
     }
-    const cw = this.owl.screen?.cellW ?? 10, ch = this.owl.screen?.cellH ?? 22;
-    const R = Math.max(40, Math.min(W - 40, Math.floor(W * 0.45)));
     const D = H - 2;                                 // the desktop's rows
-    let ih = Math.round(((R - 2) * cw * 3) / 4 / ch);
-    ih = Math.min(ih, Math.floor(D * 0.55) - 2);     // the video keeps the rest, near half
+    // The DOS PC's inside, made to hold DOS's 640x400 at a whole scale -
+    // DosBox.insideFor, as OWLOSUI's own DOS window sizes itself: text and
+    // pixels exact, 320x200 graphics at x2. Forty columns are kept for the
+    // editor, and eight rows under it for the video.
+    const fit = DosBox.insideFor(this.owl, W - 40 - 2, D - 2 - 8);
+    const R = Math.max(30, fit.w + 2);
+    const ih = fit.h;
     const B = 6;                                     // FASM says two lines; room for an error's three
     // Every window has its shadow, two columns to the right and a row below.
     // So the DOS PC and the video are on the LEFT and the source on the
@@ -227,22 +355,6 @@ export class CourseApp {
     if (!p || p.x !== r.x + 1 || p.y !== r.y + 1 || p.w !== r.w - 2 || p.h !== r.h - 2) this.dos.openWindow(r);
   }
 
-  /** An editor in the left column, coloured as its name says; `source` and `path` say where Save puts it. */
-  addDoc(name, text, source, path, { readOnly = false } = {}) {
-    const r = this.layout().editor;
-    const w = this.owl.window(`${name} - ${source?.title ?? 'new'}`, r.w, r.h, { x: r.x, y: r.y, closeCmd: Cm.Close });
-    // A DOS file ends its lines with CR LF; the editor wants LF alone, and
-    // the CRs go back on when it is saved.
-    const crlf = text.includes('\r\n');
-    const t = this.owl.text(w, crlf ? text.replace(/\r\n/g, '\n') : text);
-    // Line numbers in a grey column, and the caret's line:column on the
-    // bottom edge: a lesson says "line 120", and FASM reports its errors by
-    // line. The reader can turn either off in Edit.
-    this.owl.editor(t, Offer.All, { readOnly, numbers: true, position: true });
-    this.owl.syntax(t, name);
-    this.docs.set(w, { text: t, source, path, name, crlf });
-    return w;
-  }
 
   tell(title, text) {
     this.closeBox();
@@ -269,52 +381,124 @@ export class CourseApp {
     if (await leaveIsolation()) return;
     this.course = await (await fetch(new URL('course.json', import.meta.url))).json();
     log.info('course', `${this.course.lessons.length} lessons`);
+    await this.findGames();
+    await this.waitForScreen();
+    await this.track(this.installDisk());
     const asked = lessonFromAddress(this.course.lessons);
-    // Not at once: the first frames come before the canvas has its size,
-    // and a window opened then is cut to the size it had. Nor from poll(),
-    // which runs only when something happens - the list waited for a click.
-    await new Promise(resolve => {
-      const t = setInterval(() => { if (this.owl.width >= 80) { clearInterval(t); resolve(); } }, 50);
-    });
     if (asked) { log.info('course', `the address asks for ${asked.id}`); await this.track(this.openLesson(asked)); }
     else this.list.show();
     this.owl.refresh?.();
+    // ?tour=NAME: the page plays a script of its own features (tour.js), for
+    // the video that presents it. Loaded only then.
+    const tour = new URLSearchParams(globalThis.location?.search ?? '').get('tour');
+    if (tour && /^[\w-]+$/.test(tour)) {
+      const { Tour } = await import('./tour.js');
+      this.tour = new Tour(this, tour);
+      await this.track(this.tour.start());
+    }
   }
 
-  poll() {
-    this.list.poll();
+  /**
+   * Until the canvas has its size: a window opened in the first frames is
+   * cut to the size the screen had then. Not from poll(), which runs only
+   * when something happens - the list waited for a click.
+   */
+  waitForScreen() {
+    return new Promise(resolve => {
+      const t = setInterval(() => { if (this.owl.width >= 80) { clearInterval(t); resolve(); } }, 50);
+    });
   }
+
+  /** What is not a command: each tool looks at its own windows. */
+  poll() {
+    for (const t of this.tools()) t.poll?.();
+  }
+
+  /** Every tool, in the order a command is offered to them. */
+  tools() { return [this.list, this.documents, this.commander, this.console, this.dos]; }
 
   // ------------------------------------------------------------ the lesson
 
   dir(lesson) { return `${A}LESSONS/${lesson.folder}/`; }
 
-  /** The lesson's files onto the floppies; what is there already stays, unless `fresh`. */
-  async install(lesson, fresh = false) {
+  /**
+   * The course disk onto A:, once - the course as the repository holds it:
+   * TOOLS, ENGINE, every lesson, the examples and the games, each with its
+   * own MAKE.BAT. A file already on A: is left alone: it may be the
+   * student's. A newer disk (its version in course.json) adds what is new.
+   */
+  async installDisk() {
+    const disk = this.course?.disk;
+    if (!disk) return;
     const S = this.browser;
-    const put = async (to, from) => {
-      if (!fresh) { try { await S.readBytes(to); return; } catch { /* not there: copy it */ } }
-      await S.write(to, await bytes(from));
-    };
-    for (const [name, from] of TOOLS) await put(`${B}${name}`, from);
-    if (lesson.engine) for (const e of ENGINE) await put(`${A}ENGINE/${e}`, `ENGINE/${e}`);
-    for (const f of lesson.files) await put(`${this.dir(lesson)}${f}`, `LESSONS/${lesson.folder}/${f}`);
-    const com = lesson.main.replace(/\.ASM$/i, '.COM');
-    // The build and the run, as batch files on A: - so they are also there
-    // to type. The PC switches on at full speed, for FASM; GO.BAT slows it
-    // to the machine the lessons were made on before the program starts.
-    await S.write(`${this.dir(lesson)}BUILD.BAT`, [
+    const had = await S.read(DISK_VERSION).catch(() => '');
+    if (had.trim() === disk.version) return;
+    this.showBuild(`Putting the course disk on drive A: - ${disk.files} files, the lessons, the examples and the games...`);
+    const files = await courseDisk(disk.url);
+    let added = 0;
+    await S.hush(async () => {
+      for (const f of files) {
+        const to = `${A}${f.path}`;
+        const there = await S.readBytes(to).then(() => true, () => false);
+        if (!there) { await S.write(to, f.contents); added++; }
+      }
+    });
+    await S.write(DISK_VERSION, `${disk.version}\r\n`);
+    log.info('course', `course disk ${disk.version}: ${added} of ${files.length} files put on A:`);
+    this.showBuild(`Drive A: holds the course: LESSONS, EXAMPLES, GAMES, ENGINE and TOOLS - ${added} files new. ` +
+      'Tools > Commander shows them; MAKE.BAT in any folder builds what is there.');
+  }
+
+  /** A lesson's own files as the course ships them - Lessons > Reset - over what is on A:. */
+  async install(lesson, fresh = false) {
+    if (fresh) {
+      const prefix = `LESSONS/${lesson.folder}/`;
+      for (const f of (await courseDisk(this.course.disk.url)).filter(f => f.path.startsWith(prefix))) {
+        await this.browser.write(`${A}${f.path}`, f.contents);
+      }
+    }
+    await this.batches({ dir: this.dir(lesson), asm: lesson.main });
+  }
+
+  /**
+   * The build and the run of one source, as batch files beside it on A: -
+   * so they are also there to type. The PC switches on at full speed, for
+   * FASM; GO.BAT slows it to the machine the lessons were made on before
+   * the program starts, and waits for a key after it: a program that
+   * prints and ends (lesson 2's HELLO) would otherwise be gone at once,
+   * the DOS commander drawn over its words.
+   */
+  async batches({ dir, asm }) {
+    const com = asm.replace(/\.ASM$/i, '.COM');
+    await this.browser.write(`${dir}BUILD.BAT`, [
       '@echo off',
       `if exist ${com} del ${com}`,
-      'B:\\CWSDPMI.EXE',
-      `B:\\FASM.EXE -m ${FASM_KB} ${lesson.main} ${com} > BUILD.TXT`,
+      'A:\\TOOLS\\CWSDPMI\\CWSDPMI.EXE',
+      `A:\\TOOLS\\FASM\\FASM.EXE -m ${FASM_KB} ${asm} ${com} > BUILD.TXT`,
       `if not exist ${com} goto end`,
       'call GO.BAT',
       ':end', ''].join('\r\n'));
-    await S.write(`${this.dir(lesson)}GO.BAT`, [
+    await this.browser.write(`${dir}GO.BAT`, [
       '@echo off',
       `config -set "cpu cycles=fixed ${LESSON_CYCLES}"`,
-      com, ''].join('\r\n'));
+      com,
+      'pause', ''].join('\r\n'));
+  }
+
+  /**
+   * What F9 builds: the .ASM in the editor in front, under its own name and
+   * in its own folder - so a copy saved as MY.ASM builds as MY.COM. With no
+   * .ASM in front (an .INC, the video), what was built last; failing that,
+   * the lesson's own program. Only a file on a floppy can be built: DOS
+   * sees nothing else.
+   */
+  target() {
+    const doc = this.docs.get(this.owl.active());
+    if (doc?.path?.startsWith(A) && /\.ASM$/i.test(doc.name)) {
+      return { dir: doc.path.slice(0, doc.path.lastIndexOf('/') + 1), asm: doc.name.toUpperCase() };
+    }
+    if (this.lastTarget) return this.lastTarget;
+    return this.lesson?.buildable ? { dir: this.dir(this.lesson), asm: this.lesson.main } : null;
   }
 
   /**
@@ -325,6 +509,7 @@ export class CourseApp {
    */
   async openLesson(lesson) {
     this.lesson = lesson;
+    this.lastTarget = null;      // a new lesson builds its own program until told otherwise
     // The address follows: a reload, or a link copied from the bar, lands here.
     try { history.replaceState(null, '', `?l=${lesson.id.slice(1).replace(/^0/, '').toLowerCase()}`); } catch { /* not a page */ }
     // The video first: every lesson has one, a program or not. It waits
@@ -343,41 +528,110 @@ export class CourseApp {
     // 188 KB opens and saves whole.
     const open = [...this.docs].find(([, d]) => d.path === path);
     if (open) this.owl.activate(open[0]);
-    else this.addDoc(lesson.main, await this.browser.read(path), this.browser, path);
+    else this.documents.add(lesson.main, await this.browser.read(path), this.browser, path);
     await this.build();
   }
 
-  /** The lesson's source back onto A:, without a box saying so. */
+  /**
+   * Every open file back where it came from in this browser, without a box
+   * saying so: what F9 builds may include what another window holds.
+   */
   async saveQuietly() {
-    const lesson = this.lesson;
-    if (!lesson) return;
-    const path = `${this.dir(lesson)}${lesson.main}`;
     for (const [, d] of this.docs) {
-      if (d.path !== path) continue;
-      const typed = this.owl.getText(d.text);
-      await this.browser.write(path, d.crlf ? typed.replace(/\r?\n/g, '\r\n') : typed);
+      if (d.source !== this.browser || !d.path) continue;
+      await this.browser.write(d.path, this.documents.contentOf(d));
     }
   }
 
-  async build() {
-    const lesson = this.lesson;
-    if (!lesson?.buildable) { this.list.show(); return; }
+  /**
+   * Enter on an .ASM in the commander: assembled and run, like F9 on it.
+   * Only a file on a floppy can be: DOS sees nothing else.
+   */
+  buildFile(source, dir, name) {
+    if (source !== this.browser || !dir.startsWith(A)) {
+      this.tell('Build', `${name} is not on drive A:, so the DOS PC cannot see it. Copy it into DOS A Drive (F5) and press Enter on it there.`);
+      return null;
+    }
+    return this.build({ dir, asm: name.toUpperCase() });
+  }
+
+  /**
+   * The DOS PC switched on into `name` in `dir` - after the floppy has
+   * caught up. A file the page has just written reaches a running DOS a
+   * moment later (DriveGates, in OWLOSUI's library), and switching on first
+   * collects what DOS holds and forgets what it lacks: a BUILD.BAT written
+   * the instant before was taken for deleted, and DOS said "Illegal command:
+   * BUILD.BAT" (seen 2026-10-04). So: a breath first, while DOS still runs.
+   */
+  async runDos(source, dir, name) {
+    if (this.dos.box.running) await new Promise(r => setTimeout(r, 800));
+    return this.dos.runProgram(source, dir, name);
+  }
+
+  /**
+   * A game is built the way it is built: by its own MAKE.BAT, from its own
+   * folder - several assemblies, data files and an .EXE, not one source.
+   * The game folder of `dir` (A:\GAMES\OWLFLY3\SRC\ -> A:\GAMES\OWLFLY3\),
+   * or null outside GAMES.
+   */
+  gameOf(dir) {
+    const m = /^\/DOS A Drive\/GAMES\/[^/]+\//i.exec(dir);
+    return m ? m[0] : null;
+  }
+
+  /**
+   * Enter on a .COM, .EXE or .BAT in the commander. A lesson's or an
+   * example's program runs at the lessons' speed, through a GO.BAT beside
+   * it, as Ctrl+F9 runs one; a game, and anything else, as the DOS PC runs
+   * any program - at full speed, as on its own page.
+   */
+  async runFile(source, dir, name) {
+    this.builds = (this.builds ?? 0) + 1;      // a build waiting for FASM stops waiting
+    this.placeDos();
+    if (source === this.browser && /^\/DOS A Drive\/(LESSONS|EXAMPLES)\//i.test(dir) && /\.(COM|EXE)$/i.test(name)) {
+      await this.browser.write(`${dir}GO.BAT`, ['@echo off', `config -set "cpu cycles=fixed ${LESSON_CYCLES}"`, name.toUpperCase(), 'pause', ''].join('\r\n'));
+      return this.runDos(this.browser, dir, 'GO.BAT');
+    }
+    return this.runDos(source, dir, name);
+  }
+
+  async build(t = this.target()) {
+    if (!t) { this.list.show(); return; }
+    const game = this.gameOf(t.dir);
+    if (game) {
+      // A game's source: its own MAKE.BAT builds it (into INSTALL\), as in
+      // the repository; RUN.BAT beside it flies what was built.
+      await this.saveQuietly();
+      this.builds = (this.builds ?? 0) + 1;
+      this.showBuild(`Building ${game.slice(A.length, -1).replace(/\//g, '\\')} with its own MAKE.BAT - its words are on the DOS screen; ` +
+        'RUN.BAT in the same folder flies it.');
+      this.placeDos();
+      // Through a BUILD.BAT that waits for a key after MAKE.BAT: otherwise
+      // DOS goes straight back to its commander, and MAKE's last words -
+      // "Built INSTALL\OWLFLY3.EXE" - are gone before they can be read.
+      await this.browser.write(`${game}BUILD.BAT`, ['@echo off', 'call MAKE.BAT', 'pause', ''].join('\r\n'));
+      return this.runDos(this.browser, game, 'BUILD.BAT');
+    }
     await this.saveQuietly();
-    await this.install(lesson);
-    const out = `${this.dir(lesson)}BUILD.TXT`;
+    if (this.lesson?.buildable) await this.install(this.lesson);
+    await this.batches(t);
+    this.lastTarget = t;
+    const out = `${t.dir}BUILD.TXT`;
     await this.browser.remove(out).catch(() => {});
     // A newer F9 takes over: the older build stops waiting for its answer.
     const mine = this.builds = (this.builds ?? 0) + 1;
-    this.showBuild(`Assembling ${lesson.main} on the DOS PC...`);
-    log.info('build', `${lesson.id}: FASM -m ${FASM_KB} ${lesson.main}`);
+    this.showBuild(`Assembling ${t.asm} on the DOS PC...`);
+    log.info('build', `${t.dir}${t.asm}: FASM -m ${FASM_KB}`);
     this.placeDos();
-    await this.dos.run(this.dir(lesson), 'BUILD.BAT');
+    // The PC switches on into BUILD.BAT; when the program ends, DOS goes on
+    // into its commander - the student is at a real DOS, not a prompt.
+    await this.runDos(this.browser, t.dir, 'BUILD.BAT');
     // DOS writes BUILD.TXT on A:, and the floppy's folder gets it back
     // within a second or two. FASM's last line says how it went.
     for (let i = 0; i < 120; i++) {
       await new Promise(r => setTimeout(r, 1000));
       if (mine !== this.builds) return;
-      if (this.dos.crashed) { this.showBuild(CRASHED); return; }
+      if (this.dos.box.crashed) { this.showBuild(CRASHED); return; }
       const text = await this.browser.read(out).catch(() => '');
       if (/bytes\.|error/i.test(text)) {
         const lines = text.trim().split(/\r?\n/);
@@ -391,11 +645,31 @@ export class CourseApp {
     this.showBuild("No word from FASM in two minutes. The browser's console (F12) says what the DOS PC did.");
   }
 
-  runOnly() {
-    const lesson = this.lesson;
-    if (!lesson?.buildable) { this.list.show(); return; }
+  /**
+   * The games' bundles onto C:\GAMES - each named by its own page, which
+   * pack.ps1 keeps current. Before the PC's first switch-on: C: is put
+   * together once and kept. A game whose page cannot be read is left out.
+   */
+  async findGames() {
+    const bundles = [];
+    for (const g of GAMES) {
+      try {
+        const name = g.bundle.exec(await (await fetch(new URL(`../${g.page}`, import.meta.url))).text())?.[0];
+        if (name) bundles.push({ url: new URL(`../${name}`, import.meta.url).href, to: `GAMES/${g.dir}` });
+        else log.warn('course', `${g.page} names no bundle: ${g.name} is not on C:`);
+      } catch (e) {
+        log.warn('course', `${g.page} did not load: ${g.name} is not on C:`);
+      }
+    }
+    this.dos.bundles = bundles;
+  }
+
+  async runOnly() {
+    const t = this.target();
+    if (!t) { this.list.show(); return; }
+    await this.batches(t);
     this.placeDos();
-    return this.dos.run(this.dir(lesson), 'GO.BAT');
+    return this.runDos(this.browser, t.dir, 'GO.BAT');
   }
 
   showBuild(text) {
@@ -406,6 +680,7 @@ export class CourseApp {
       this.buildText = owl.staticText(this.buildWin, 1, 1, '', r.w - 4, r.h - 3);
     }
     owl.setText(this.buildText, text);
+    this.lastBuildShown = text;          // what the tour waits on (tour.js, waitbuild)
     owl.refresh?.();
   }
 
@@ -505,13 +780,14 @@ export class CourseApp {
     switch (cmd) {
       case Cm.Exit: return false;
       case Cm.Dismiss: this.closeBox(); return true;
-      case Cm.Save:
-        this.track(this.saveQuietly().then(() => { if (this.lesson) this.showBuild(`${this.lesson.main} saved on A:. F9 builds and runs it.`); }));
-        return true;
       case Cm.Lessons: this.list.show(); return true;
-      case Cm.Keys: this.dos.box.grab(); return true;
-      case Cm.DosOff:
-      case Cm.DosClose: this.track(this.dos.close()); return true;
+      case Cm.Commander: {
+        // The lesson's folder on the left, the whole of A: on the right.
+        const left = this.lesson ? this.dir(this.lesson) : A;
+        this.commander.show({ left: this.browser, right: this.browser, leftDir: left, rightDir: A });
+        return true;
+      }
+      case Cm.Console: this.console.show(); return true;
       case Cm.Next: owl.nextWindow(); return true;
       case Cm.Previous: owl.previousWindow(); return true;
       case Cm.Zoom: { const a = owl.active(); if (a) owl.zoom(a); return true; }
@@ -540,10 +816,21 @@ export class CourseApp {
           'colours assembler, and a DOS PC in the page that assembles it with FASM and runs it. The page is OWLOSUI - a Rust core ' +
           'in WebAssembly - and the DOS PC is DOSBox, also in WebAssembly.');
         return true;
-      default:
-        // The Lessons window's own buttons.
-        if (this.list.handles(cmd)) this.list.onCommand(cmd);
+      default: {
+        // A game on the DOS menu: its own sky. The DOS PC has one room for
+        // its network card; a game's room goes in before it switches on, so
+        // OWL FLY II meets the players on its own page, not III's.
+        const game = this.dos.pageStarts?.[cmd - DosCm.Start] && GAMES.find(g => g.key === this.dos.pageStarts[cmd - DosCm.Start]);
+        if (game) {
+          if (game.room) this.dos.settings = { ...this.dos.settings, room: game.room };
+          this.builds = (this.builds ?? 0) + 1;     // a build waiting for FASM stops waiting
+          this.placeDos();
+        }
+        // Whoever owns the command: the Lessons window, the editors, the
+        // commander, the console, the DOS PC.
+        for (const t of this.tools()) if (t.handles(cmd)) { this.track(Promise.resolve(t.onCommand(cmd))); break; }
         return true;
+      }
     }
   }
 
@@ -552,12 +839,13 @@ export class CourseApp {
     const a = this.owl.active();
     if (!a) return;
     if (this.list.owns(a)) { this.list.close(); return; }
-    if (this.dos.owns(a)) { this.track(this.dos.close()); return; }
     if (a === this.buildWin) { this.owl.close(a); this.buildWin = 0; return; }
     if (a === this.video?.win) { this.closeVideo(); return; }
     if (a === this.box) { this.closeBox(); return; }
+    for (const t of [this.documents, this.commander, this.console, this.dos]) {
+      if (t.owns(a)) { this.track(Promise.resolve(t.closeWindow(a))); return; }
+    }
     this.owl.close(a);
-    this.docs.delete(a);
   }
 }
 

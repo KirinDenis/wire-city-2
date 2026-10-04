@@ -103,12 +103,40 @@ export class DosBox {
     document.addEventListener('visibilitychange', () => {
       if (this.ci && this.keepRunning) setTimeout(() => this.ci?.resume(), 50);
     });
+    // js-dos 8 listens for keys on the whole WINDOW, not on its picture, so
+    // every key typed in an editor on the page went to DOS as well (three
+    // Downs in the editor, three Downs in DOS). OWLOSUI hears keys on
+    // `document`, a step before the window: there a key is stopped from
+    // going on unless DOS has the focus. A key that went down while DOS
+    // had it is still let up, so nothing stays held in DOS.
+    const held = new Set();
+    const gate = e => {
+      if (this.hasKeys()) {
+        if (e.type === 'keydown') held.add(e.code); else held.delete(e.code);
+        return;
+      }
+      if (e.type === 'keyup' && held.delete(e.code)) return;
+      e.stopPropagation();
+    };
+    document.addEventListener('keydown', gate);
+    document.addEventListener('keyup', gate);
+    // js-dos sometimes dies - `RuntimeError: unreachable`, seen right
+    // after FASM's banner, cause not found - and a dead one never answers
+    // again. It is noticed here and said ('crashed'); the next start makes
+    // a fresh machine, and nothing waits on the dead one (stop's limit).
+    this.crashed = false;
+    window.addEventListener('error', e => {
+      if (!this.running || this.crashed || !/unreachable/.test(String(e.message ?? e.error))) return;
+      this.crashed = true;
+      this.emit('crashed');
+    });
   }
 
   /**
    * Something to hear about: 'started', 'stopped', 'keys' (who has the
-   * keyboard), 'frame' (a new picture size, in frameSize), and what the
-   * emulator says - 'stdout' with its line, 'message' with { type, text }.
+   * keyboard), 'frame' (a new picture size, in frameSize), 'crashed' (js-dos
+   * died: `crashed` is true until the next start), and what the emulator
+   * says - 'stdout' with its line, 'message' with { type, text }.
    */
   on(f) { this.listeners.add(f); return () => this.listeners.delete(f); }
   emit(what, detail) { for (const f of this.listeners) f(what, this, detail); }
@@ -120,11 +148,15 @@ export class DosBox {
    *   { url }            a .jsdos bundle
    *   { conf, files }    a dosbox.conf and [{ path, contents }] for its disks
    * what: a name for it, shown by the page. keepRunning: carry on in a
-   * background tab - for a machine on the network.
+   * background tab - for a machine on the network. picture: 'sharp' -
+   * whole multiples of DOS's pixels; 'fill' - as big as the window allows
+   * at 4:3, the pixels still square blocks; 'monitor' - the same size,
+   * smoothed as a CRT showed it.
    */
   async start(win, { url, conf, files = [], what = 'DOS', keepRunning = false, picture = 'sharp' }) {
     await this.stop();
     const Dos = await loadJsDos();
+    this.crashed = false;
     this.win = win;
     this.what = what;
     this.keepRunning = keepRunning;
@@ -153,9 +185,11 @@ export class DosBox {
         noCloud: true,
         noNetworking: false,
         // Sharp: every DOS pixel a whole square of screen pixels, the frame
-        // as it is. A monitor: stretched to 4:3 as a CRT showed it, and
-        // smoothed, since the stretch cannot be whole pixels.
-        imageRendering: picture === 'sharp' ? 'pixelated' : 'smooth',
+        // as it is. Fill: as big as the window at 4:3, the pixels blocks -
+        // sharp in a window a few pixels short of 400 showed 320 by 200 at
+        // one to one, a stamp in a black field. A monitor: the same size,
+        // smoothed as a CRT showed it.
+        imageRendering: picture === 'monitor' ? 'smooth' : 'pixelated',
         renderAspect: picture === 'sharp' ? 'AsIs' : '4/3',
         onEvent: (event, ci) => {
           if (event === 'ci-ready') {
@@ -179,14 +213,25 @@ export class DosBox {
     return ci;
   }
 
-  async stop() {
+  /**
+   * Switched off, its picture taken away. A machine that does not stop in
+   * `ms` - a crashed js-dos never answers - is dropped: its picture taken
+   * off the page all the same, and 'dropped' returned.
+   */
+  async stop(ms = 3000) {
     const dos = this.dos, el = this.el;
     this.dos = null;
     this.ci = null;
     this.el = null;
-    if (dos) { try { await dos.stop(); } catch { /* already gone */ } }
+    let result = dos ? 'stopped' : 'off';
+    if (dos) {
+      const stopped = dos.stop().then(() => true, () => true);
+      const late = new Promise(r => setTimeout(() => r(false), ms));
+      if (!(await Promise.race([stopped, late]))) result = 'dropped';
+    }
     el?.remove();
     if (dos) this.emit('stopped');
+    return result;
   }
 
   /** Over the window's inside while nothing covers it; hidden, and the keyboard given back, while something does. */
@@ -217,7 +262,7 @@ export class DosBox {
    * pixels - a 125% Windows display has 1.25 of them to a CSS pixel - and
    * placed on a pixel, centred. Scaled by anything else, some columns of
    * a letter come out a pixel wider than the rest, and text is hard to
-   * read. A monitor: the whole area; js-dos keeps 4:3 inside it.
+   * read. Fill and a monitor: the whole area; js-dos keeps 4:3 inside it.
    */
   pictureRect(area) {
     if (this.picture !== 'sharp') return area;

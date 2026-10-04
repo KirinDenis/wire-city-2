@@ -15,9 +15,11 @@
      the lessons without SharedArrayBuffer, and only a page that is not
      isolated can frame YouTube in Firefox and Safari. -->
 <script type="module">
-  // The diary first: it is listening for errors before anything can make one.
-  import './log.js';
+  // The log first: it is listening for errors before anything can make one
+  // (Tools > Console shows it).
+  import { catchThePage } from '../owlosui/apps/log.js';
   import { run } from '../owlosui/owlosui.js';
+  catchThePage();
   import { CourseApp } from './course.js';
   run(document.getElementById('screen'), owl => {
     const app = new CourseApp(owl);

@@ -8,7 +8,9 @@ The course page, [`../course/`](../course/), is built on it: the editor
 with assembler colouring, the windows, and the DOS PC in the page (js-dos,
 GPL-2.0 — see `jsdos/NOTICE.md`).
 
-Only OWLOSUI's `lib/js` is here, never its examples, and it is not followed
+Only OWLOSUI's library is here - `lib/js` with its `apps/` (commander,
+documents, DOS PC, console, log), and in `dos/` the three `lib/dos` files the
+DOS PC's drive C: needs - never its examples, and it is not followed
 live: it is copied when we choose to, by [`../pull-owlosui.ps1`](../pull-owlosui.ps1),
 and [`VERSION.txt`](VERSION.txt) says which commit the copy came from. So
 this repository keeps working whatever OWLOSUI is doing, and GitHub Pages,

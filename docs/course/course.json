@@ -1,5 +1,11 @@
 {
     "playlist":  "PLYAv8-EdgIF8",
+    "disk":  {
+                 "url":  "disk.zip",
+                 "version":  "57B987254221",
+                 "files":  334,
+                 "bytes":  7649132
+             },
     "lessons":  [
                     {
                         "id":  "L01",
@@ -8,10 +14,6 @@
                         "title":  "The screen is memory",
                         "about":  "Two addresses - B800 for text, A000 for pixels - and why FAR exists",
                         "main":  "MEMORY.C",
-                        "files":  [
-
-                                  ],
-                        "engine":  false,
                         "buildable":  false,
                         "size":  4417,
                         "video":  "bi9Kjp8gQ8I",
@@ -24,10 +26,6 @@
                         "title":  "The file is the program",
                         "about":  "COM against EXE - one source line decides which file comes out",
                         "main":  "HELLO.ASM",
-                        "files":  [
-                                      "HELLO.ASM"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  724,
                         "video":  "G_GIAm2QHFk",
@@ -40,10 +38,6 @@
                         "title":  "The screen, one byte at a time",
                         "about":  "Mode 13h - a dot, lines and squares written straight into A000",
                         "main":  "PIXEL.ASM",
-                        "files":  [
-                                      "PIXEL.ASM"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  13264,
                         "video":  "2-bmdJWxBUM",
@@ -56,10 +50,6 @@
                         "title":  "The arithmetic underneath everything",
                         "about":  "A program cannot even show you a number until it can divide",
                         "main":  "MATH.ASM",
-                        "files":  [
-                                      "MATH.ASM"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  21155,
                         "video":  "l2u1JP2zqoE",
@@ -72,11 +62,6 @@
                         "title":  "Sixty-five numbers, and what they are for",
                         "about":  "A sine table, and a dozen instructions that unfold it",
                         "main":  "TURN.ASM",
-                        "files":  [
-                                      "TURN.ASM",
-                                      "SINT.INC"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  27267,
                         "video":  "mLUMi9wG0bU",
@@ -89,11 +74,6 @@
                         "title":  "A Ring With No Multiply In It (shift-and-add)",
                         "about":  "",
                         "main":  "PIVOT.ASM",
-                        "files":  [
-                                      "PIVOT.ASM",
-                                      "SINT.INC"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  17478,
                         "video":  "vebo-_sgv18",
@@ -106,12 +86,6 @@
                         "title":  "Ten clocks, and one formula",
                         "about":  "The radius vector - a length and an angle in, a point out",
                         "main":  "CLOCK.ASM",
-                        "files":  [
-                                      "CLOCK.ASM",
-                                      "SINT.INC",
-                                      "DRAW.INC"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  19993,
                         "video":  "alGTDwpsHFI",
@@ -124,11 +98,6 @@
                         "title":  "Memory is one line, the screen is not",
                         "about":  "Why a horizontal line is nearly free and a vertical one is not",
                         "main":  "LINE.ASM",
-                        "files":  [
-                                      "LINE.ASM",
-                                      "DRAW7.INC"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  15664,
                         "video":  "dVpH3NbW6d0",
@@ -141,11 +110,6 @@
                         "title":  "The program that rewrites itself",
                         "about":  "Slanted lines - and JIT by its old name: rewrite the ADD, drop the questions",
                         "main":  "SLANT.ASM",
-                        "files":  [
-                                      "SLANT.ASM",
-                                      "DRAW8.INC"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  29342,
                         "video":  "OCKsV-xFkZw",
@@ -158,11 +122,6 @@
                         "title":  "Self-modifying code",
                         "about":  "The titles\u0027 program run for real: patched live, the word on the glass",
                         "main":  "SMC.ASM",
-                        "files":  [
-                                      "SMC.ASM",
-                                      "DRAW9.INC"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  17781,
                         "video":  "AH9QQLRfbmY",
@@ -175,12 +134,6 @@
                         "title":  "The square that is not there",
                         "about":  "Four radius vectors become vertices, edges, a turning wireframe - and the three transformations",
                         "main":  "SQUARE.ASM",
-                        "files":  [
-                                      "SQUARE.ASM",
-                                      "SINTAB.INC",
-                                      "DRAW10.INC"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  21809,
                         "video":  "o2dWVRA_34w",
@@ -193,11 +146,6 @@
                         "title":  "The keyboard is a computer",
                         "about":  "Scan codes at port 60h, the BIOS pair and its 16-cell buffer, the DOS line - and a square driving on our own INT 9",
                         "main":  "KEYS.ASM",
-                        "files":  [
-                                      "KEYS.ASM",
-                                      "DRAW11.INC"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  19310,
                         "video":  "re79gf-iXZU",
@@ -210,12 +158,6 @@
                         "title":  "The triangle that turns the sky",
                         "about":  "Sin and cos out of the school triangle, the rotation matrix out of two anchor arrows - and a solar system out of one routine",
                         "main":  "ORBITS.ASM",
-                        "files":  [
-                                      "ORBITS.ASM",
-                                      "SINTAB.INC",
-                                      "DRAW12.INC"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  21595,
                         "video":  "r4Q3AOGO12A",
@@ -228,12 +170,6 @@
                         "title":  "The arm that adds up",
                         "about":  "A robot arm in one table: every link inherits its parent\u0027s place AND its turn, and because every joint turns about the same axis the angles simply ADD",
                         "main":  "ARM.ASM",
-                        "files":  [
-                                      "ARM.ASM",
-                                      "SINTAB.INC",
-                                      "DRAW13.INC"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  52250,
                         "video":  "7zeXgvwWWNw",
@@ -246,12 +182,6 @@
                         "title":  "The first cube",
                         "about":  "Eight corners measured from the cube\u0027s own centre and twelve pairs saying which to join - a model is a list of vectors and a list of joins, and moving it is transforming the vectors",
                         "main":  "CUBE.ASM",
-                        "files":  [
-                                      "CUBE.ASM",
-                                      "SINTAB.INC",
-                                      "DRAW14.INC"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  30891,
                         "video":  "dg58XkBBf4g",
@@ -264,13 +194,6 @@
                         "title":  "Perspective is one divide",
                         "about":  "Two similar triangles make x\u0027 = x*d/z - lesson 0E\u0027s cube with one IDIV per coordinate, then the same without the divide through a table of d/z, and the near plane as the difference between a table that lies and a divide that traps",
                         "main":  "PERSP.ASM",
-                        "files":  [
-                                      "PERSP.ASM",
-                                      "SINTAB.INC",
-                                      "RECIP.INC",
-                                      "DRAW15.INC"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  37155,
                         "video":  "KFMzcN5s6Wg",
@@ -283,13 +206,6 @@
                         "title":  "Move the camera, or move the world",
                         "about":  "The view matrix and the projection matrix, by their classical names - and the discovery that a picture cannot tell you whether the cube moved or the camera did, because only where the eye is RELATIVE to the cube decides it",
                         "main":  "CAM.ASM",
-                        "files":  [
-                                      "CAM.ASM",
-                                      "SINTAB.INC",
-                                      "RECIP.INC",
-                                      "DRAW16.INC"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  40565,
                         "video":  "9A4hX6_eqns",
@@ -302,10 +218,6 @@
                         "title":  "Diamond-Square: a landscape out of random numbers",
                         "about":  "A game ships a recipe, not a world. One multiply and one add make a random number; four adds and two shifts turn four of them into a 64x64 island, on a torus, in integers - watched one step at a time, then minted fresh on every keypress",
                         "main":  "TERRAIN.ASM",
-                        "files":  [
-                                      "TERRAIN.ASM"
-                                  ],
-                        "engine":  false,
                         "buildable":  true,
                         "size":  49653,
                         "video":  "ht7Y--vCT_c",
@@ -318,10 +230,6 @@
                         "title":  "The Notebook - from a right triangle to a 3D camera, with a pencil (no assembly)",
                         "about":  "",
                         "main":  null,
-                        "files":  [
-
-                                  ],
-                        "engine":  false,
                         "buildable":  false,
                         "size":  0,
                         "video":  "5T7SJsfj8pc",
@@ -334,10 +242,6 @@
                         "title":  "Clipping: a wall in front of your eye, and a frame around the glass",
                         "about":  "A point behind your eye has no image, and the machine will hand you a number anyway. Flight over a flat lattice painted by a Diamond-Square island, on the modules OWL FLY is built from: the near-plane cut of an edge, the screen clip of a line, the divide fault caught and counted - and one byte that flips the engine between the game\u0027s classic arithmetic and the lessons\u0027 way, with the frame rate on the glass",
                         "main":  "CLIP.ASM",
-                        "files":  [
-                                      "CLIP.ASM"
-                                  ],
-                        "engine":  true,
                         "buildable":  true,
                         "size":  61482,
                         "video":  "3ORV2DEfTpI",
@@ -350,10 +254,6 @@
                         "title":  "Flight: the physics WIRE CITY actually flies on",
                         "about":  "The aeroplane stops waiting for you. Four rules out of the game - it always moves forward, the arrows turn it, the turn banks it, and the bank is a rotation the engine was already doing for nothing - plus its own keyboard interrupt, so a held key is a fact and not an event",
                         "main":  "FLY.ASM",
-                        "files":  [
-                                      "FLY.ASM"
-                                  ],
-                        "engine":  true,
                         "buildable":  true,
                         "size":  76355,
                         "video":  "trGxGJ9T_xs",
@@ -366,10 +266,6 @@
                         "title":  "The ground stops being flat: relief, and what is behind a hill",
                         "about":  "Every node of the lattice takes its height from the island - and one shift doubles it, because 1024 units between nodes against 1110 at the highest point is why it looked flat. Then hidden lines in 320 bytes, one a screen column, drawn from the eye outwards. Measured, hiding is FASTER than a plain line; the frames it costs went on leaving lesson 8\u0027s patched one behind",
                         "main":  "RELIEF.ASM",
-                        "files":  [
-                                      "RELIEF.ASM"
-                                  ],
-                        "engine":  true,
                         "buildable":  true,
                         "size":  101545,
                         "video":  "VcVytWCQ5dw",
@@ -382,10 +278,6 @@
                         "title":  "The ground becomes a surface: the painter, the first crash, and a word that overflows",
                         "about":  "Every square of the lattice is filled now, painted far to near so each one covers what was behind it - the painter\u0027s algorithm, which is lesson 15\u0027s table read backwards. The skyline array and five line routines are gone. A filled hillside ends the flight. Twice the view distance overflowed a 16-bit word when the square block turned 45 degrees, so the view became a circle. Then three speed-ups, each measured: 19 to 27 frames, and one of them bought almost nothing",
                         "main":  "FILL.ASM",
-                        "files":  [
-                                      "FILL.ASM"
-                                  ],
-                        "engine":  true,
                         "buildable":  true,
                         "size":  114584,
                         "video":  "vUmCzxGhyxQ",
@@ -398,10 +290,6 @@
                         "title":  "A town on the ground: houses, a byte of fraction, windows that grow, and night",
                         "about":  "Blocks of sixteen houses stand on the flat squares of the island, placed by a hash so the town plan costs no memory. Each house shows only the walls that face you, decided by four comparisons in the world. Everything but the island is halved, because the island is exactly one 16-bit word wide - and the position gains a byte of fraction, carried in with ADC. Windows are drawn exactly as big as they are on the screen, so a far one is a lit pixel that grows. N is night, and night is nothing but the palette",
                         "main":  "HOUSES.ASM",
-                        "files":  [
-                                      "HOUSES.ASM"
-                                  ],
-                        "engine":  true,
                         "buildable":  true,
                         "size":  188338,
                         "video":  "uro4Zu2EWps",
