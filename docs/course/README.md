@@ -147,6 +147,43 @@ DOS commander's letters were hard to read.)
 - **A file of any size opens in the editor** (OWLOSUI sends text in parts):
   HOUSES.ASM, 188 KB, opens, edits at its last line and saves byte-exact.
 
+## The tour - a video that presents the page
+
+`?tour=NAME` makes the page play a script of its own features (`tour.js`),
+for a presentation video - not a lesson. The script is a lecture-rig script,
+`C:\DOSFiles\lecture-rig\scripts\W02-course.txt`: its `say` lines are the
+narration, rendered by the rig as every lesson's is; its browser actions are
+comments, `;@ action args`, which the rig skips and the page runs (the list
+is in `tour.js`'s header). To take it:
+
+```
+Director.exe --render W02-course --voice=kokoro       (in lecture-rig)
+copy scripts\W02-course.txt and voice\W02-course\ into docs\course\tour\
+http://localhost:8770/course/?tour=W02-course - start OBS, click the page once
+```
+
+`docs/course/tour/` is in `.gitignore`: a take's files, not the site's.
+W02 (43 says, narration 4 min 54 s, the take about 6 min 20 s; run end to
+end three times 2026-10-04): the list, lesson 2 opened, its text changed
+with the cursor while the whole file stays on screen, rebuilt, the editor's
+File menu, the commander walked to `GAMES\OWLFLY3\SRC`, OWL FLY III built
+by its MAKE.BAT and started at `auto` with its sound off (menu 3 - the
+narration says why), DOS > Settings > CPU set to fixed 30000, taken off;
+lesson 12's arms turned yellow (`VECC` 10 -> 14), the file shown on A: with
+its save time, persistence and Reset explained; lesson 17's houses doubled
+(`FLOORH` 32 -> 64) and its town reach widened (`HFULL`/`HMAX` 5120/6144).
+
+`?tour=NAME&tourshots` checks a take without watching it: the page shoots
+the DOS picture every 3 s and lays the shots out, numbered by say, when the
+tour ends. Measured on the way: `auto` is 3000 cycles/ms for a real-mode
+program; `max` starves js-dos here (the tour waited 3 minutes for a
+picture), so the tour sets `fixed`. OWL FLY III opens in its WATCHING seat
+("HOLDING, PRESS ENTER TO JOIN"), lit like flight - `fly` presses one more
+Enter to take a jet, which starts on the concrete with the brakes set:
+`doskeys b`, `hold w 3000`, `hold a 7000` take off. Lesson 17's island is
+seeded from the BIOS clock, so every run is a new island: a before/after
+shows the same CODE, never the same place.
+
 ## Testing it as an agent
 
 - **A hidden browser pane freezes js-dos** (and throttles the page's

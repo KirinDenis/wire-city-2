@@ -30,13 +30,16 @@
 //   waitbuild                until the Build strip shows FASM's last line
 //   waitlog REGEX            until a log line matches (a game's MAKE.BAT)
 //   doskeys K...             keys to DOS: enter esc space f10 ... (js-dos codes)
+//   hold K+K MS              keys held down together in DOS: hold w+a 3000 (throttle and burner)
+//   menus K...               keys to a DOS program's menus, one each: waits for the menu, checks it changed, presses again if not
 //   grab | release           the keyboard to DOS, or back
-//   commander                Tools > Commander
+//   commander                Tools > Commander; closecommander closes both its panels
 //   cmdto NAME               Down in the commander's panel until NAME is under the cursor
 //   settings PAGE            DOS > Settings on page PAGE (0 Machine, 1 CPU...)
 //   click X Y                a click in the front window, X Y inside it, in cells
 //   cmd N                    a command by number
 //   game KEY                 a game from the DOS menu (owlfly, owlfly2, owlfly3)
+//   fly [S]                  Enter through OWL FLY's front screens into the cockpit (S seconds at most, 60)
 //   fresh Lnn                that lesson's files on A: as the course ships them
 //   speed auto|max           the DOS PC's speed, quietly - every take starts the same
 
@@ -51,6 +54,8 @@ const ALIASES = {
   esc: 'Escape', escape: 'Escape', pgdn: 'PageDown', pgup: 'PageUp', del: 'Delete', bs: 'Backspace', tab: 'Tab',
 };
 const DOSKEYS = { ...KEYS, space: 32, y: 89, n: 78, '1': 49, '2': 50, '3': 51, '6': 54, up: 265, down: 264, left: 263, right: 262 };
+/** A script's DOS key name as js-dos's code: a letter is its capital's ASCII. */
+const dosCode = k => DOSKEYS[k.toLowerCase()] ?? k.toUpperCase().charCodeAt(0);
 
 /** The script: [{ say, actions: [[name, args]] }], and the actions before the first say. */
 export function parse(text) {
@@ -80,7 +85,20 @@ export class Tour {
     log.info('tour', `${this.name}: ${this.script.steps.length} says`);
     await this.clickToStart();
     for (const a of this.script.before) await this.act(a);
+    // ?tourshots: a contact sheet of the DOS picture every 3 s, shown at the
+    // end - to check a whole take without watching it.
+    const sheet = new URLSearchParams(location.search).has('tourshots') ? [] : null;
+    let saying = 0;
+    const shooter = sheet && setInterval(async () => {
+      const im = await this.app.dos.box.ci?.screenshot().catch(() => null);
+      if (!im) return;
+      const c = document.createElement('canvas');
+      c.width = im.width; c.height = im.height;
+      c.getContext('2d').putImageData(im, 0, 0);
+      sheet.push({ say: saying, url: c.toDataURL('image/jpeg', 0.6) });
+    }, 3000);
     for (const [i, step] of this.script.steps.entries()) {
+      saying = i + 1;
       log.info('tour', `say ${i + 1}: ${step.say.slice(0, 70)}`);
       const spoken = this.speak(i);
       for (const a of step.actions) await this.act(a);
@@ -88,6 +106,20 @@ export class Tour {
       await sleep(350);
     }
     log.info('tour', 'the end');
+    if (sheet) { clearInterval(shooter); this.showSheet(sheet); }
+  }
+
+  showSheet(sheet) {
+    const d = document.createElement('div');
+    d.id = 'tour-sheet';
+    d.style.cssText = 'position:fixed;inset:0;z-index:30;overflow:auto;background:#111;display:flex;flex-wrap:wrap;gap:2px;align-content:flex-start';
+    for (const s of sheet) {
+      const f = document.createElement('figure');
+      f.style.cssText = 'margin:0;width:156px;color:#ff0;font:10px monospace;position:relative';
+      f.innerHTML = `<img src="${s.url}" style="width:156px;height:98px;display:block"><span style="position:absolute;left:2px;top:0;background:#000">${s.say}</span>`;
+      d.append(f);
+    }
+    document.body.append(d);
   }
 
   /** A browser plays sound only after a click: the take starts on one. */
@@ -126,9 +158,46 @@ export class Tour {
   }
 
   async keys(list, pace = 140) {
+    // A build F9 starts is the one `waitbuild` waits for: counted before the key.
+    if (/\bF9\b/i.test(list)) this.buildMark = this.app.buildsStarted ?? 0;
     for (const k of list.split(/\s+/).filter(Boolean)) {
       const [spec, times] = k.split('*');
-      for (let n = 0; n < (Number(times) || 1); n++) { this.key(spec); await sleep(pace); }
+      const n = Number(times) || 1;
+      // A long run of one key - forty lines down - goes quicker, as a held key does.
+      for (let i = 0; i < n; i++) { this.key(spec); await sleep(n > 10 ? 45 : pace); }
+    }
+  }
+
+  /** A cheap fingerprint of DOS's picture, to see that a key did something. */
+  async screenPrint() {
+    const im = await this.app.dos.box.ci?.screenshot().catch(() => null);
+    if (!im) return 0;
+    let h = 0;
+    for (let p = 0; p < im.data.length; p += 97) h = (h * 31 + im.data[p]) | 0;
+    return h;
+  }
+
+  /**
+   * Keys to a DOS program's menus, one menu each: wait for the menu to stand
+   * still, press, and see the picture change - a key pressed before the
+   * program reads it is lost, so one that changed nothing is pressed again.
+   */
+  async menus(list) {
+    for (const k of list.split(/\s+/).filter(Boolean)) {
+      let before = await this.screenPrint();
+      for (let t = 0; t < 4000; t += 600) {            // still for a moment: the menu is up
+        await sleep(600);
+        const now = await this.screenPrint();
+        if (now === before) break;
+        before = now;
+      }
+      for (let tries = 0; tries < 3; tries++) {
+        await this.dosKeys(k);
+        let changed = false;
+        for (let t = 0; t < 6000 && !changed; t += 500) { await sleep(500); changed = (await this.screenPrint()) !== before; }
+        if (changed) break;
+        log.info('tour', `${k} changed nothing: again`);
+      }
     }
   }
 
@@ -143,9 +212,21 @@ export class Tour {
     const ci = this.app.dos.box.ci;
     if (!ci) return;
     for (const k of list.split(/\s+/).filter(Boolean)) {
-      const code = DOSKEYS[k.toLowerCase()] ?? k.toUpperCase().charCodeAt(0);
+      const code = dosCode(k);
       ci.sendKeyEvent(code, true); await sleep(120); ci.sendKeyEvent(code, false); await sleep(250);
     }
+  }
+
+  /** Keys held down together in DOS for a while - a throttle, a stick: `w+a 3000`. */
+  async hold(args) {
+    const ci = this.app.dos.box.ci;
+    const [list, ms] = args.split(/\s+/);
+    if (!ci || !list) return;
+    const codes = list.split('+').map(dosCode);
+    for (const c of codes) ci.sendKeyEvent(c, true);
+    await sleep(Number(ms) || 1000);
+    for (const c of codes) ci.sendKeyEvent(c, false);
+    await sleep(150);
   }
 
   async until(test, ms = 90000, what = 'it') {
@@ -179,8 +260,12 @@ export class Tour {
           break;
         }
         case 'waitbuild': {
-          const from = app.lastBuildShown ?? '';
-          await this.until(() => app.lastBuildShown !== from && /bytes\.|error|crashed/i.test(app.lastBuildShown ?? ''), 90000, 'the build');
+          // FASM's answer to a build that started after the key: counted, not
+          // read - a rebuild can answer in the very words of the last one (a
+          // colour changes no size), and the Build strip may still show it.
+          const started = this.buildMark ?? app.buildsStarted ?? 0;
+          this.buildMark = undefined;
+          await this.until(() => (app.buildsStarted ?? 0) > started && (app.buildsAnswered ?? 0) > started, 90000, 'the build');
           break;
         }
         case 'waitlog': {
@@ -189,12 +274,21 @@ export class Tour {
           break;
         }
         case 'doskeys': await this.dosKeys(args); break;
+        case 'hold': await this.hold(args); break;
+        case 'menus': await this.menus(args); break;
         case 'grab': app.dos.box.grab(); break;
         case 'release': app.dos.box.release(); break;
         case 'commander': app.onCommand(6); break;
+        case 'closecommander':
+          for (const s of [app.commander.left, app.commander.right]) if (s?.win) app.commander.closeWindow(s.win);
+          owl.refresh?.();
+          break;
         case 'cmdto': {
           const want = args.trim().toUpperCase();
           const side = [app.commander.left, app.commander.right].find(s => s && s.win === owl.active()) ?? app.commander.left;
+          // From the top, as a person who knows where the name is: `..`
+          // is first, and Down alone would never come back to it.
+          if ((owl.markedNames(side.files)[0] ?? '').toUpperCase() !== want) { this.key('Home'); await sleep(150); }
           for (let n = 0; n < 80; n++) {
             const [here] = owl.markedNames(side.files);
             if ((here ?? '').toUpperCase() === want) break;
@@ -211,6 +305,37 @@ export class Tour {
           break;
         }
         case 'cmd': app.onCommand(Number(args)); break;
+        case 'fly': {
+          // OWL FLY's front screens - video system, detail, sound, title -
+          // take an Enter each, but a key sent before the game reads it is
+          // lost, and on a slow DOS PC the game takes long to get there. So
+          // Enter, every two seconds, until the picture is the cockpit:
+          // 320x200 and most of it lit. The title is 320x200 too, and
+          // moves, but it is drawn on black.
+          //
+          // OWL FLY III opens in the WATCHING seat - "HOLDING, PRESS ENTER
+          // TO JOIN", the world lit and turning - and only sometimes does an
+          // early Enter join it straight away. So one more Enter at the end,
+          // always: from the watching seat it takes a jet, in a jet it is
+          // the lock key and harmless. Either way: the cockpit, on the
+          // concrete, brakes on (B, W, A take off).
+          const box = app.dos.box;
+          const limit = Date.now() + (Number(args) || 60) * 1000;
+          while (Date.now() < limit) {
+            await sleep(2000);
+            const im = box.frameSize?.w === 320 ? await box.ci?.screenshot().catch(() => null) : null;
+            let lit = 0;
+            if (im) for (let p = 0; p < im.data.length; p += 16) if (im.data[p] + im.data[p + 1] + im.data[p + 2] > 60) lit++;
+            if (im && lit / (im.data.length / 16) > 0.4) {
+              await sleep(1500);
+              await this.dosKeys('enter');
+              log.info('tour', 'in the cockpit');
+              break;
+            }
+            await this.dosKeys('enter');
+          }
+          break;
+        }
         // Every take starts the same: a lesson's files as shipped, the DOS
         // PC's speed as a first visit has it. Neither shows on the screen.
         case 'fresh': {

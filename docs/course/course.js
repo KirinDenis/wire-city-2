@@ -175,12 +175,39 @@ async function leaveIsolation() {
   }
 }
 
+/**
+ * NOTHING ON DRIVE A: IS DELETED BECAUSE DOS SEEMS TO HAVE LOST IT.
+ *
+ * OWLOSUI's DriveGates keeps the floppy folders and DOS in step both ways,
+ * and a file it knew of that DOS no longer shows it takes for deleted by DOS,
+ * and removes from this browser's storage. On 2026-10-04 that removed 328 of
+ * the course disk's 334 files - everything but the lesson the page had just
+ * written - after the page wrote to A: while OWL FLY III had been running a
+ * long while: DOS was shown a folder it did not have whole, and the storage
+ * followed it. A: holds the student's work. So a removal that comes from
+ * that mirroring (storage.hush) is refused under A: and said in the log; the
+ * page's own removals (a stale BUILD.TXT) still happen. The price: a file
+ * DEL'd inside DOS comes back at the next switch-on. The fix belongs in
+ * OWLOSUI's DriveGates; this guard stays until it is there.
+ */
+function guardTheDisk(storage) {
+  const remove = storage.remove.bind(storage);
+  storage.remove = path => {
+    if (storage.quiet > 0 && path.startsWith(A)) {
+      log.warn('files', `kept ${path}: the DOS PC no longer shows it, but nothing on A: is deleted that way`);
+      return Promise.resolve();
+    }
+    return remove(path);
+  };
+}
+
 export class CourseApp {
   constructor(owl) {
     this.owl = owl;
     watchWindows(owl);
     courseSettings();
     this.browser = new BrowserStorage();
+    guardTheDisk(this.browser);
     // Files in editors: New, Open, Save, Save as - placed where the layout
     // puts the source.
     this.documents = new Documents(owl, {
@@ -680,7 +707,10 @@ export class CourseApp {
       this.buildText = owl.staticText(this.buildWin, 1, 1, '', r.w - 4, r.h - 3);
     }
     owl.setText(this.buildText, text);
-    this.lastBuildShown = text;          // what the tour waits on (tour.js, waitbuild)
+    // For the tour (tour.js, waitbuild): builds started, and the last one answered.
+    this.lastBuildShown = text;
+    if (/^Assembling/.test(text)) this.buildsStarted = (this.buildsStarted ?? 0) + 1;
+    else if (/bytes\.|error|crashed/i.test(text)) this.buildsAnswered = this.buildsStarted ?? 0;
     owl.refresh?.();
   }
 
