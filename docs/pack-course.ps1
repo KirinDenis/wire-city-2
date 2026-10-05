@@ -65,6 +65,14 @@ $picked += Get-Item (Join-Path $root "TOOLS\FASM\FASM.EXE"), (Join-Path $root "T
 $picked += Pick "ENGINE" '\.INC$'
 foreach ($d in Get-ChildItem (Join-Path $root "LESSONS") -Directory | Where-Object { $_.Name -match '^L\d\d$' }) {
   $picked += Pick "LESSONS\$($d.Name)" $TEXT          # the lesson's own folder, not its WEB\ copies
+  # ...and its notebook, when the notebook carries its own BGI driver (lesson
+  # 18 on). The older ones load EGAVGA.BGI from D:\BGI, which the course disk
+  # does not have, so shipping them would only ship an error message.
+  $deck = Join-Path $d.FullName "INFOGR.PAS"
+  if ((Test-Path $deck) -and (Select-String -Path $deck -Pattern 'RegisterBGIdriver' -Quiet) -and
+      (Test-Path (Join-Path $d.FullName "INFOGR.EXE"))) {
+    $picked += Get-Item (Join-Path $d.FullName "INFOGR.EXE")
+  }
 }
 $picked += Pick "EXAMPLES" $TEXT
 foreach ($g in "OWLFLY", "OWLFLY2", "OWLFLY3") {

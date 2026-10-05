@@ -1,0 +1,7 @@
+.title  The forces: a throttle, the air, and Newton - flight physics on the BIOS clock
+.what   The aeroplane gets a speed. OWL FLY III's flight model, step by step: thin air, an engine that breathes it, drag, Newton's a = F/m with the fuel in the mass, a turn that costs speed, a climb paid for out of speed, the stall, and the wind. The physics runs on the 18.2 Hz timer tick and not on the frame, so the speed is the same over a town as over a field. Throttle, speed, height and heading are printed in the PC's own font - and where the model is deliberately not honest physics, the source says so
+.tier   LESSON
+.main   FORCES.ASM
+.build  FASM FORCES.ASM FORCES.COM
+.run    FORCES.COM
+.uses   SBB ADC MUL IMUL DIV IDIV SHL SHR SAR CBW LOOP JCXZ

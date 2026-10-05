@@ -190,6 +190,27 @@ async function leaveIsolation() {
  * DEL'd inside DOS comes back at the next switch-on. The fix belongs in
  * OWLOSUI's DriveGates; this guard stays until it is there.
  */
+/**
+ * DOS's picture STRETCHED in a big window. The course keeps OWLOSUI's 'sharp'
+ * picture - whole multiples of DOS's pixels, so text stays exact - and sizes
+ * the DOS window to a whole multiple too. But zoomed to the whole screen, a
+ * lesson's notebook (640 by 480) fits once: a postcard in a black field (the
+ * pilot, 2026-10-05). So when the whole multiple would leave more than half
+ * the window black, the picture fills it instead, at the frame's own shape.
+ * The library's box is left as it is; only this instance's sum is wrapped.
+ */
+function stretchWhenBig(box, big = () => false) {
+  const sharp = box.pictureRect.bind(box);
+  box.pictureRect = area => {
+    const s = sharp(area);
+    if (box.picture !== 'sharp') return s;
+    if (!big() && s.w * s.h >= area.w * area.h / 2) return s;
+    const { w: fw, h: fh } = box.frameSize;
+    const f = Math.min(area.w / fw, area.h / fh);
+    return { x: area.x + (area.w - fw * f) / 2, y: area.y + (area.h - fh * f) / 2, w: fw * f, h: fh * f };
+  };
+}
+
 function guardTheDisk(storage) {
   const remove = storage.remove.bind(storage);
   storage.remove = path => {
@@ -254,6 +275,7 @@ export class CourseApp {
       },
     });
     this.dos.box.on(what => { if (what === 'crashed') this.showBuild(CRASHED); });
+    stretchWhenBig(this.dos.box, () => this.dosBig);
     this.console = new ConsoleWindow(owl, { state: async () => this.state() });
     this.course = null;
     this.lesson = null;
@@ -378,8 +400,40 @@ export class CourseApp {
   /** The DOS PC's window where the layout puts it; moved only by opening it again, so only when it is elsewhere. */
   placeDos() {
     const r = this.layout().dos;
+    this.dosBig = false;
     const p = this.dos.win ? this.owl.place(this.dos.win) : null;
     if (!p || p.x !== r.x + 1 || p.y !== r.y + 1 || p.w !== r.w - 2 || p.h !== r.h - 2) this.dos.openWindow(r);
+  }
+
+  /**
+   * F5 on the DOS PC: as big as the screen allows AT THE PICTURE'S OWN
+   * SHAPE, centred, and the picture stretched to fill it - and F5 again puts
+   * it back in the layout. A plain zoom made the window the whole desktop,
+   * two and a fifth to one, and a 320 by 200 game or a 640 by 480 notebook
+   * sat in it between two black fields (the pilot chose this, 2026-10-05).
+   * The shape is the frame's when F5 is pressed: a mode change later keeps
+   * the window and fits the new frame into it.
+   */
+  zoomDos() {
+    const owl = this.owl, box = this.dos.box;
+    if (this.dosBig) {
+      this.placeDos();
+    } else {
+      const W = owl.width, H = owl.height;
+      const { cellW = 10, cellH = 22 } = owl.screen ?? {};
+      const { w: fw, h: fh } = box.frameSize;
+      let ih = H - 2 - 2;                                // the desktop's rows, less the frame
+      let iw = Math.round((ih * cellH * fw) / fh / cellW);
+      if (iw > W - 2) {                                  // a tall, narrow screen: fit the width instead
+        iw = W - 2;
+        ih = Math.round((iw * cellW * fh) / fw / cellH);
+      }
+      this.dos.openWindow({ x: Math.floor((W - iw - 2) / 2), y: 1, w: iw + 2, h: ih + 2 });
+      this.dosBig = true;
+    }
+    box.win = this.dos.win;                              // the picture follows the window it now lies over
+    this.dos.retitle?.();                                // ...and its title says what runs, again
+    box.layout();
   }
 
 
@@ -820,7 +874,12 @@ export class CourseApp {
       case Cm.Console: this.console.show(); return true;
       case Cm.Next: owl.nextWindow(); return true;
       case Cm.Previous: owl.previousWindow(); return true;
-      case Cm.Zoom: { const a = owl.active(); if (a) owl.zoom(a); return true; }
+      case Cm.Zoom: {
+        const a = owl.active();
+        if (a && a === this.dos.win && this.dos.box.running) this.zoomDos();
+        else if (a) owl.zoom(a);
+        return true;
+      }
       case Cm.Minimize: { const a = owl.active(); if (a) owl.minimize(a); return true; }
       case Cm.Close: this.closeActive(); return true;
       case Cm.Cascade: owl.cascade(); return true;

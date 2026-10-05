@@ -173,6 +173,17 @@ lesson 12's arms turned yellow (`VECC` 10 -> 14), the file shown on A: with
 its save time, persistence and Reset explained; lesson 17's houses doubled
 (`FLOORH` 32 -> 64) and its town reach widened (`HFULL`/`HMAX` 5120/6144).
 
+**Lessons are taken this way too, from lesson 18 (L24-forces).** The script
+opens the lesson (`lesson L24`), waits for its build, runs its notebook from
+the course disk (`run L24 INFOGR.EXE` - the first notebook with its BGI
+driver linked in), zooms the DOS window (`cmd 31`), reads the source with
+`find`, builds with F9 and flies with `hold`. Live physics is timed by the
+picture, not the clock: `waitred` / `waitnored` wait for the program's red
+STALL warning to come and go. An action belongs to the say ABOVE it and
+runs when that say starts - written above the say it meant, every action of
+three chapters ran one say early in the first take. A watchdog resumes
+js-dos when its cycle count stands still on a visible page.
+
 `?tour=NAME&tourshots` checks a take without watching it: the page shoots
 the DOS picture every 3 s and lays the shots out, numbered by say, when the
 tour ends. Measured on the way: `auto` is 3000 cycles/ms for a real-mode

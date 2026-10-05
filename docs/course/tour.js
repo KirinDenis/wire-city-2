@@ -38,7 +38,11 @@
 //   settings PAGE            DOS > Settings on page PAGE (0 Machine, 1 CPU...)
 //   click X Y                a click in the front window, X Y inside it, in cells
 //   cmd N                    a command by number
-//   game KEY                 a game from the DOS menu (owlfly, owlfly2, owlfly3)
+//   waitred X0 Y0 X1 Y1 [S]  until red shows in that box of the DOS picture (a STALL warning), S seconds at most
+//   waitnored X0 Y0 X1 Y1 [S] until it is gone again
+//   lesson Lnn              open that lesson as the list does (it builds; `waitbuild` waits for it)
+//   run Lnn NAME            a program in that lesson's folder on A:, as Enter in the commander runs it
+//   game KEY                a game from the DOS menu (owlfly, owlfly2, owlfly3)
 //   fly [S]                  Enter through OWL FLY's front screens into the cockpit (S seconds at most, 60)
 //   fresh Lnn                that lesson's files on A: as the course ships them
 //   speed auto|max           the DOS PC's speed, quietly - every take starts the same
@@ -76,6 +80,8 @@ export class Tour {
     this.owl = app.owl;
     this.name = name;
     this.base = new URL(`tour/${name}`, import.meta.url);
+    // read now: opening a lesson rewrites the address, ?tourshots and all
+    this.shots = new URLSearchParams(location.search).has('tourshots');
   }
 
   async start() {
@@ -87,7 +93,21 @@ export class Tour {
     for (const a of this.script.before) await this.act(a);
     // ?tourshots: a contact sheet of the DOS picture every 3 s, shown at the
     // end - to check a whole take without watching it.
-    const sheet = new URLSearchParams(location.search).has('tourshots') ? [] : null;
+    // A WATCHDOG ON THE EMULATOR. js-dos sometimes stands still on its own -
+    // its cycle count stops while the page is plainly visible - and only
+    // ci.resume() starts it again (measured 2026-10-05: 4.3 million cycles
+    // for forty seconds, then 94 million three seconds after a resume). In a
+    // take that is a frozen picture under the narration, so: every 3 s, if
+    // the page is visible and the count has not moved, resume it.
+    let lastCycles = -1;
+    const watchdog = setInterval(async () => {
+      const ci = this.app.dos.box.ci;
+      if (!ci || document.hidden) { lastCycles = -1; return; }
+      const c = (await ci.asyncifyStats?.().catch(() => null))?.cycles ?? -1;
+      if (c >= 0 && c === lastCycles) { log.warn('tour', 'the DOS PC stood still: resumed'); ci.resume(); }
+      lastCycles = c;
+    }, 3000);
+    const sheet = this.shots ? [] : null;
     let saying = 0;
     const shooter = sheet && setInterval(async () => {
       const im = await this.app.dos.box.ci?.screenshot().catch(() => null);
@@ -106,6 +126,7 @@ export class Tour {
       await sleep(350);
     }
     log.info('tour', 'the end');
+    clearInterval(watchdog);
     if (sheet) { clearInterval(shooter); this.showSheet(sheet); }
   }
 
@@ -346,6 +367,42 @@ export class Tour {
         case 'speed': {
           app.dos.settings = { ...app.dos.settings, cycles: args.trim() };
           try { localStorage.setItem(app.dos.settingsKey, JSON.stringify(app.dos.settings)); } catch { /* this visit only */ }
+          break;
+        }
+        case 'waitred':
+        case 'waitnored': {
+          // Until something RED is on the DOS picture inside a box - a
+          // program's own warning, like lesson 18's STALL. Live physics on a
+          // random island cannot be timed in milliseconds; the picture says
+          // when. Args: X0 Y0 X1 Y1 in the program's pixels, then seconds.
+          const [x0, y0, x1, y1, s] = args.trim().split(/\s+/).map(Number);
+          const limit = Date.now() + (s || 20) * 1000;
+          while (Date.now() < limit) {
+            const im = await app.dos.box.ci?.screenshot().catch(() => null);
+            let red = 0;
+            if (im) for (let y = y0; y < Math.min(y1, im.height); y++) for (let x = x0; x < Math.min(x1, im.width); x++) {
+              const p = (y * im.width + x) * 4;
+              if (im.data[p] > 150 && im.data[p + 1] < 90 && im.data[p + 2] < 90) red++;
+            }
+            if ((red > 4) === (name === 'waitred')) { log.info('tour', name === 'waitred' ? 'red on the screen' : 'the red is gone'); break; }
+            await sleep(250);
+          }
+          break;
+        }
+        case 'lesson': {
+          // A lesson opened the way the list opens it: source, video, build.
+          // The F9 counters are marked first, so a `waitbuild` after this
+          // waits for THIS build and not the last one.
+          const l = app.course.lessons.find(x => x.id === args.trim());
+          this.buildMark = app.buildsStarted ?? 0;
+          if (l) await app.openLesson(l);
+          break;
+        }
+        case 'run': {
+          // A program on the course disk, run as the commander's Enter runs
+          // it: a lesson's .COM or .EXE at the lessons' speed, then a key.
+          const [folder, file] = args.trim().split(/\s+/);
+          await app.runFile(app.browser, `/DOS A Drive/LESSONS/${folder}/`, file);
           break;
         }
         case 'game': {
