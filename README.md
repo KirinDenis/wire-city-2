@@ -129,6 +129,7 @@ mix them up.
 | **15 — the ground stops being flat** | Relief on the lattice, and hidden lines in 320 bytes, drawn from the eye outwards — measured, and hiding turned out *faster* than a plain line. | [▶ watch](https://www.youtube.com/watch?v=VcVytWCQ5dw) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=21) |
 | **16 — the ground becomes a surface** | Every square filled, painted far to near — the painter's algorithm. The first crash into a hillside, and a 16-bit word that overflowed when the view turned 45°. | [▶ watch](https://www.youtube.com/watch?v=vUmCzxGhyxQ) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=22) |
 | **17 — a town on the ground** | Houses placed by a hash, so the town plan costs no memory; a byte of fraction carried with `ADC`; windows as big as they really are; and night, which is nothing but the palette. | [▶ watch](https://www.youtube.com/watch?v=uro4Zu2EWps) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=23) |
+| **18 — the forces** | The aeroplane gets an engine: OWL FLY III's flight model — thin air, thrust, drag, `a = F/m` with the fuel in the mass, a climb paid for out of speed, the stall, the wind — run on the BIOS clock, not the frame; a byte of fraction for the speed with `ADC` and `SBB`; and the numbers on the screen in the PC's own font. | [▶ watch](https://www.youtube.com/watch?v=pTsIJ0mESn8) · [⌨ open it](https://kirindenis.github.io/wire-city-2/course/?l=24) |
 
 ## Reading
 
