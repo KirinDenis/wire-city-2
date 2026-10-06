@@ -12,7 +12,7 @@ const int HeaderSize = 30;
 const ushort RegSocket = 0x0002;
 const ulong Broadcast = 0xFFFFFFFFFFFF;
 
-var port = 1900;
+var port = 1900; //by default
 var portArgIndex = Array.IndexOf(args, "--port");
 if (portArgIndex >= 0 && portArgIndex + 1 < args.Length) port = int.Parse(args[portArgIndex + 1]);
 
