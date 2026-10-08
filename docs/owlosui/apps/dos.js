@@ -442,10 +442,11 @@ export class DosTool {
     const owl = this.owl;
     if (this.win) owl.close(this.win);
     this.win = owl.window('DOS', rect.w, rect.h, { x: rect.x, y: rect.y, closeCmd: DosCm.Close });
-    // What shows when the picture does not: while something is over the
-    // window, or before the machine is on.
-    owl.staticText(this.win, 2, 1, 'The DOS PC is switching on. Its picture is laid over this window, and taken away ' +
-      'while a menu or another window is over it - DOS keeps running. Bring this window to the front to see it again.', rect.w - 6, 6);
+    // What shows when the picture does not: before the machine is on, and
+    // after it is switched off. While it runs the window's inside is a
+    // hole the picture shows through (DosBox), over these words.
+    owl.staticText(this.win, 2, 1, 'The DOS PC is switching on. Its picture shows in this window; a menu or a window ' +
+      'over it hides only what it covers, and DOS keeps running. A click on the picture gives DOS the keyboard.', rect.w - 6, 6);
     // Right Ctrl, the one key worth saying; a click on the picture is how
     // the keyboard goes to DOS.
     owl.windowStatus(this.win, { label: '~Right Ctrl~ Keys back', cmd: 0 });

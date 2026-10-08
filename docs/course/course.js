@@ -431,9 +431,12 @@ export class CourseApp {
       this.dos.openWindow({ x: Math.floor((W - iw - 2) / 2), y: 1, w: iw + 2, h: ih + 2 });
       this.dosBig = true;
     }
-    box.win = this.dos.win;                              // the picture follows the window it now lies over
+    box.win = this.dos.win;                              // the picture follows the window it now lies under,
+    if (box.running) box.hole = owl.hole(box.win);       //  and is seen through a hole of THIS window: the
+                                                         //  old one went with the window it was cut in
     this.dos.retitle?.();                                // ...and its title says what runs, again
     box.layout();
+    owl.refresh?.();                                     // the canvas redrawn with the hole in it
   }
 
 

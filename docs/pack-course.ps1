@@ -153,4 +153,30 @@ $json = [ordered]@{
 [IO.File]::WriteAllText((Join-Path $course "course.json"), $json)
 $old = Join-Path $course "files"
 if (Test-Path $old) { Remove-Item -Recurse -Force $old }      # the per-file copies this replaced
+
+# ---- docs/llms.txt: the list of lessons, for a student's AI ---------------
+# The rest of llms.txt is written by hand; only the block between the two
+# markers is rewritten here, from the same rows as course.json, so the file a
+# language model reads never lags behind the course.
+$llms = Join-Path $PSScriptRoot "llms.txt"
+if (Test-Path $llms) {
+  $raw = 'https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS'
+  $page = 'https://kirindenis.github.io/wire-city-2/course/?l='
+  $rows = foreach ($l in $lessons) {
+    $n = $l.id.Substring(1).TrimStart('0').ToLower()
+    $lect = if ($l.lecture) { "lecture $($l.lecture)" } else { 'no video yet' }
+    $line = "- **$($l.id)** ($lect) - $($l.title). Open: $page$n"
+    if ($l.main) { $line += " - source: $raw/$($l.folder)/$($l.main)" }
+    if ($l.video) { $line += " - video: https://www.youtube.com/watch?v=$($l.video)" }
+    $line
+  }
+  $text = [IO.File]::ReadAllText($llms)
+  $begin = '<!-- LESSONS BEGIN'; $end = '<!-- LESSONS END -->'
+  $i = $text.IndexOf($begin); $j = $text.IndexOf($end)
+  if ($i -ge 0 -and $j -gt $i) {
+    $head = $text.Substring(0, $text.IndexOf("`n", $i) + 1)       # the BEGIN line itself is kept
+    $text = $head + (($rows -join "`n") + "`n") + $text.Substring($j)
+    [IO.File]::WriteAllText($llms, $text)
+  }
+}
 "$($lessons.Count) lessons; disk.zip ${hash}: $($picked.Count) files, $bytes bytes ($((Get-Item $zipPath).Length) packed), FASM -m 4096 in $patched batch files"

@@ -1,0 +1,7 @@
+.title  The three axes: barrel rolls, loops and turns - the stick is in the aeroplane
+.what   The aeroplane stops being a point on a rail. The arrows roll it about its own nose, all the way round; the stick moves the nose towards the pilot's head, wherever the sky is - so a pull with the wings level climbs, a pull banked is a turn, and a pull upside down dives: pitch += q cos(roll), heading += q sin(roll). Over the top of a loop three angles meet their seam, and flip. The picture pitches again, and the cull of lessons 16 to 18, built for a level eye, is rebuilt for any attitude
+.tier   LESSON
+.main   AXES.ASM
+.build  FASM AXES.ASM AXES.COM
+.run    AXES.COM
+.uses   NEG CBW SAR IMUL AND JCXZ

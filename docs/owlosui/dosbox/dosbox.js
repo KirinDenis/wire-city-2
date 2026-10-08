@@ -1,15 +1,19 @@
 // DOSBox in an OWLOSUI window: a real DOS machine, compiled to WebAssembly
-// (js-dos, ../jsdos/), laid over a window's inside.
+// (js-dos, ../jsdos/), seen through a window's inside.
 //
 // The core draws every cell of the screen; the emulator's picture is not a
-// cell, so it is an element of the page put exactly over the window - and
-// moved with it, and hidden while a menu or another window is drawn over
-// it (owl.place says where the window is and whether it is covered). The
-// machine keeps running while it is hidden.
+// cell, so it is an element of the page put UNDER the canvas, exactly where
+// the window's inside is (owl.place), and moved with it. The window's
+// inside is a hole (owl.hole): the canvas is cleared there, and the
+// picture shows through wherever nothing is drawn over it - a menu, a
+// dialog, a shadow hides just the cells it covers, as it would anything
+// else in the window. Over the hole the mouse is the picture's too.
 //
 // The keyboard belongs to whoever has the focus. Click the DOS picture and
 // keys go to DOS; click anywhere on the OWLOSUI screen, or press Right Ctrl
 // - the "host key" virtual machines have always used - and they come back.
+// While anything at all is drawn over the window, DOS has no keys: a menu
+// open over it is typed into, not DOS.
 //
 // A machine starts from either a .jsdos bundle (a zip with a dosbox.conf
 // inside: url) or from a dosbox.conf and the files of its disks, put
@@ -83,6 +87,7 @@ export class DosBox {
     this.dos = null;
     this.ci = null;
     this.el = null;
+    this.hole = 0;
     this.what = '';
     this.net = NetTap.install();
     this.listeners = new Set();
@@ -162,11 +167,12 @@ export class DosBox {
     this.keepRunning = keepRunning;
     this.picture = picture;
     this.frameSize = { w: 640, h: 400 };
-    // A black backdrop over the window's inside, and js-dos's own element
-    // in it, at the size the picture is shown at - see layout().
+    // A black backdrop under the window's inside, and js-dos's own element
+    // in it, at the size the picture is shown at - see layout(). Under the
+    // canvas, which run() lifts to z-index 1; the hole lets it be seen.
     const el = document.createElement('div');
     el.dataset.owlOwnKeys = '';
-    el.style.cssText = 'position:fixed;z-index:5;background:#000;visibility:hidden';
+    el.style.cssText = 'position:fixed;z-index:0;background:#000;visibility:hidden';
     el.addEventListener('focusin', () => this.emit('keys'));
     el.addEventListener('focusout', () => this.emit('keys'));
     const screen = document.createElement('div');
@@ -175,7 +181,9 @@ export class DosBox {
     document.body.append(el);
     this.el = el;
     this.screenEl = screen;
+    this.hole = this.owl.hole(win);
     this.layout();
+    this.owl.refresh?.();
     const ready = new Promise((resolve, reject) => {
       const options = {
         pathPrefix: new URL('emulators/', JSDOS).href,
@@ -219,10 +227,17 @@ export class DosBox {
    * off the page all the same, and 'dropped' returned.
    */
   async stop(ms = 3000) {
-    const dos = this.dos, el = this.el;
+    const dos = this.dos, el = this.el, hole = this.hole;
     this.dos = null;
     this.ci = null;
     this.el = null;
+    this.hole = 0;
+    // The window's own inside again - unless the window went first, and
+    // its hole with it.
+    if (hole) {
+      try { this.owl.close(hole); } catch { /* gone with its window */ }
+      this.owl.refresh?.();
+    }
     let result = dos ? 'stopped' : 'off';
     if (dos) {
       const stopped = dos.stop().then(() => true, () => true);
@@ -234,7 +249,7 @@ export class DosBox {
     return result;
   }
 
-  /** Over the window's inside while nothing covers it; hidden, and the keyboard given back, while something does. */
+  /** Under the window's inside, always there; the keyboard given back while anything covers the window. */
   layout() {
     if (!this.el) return;
     const p = this.win ? this.owl.place(this.win) : null;
@@ -245,9 +260,10 @@ export class DosBox {
     }
     const box = canvas.getBoundingClientRect();
     const area = { x: box.left + p.x * cellW, y: box.top + p.y * cellH, w: p.w * cellW, h: p.h * cellH };
+    // Shown whatever covers it: the canvas over it says what of it is seen.
     Object.assign(this.el.style, {
       left: `${area.x}px`, top: `${area.y}px`, width: `${area.w}px`, height: `${area.h}px`,
-      visibility: p.covered ? 'hidden' : 'visible',
+      visibility: 'visible',
     });
     const s = this.pictureRect(area);
     Object.assign(this.screenEl.style, {

@@ -2,9 +2,9 @@
     "playlist":  "PLYAv8-EdgIF8",
     "disk":  {
                  "url":  "disk.zip",
-                 "version":  "2D6EDBA35560",
-                 "files":  342,
-                 "bytes":  7937550
+                 "version":  "3857299CC3E7",
+                 "files":  350,
+                 "bytes":  8241659
              },
     "lessons":  [
                     {
@@ -306,6 +306,18 @@
                         "size":  216749,
                         "video":  "pTsIJ0mESn8",
                         "length":  "10:39"
+                    },
+                    {
+                        "id":  "L25",
+                        "folder":  "L25",
+                        "lecture":  "19",
+                        "title":  "The three axes: barrel rolls, loops and turns - the stick is in the aeroplane",
+                        "about":  "The aeroplane stops being a point on a rail. The arrows roll it about its own nose, all the way round; the stick moves the nose towards the pilot\u0027s head, wherever the sky is - so a pull with the wings level climbs, a pull banked is a turn, and a pull upside down dives: pitch += q cos(roll), heading += q sin(roll). Over the top of a loop three angles meet their seam, and flip. The picture pitches again, and the cull of lessons 16 to 18, built for a level eye, is rebuilt for any attitude",
+                        "main":  "AXES.ASM",
+                        "buildable":  true,
+                        "size":  233717,
+                        "video":  "UVa4p0RmGT4",
+                        "length":  "6:31"
                     }
                 ]
 }

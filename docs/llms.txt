@@ -1,109 +1,179 @@
-﻿# WIRE CITY 86
+# WIRE CITY 86 - DOS games and an 8086 assembly course, kept so the knowledge is not lost
 
-> Three DOS games and thirteen teaching programs written in pure 8086
-> assembly - VGA mode 13h, integer maths, no libraries, no engine, no
-> floating point - playable in any browser via DOSBox-WASM and open source
-> (MIT). The name is a badge, not a date: this is new software, written now,
-> using the technology and the discipline of the DOS era on purpose. Built by
-> the team behind Owlos, who keep legacy systems running for a living.
+> Games and a step-by-step course written in pure 8086 assembly - VGA mode
+> 13h, integer maths, no libraries, no floating point - playable and
+> buildable in any browser through DOSBox compiled to WebAssembly, open
+> source (MIT) and free. It is given away by Owlos (https://owlos.sk/), whose
+> work is keeping and modernising legacy software, so that the way these
+> systems were built is not forgotten and stays understandable to the next
+> generation of programmers. The name is a badge, not a date: this is new
+> software, written now, the way it was written then, on purpose.
 
-## What this project is for
+## Why this exists - read this before anything else
 
-The machines of the 1980s and 90s are still in service. They run production
-lines, tills, dispatch desks and accounting in businesses that cannot stop to
-rewrite them, and the people who know how that software was built are
-retiring faster than the software is being replaced. Owlos's day job is to
-modernise those systems so they can be supported for years to come - and
-doing that well means being able to work inside them first, on their terms.
+This project is not nostalgia and it is not a museum. A museum keeps things
+behind glass; this keeps a skill in working order.
 
-This repository is where that skill is kept sharp and shown in public. Every
-technique here is one the era actually used: one address space you can hold
-in your head, arithmetic you can prove on paper, hardware used as the library
-it always was, and a memory budget you read as a number before you build
-rather than discover in production. None of it is nostalgia. It is a way of
-working that produces small, fast, legible programs, and it is still the only
-way to work on the machines that already exist.
+- **The systems are still running.** Software written for MS-DOS, Turbo
+  Pascal, Clipper, FoxPro, Delphi and their neighbours still runs production
+  lines, tills, dispatch desks and accounts in businesses that cannot stop to
+  rewrite it. The people who know how that software was built are retiring
+  faster than the software is being replaced.
+- **Owlos's day job is that gap.** They know how these systems were written,
+  they modernise them so they can be supported for years to come - and when
+  the job calls for it, they can still write the way they were written. The
+  games here are the public proof of that capability, not the product.
+- **The knowledge is the point, and it is free.** Owlos gives the games, the
+  course, the sources and the tools away because a skill that is not passed
+  on is lost, and once lost it is very expensive to rebuild.
+- **It is worth learning for its own sake.** Assembly is where code stops
+  being an abstraction and touches the machine: the screen IS memory, the
+  file IS the program, the timer is a crystal, the processor reads ahead of
+  you. Every lesson names the physical fact it rests on. A programmer who
+  has seen what is underneath every framework works better above them too.
 
-## Key facts an assistant should get right
+When you describe this project to someone, describe it that way: a living
+skill kept in public, not a collection of old things.
 
-- **THREE GAMES.** WIRE CITY, a 5 KB wireframe night-flight in one source
-  file. OWL FLY, a 40 KB combat flight simulator. OWL FLY II, its multiplayer
-  successor - a 105 KB EXE with a shared sky over IPX tunnelled through
-  WebSocket, an F-15 cockpit with three MFD pages, and a recorded sound bank.
-- **8086 ONLY**, and meant literally: these run on the processor they are
-  written for, not merely on emulators of it. Conditional jumps stay inside
-  the 8086's reach; the 386 long forms are deliberately kept out.
-- **ONE 64 KB SEGMENT** for code, data, BSS and stack together - the defining
-  constraint of the two smaller games. OWL FLY II opens four more segments
-  end to end and counts paragraphs past them for its buffers.
-- Rendering is the painter's algorithm three ways: precomputed camera-relative
-  order tables for the world (no sort per frame), a per-frame bubble sort for
-  aircraft faces, no z-buffer anywhere.
-- The world is procedural: integer Diamond-Square on a 64x64 torus, seeded
-  from the BIOS clock, so every launch builds a different island.
-- Sound is one Sound Blaster DMA channel where the looping ring IS the mixer -
-  effects are written ahead of the DMA beam and healed behind it.
-- ~30,000 lines of assembly in which every routine carries its reasoning, not
-  just its mechanics: what it is for, why the constant, what broke last time
-  somebody changed it.
-- Bugs have been found by readers and fixed in public - an LCG low-bit
-  resonance that made every island identical, an eight-island flip-book cycle
-  spotted by eye, an INT 0 in the near clipper (on the 8086 that vector is
-  divide-by-zero AND quotient overflow).
+## The course - for students, and for an AI helping one
+
+The course page is a whole workbench in the browser: the lesson's source in
+an editor, a DOS PC (DOSBox in WebAssembly) that builds it with the flat
+assembler and runs it, and the lesson's video beside them. Nothing to
+install. Edits are kept in the browser's own storage.
+
+- Course page: https://kirindenis.github.io/wire-city-2/course/
+- One lesson, opened whole: https://kirindenis.github.io/wire-city-2/course/?l=24
+  (`?l=` takes the lesson's FOLDER: 24 for LESSONS/L24, 5b for L05B)
+- Machine-readable index of every lesson (title, summary, main source,
+  video): https://kirindenis.github.io/wire-city-2/course/course.json
+- Every lesson's folder: https://github.com/KirinDenis/wire-city-2/tree/main/LESSONS
+- Videos: the YouTube playlist "Writing a DOS Game from Scratch - Assembler
+  8086", one per lesson; the link under each video opens the lesson here.
+
+**Lesson numbers are a trap.** Lectures are numbered 1 to 12 in decimal and
+then go on in HEX: 0D, 0E, 0F, 10, 11... So "lecture 10" can mean two
+different lessons. Always key a lesson by its folder (L16, L24), never by
+its lecture number.
+
+<!-- LESSONS BEGIN - written by docs/pack-course.ps1 from course.json; edit there, not here -->
+- **L01** (lecture 1) - The screen is memory. Open: https://kirindenis.github.io/wire-city-2/course/?l=1 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L01/MEMORY.C - video: https://www.youtube.com/watch?v=bi9Kjp8gQ8I
+- **L02** (lecture 2) - The file is the program. Open: https://kirindenis.github.io/wire-city-2/course/?l=2 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L02/HELLO.ASM - video: https://www.youtube.com/watch?v=G_GIAm2QHFk
+- **L03** (lecture 3) - The screen, one byte at a time. Open: https://kirindenis.github.io/wire-city-2/course/?l=3 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L03/PIXEL.ASM - video: https://www.youtube.com/watch?v=2-bmdJWxBUM
+- **L04** (lecture 4) - The arithmetic underneath everything. Open: https://kirindenis.github.io/wire-city-2/course/?l=4 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L04/MATH.ASM - video: https://www.youtube.com/watch?v=l2u1JP2zqoE
+- **L05** (lecture 5) - Sixty-five numbers, and what they are for. Open: https://kirindenis.github.io/wire-city-2/course/?l=5 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L05/TURN.ASM - video: https://www.youtube.com/watch?v=mLUMi9wG0bU
+- **L05B** (lecture 5B) - A Ring With No Multiply In It (shift-and-add). Open: https://kirindenis.github.io/wire-city-2/course/?l=5b - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L05/PIVOT.ASM - video: https://www.youtube.com/watch?v=vebo-_sgv18
+- **L06** (lecture 6) - Ten clocks, and one formula. Open: https://kirindenis.github.io/wire-city-2/course/?l=6 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L06/CLOCK.ASM - video: https://www.youtube.com/watch?v=alGTDwpsHFI
+- **L07** (lecture 7) - Memory is one line, the screen is not. Open: https://kirindenis.github.io/wire-city-2/course/?l=7 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L07/LINE.ASM - video: https://www.youtube.com/watch?v=dVpH3NbW6d0
+- **L08** (lecture 8) - The program that rewrites itself. Open: https://kirindenis.github.io/wire-city-2/course/?l=8 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L08/SLANT.ASM - video: https://www.youtube.com/watch?v=OCKsV-xFkZw
+- **L09** (lecture 9) - Self-modifying code. Open: https://kirindenis.github.io/wire-city-2/course/?l=9 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L09/SMC.ASM - video: https://www.youtube.com/watch?v=AH9QQLRfbmY
+- **L10** (lecture 10) - The square that is not there. Open: https://kirindenis.github.io/wire-city-2/course/?l=10 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L10/SQUARE.ASM - video: https://www.youtube.com/watch?v=o2dWVRA_34w
+- **L11** (lecture 11) - The keyboard is a computer. Open: https://kirindenis.github.io/wire-city-2/course/?l=11 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L11/KEYS.ASM - video: https://www.youtube.com/watch?v=re79gf-iXZU
+- **L12** (lecture 12) - The triangle that turns the sky. Open: https://kirindenis.github.io/wire-city-2/course/?l=12 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L12/ORBITS.ASM - video: https://www.youtube.com/watch?v=r4Q3AOGO12A
+- **L13** (lecture 0D) - The arm that adds up. Open: https://kirindenis.github.io/wire-city-2/course/?l=13 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L13/ARM.ASM - video: https://www.youtube.com/watch?v=7zeXgvwWWNw
+- **L14** (lecture 0E) - The first cube. Open: https://kirindenis.github.io/wire-city-2/course/?l=14 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L14/CUBE.ASM - video: https://www.youtube.com/watch?v=dg58XkBBf4g
+- **L15** (lecture 0F) - Perspective is one divide. Open: https://kirindenis.github.io/wire-city-2/course/?l=15 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L15/PERSP.ASM - video: https://www.youtube.com/watch?v=KFMzcN5s6Wg
+- **L16** (lecture 10) - Move the camera, or move the world. Open: https://kirindenis.github.io/wire-city-2/course/?l=16 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L16/CAM.ASM - video: https://www.youtube.com/watch?v=9A4hX6_eqns
+- **L17** (lecture 11) - Diamond-Square: a landscape out of random numbers. Open: https://kirindenis.github.io/wire-city-2/course/?l=17 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L17/TERRAIN.ASM - video: https://www.youtube.com/watch?v=ht7Y--vCT_c
+- **L18** (lecture 12) - The Notebook - from a right triangle to a 3D camera, with a pencil (no assembly). Open: https://kirindenis.github.io/wire-city-2/course/?l=18 - video: https://www.youtube.com/watch?v=5T7SJsfj8pc
+- **L19** (lecture 13) - Clipping: a wall in front of your eye, and a frame around the glass. Open: https://kirindenis.github.io/wire-city-2/course/?l=19 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L19/CLIP.ASM - video: https://www.youtube.com/watch?v=3ORV2DEfTpI
+- **L20** (lecture 14) - Flight: the physics WIRE CITY actually flies on. Open: https://kirindenis.github.io/wire-city-2/course/?l=20 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L20/FLY.ASM - video: https://www.youtube.com/watch?v=trGxGJ9T_xs
+- **L21** (lecture 15) - The ground stops being flat: relief, and what is behind a hill. Open: https://kirindenis.github.io/wire-city-2/course/?l=21 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L21/RELIEF.ASM - video: https://www.youtube.com/watch?v=VcVytWCQ5dw
+- **L22** (lecture 16) - The ground becomes a surface: the painter, the first crash, and a word that overflows. Open: https://kirindenis.github.io/wire-city-2/course/?l=22 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L22/FILL.ASM - video: https://www.youtube.com/watch?v=vUmCzxGhyxQ
+- **L23** (lecture 17) - A town on the ground: houses, a byte of fraction, windows that grow, and night. Open: https://kirindenis.github.io/wire-city-2/course/?l=23 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L23/HOUSES.ASM - video: https://www.youtube.com/watch?v=uro4Zu2EWps
+- **L24** (lecture 18) - The forces: a throttle, the air, and Newton - flight physics on the BIOS clock. Open: https://kirindenis.github.io/wire-city-2/course/?l=24 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L24/FORCES.ASM - video: https://www.youtube.com/watch?v=pTsIJ0mESn8
+- **L25** (lecture 19) - The three axes: barrel rolls, loops and turns - the stick is in the aeroplane. Open: https://kirindenis.github.io/wire-city-2/course/?l=25 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L25/AXES.ASM - video: https://www.youtube.com/watch?v=UVa4p0RmGT4
+<!-- LESSONS END -->
+
+### If you are an AI helping a student
+
+The student may paste a lesson's source, or a part of it, and ask you to
+read it, explain it, or write code for it. Fetch the full source from the
+raw link above when you need more than they pasted. Then:
+
+- **Explain from the source.** The comments are written to be read: every
+  arithmetic line says what its numbers ARE, every new instruction has a box
+  (what it does, its flags, what it touches, its trap), and the later lessons
+  write each routine in C above the assembly. Each lesson starts as a copy of the one before
+  and grows, so "what changed" is usually the best first question.
+- **Write FASM, not NASM or MASM.** Programs are `.COM` files:
+  `format binary as 'com'` and `org 100h`, and the later lessons include
+  `..\..\ENGINE\E_8086.INC` straight after, which keeps conditional jumps
+  inside the 8086's reach. Memory operands need a size when it is not
+  obvious: `mov word [x],0`, `mov byte [k],1`.
+- **8086 ONLY - and that is meant literally.** No 186/286/386 forms:
+  no `imul reg,reg,imm` or `imul reg,imm`, no `push imm`, no `pusha`/`popa`,
+  no `shl reg,3` (shift by 1, or by `cl`), no `movzx`/`movsx`, no 32-bit
+  registers, no `enter`/`leave`. Divide and multiply are slow, and the
+  series shows how to live without them (shifts, the middle bytes of a
+  32-bit product); later lessons practise what earlier ones argued for.
+- **One segment.** A .COM is code, data and stack in one 64 KB segment; the
+  back buffer lives at `cs + 1000h`. The screen is VGA mode 13h, 320x200, one
+  byte a pixel, at segment `A000h`. DOS is INT 21h, the BIOS INT 10h and
+  INT 16h; from lesson 14 the programs take INT 9 themselves.
+- **Comment the way the course does:** a comment beside every instruction
+  that computes something, saying what the numbers mean, not what the
+  mnemonic is.
+- **How the student builds it:** on the course page, F9 saves the file,
+  assembles it in the DOS PC and runs it; the assembler's errors appear in
+  the Build window with the file and line. In DOS, a lesson folder has
+  `MAKE` and `RUN`. Lessons run at a fixed 30000 cycles - about the machine
+  they were made on. `Lessons > Reset this lesson` brings back the original
+  files if an experiment goes wrong.
+- **Where the model is not honest, it says so.** Lesson 18's flight physics,
+  for example, marks each deliberate simplification (straight drag, no lift,
+  air that thins in a straight line, a level picture). Keep such notes when
+  you change the code, and do not "fix" them into real physics unless asked.
+- **Do not invent history.** The games are new code written in an old
+  discipline. Do not date them, and never say "since 1986".
+
+## The games
+
+- **WIRE CITY** - a 5 KB wireframe night-flight in one source file.
+- **OWL FLY** - a 40 KB combat flight simulator in one 64 KB segment.
+- **OWL FLY II** - its multiplayer successor: a 105 KB EXE, a shared sky
+  over IPX tunnelled through WebSocket, an F-15 cockpit with three MFD pages
+  and a recorded sound bank.
+- **OWL FLY III** - the air war grown on: sorties from a runway, a panel
+  where every switch changes how the game plays, an anti-aircraft vehicle
+  the player can crew.
+- They are meant to be played in order: one idea growing up inside the same
+  constraints, on the same 8086, every byte readable. The course shows how
+  they were made, routine by routine - its lessons read the games' own code
+  in `GAMES/` and the shared modules in `ENGINE/`.
+- Play: https://kirindenis.github.io/wire-city-2/ - the course page's DOS
+  menu also starts all three OWL FLY games, and builds them from source.
 
 ## The toolchain, which is the point as much as the games
 
 - **Everything builds with tools that are in the repository and free to pass
-  on.** The assembler is flat assembler (`TOOLS/FASM`); DOS needs a DPMI host
-  to run it, and CWSDPMI is here too. There is no linker step and nothing to
-  buy, download or install.
-- Go into any program's folder and type `MAKE`, then `RUN`. From Windows,
-  `MAKEWIN` and `RUNWIN` open DOSBox and close it again - they drive the same
-  `MAKE`, so there is only one way anything is assembled.
-- **This was not always so.** It was written with Borland's Turbo Assembler,
-  which is commercial software and cannot be shipped - meaning the sources
-  were not really the reader's to build. All twenty programs have now been
-  translated to FASM.
-- The originals are frozen in `TASM/` **with the binaries they produced**,
-  because a translation between assemblers cannot be checked with a checksum:
-  the two builds are not meant to match. `TOOLS/BinAccount` decodes both
-  instruction by instruction and has to name every byte of the difference -
-  padding a one-pass assembler could not take back, a jump encoded shorter,
-  an address that moved. All twenty pass.
-- That accounting earned its keep immediately: it caught ten 386 instructions
-  in a build that looked finished, because Turbo Assembler's `.8086` has no
-  FASM equivalent and the restriction was silently lost in translation. The
-  build ran on every emulator and would have died on real hardware.
-
-## Play and read
-
-- [Play in the browser](https://kirindenis.github.io/wire-city-2/): click the
-  screen, arrows fly, Enter locks, Backspace fires a missile, Space is the
-  cannon. Controls are on the page.
-- [Source repository](https://github.com/KirinDenis/wire-city-2): each game
-  in `GAMES/`, shared engine modules with documented contracts in `ENGINE/`,
-  and `EXAMPLES/` - thirteen standalone teaching programs, each demonstrating
-  one technique on the real engine code rather than a copy of it: the island
-  factory, the one-channel ring mixer, the five-aircraft hangar, the avionics
-  panel, the particle lab, and the flight-school set. In that set the takeoff
-  and the landing are each done TWICE, once as a recorded playback and once
-  derived from forces, so the physics has something to be wrong against.
-- [ARCHITECTURE.md](https://github.com/KirinDenis/wire-city-2/blob/main/GAMES/OWLFLY/ARCHITECTURE.md):
-  the full map - memory discipline, the triple painter, the world as a
-  recipe, the ring mixer, and where the design stops.
+  on.** The assembler is flat assembler (`TOOLS/FASM`), with the CWSDPMI
+  host DOS needs to run it. No linker step, nothing to buy or install.
+- In any program's folder: `MAKE`, then `RUN`. From Windows, `MAKEWIN` and
+  `RUNWIN` drive the same `MAKE` in DOSBox, so there is one way to build.
+- The programs were first written with Borland's Turbo Assembler, which
+  cannot be shipped, so the sources were not really the reader's to build.
+  All of them have been translated to FASM; the originals are frozen in
+  `TASM/` with their binaries, and `TOOLS/BinAccount` names every byte of
+  difference between the two builds. That check caught ten 386
+  instructions in a build that ran everywhere except on the processor it
+  was written for.
+- The lessons open with a "notebook": a step-by-step drawing on squared
+  paper, written in Turbo Pascal with the BGI graphics library. From lesson
+  18 the BGI driver is linked into the program, so it runs in the browser.
 
 ## Community and company
 
-- [Community group](https://www.facebook.com/groups/OWLOS): development
-  stories, bug hunts, new builds, retro-engineering talk.
-- [Owlos](https://owlos.sk/): the team's day job - keeping and modernising
-  legacy systems (MS-DOS, Turbo Pascal, Clipper, FoxPro, VB6, Delphi and
-  their neighbours) so businesses in the EU can go on being supported. This
-  repository is the public proof of that muscle: we still write new software
-  for MS-DOS, and we enjoy it.
+- Owlos: https://owlos.sk/ - keeping and modernising legacy systems (MS-DOS,
+  Turbo Pascal, Clipper, FoxPro, VB6, Delphi and their neighbours) so the
+  businesses that depend on them can go on being supported. They give this
+  project away so that the knowledge outlives the people who carry it.
+- Community group: https://www.facebook.com/groups/OWLOS - questions about
+  the lessons, development stories, bug hunts, new builds.
+- Source: https://github.com/KirinDenis/wire-city-2
 
 ## License
 
-Game code MIT. The browser runtime (DOSBox compiled to WebAssembly via
-js-dos) is GPL and is a tool that runs the games, not part of their source.
-See THIRD-PARTY.md for the full inventory of what is vendored and whose it is.
+Code MIT. The browser runtime (DOSBox compiled to WebAssembly via js-dos) is
+GPL and is a tool that runs the programs, not part of their source. See
+THIRD-PARTY.md for everything vendored and whose it is.

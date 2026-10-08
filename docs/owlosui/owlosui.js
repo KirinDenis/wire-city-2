@@ -128,6 +128,7 @@ const Op = {
   Files: 0x1A, SetFiles: 0x25, TakeFiles: 0x26, MarkedNames: 0x28, SetFilesError: 0x29, AddFiles: 0x5A, Unmark: 0x61,
   Place: 0x62, SetTag: 0x65, SetIndicator: 0x66, Console: 0x67, ConsoleWrite: 0x68,
   Clipboard: 0x69, ClipboardGet: 0x6A, ClipboardPaste: 0x6B, Minimize: 0x6C, TextAppend: 0x6D, GetTextPart: 0x6E, GetTextBytes: 0x6F,
+  Hole: 0x70, Holes: 0x71,
   Tree: 0x53, TreeChildren: 0x54, TreeExpand: 0x55, TreePath: 0x56,
 };
 
@@ -305,7 +306,12 @@ export class Frame {
     this.holdMs = body[8] === 2 ? 35 : 90;
     this.cells = body.subarray(11);
     this.glyphs = glyphs;
+    // Which cells show what is under the screen (see Owlosui.hole): one
+    // byte a cell, or null when none does.
+    this.holes = null;
   }
+  /** Whether a cell is a hole: the page's own picture under the canvas shows there. */
+  isHole(x, y) { return !!this.holes && x >= 0 && y >= 0 && x < this.w && y < this.h && this.holes[y * this.w + x] !== 0; }
   glyph(x, y) { return readU16(this.cells, (y * this.w + x) * 3); }
   attr(x, y) { return this.cells[(y * this.w + x) * 3 + 2]; }
   char(x, y) { const g = this.glyph(x, y); return g < this.glyphs.length ? this.glyphs[g] : '?'; }
@@ -367,8 +373,9 @@ export class Owlosui {
   close(id) { this.call(Op.Close, u16(id)); }
   /**
    * Where a window's inside is, in cells, and whether anything is drawn
-   * over it - for laying something of the page's own over a window, such
-   * as an emulator's picture: show it while `covered` is false.
+   * over it - for putting something of the page's own under a window's
+   * hole (see hole), such as an emulator's picture, and for taking the
+   * keyboard from it while `covered` is true.
    * { x, y, w, h, covered }, or null for a window that is gone.
    */
   place(id) {
@@ -648,6 +655,28 @@ export class Owlosui {
     return this.call(Op.ClipboardPaste, u8((now ? 1 : 0) | (keep ? 2 : 0)), str(text ?? ''))[0] !== 0;
   }
 
+  // ---- a hole: what is under the screen, seen through a window
+
+  /**
+   * A hole filling a window's inside: the page's own element put under
+   * the canvas there - an emulator's picture - shows through it, and gets
+   * the mouse there, wherever nothing is drawn over it. A menu, a dialog,
+   * a shadow covers exactly its own cells, as it would any other. A client
+   * with nothing underneath draws it as the window's background. close(id)
+   * takes it away.
+   */
+  hole(parent) {
+    this.holed = true;
+    return readU16(this.call(Op.Hole, u16(parent)), 0);
+  }
+  /** The holes of the last frame: [{ x, y, w }], a run of cells along a row each. */
+  holes() {
+    const r = this.call(Op.Holes);
+    const n = readU16(r, 0), out = new Array(n);
+    for (let i = 0; i < n; i++) out[i] = { x: readI16(r, 2 + i * 6), y: readI16(r, 4 + i * 6), w: readI16(r, 6 + i * 6) };
+    return out;
+  }
+
   // ---- a canvas: cells the program draws itself
 
   canvas(parent, x, y, w, h) { return readU16(this.call(Op.Canvas, u16(parent), rect(x, y, w, h)), 0); }
@@ -782,7 +811,16 @@ export class Owlosui {
   frame() {
     const r = this.call(Op.Frame);
     if (readU16(r, 9) > this.glyphs.length) this.glyphs = this.fetchGlyphs();
-    return new Frame(r, this.glyphs);
+    const f = new Frame(r, this.glyphs);
+    // Asked only once a hole has been made: a page without one has none.
+    if (this.holed) {
+      const runs = this.holes();
+      if (runs.length) {
+        f.holes = new Uint8Array(f.w * f.h);
+        for (const { x, y, w } of runs) f.holes.fill(1, y * f.w + x, y * f.w + x + w);
+      }
+    }
+    return f;
   }
 }
 
@@ -852,7 +890,9 @@ const PALETTE = [
 export class Screen {
   constructor(canvas, { font = '18px "Cascadia Mono", "Consolas", "DejaVu Sans Mono", monospace', cellHeight = 22 } = {}) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d', { alpha: false });
+    // With alpha: a hole is a cell cleared to nothing, and what the page
+    // put under the canvas shows there.
+    this.ctx = canvas.getContext('2d');
     this.font = font;
     this.ctx.font = font;
     this.cellW = Math.ceil(this.ctx.measureText('M').width);
@@ -904,15 +944,40 @@ export class Screen {
   /** Every cell of a frame onto the canvas, and the caret. */
   draw(frame) {
     const { ctx, cellW: cw, cellH: ch } = this;
+    // Opaque first. At a scale that puts a cell's edge inside a screen
+    // pixel - 125% - two cells each cover part of it, and on a canvas that
+    // has alpha the pixel would come out part see-through: a faint grid
+    // over the page. Then the holes, a run at a time and on whole screen
+    // pixels, for the same reason - cleared cell by cell, the edges between
+    // them would stay part black, a grid over the picture.
+    // A cell's background goes on whole screen pixels too, so none of it
+    // spills into a hole beside it.
+    const dpr = globalThis.devicePixelRatio || 1;
+    const snap = v => Math.round(v * dpr) / dpr;
+    ctx.fillStyle = PALETTE[0];
+    ctx.fillRect(0, 0, frame.w * cw, frame.h * ch);
+    if (frame.holes) {
+      for (let y = 0; y < frame.h; y++) {
+        for (let x = 0; x < frame.w; x++) {
+          if (!frame.isHole(x, y)) continue;
+          const from = x;
+          while (x < frame.w && frame.isHole(x, y)) x++;
+          const x0 = snap(from * cw), y0 = snap(y * ch);
+          ctx.clearRect(x0, y0, snap(x * cw) - x0, snap((y + 1) * ch) - y0);
+        }
+      }
+    }
     for (let y = 0; y < frame.h; y++) {
       for (let x = 0; x < frame.w; x++) {
+        if (frame.isHole(x, y)) continue;
+        const px = x * cw, py = y * ch;
         const a = frame.attr(x, y);
         const fg = PALETTE[a & 15], bg = PALETTE[a >> 4];
-        const px = x * cw, py = y * ch;
         const c = frame.char(x, y);
         const code = c.charCodeAt(0);
         ctx.fillStyle = bg;
-        ctx.fillRect(px, py, cw, ch);
+        const bx = snap(px), by = snap(py);
+        ctx.fillRect(bx, by, snap(px + cw) - bx, snap(py + ch) - by);
         if (code === 0 || c === ' ') continue;
         ctx.fillStyle = fg;
         if (code === 0x2588) ctx.fillRect(px, py, cw, ch);
@@ -961,6 +1026,15 @@ export async function run(canvas, makeApp, { wasm = new URL('./owlosui-wire.wasm
   // frame - put that something where the window now is.
   owl.screen = screen;
   owl.afterPaint = new Set();
+  // A hole (owl.hole) shows an element the page puts under the canvas:
+  // the canvas is lifted to make room for one there, at z-index 0 - a
+  // canvas left in the page's flow is drawn under every placed element.
+  const style = getComputedStyle(canvas);
+  if (style.position === 'static') canvas.style.position = 'relative';
+  if (style.zIndex === 'auto') canvas.style.zIndex = '1';
+  // The frame on the canvas, where the mouse last was, and which buttons
+  // went down on the screen - known before the first paint.
+  let shown = null, pointer = null, held = 0;
   const app = makeApp(owl);
   let ended = false, holding = false;
 
@@ -983,7 +1057,11 @@ export async function run(canvas, makeApp, { wasm = new URL('./owlosui-wire.wasm
     if (ended) return;
     const f = owl.frame();
     screen.draw(f);
+    shown = f;
     for (const after of owl.afterPaint) after();
+    // A menu dropped under a mouse that has not moved is the menu's to
+    // click, not the picture's that was there a moment ago.
+    through();
     // A button pressed by a key is on the screen, down: leave it there
     // long enough to be seen, then let it happen.
     // One wait at a time: the cursor's blink paints too, and a second
@@ -1058,10 +1136,11 @@ export async function run(canvas, makeApp, { wasm = new URL('./owlosui-wire.wasm
     owl.key(...k);
     after();
   });
-  let held = 0, lastDown = 0, lastAt = '';
+  let lastDown = 0, lastAt = '';
   const button = e => (e.button === 2 ? 1 : e.button === 1 ? 2 : 0);
   canvas.addEventListener('contextmenu', e => e.preventDefault());
-  canvas.addEventListener('mousedown', e => {
+  canvas.addEventListener('mousedown', e => screenDown(e));
+  function screenDown(e) {
     if (ended) return;
     // A click on the screen takes the keyboard back from whatever had it.
     if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) document.activeElement.blur();
@@ -1077,7 +1156,7 @@ export async function run(canvas, makeApp, { wasm = new URL('./owlosui-wire.wasm
     owl.mouse(twice ? 6 : 0, x, y, b);
     after();
     e.preventDefault();
-  });
+  }
   // While a button is down - a window dragged by its title, resized by its
   // corner - the release and the moves are heard on the whole page, in the
   // capture phase, ahead of anything on it. An element laid over the screen
@@ -1112,6 +1191,44 @@ export async function run(canvas, makeApp, { wasm = new URL('./owlosui-wire.wasm
     held = 0;
     after();
   });
+  // Over a hole the mouse is the picture's: the canvas lets it through to
+  // the element under it - moves, clicks, the wheel - while the pointer
+  // is over a hole cell, and takes it back off one. Not in the middle of a
+  // drag that began on the screen: a window dragged over the picture is
+  // still being dragged. A click that goes through brings the hole's
+  // window to the front, as a click anywhere else in it would.
+  function through() {
+    let over = false;
+    if (!ended && !held && pointer && shown) {
+      const { x, y } = screen.cellAt(pointer);
+      over = shown.isHole(x, y);
+    }
+    const want = over ? 'none' : '';
+    if (canvas.style.pointerEvents !== want) canvas.style.pointerEvents = want;
+  }
+  window.addEventListener('mousemove', e => {
+    pointer = { clientX: e.clientX, clientY: e.clientY };
+    through();
+  }, true);
+  window.addEventListener('mousedown', e => {
+    if (ended || held || canvas.style.pointerEvents !== 'none') return;
+    pointer = { clientX: e.clientX, clientY: e.clientY };
+    const { x, y } = screen.cellAt(e);
+    if (shown?.isHole(x, y)) {
+      owl.mouse(0, x, y, 0);
+      owl.mouse(1, x, y, 0);
+      after();
+      return;
+    }
+    // Down with no move before it - a tap, a test's click - where a hole
+    // was when the mouse last moved: the screen's, if the screen is what
+    // is there now that it takes the mouse again.
+    through();
+    if (document.elementFromPoint(e.clientX, e.clientY) === canvas) {
+      e.stopPropagation();
+      screenDown(e);
+    }
+  }, true);
   canvas.addEventListener('wheel', e => {
     if (ended) return;
     const { x, y } = screen.cellAt(e);
