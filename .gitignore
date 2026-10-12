@@ -190,6 +190,10 @@ LAB/OWLFLY4/ENGINE/SHOT*.OWV
 # the bundle: a hundred megabytes of them, rebuilt from the recipes, and the
 # whole reason the bundle got small. Never in git - see docs/pack.ps1.
 docs/owlnight/
+# OWL NIGHT never ships as a bundle again: its files are GitHub release
+# assets, staged in docs/owlnight/release/ by docs/pack-night.ps1 and listed
+# in docs/owlnight.json, which is the only part that is committed
+docs/owlvid*.jsdos
 
 # Reference captures are pictures of commercial software's screens. The
 # tool that takes them is ours; what it photographs is not.

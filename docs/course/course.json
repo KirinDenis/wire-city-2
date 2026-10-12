@@ -2,9 +2,9 @@
     "playlist":  "PLYAv8-EdgIF8",
     "disk":  {
                  "url":  "disk.zip",
-                 "version":  "3857299CC3E7",
-                 "files":  350,
-                 "bytes":  8241659
+                 "version":  "9FAC0FC5CBA9",
+                 "files":  358,
+                 "bytes":  8560395
              },
     "lessons":  [
                     {
@@ -318,6 +318,18 @@
                         "size":  233717,
                         "video":  "UVa4p0RmGT4",
                         "length":  "6:31"
+                    },
+                    {
+                        "id":  "L26",
+                        "folder":  "L26",
+                        "lecture":  "1A",
+                        "title":  "Letters you draw yourself: the game\u0027s 4x6 font, and a ring of bit masks",
+                        "about":  "A breather. In text mode the VGA card draws the letters itself; in mode 13h nothing does - every letter is a picture you put there. The PC\u0027s ROM has 8x8 letters at F000:FA6E; the game has its own 4x6 ones, and their binary numbers ARE the pixels. The HUD moves to the game\u0027s letters, three new ones are drawn in binary, and a dark ring made of bit masks - OR to grow, AND NOT to carve - keeps them readable on any background. T switches between the three",
+                        "main":  "LETTERS.ASM",
+                        "buildable":  true,
+                        "size":  250038,
+                        "video":  "8MRKP3MoJC0",
+                        "length":  "5:50"
                     }
                 ]
 }

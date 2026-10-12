@@ -1,0 +1,7 @@
+.title  Letters you draw yourself: the game's 4x6 font, and a ring of bit masks
+.what   A breather. In text mode the VGA card draws the letters itself; in mode 13h nothing does - every letter is a picture you put there. The PC's ROM has 8x8 letters at F000:FA6E; the game has its own 4x6 ones, and their binary numbers ARE the pixels. The HUD moves to the game's letters, three new ones are drawn in binary, and a dark ring made of bit masks - OR to grow, AND NOT to carve - keeps them readable on any background. T switches between the three
+.tier   LESSON
+.main   LETTERS.ASM
+.build  FASM LETTERS.ASM LETTERS.COM
+.run    LETTERS.COM
+.uses   SHL SHR OR AND NOT

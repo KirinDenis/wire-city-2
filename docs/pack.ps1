@@ -1,4 +1,4 @@
-﻿# pack.ps1 -Game <OWLFLY|OWLFLY2|WIRECITY|TRAINER> - build a versioned js-dos bundle.
+# pack.ps1 -Game <OWLFLY|OWLFLY2|WIRECITY|TRAINER> - build a versioned js-dos bundle.
 #
 # js-dos caches extracted bundles in IndexedDB keyed by the bundle PATH,
 # so every release gets a NEW FILENAME: <prefix>_vN.jsdos. This script
@@ -372,113 +372,10 @@ $MAP = @{
       @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=30000`n[autoexec]`necho off`nmount c .`nc:`ncls`nLESSON.BAT`n" }
     )
   }
-  # OWL NIGHT, the LAB game, on the unlisted page: the story engine and the
-  # whole NIGHT story - every SCENE.INI and every product beside it. The
-  # story is a TREE, not a list of files, so it comes in through `trees`:
-  # a folder walked for the extensions named, `frames\` and the recipes'
-  # logs left behind. The bundle is large (the clips are a megabyte a
-  # second) and GitHub refuses a file over 100 MB, so the script says the
-  # size out loud and stops rather than commit a bundle Pages cannot serve.
-  # The story is made in TWO editions - 640x400 through VESA and 320x200
-  # through mode 13h - and the two together are over GitHub's 100 MB, so
-  # each is its own bundle and the page offers the choice before the
-  # machine starts. Each bundle's STORY.INI is patched to list only the
-  # edition it carries, so the engine does not ask again. The 320x200
-  # products live in a 320\ folder inside each scene; SCENE.INI and the
-  # music are shared and go into both.
-  OWLVID = @{
-    prefix = "owlvid"
-    page   = Join-Path $root "docs\owlvid.html"
-    detect = "owlvid_v(\d+)\.jsdos"
-    files  = @(
-      @{ p = "LAB\OWLFLY4\ENGINE\STORY.COM"; n = "ENGINE/STORY.COM" }
-    )
-    trees  = @(
-      @{ p = "LAB\OWLFLY4\STORY\NIGHT"; n = "STORY/NIGHT"; ext = @('.INI', '.OWV', '.SPR', '.SLT', '.PCM'); skip = @('frames', '320') }
-    )
-    patch  = @(
-      @{ p = "LAB\OWLFLY4\STORY\NIGHT\STORY.INI"; n = "STORY/NIGHT/STORY.INI"; find = '(?m)^SCREENS\s*=[^\r\n]*'; put = 'SCREENS  = 640x400' }
-    )
-    # the clips ride outside the bundle; the room, the music and every INI
-    # stay inside it, because the machine cannot start without them
-    # DORMANT, and the reason is worth keeping. Uncomment these four and the
-    # STREAM.ON line below and the clips come OUT of the bundle, into
-    # docs\owlnight\ with a JSON list, for the page to fetch and write into
-    # the running machine with ci.fsWriteFile. Every part of that works
-    # except the last one: the write lands in the emulator's file system -
-    # ci.fsTree() shows the whole 3.8 MB clip at the right path - and DOS
-    # cannot see it. DOSBox caches the directory of a mounted drive, and
-    # neither a NEW file nor new CONTENT in an old one reaches a machine
-    # that has already booted. Proved by making the engine print the four
-    # bytes it read: "WAIT", the placeholder, with the real clip sitting in
-    # the file system underneath it.
-    #
-    # So streaming needs one of: a js-dos whose fsWriteFile invalidates that
-    # cache, or a feed that does not go through the file system at all
-    # (IPX, which this project already has a relay for). Until then the
-    # clips travel in the bundle, and the bundle has to fit.
-    # loose    = '\.OWV$'
-    # looseNot = '/PICKUP/'
-    # dist     = "docs\owlnight"
-    # storyIni = "LAB\OWLFLY4\STORY\NIGHT\STORY.INI"
-    ignore = @()
-    limit  = 100MB
-    strings = @(
-      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[sblaster]`nsbtype=sb16`n[autoexec]`necho off`nmount c .`nc:`ncd ENGINE`n:again`nSTORY`necho.`necho Press a key to play it again.`npause`ngoto again`n" },
-      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[sblaster]`nsbtype=sb16`n[autoexec]`necho off`nmount c .`nc:`ncd ENGINE`n:again`nSTORY`necho.`necho Press a key to play it again.`npause`ngoto again`n" }
-      # the engine looks for this: with it here a product that is not
-      # there is one that has not landed yet, and it waits instead of
-      # saying MISSING
-      # dormant with the loose-clip feature above
-    )
-  }
-  OWLVID320 = @{
-    prefix = "owlvid320"
-    page   = Join-Path $root "docs\owlvid.html"
-    detect = "owlvid320_v(\d+)\.jsdos"
-    files  = @(
-      @{ p = "LAB\OWLFLY4\ENGINE\STORY.COM"; n = "ENGINE/STORY.COM" }
-    )
-    trees  = @(
-      # the shared text and music from the scenes themselves...
-      @{ p = "LAB\OWLFLY4\STORY\NIGHT"; n = "STORY/NIGHT"; ext = @('.INI', '.PCM'); skip = @('frames', '320') },
-      # ...and the pictures only from the 320\ folders
-      @{ p = "LAB\OWLFLY4\STORY\NIGHT"; n = "STORY/NIGHT"; ext = @('.INI', '.OWV', '.SPR', '.SLT'); skip = @('frames'); only = '\\320\\' }
-    )
-    patch  = @(
-      @{ p = "LAB\OWLFLY4\STORY\NIGHT\STORY.INI"; n = "STORY/NIGHT/STORY.INI"; find = '(?m)^SCREENS\s*=[^\r\n]*'; put = 'SCREENS  = 320x200' }
-    )
-    # DORMANT, and the reason is worth keeping. Uncomment these four and the
-    # STREAM.ON line below and the clips come OUT of the bundle, into
-    # docs\owlnight\ with a JSON list, for the page to fetch and write into
-    # the running machine with ci.fsWriteFile. Every part of that works
-    # except the last one: the write lands in the emulator's file system -
-    # ci.fsTree() shows the whole 3.8 MB clip at the right path - and DOS
-    # cannot see it. DOSBox caches the directory of a mounted drive, and
-    # neither a NEW file nor new CONTENT in an old one reaches a machine
-    # that has already booted. Proved by making the engine print the four
-    # bytes it read: "WAIT", the placeholder, with the real clip sitting in
-    # the file system underneath it.
-    #
-    # So streaming needs one of: a js-dos whose fsWriteFile invalidates that
-    # cache, or a feed that does not go through the file system at all
-    # (IPX, which this project already has a relay for). Until then the
-    # clips travel in the bundle, and the bundle has to fit.
-    # loose    = '\.OWV$'
-    # looseNot = '/PICKUP/'
-    # dist     = "docs\owlnight"
-    # storyIni = "LAB\OWLFLY4\STORY\NIGHT\STORY.INI"
-    ignore = @()
-    limit  = 100MB
-    strings = @(
-      @{ n = ".jsdos/dosbox.conf"; c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[sblaster]`nsbtype=sb16`n[autoexec]`necho off`nmount c .`nc:`ncd ENGINE`n:again`nSTORY`necho.`necho Press a key to play it again.`npause`ngoto again`n" },
-      @{ n = "dosbox.conf";        c = "[sdl]`nautolock=false`n[dosbox]`nmachine=svga_s3`nmemsize=16`n[cpu]`ncore=auto`ncycles=max`n[sblaster]`nsbtype=sb16`n[autoexec]`necho off`nmount c .`nc:`ncd ENGINE`n:again`nSTORY`necho.`necho Press a key to play it again.`npause`ngoto again`n" }
-      # the engine looks for this: with it here a product that is not
-      # there is one that has not landed yet, and it waits instead of
-      # saying MISSING
-      # dormant with the loose-clip feature above
-    )
-  }
+  # OWL NIGHT is not a bundle any more: its files are GitHub release assets,
+  # staged by docs\pack-night.ps1 and listed in docs\owlnight.json. The two
+  # entries that lived here (OWLVID, OWLVID320) and their dormant streaming
+  # notes are in the history and in Skill\POINTTASK.md.
   WIRECITY = @{
     prefix = "wirecity"
     page   = Join-Path $root "docs\play.html"

@@ -32,27 +32,27 @@ powershell -NoProfile -ExecutionPolicy Bypass -File docs\pack.ps1 -Game OWLFLY3H
 if errorlevel 1 goto fail
 goto packed
 
-REM OWL NIGHT is TWO editions and only one of them fits. The 640x400 bundle
-REM is 157 MB against GitHub's 100, so its failure is EXPECTED and must not
-REM take the publish down with it - the 320x200 edition plays, and its
-REM button is the only one the page offers. When 640 fits again (a home of
-REM its own, or a codec that earns it) this step will simply start passing.
+REM OWL NIGHT is not a bundle: its clips, rooms and music are assets of a
+REM GitHub RELEASE (up to 2 GB each, outside the repository), and the page
+REM fetches them one by one into the emulator before it boots. The packer
+REM stages them and writes the manifest the page reads; the upload itself
+REM is gh commands in docs\owlnight\upload.cmd, run by hand, because it is
+REM publishing. The commit below carries the manifest and the page only.
 :owlnight
-echo [1/2] Packing a fresh OWL NIGHT 640x400 bundle ...
-powershell -NoProfile -ExecutionPolicy Bypass -File docs\pack.ps1 -Game OWLVID
-if not errorlevel 1 goto pair320
+echo [1/3] Staging OWL NIGHT for its release ...
+powershell -NoProfile -ExecutionPolicy Bypass -File docs\pack-night.ps1
+if errorlevel 1 goto fail
 echo.
-echo   ...the 640x400 edition does not fit and was NOT packed. Expected:
-echo   the page offers 320x200 only until that edition has somewhere to live.
+echo [2/3] Upload the changed assets - this talks to GitHub:
+echo       docs\owlnight\upload.cmd
 echo.
-:pair320
-echo [1b/2] ...and the 320x200 edition ...
-powershell -NoProfile -ExecutionPolicy Bypass -File docs\pack.ps1 -Game OWLVID320
+set /p UP=Run it now? [y/N]
+if /i "%UP%"=="y" call docs\owlnight\upload.cmd
 if errorlevel 1 goto fail
 goto packed
 :packed
 
-echo [2/2] Commit + push ...
+if /i "%GAME%"=="OWLVID" (echo [3/3] Commit + push ...) else (echo [2/2] Commit + push ...)
 echo.
 echo --- files that will be committed to the PUBLIC repo: ---
 git status --short

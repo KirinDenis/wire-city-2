@@ -83,6 +83,7 @@ its lecture number.
 - **L23** (lecture 17) - A town on the ground: houses, a byte of fraction, windows that grow, and night. Open: https://kirindenis.github.io/wire-city-2/course/?l=23 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L23/HOUSES.ASM - video: https://www.youtube.com/watch?v=uro4Zu2EWps
 - **L24** (lecture 18) - The forces: a throttle, the air, and Newton - flight physics on the BIOS clock. Open: https://kirindenis.github.io/wire-city-2/course/?l=24 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L24/FORCES.ASM - video: https://www.youtube.com/watch?v=pTsIJ0mESn8
 - **L25** (lecture 19) - The three axes: barrel rolls, loops and turns - the stick is in the aeroplane. Open: https://kirindenis.github.io/wire-city-2/course/?l=25 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L25/AXES.ASM - video: https://www.youtube.com/watch?v=UVa4p0RmGT4
+- **L26** (lecture 1A) - Letters you draw yourself: the game's 4x6 font, and a ring of bit masks. Open: https://kirindenis.github.io/wire-city-2/course/?l=26 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L26/LETTERS.ASM - video: https://www.youtube.com/watch?v=8MRKP3MoJC0
 <!-- LESSONS END -->
 
 ### If you are an AI helping a student

@@ -32,6 +32,8 @@
   #choice button:hover:not(:disabled) { border-color:var(--acc2); border-left-color:var(--acc2); }
   #choice button:disabled { opacity:.45; cursor:default; border-left-color:#33334a; }
   #choice button small { display:block; color:var(--dim); font-size:13px; margin-top:4px; }
+  #bar { position:absolute; left:0; right:0; bottom:0; height:4px; background:#232338; display:none; }
+  #bar i { display:block; height:100%; width:0; background:var(--acc2); transition:width .2s; }
   .note { background:var(--panel); border:1px solid #232338; border-left:3px solid var(--acc2);
           padding:12px 16px; margin:18px 0; font-size:14px; }
   .note b { color:var(--acc2); font-weight:600; }
@@ -54,10 +56,9 @@
 
   <div class="note">
     <b>Press play on the picture</b>, and give it a moment &mdash; the whole
-    story arrives in one piece before anything happens, and at 320&times;200
-    that is 56 MB. The 640&times;400 edition is 157 MB, which is more than
-    GitHub will serve as one file, so in the browser it waits for a home of
-    its own; in DOS it plays from the folder like everything else.<br>
+    story is fetched before the machine starts, file by file, and the bar
+    under the picture shows how far it has got. Once fetched it stays in
+    this browser, so the second time is quick.<br>
     It does not start by itself on purpose. A browser will not let a page make
     a sound until you have interacted with it, so a game that started on its
     own would play silently; the click that starts it is the one that unlocks
@@ -68,9 +69,10 @@
     <div id="dos"></div>
     <div id="choice">
       <p>Which screen?</p>
-      <button id="pick640" disabled>640 &times; 400<small>not in the browser yet &middot; 157 MB, and GitHub holds 100</small></button>
-      <button id="pick320">320 &times; 200<small>mode 13h &middot; any VGA &middot; a quarter of the bytes</small></button>
+      <button id="pick640" disabled>640 &times; 400<small>VESA, the picture as it was made &middot; <span id="mb640">&hellip;</span></small></button>
+      <button id="pick320" disabled>320 &times; 200<small>mode 13h &middot; any VGA &middot; <span id="mb320">&hellip;</span></small></button>
     </div>
+    <div id="bar"><i></i></div>
   </div>
   <p id="feed" class="quiet"></p>
 
@@ -111,8 +113,12 @@
         card gets the high bytes</dd>
     <dt>Addressing</dt><dd>unreal mode &mdash; a 4 GB limit cached in FS. No DOS
         extender, nothing licensed, nothing vendored</dd>
-    <dt>Built with</dt><dd>FASM, inside DOS. The engine is a 13 KB
+    <dt>Built with</dt><dd>FASM, inside DOS. The engine is a 15 KB
         <code>.COM</code> file; the scenes are INI files beside their clips</dd>
+    <dt>Delivered</dt><dd>one file each, listed in <code>owlnight.json</code>
+        with where they live; the page fetches them and hands them to the
+        emulator as its disk C: before it boots. Nothing here is a bundle,
+        and nothing big is in the repository</dd>
   </dl>
 
   <h2>What is wrong with it</h2>
@@ -124,7 +130,11 @@
      put runs back into the dither, not from a better codec. A codebook is
      still not written, and on this material it would have to be a real
      one: measured, 165,648 coded blocks in a clip and 165,642 of them
-     different from every other, so nothing matches anything exactly.</p>
+     different from every other, so nothing matches anything exactly.
+     And the whole edition is fetched before the first frame, because this
+     emulator cannot be handed a file once it runs; a disk read sector by
+     sector as the story asks for it would take the wait away, and is not
+     built.</p>
 
   <p class="quiet">Part of <a href="https://github.com/KirinDenis/wire-city-2"
      style="color:var(--acc2)">wire-city-2</a>. This page is not linked from
@@ -133,42 +143,39 @@
 
 <script src="jsdos/js-dos.js"></script>
 <script>
-  // Named once. A cached page serving a stale bundle is a class of confusion
-  // this project has already paid for, so the version is on the glass.
-  // Two bundles, one an edition: the story is made at 640x400 and at
-  // 320x200, and the two together are over what GitHub will hold in one
-  // file. The choice the DOS engine asks in text mode is asked HERE
-  // instead - each bundle's STORY.INI lists only its own edition, so the
-  // machine goes straight to the story.
-  const BUNDLE640 = "";   // the 640x400 edition has no bundle: 157 MB, and its button is off
-  const BUNDLE320 = "owlvid320_v24.jsdos";
-
-  // The bundle holds the engine, every scene's text, the first room and the
-  // music - enough for the machine to start in seconds. The CLIPS do not:
-  // they are fetched one at a time and written into the running DOS file
-  // system while the player is still in the room ahead of them. The engine
-  // waits for whatever has not landed (STREAM.ON in the bundle tells it to),
-  // so the order below is the order the story plays.
+  // THE SHAPE OF THIS PAGE
   //
-  // CLIP_BASE is the one line to change when the clips move off this site:
-  // any host will do that sends Access-Control-Allow-Origin and
-  // Cross-Origin-Resource-Policy, which this page needs because it runs
-  // under COEP for the emulator's shared memory.
-  const CLIP_BASE = "owlnight/";
-  const CLIPS640 = CLIP_BASE + "owlvid_clips.json";
-  const CLIPS320 = CLIP_BASE + "owlvid320_clips.json";
+  // No bundle. docs/owlnight.json (written by pack-night.ps1, committed)
+  // lists every file the story is made of - where it goes on C:, how big it
+  // is, which edition it belongs to - and where the files live (`base`).
+  // NOT a GitHub release, although that is where the files are published
+  // for people: measured 2026-10-09, a release download sends no
+  // Access-Control-Allow-Origin on either of its two hops, and a browser
+  // refuses to let a page read such a response. `base` must be a host that
+  // sends the header - our own server behind a Caddy block, or the Drive
+  // API - and pack-night.ps1 -Base writes it into the manifest. The page
+  // then fetches the
+  // chosen edition's files, keeps them in this browser's cache, and starts
+  // js-dos with them as the contents of C: (initFs) and a dosbox.conf of
+  // its own - the way OWLOSUI's DOS PC builds its disk. That is the one
+  // shape this emulator supports: everything in place BEFORE it boots. A
+  // file written into a running machine is never seen by DOS; that was
+  // proved twice and the proof is in Skill/POINTTASK.md.
+  //
+  // ?base=owlnight/release/  fetches from the packer's staging folder on
+  //                          this site instead of the release: the test
+  //                          before anything is uploaded
+  // ?autostart=1&screen=320  for the rigs - it FREEZES at the first sound,
+  //                          because no gesture means no audio; see below
+  const MANIFEST = "owlnight.json";
   const params = new URLSearchParams(location.search);
-  document.querySelector(".sub").textContent +=
-    "  \u00b7  v" + (BUNDLE640.match(/_v(\d+)/) || [0, "?"])[1] +
-    " / v" + (BUNDLE320.match(/_v(\d+)/) || [0, "?"])[1];   // the dot is escaped: pack.ps1 rewrites this page as ASCII
 
   // Belt and braces, and it has to be installed BEFORE js-dos runs - it
   // works by remembering every AudioContext the page creates, and a wrapper
   // put in place after the context already exists remembers nothing. The
   // next real gesture then resumes any that are still suspended, so a
-  // visitor arriving with ?autostart=1, or one whose browser suspends the
-  // context for reasons of its own, gets sound on their first click rather
-  // than a silent picture and no explanation.
+  // visitor whose browser suspends the context for reasons of its own gets
+  // sound on their first click rather than a silent picture.
   (function () {
     const Orig = window.AudioContext || window.webkitAudioContext;
     if (!Orig) return;
@@ -181,7 +188,6 @@
     Tracked.prototype = Orig.prototype;
     window.AudioContext = Tracked;
     if (window.webkitAudioContext) window.webkitAudioContext = Tracked;
-
     const resume = () => made.forEach((c) => {
       if (c.state === "suspended") c.resume().catch(() => {});
     });
@@ -189,165 +195,128 @@
       window.addEventListener(e, resume, { capture: true }));
   })();
 
-  // NOT autoStart, and this is the whole reason:
-  //
-  // A browser refuses to let a page make a sound until the visitor has
-  // interacted with it. Start the emulator on page load and its AudioContext
-  // is created suspended, so the clip runs perfectly and in silence - and
-  // nothing on screen says why. It looked like a hardware fault: sound
-  // appeared when the volume wheel on a headset was turned, because the
-  // wheel sends an event the browser counts as interaction, and the context
-  // woke up. Two different browsers, same behaviour, no bug in either.
-  //
-  // The click on a screen button is that gesture: it picks the bundle,
-  // starts the machine and unlocks the sound in one go. ?autostart=1 (with
-  // &screen=320 for the other edition) is kept for the test rigs, which do
-  // not care about audio.
-  // Fetch the clips in play order and hand each to the machine. Each one
-  // OVERWRITES a four-byte placeholder that was in the bundle: DOS caches
-  // the directory of a mounted drive and never sees a file that appears
-  // after boot, but it does read back the new content of one whose entry
-  // it already had. The engine tells the two apart by the first four bytes
-  // and waits for a clip that has not landed. One that fails to arrive is
-  // not fatal - the engine says MISSING for that section and goes on.
-  //  BEFORE THE ENGINE LOOKS, and that is the whole trick. Writing into a
-  //  machine that is already playing does not work: DOS caches the
-  //  directory of a mounted drive the first time it reads it, and a file
-  //  that arrives afterwards is not there as far as DOS is concerned -
-  //  proved by making the engine print the four bytes it read back, which
-  //  were the placeholder's while the real clip sat in the file system.
-  //
-  //  So the bundle's autoexec stops at a PAUSE before it runs anything.
-  //  Nothing has listed the scene folders yet, nothing is cached, and the
-  //  clips are written into a machine that is up but idle. Then one
-  //  simulated keypress lets it out of the pause and the story starts with
-  //  everything in place.
-  //
-  //  What this buys: the clips are ordinary files beside the page, one per
-  //  scene, none of them near GitHub's 100 MB limit, and the bundle itself
-  //  stays small. What it does not buy is a shorter wait - that needs the
-  //  files to arrive DURING the story, which this js-dos cannot do.
-  const KEY_ENTER = 257;
+  const byId = (id) => document.getElementById(id);   // not $ and not el: js-dos.js takes both
+  function say(text) { byId("feed").textContent = text; }
+  const MB = (n) => (n / 1048576).toFixed(0) + " MB";
 
-  async function feed(ci, listUrl) {
-    let clips = [];
-    try {
-      const r = await fetch(listUrl);
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      clips = await r.json();
-    } catch (e) {
-      say("no clip list at " + listUrl + " - only what is in the bundle will play");
-    }
-    const total = clips.reduce((n, c) => n + c.bytes, 0);
+  let manifest = null;
+  async function loadManifest() {
+    const r = await fetch(MANIFEST, { cache: "no-cache" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    manifest = await r.json();
+    if (params.get("base")) manifest.base = params.get("base");
+    const size = (ed) => manifest.files.filter((f) => f.edition === ed || f.edition === "shared")
+                                         .reduce((n, f) => n + f.bytes, 0);
+    byId("mb640").textContent = MB(size("640"));
+    byId("mb320").textContent = MB(size("320"));
+    byId("pick640").disabled = false;
+    byId("pick320").disabled = false;
+    document.querySelector(".sub").textContent += "  ·  " + manifest.tag + " · " + manifest.made;
+  }
+  loadManifest().catch((e) => say("no manifest (" + e.message + ") - nothing to play"));
+
+  // The machine's own configuration: the same lines the DOS batch files
+  // use, with the edition chosen HERE so the engine does not ask in text
+  // mode. C: is the initFs folder "C"; the story plays from ENGINE\ with
+  // the story folder beside it, exactly as in the repository.
+  function conf(screen) {
+    return [
+      "[sdl]", "autolock=false",
+      "[dosbox]", "machine=svga_s3", "memsize=16",
+      "[cpu]", "core=auto", "cycles=max",
+      "[sblaster]", "sbtype=sb16",
+      "[autoexec]", "@echo off", "mount c C", "c:", "cd ENGINE",
+      ":again", "STORY ..\\STORY\\NIGHT /" + screen,
+      "echo.", "echo Press a key to play it again.", "pause", "goto again", ""
+    ].join("\r\n");
+  }
+
+  // Fetch one edition: the cache first, the release second, three files at
+  // a time, the bar by bytes. The cache is this browser's, keyed by the
+  // release tag, so a new release is a new fetch and an old one is free.
+  async function fetchEdition(screen) {
+    const files = manifest.files.filter((f) => f.edition === screen || f.edition === "shared");
+    const total = files.reduce((n, f) => n + f.bytes, 0);
     let done = 0;
-    for (const c of clips) {
-      try {
-        const r = await fetch(CLIP_BASE + c.file);
-        if (!r.ok) throw new Error("HTTP " + r.status);
+    let cache = null;
+    try { cache = await caches.open("owlnight-" + manifest.tag); } catch (e) { cache = null; }
+    const bar = byId("bar"); bar.style.display = "block";
+    const fill = bar.firstElementChild;
+    const show = () => { fill.style.width = Math.round(done * 100 / Math.max(1, total)) + "%"; say("fetching the night: " + MB(done) + " of " + MB(total)); };
+    show();
+    const out = new Array(files.length);
+    let next = 0;
+    async function worker() {
+      while (next < files.length) {
+        const i = next++;
+        const f = files[i];
+        const url = manifest.base + f.asset;
+        let r = cache ? await cache.match(url) : null;
+        if (!r) {
+          r = await fetch(url, { mode: "cors" });
+          if (!r.ok) throw new Error(f.asset + ": HTTP " + r.status);
+          if (cache) { try { await cache.put(url, r.clone()); } catch (e) { /* no room: play on, uncached */ } }
+        }
         const bytes = new Uint8Array(await r.arrayBuffer());
-        await ci.fsWriteFile(c.into, bytes);
-        done += c.bytes;
-        say("loading the night: " + Math.round(done * 100 / Math.max(1, total)) + "%");
-      } catch (e) {
-        say("could not fetch " + c.file + " (" + e.message + ")");
+        if (bytes.length !== f.bytes) throw new Error(f.asset + ": " + bytes.length + " bytes, the manifest says " + f.bytes);
+        out[i] = { path: "C/" + f.into, contents: bytes };
+        done += f.bytes; show();
       }
     }
-    // out of the pause, whatever happened above: a machine left waiting
-    // for a key nobody presses is worse than a story with a hole in it
-    say(done >= total && total > 0 ? "all of it is here" : "starting with what arrived");
-    try { ci.simulateKeyPress(KEY_ENTER); } catch (e) { say("could not start the story: " + e.message); }
+    await Promise.all([worker(), worker(), worker()]);
+    bar.style.display = "none";
+    return out;
   }
-  function say(text) { document.getElementById("feed").textContent = text; }
 
-  function start(bundle, listUrl) {
-    document.getElementById("choice").hidden = true;
-    say("loading the rest of the night: 0%");
-    Dos(document.getElementById("dos"), {
-    url: bundle,
-    // The machine's own hand, kept on the window on purpose: it is how the
-    // clips get in, and it is the only way to ask the DOS side what it
-    // thinks afterwards - window.owlci.fsReadFile("ENGINE/STORY.LOG")
-    // prints the engine's log without leaving the browser.
-    // ?autostart=1 FREEZES THE MACHINE the moment the story makes a sound,
-    // and that is not a bug to chase: with no gesture behind it the page's
-    // AudioContext is suspended, the emulator's audio backs up, and the
-    // whole machine stops - the engine's log ends at the line before the
-    // first note. A real click on a screen button is a gesture, the context
-    // runs, and none of this happens. Keep autostart for looking at the
-    // picture and the file system, not for hearing anything.
-    //
-    // ?nofeed=1 starts the machine and sends it nothing - the way to tell
-    // a fault in the engine from a fault in the feeding.
-    onEvent: (name, ci) => {
-      if (name !== "ci-ready") return;
-      window.owlci = ci;
-      if (params.get("nofeed") !== "1") feed(ci, listUrl); else say("not feeding (nofeed=1)");
-    },
-    pathPrefix: "jsdos/emulators/",
-    theme: "dark",
-    renderAspect: "16/10",
-    imageRendering: "pixelated",
-    scaleControls: 0.2,
-    autoStart: true,
+  async function start(screen) {
+    if (!manifest) { say("the manifest has not arrived yet"); return; }
+    byId("choice").hidden = true;
+    let files;
+    try { files = await fetchEdition(screen); }
+    catch (e) { say("could not fetch the story: " + e.message); byId("choice").hidden = false; return; }
+    say("all of it is here: " + files.length + " files - starting the machine");
+    Dos(byId("dos"), {
+      dosboxConf: conf(screen),
+      initFs: files,
+      // The machine's own hand, kept on the window on purpose: it is the
+      // only way to ask the DOS side what it thinks afterwards -
+      // window.owlci.fsReadFile("C/ENGINE/STORY.LOG") prints the engine's
+      // log without leaving the browser.
+      onEvent: (name, ci) => {
+        if (name !== "ci-ready") return;
+        window.owlci = ci;
+        say("");
+      },
+      pathPrefix: "jsdos/emulators/",
+      theme: "dark",
+      renderAspect: "16/10",
+      imageRendering: "pixelated",
+      scaleControls: 0.2,
+      // The click on a screen button is the gesture that unlocks the sound;
+      // autoStart here only means "once the files are in, boot".
+      autoStart: true,
 
-    // PINNED, and this is not a preference.
-    //
-    // js-dos reads its emulator from the browser's stored settings:
-    //     backend: storage.getItem("backend") ?? "dosbox"
-    // ...and its own settings panel lets a visitor change it to DOSBox-X.
-    // Only wdosbox.wasm is vendored here - wdosbox-x.wasm has never been -
-    // so one touch of that gear leaves the browser asking for a file this
-    // site does not have, and every js-dos page on it dies with a 404 from
-    // then on. It is stored, so it does not go away by reloading, and it
-    // looks exactly like the site being broken for everyone.
-    //
-    // Naming the backend here overrides the stored value. Every page that
-    // embeds js-dos wants this line.
-    backend: "dosbox"
+      // PINNED, and this is not a preference.
+      //
+      // js-dos reads its emulator from the browser's stored settings:
+      //     backend: storage.getItem("backend") ?? "dosbox"
+      // ...and its own settings panel lets a visitor change it to DOSBox-X.
+      // Only wdosbox.wasm is vendored here - wdosbox-x.wasm has never been -
+      // so one touch of that gear leaves the browser asking for a file this
+      // site does not have, and every js-dos page on it dies with a 404 from
+      // then on. Naming the backend here overrides the stored value.
+      backend: "dosbox"
     });
   }
-  // The 640x400 button is off until its bundle has somewhere to live: see
-  // the note above the picture, and the dormant streaming in pack.ps1.
-  document.getElementById("pick640").addEventListener("click", () => start(BUNDLE640, CLIPS640));
-  document.getElementById("pick320").addEventListener("click", () => start(BUNDLE320, CLIPS320));
-  if (params.get("autostart") === "1")
-    params.get("screen") === "320" ? start(BUNDLE320, CLIPS320) : start(BUNDLE640, CLIPS640);
 
+  byId("pick640").addEventListener("click", () => start("640"));
+  byId("pick320").addEventListener("click", () => start("320"));
+  // ?autostart=1 FREEZES THE MACHINE the moment the story makes a sound,
+  // and that is not a bug to chase: with no gesture behind it the page's
+  // AudioContext is suspended, the emulator's audio backs up, and the whole
+  // machine stops. Keep it for looking at the picture and the file system.
+  if (params.get("autostart") === "1")
+    loadManifest().then(() => start(params.get("screen") === "320" ? "320" : "640")).catch(() => {});
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
