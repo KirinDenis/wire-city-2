@@ -2,9 +2,9 @@
     "playlist":  "PLYAv8-EdgIF8",
     "disk":  {
                  "url":  "disk.zip",
-                 "version":  "9FAC0FC5CBA9",
-                 "files":  358,
-                 "bytes":  8560395
+                 "version":  "D9D2D6723720",
+                 "files":  366,
+                 "bytes":  8905297
              },
     "lessons":  [
                     {
@@ -330,6 +330,18 @@
                         "size":  250038,
                         "video":  "8MRKP3MoJC0",
                         "length":  "5:50"
+                    },
+                    {
+                        "id":  "L27",
+                        "folder":  "L27",
+                        "lecture":  "",
+                        "title":  "Tapes: the HUD\u0027s scales - speed, height, compass, the climb and the G",
+                        "about":  "The numbers in the corner become OWL FLY III\u0027s HUD tapes. A scale is a number line seen through a window, and every tape is one sum: y = 83 - (mark - value) / scale. The first mark is a DIV and a MUL; the compass slides past a caret, the speed and the height slide past their pointers; the stall, the floor under you and the ceiling are red lines on the scales; the IVV, a cyan tick, shows the climb; and the G meter reads the stick: G = 1 + q*vel/512. With the ring on, every bar is drawn twice - rings first, then ink - the painter\u0027s order again",
+                        "main":  "TAPES.ASM",
+                        "buildable":  true,
+                        "size":  276381,
+                        "video":  null,
+                        "length":  null
                     }
                 ]
 }

@@ -1,0 +1,7 @@
+.title  Tapes: the HUD's scales - speed, height, compass, the climb and the G
+.what   The numbers in the corner become OWL FLY III's HUD tapes. A scale is a number line seen through a window, and every tape is one sum: y = 83 - (mark - value) / scale. The first mark is a DIV and a MUL; the compass slides past a caret, the speed and the height slide past their pointers; the stall, the floor under you and the ceiling are red lines on the scales; the IVV, a cyan tick, shows the climb; and the G meter reads the stick: G = 1 + q*vel/512. With the ring on, every bar is drawn twice - rings first, then ink - the painter's order again
+.tier   LESSON
+.main   TAPES.ASM
+.build  FASM TAPES.ASM TAPES.COM
+.run    TAPES.COM
+.uses   DIV MUL SAR STOSB
