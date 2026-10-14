@@ -2,9 +2,9 @@
     "playlist":  "PLYAv8-EdgIF8",
     "disk":  {
                  "url":  "disk.zip",
-                 "version":  "D9D2D6723720",
-                 "files":  366,
-                 "bytes":  8905297
+                 "version":  "6D7890FC289E",
+                 "files":  374,
+                 "bytes":  9261289
              },
     "lessons":  [
                     {
@@ -334,14 +334,26 @@
                     {
                         "id":  "L27",
                         "folder":  "L27",
-                        "lecture":  "",
+                        "lecture":  "1B",
                         "title":  "Tapes: the HUD\u0027s scales - speed, height, compass, the climb and the G",
                         "about":  "The numbers in the corner become OWL FLY III\u0027s HUD tapes. A scale is a number line seen through a window, and every tape is one sum: y = 83 - (mark - value) / scale. The first mark is a DIV and a MUL; the compass slides past a caret, the speed and the height slide past their pointers; the stall, the floor under you and the ceiling are red lines on the scales; the IVV, a cyan tick, shows the climb; and the G meter reads the stick: G = 1 + q*vel/512. With the ring on, every bar is drawn twice - rings first, then ink - the painter\u0027s order again",
                         "main":  "TAPES.ASM",
                         "buildable":  true,
                         "size":  276381,
-                        "video":  null,
-                        "length":  null
+                        "video":  "5pLQ9ZnklwQ",
+                        "length":  "6:18"
+                    },
+                    {
+                        "id":  "L28",
+                        "folder":  "L28",
+                        "lecture":  "1C",
+                        "title":  "The middle of the display: the gunsight, the horizon and the pitch ladder",
+                        "about":  "The centre of OWL FLY III\u0027s head-up display. The gunsight at the middle of the screen, where the nose points, with a bar that stays level with the horizon; the horizon line, where the horizon really is - FOCAL*tan(pitch) below the nose; and the pitch ladder, a rung every ten degrees, shown only once the horizon has left the middle of the screen. Everything is drawn in the horizon\u0027s frame and turned by the bank, and a rung is walked in 8.8 steps, not multiplied. The ladder is conformal - the world\u0027s own lens - and a rung sits FOCAL*tan(pitch - a) from the nose: the game measures from the horizon instead, and a tangent of a difference is not a difference of tangents",
+                        "main":  "LADDER.ASM",
+                        "buildable":  true,
+                        "size":  292161,
+                        "video":  "QsAhPJk0-pM",
+                        "length":  "5:34"
                     }
                 ]
 }

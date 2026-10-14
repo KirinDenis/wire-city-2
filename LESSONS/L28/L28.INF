@@ -1,0 +1,7 @@
+.title  The middle of the display: the gunsight, the horizon and the pitch ladder
+.what   The centre of OWL FLY III's head-up display. The gunsight at the middle of the screen, where the nose points, with a bar that stays level with the horizon; the horizon line, where the horizon really is - FOCAL*tan(pitch) below the nose; and the pitch ladder, a rung every ten degrees, shown only once the horizon has left the middle of the screen. Everything is drawn in the horizon's frame and turned by the bank, and a rung is walked in 8.8 steps, not multiplied. The ladder is conformal - the world's own lens - and a rung sits FOCAL*tan(pitch - a) from the nose: the game measures from the horizon instead, and a tangent of a difference is not a difference of tangents
+.tier   LESSON
+.main   LADDER.ASM
+.build  FASM LADDER.ASM LADDER.COM
+.run    LADDER.COM
+.uses   SAR IMUL IDIV
