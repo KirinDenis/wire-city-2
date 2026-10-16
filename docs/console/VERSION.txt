@@ -1,0 +1,4 @@
+The console's shared core, copied from OWLOS-LAN\web\console\
+commit e997715b3b642ba50479e728aa4512ecea43321d - plus changes not yet committed in web\console\ (1 entries)
+copied 2026-10-16 21:01 by docs\pull-console.ps1
+files: commands.js, shell.js, terminal.js

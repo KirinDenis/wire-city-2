@@ -2828,18 +2828,18 @@ NOSEIN: mov  ax,[pitch]         ; keep the path
         add  ax,64              ; a quarter on: the cosine
         call SINQ               ; AX = cos(roll)*256
         imul word [alpha]       ; DX:AX = alpha*cos*256
-        mov  al,ah              ; AX = alpha*cos(roll): the middle bytes
-        mov  ah,dl
-        mov  cl,3               ; CL = 3
-        sar  ax,cl              ; AX = /8: whole steps
+        mov  al,ah              ; AX = alpha*cos(roll): the middle bytes,
+        mov  ah,dl              ;  in eighths of a step
+        mov  si,noffp           ; SI = the pitch offset's step, kept
+        call NSTEP              ; AX = whole steps, steadied
         add  [pitch],ax         ; pitch += them: the nose is above the path
         mov  ax,[roll]          ; AX = roll
         call SINQ               ; AX = sin(roll)*256
         imul word [alpha]       ; DX:AX = alpha*sin*256
-        mov  al,ah              ; AX = alpha*sin(roll)
+        mov  al,ah              ; AX = alpha*sin(roll), eighths
         mov  ah,dl
-        mov  cl,3
-        sar  ax,cl              ; AX = whole steps
+        mov  si,noffh           ; SI = the heading offset's step, kept
+        call NSTEP              ; AX = whole steps, steadied
         add  ax,[heading]       ; AX = heading + them
         and  ax,255
         mov  [heading],ax       ; heading = the nose's
@@ -2860,6 +2860,41 @@ NOSEIN: mov  ax,[pitch]         ; keep the path
         add  word [roll],128
         and  word [roll],255
 .nx:    ret
+
+; ---- NSTEP: AX = an offset in eighths of a step, SI -> the whole steps it
+;      was last drawn at -> AX = the whole steps to draw it at now.
+;  THE CAMERA TURNS IN WHOLE STEPS - 256 to the circle, 1.4 degrees, five
+;  pixels on the screen - and the nose's offset is a fraction of one. The
+;  first build cut it with SAR 3, and two things shook the picture: SAR
+;  rounds DOWN, so a third of a step to the left was a whole step and a
+;  third to the right was none; and alpha moves a little every tick, so the
+;  offset sat on a threshold and flicked across it - with a touch of bank,
+;  the island jumped left and right five pixels at a time (the pilot saw
+;  it, 2026-10-16). Now it ROUNDS, and it only moves when the true offset
+;  has gone three quarters of a step from where it is drawn: a little
+;  stickiness, and the flicker is gone. A thermostat does the same - it is
+;  called hysteresis.
+;  In C:
+;
+;      int nstep(int e, int *kept)              /* e in eighths */
+;      {
+;          if (abs(e - *kept * 8) > 6) *kept = (e + 4) >> 3;
+;          return *kept;
+;      }
+NSTEP:  mov  bx,[si]            ; BX = the steps it is drawn at
+        mov  cl,3               ; CL = 3
+        shl  bx,cl              ; BX = them in eighths
+        mov  dx,ax              ; DX = e
+        sub  dx,bx              ; DX = e - drawn: how far it has gone
+        jns  .p
+        neg  dx                 ; DX = |it|
+.p:     cmp  dx,6               ; more than three quarters of a step?
+        jle  .k                 ;   no: stay where it is
+        add  ax,4               ;   yes: round - a half step on...
+        sar  ax,cl              ;   ...and /8: the nearest whole step
+        mov  [si],ax            ;   kept for next time
+.k:     mov  ax,[si]            ; AX = the steps to draw it at
+        ret
 
 NOSEOUT:
         mov  ax,[ppath]         ; the path back, for PHYS
@@ -5818,6 +5853,8 @@ thi     dw 0
 ppath   dw 0                    ; NOSEIN: the path, kept for one frame
 hpath   dw 0
 rpath   dw 0
+noffp   dw 0                    ; NSTEP: the nose's pitch offset, as drawn
+noffh   dw 0                    ; ...and its heading offset
 fpy     dw 0                    ; FPM: the marker's row
 q       dw 0                    ; the pull on the stick, signed, in eighths
 rud     dw 0                    ; ...and the push on the pedals

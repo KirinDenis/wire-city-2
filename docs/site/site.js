@@ -27,6 +27,9 @@ import { log } from '../owlosui/apps/log.js';
 import { CourseApp, Cm, A } from '../course/course.js';
 import { Drive, LocalFolder, crlf, fingerprint, guardRemovals, loadTable, saveTable, keepHandle, handleOf, forgetHandle, freeFolder, statsOf, sizeText, dateText } from './drives.js';
 import { CellTable } from './table.js';
+import { Terminal, CmTerminalClose } from '../console/terminal.js';
+import { ANSI, RESET } from '../console/shell.js';
+import { siteShell } from './console.js';
 
 /** C:, the machine's hard disk, kept in this browser: what DOS writes there is there tomorrow. */
 const C_FOLDER = '/DOS C Drive/';
@@ -159,6 +162,7 @@ export class SiteApp extends CourseApp {
     window.addEventListener('pointerdown', () => { this.mouseDown = true; }, true);
     window.addEventListener('pointerup', () => { this.mouseDown = false; }, true);
     this.buildMenus();          // again: the course's constructor built it before the drives were there
+    this.makeTerminal();
   }
 
   /** The machine's own four: A: and B: floppies, C: the hard disk, D: My files - all kept in this browser. */
@@ -273,11 +277,14 @@ export class SiteApp extends CourseApp {
       for (const x of this.extraGates) if (x.writable) got = (await x.pull()) || got;
       return got;
     };
+    // The library's README - "this folder is a floppy of the DOS PC" - for
+    // A:, B: and D:; C: has its own (the toolkit's, seedC), and a folder
+    // Map Drives added has none.
     g.ensure = async () => {
       const all = g.gates;
-      g.gates = all.filter(x => 'ABCD'.includes(x.letter));
+      g.gates = all.filter(x => 'ABD'.includes(x.letter));
       try { await ensure(); } finally { g.gates = all; }
-      for (const x of all) if (!'ABCD'.includes(x.letter)) await this.browser.mkdir(x.folder).catch(() => {});
+      for (const x of all) if (!'ABD'.includes(x.letter)) await this.browser.mkdir(x.folder).catch(() => {});
     };
   }
 
@@ -736,8 +743,11 @@ export class SiteApp extends CourseApp {
         const at = `${C_FOLDER}${f.path}`;
         const have = await S.readBytes(at).catch(() => null);
         const mine = was.files[f.path];
+        // The library's floppy README, written into C:'s folder before the
+        // site kept it out (2026-10-16): the library's words, not the visitor's.
+        const gates = have && f.path === 'README.TXT' && new TextDecoder().decode(have.slice(0, 64)).startsWith('This folder is drive C:');
         if (!have && !first && mine !== undefined) continue;                       // the visitor deleted it
-        if (have && !first && mine !== undefined && fingerprint(have) !== mine) {  // the visitor changed it
+        if (have && !first && !gates && mine !== undefined && fingerprint(have) !== mine) {  // the visitor changed it
           now.files[f.path] = mine;
           continue;
         }
@@ -853,7 +863,7 @@ export class SiteApp extends CourseApp {
           { act: () => this.track(this.dos.run('commander')) }),
         item('Kirin Commander for ~W~eb', 'The same two panels in the page, over the same drives: A: on the left, D: on the right',
           { act: () => this.track(this.panels(this.drives[0])) }),
-        item('~T~erminal', 'The console: the same drives as /mnt/a, /mnt/c, and what every window does', { shortcut: 'Ctrl+`' }),
+        item('~T~erminal', 'The console: the same drives as /mnt/a, /mnt/c, and what every window does', { shortcut: 'Ctrl+`', act: () => this.terminal?.toggle() }),
         line(),
         item('Save ~p~rofile...', 'Your drives and settings as a list of commands, in a file on your computer'),
         item('~L~oad profile...', 'Put a saved profile back: the drives come back with their letters')),
@@ -1016,6 +1026,32 @@ export class SiteApp extends CourseApp {
     this.track(this.dos.run(g.key));
   }
 
+  /** The games, for the console's play. */
+  get games() { return GAMES; }
+
+  /**
+   * The console (console.js over ../console/, OWLOS LAN's shared core): the
+   * terminal Ctrl+` drops - and Files > Terminal - over the same drives as
+   * the menu, both commanders and DOS. Made once, at the first start(); its
+   * history kept in this browser apart from OWLOS LAN's.
+   */
+  makeTerminal() {
+    if (this.terminal) return;
+    this.terminal = new Terminal(this.owl, {
+      app: this,
+      makeShell: io => siteShell(this, io),
+      historyKey: 'site.history',
+      welcome: `${ANSI.heading}WIRE CITY 86${RESET} ${ANSI.muted}- help lists the commands, man NAME says more, Tab finishes a word. ` +
+        `The drives are /mnt/a, /mnt/c... - C:\\GAMES works too; ~ is D:, My files.${RESET}`,
+    });
+  }
+
+  /** Alt+F3 on the terminal: closed its own way, its record kept for the next time. */
+  closeActive() {
+    if (this.terminal?.owns(this.owl.active())) { this.terminal.close(); return; }
+    super.closeActive();
+  }
+
   /** What is not a command: the course's tools, and a click on Map Drives' table. */
   poll() {
     super.poll();
@@ -1026,6 +1062,7 @@ export class SiteApp extends CourseApp {
     // The course ends its page on Alt+X (the commander passes it on); a
     // site is left by its browser tab.
     if (cmd === Cm.Exit) return true;
+    if (this.terminal?.handles(cmd)) { this.terminal.onCommand(cmd); return true; }
     const t = this.mapTable;
     switch (cmd) {
       case Mp.Close:
