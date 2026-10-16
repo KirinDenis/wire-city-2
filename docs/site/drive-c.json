@@ -1,0 +1,133 @@
+{
+    "made":  "2026-10-16 14:03",
+    "source":  "released",
+    "from":  {
+                 "OWLFLY3":  "owlfly3_v17.jsdos",
+                 "OWLFLY2":  "owlfly2_v70.jsdos",
+                 "OWLFLY":  "owlfly_v53.jsdos",
+                 "TRAINER":  "field_v32.jsdos",
+                 "WIRECITY":  "wirecity_v4.jsdos"
+             },
+    "files":  [
+                  {
+                      "path":  "GAMES/OWLFLY3/OWLFLY3.EXE",
+                      "size":  124864
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/CITY.DAT",
+                      "size":  64260
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/CPSIDE.DAT",
+                      "size":  48231
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/SFX.DAT",
+                      "size":  53389
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/CPCGA.DAT",
+                      "size":  16000
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/CPEGA.DAT",
+                      "size":  32000
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/CPHGC.DAT",
+                      "size":  16000
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/CPSCGA.DAT",
+                      "size":  128000
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/CPSEGA.DAT",
+                      "size":  128000
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/CPSHGC.DAT",
+                      "size":  128000
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/RUN.BAT",
+                      "size":  90
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY2/FLYOWL2.EXE",
+                      "size":  107424
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY2/CITY.DAT",
+                      "size":  64260
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY2/CPSIDE.DAT",
+                      "size":  48231
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY2/SFX.DAT",
+                      "size":  53389
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY2/RUN.BAT",
+                      "size":  89
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY/FLYOWL.COM",
+                      "size":  40309
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY/CITY.DAT",
+                      "size":  64260
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY/ENGINE.RAW",
+                      "size":  32768
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY/RUN.BAT",
+                      "size":  84
+                  },
+                  {
+                      "path":  "GAMES/TRAINER/FIELD.COM",
+                      "size":  24531
+                  },
+                  {
+                      "path":  "GAMES/TRAINER/PLANE1.DAT",
+                      "size":  409
+                  },
+                  {
+                      "path":  "GAMES/TRAINER/RBASE1.DAT",
+                      "size":  147
+                  },
+                  {
+                      "path":  "GAMES/TRAINER/RDISH1.DAT",
+                      "size":  275
+                  },
+                  {
+                      "path":  "GAMES/TRAINER/TWR1.DAT",
+                      "size":  554
+                  },
+                  {
+                      "path":  "GAMES/TRAINER/CKPT1.DAT",
+                      "size":  519
+                  },
+                  {
+                      "path":  "GAMES/TRAINER/CNPY1.DAT",
+                      "size":  185
+                  },
+                  {
+                      "path":  "GAMES/TRAINER/RUN.BAT",
+                      "size":  94
+                  },
+                  {
+                      "path":  "GAMES/WIRECITY/CITY.COM",
+                      "size":  5552
+                  },
+                  {
+                      "path":  "GAMES/WIRECITY/RUN.BAT",
+                      "size":  86
+                  }
+              ]
+}

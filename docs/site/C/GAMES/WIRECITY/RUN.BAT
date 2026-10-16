@@ -1,0 +1,3 @@
+@echo off
+REM RUN.BAT - WIRE CITY. From C:\: cd GAMES\WIRECITY, then RUN.
+CITY.COM

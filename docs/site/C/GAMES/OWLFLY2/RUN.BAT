@@ -1,0 +1,3 @@
+@echo off
+REM RUN.BAT - OWL FLY II. From C:\: cd GAMES\OWLFLY2, then RUN.
+FLYOWL2.EXE

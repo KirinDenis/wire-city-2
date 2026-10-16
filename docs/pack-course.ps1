@@ -17,6 +17,9 @@
 #       GAMES\OWLFLY\, OWLFLY2\, OWLFLY3\
 #                            SRC\ and INSTALL\ (the data the build does not
 #                            make, and the game as built), MAKE.BAT, RUN.BAT...
+#       GAMES\WIRECITY\, TRAINER\
+#                            the same, the game in its own folder; TRAINER\res\
+#                            the models its MAKE.BAT packs with TOOLS\OBJ2DAT
 #   docs\course\course.json  every lesson, its title and notes (its .INF), its
 #                            main source, its video - and the disk's version
 #
@@ -80,6 +83,16 @@ foreach ($g in "OWLFLY", "OWLFLY2", "OWLFLY3") {
   $picked += Pick "GAMES\$g\SRC" '.' -recurse | Where-Object { $_.Extension -notmatch '^\.(LST|MAP|LOG)$' }
   $picked += Pick "GAMES\$g\INSTALL" '.' -recurse
 }
+# The two small ones keep the game in their own folder, not in INSTALL\.
+# The flight school's MAKE.BAT packs its models itself: res\ is 36 KB of
+# .OBJ, and TOOLS\OBJ2DAT.COM packs them (the site's Sources, 2026-10-16).
+$picked += Pick "GAMES\WIRECITY" $TEXT
+$picked += Pick "GAMES\WIRECITY" '\.COM$'
+$picked += Pick "GAMES\TRAINER" $TEXT
+$picked += Pick "GAMES\TRAINER" '\.(COM|DAT|RAW)$'
+$picked += Pick "GAMES\TRAINER\SRC" '.' -recurse | Where-Object { $_.Extension -notmatch '^\.(LST|MAP|LOG)$' }
+$picked += Pick "GAMES\TRAINER\res" '\.(obj|mtl)$'
+$picked += Get-Item (Join-Path $root "TOOLS\OBJ2DAT.COM")
 
 # FASM gets -m 4096 on the disk's copies: a line that runs it ON something,
 # not the "if not exist ...FASM.EXE goto" checks.

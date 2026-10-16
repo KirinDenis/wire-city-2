@@ -1,0 +1,7 @@
+.title  The wing: lift, the angle of attack, and a stall that comes from the angle
+.what   The aeroplane stops flying along its nose. The stick asks for a load - one G hands off, more as you pull - and the wing finds the angle of attack that gives it: alpha = ACRIT * Ncmd / Nmax, where Nmax grows with the air and the square of the speed. The lift, tilted by the bank, bends the path against the weight; pitch and heading are now the PATH, and the nose is the path plus alpha. The flight path marker shows where you are going, alpha below the gunsight on lesson 1C's ladder. Past the critical angle the wing stalls at any speed; the G meter reads the real load, minus one upside down; and the tape's stall line moves with the pull - a square root by Newton, six rounds
+.tier   LESSON
+.main   WING.ASM
+.build  FASM WING.ASM WING.COM
+.run    WING.COM
+.uses   MUL DIV IMUL IDIV SHR

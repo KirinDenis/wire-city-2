@@ -39,7 +39,7 @@ import { unzip } from '../owlosui/dosbox/unzip.js';
 import { ConsoleWindow } from '../owlosui/apps/console.js';
 import { log, watchWindows } from '../owlosui/apps/log.js';
 
-const Cm = {
+export const Cm = {
   Exit: 2, About: 4, Dismiss: 5, Commander: 6, Console: 7,
   Next: 30, Zoom: 31, Close: 32, Cascade: 33, Tile: 34, Previous: 35, List: 36, SizeMove: 37, Minimize: 38,
   Lessons: 600, Build: 601, Run: 602, Watch: 603, Reset: 604,
@@ -47,7 +47,7 @@ const Cm = {
 };
 // Drive A: of the DOS PC: this folder of the browser's storage. The course
 // disk (disk.zip, made by ../pack-course.ps1) is unpacked into it once.
-const A = '/DOS A Drive/';
+export const A = '/DOS A Drive/';
 const DISK_VERSION = `${A}COURSE.VER`;
 // FASM's memory in KB; ?m=N on the page tries another (testing the crash).
 const FASM_KB = Number(new URLSearchParams(globalThis.location?.search ?? '').get('m')) || 4096;
@@ -249,13 +249,46 @@ export class CourseApp {
       run: (source, dir, name) => this.runFile(source, dir, name),
       associations: { ...ASSOCIATIONS, asm: ({ source, dir, name }) => this.buildFile(source, dir, name) },
     });
-    // The DOS PC (OWLOSUI's DosTool - a DOS PC and nothing more): C: with the
-    // toolkit, A: and B: the browser's floppy folders, and the games -
-    // unpacked onto C:\GAMES once their bundles' names are read (start()).
-    // It starts into OUR DOS commander, A:\TOOLS\COMMANDR on the course disk
-    // (a copy of an OWLOSUI example - see its README), and a lesson's
-    // program, run from the page, gives way to it when it ends.
-    this.dos = new DosTool(owl, {
+    this.dos = new DosTool(owl, this.dosOptions());
+    this.dos.box.on(what => { if (what === 'crashed') this.showBuild(CRASHED); });
+    stretchWhenBig(this.dos.box, () => this.dosBig);
+    this.console = new ConsoleWindow(owl, { state: async () => this.state() });
+    this.course = null;
+    this.lesson = null;
+    this.list = new LessonsWindow(this);
+    this.buildWin = 0;
+    this.video = null;
+    this.box = 0;
+    log.info('page', `the core is running: ${owl.width}x${owl.height} cells`);
+    this.buildMenus();
+
+    // F9 and Ctrl+F9 belong to the course even while DOS has the keyboard:
+    // caught on the way down, before the emulator's element, the way the
+    // DOS PC catches Right Ctrl. While the page has the keys, the status
+    // line answers them as usual. A lesson program never sees F9 - every
+    // build switches the PC off and on anyway.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', e => {
+        if (e.key !== 'F9' || !this.dos.box.hasKeys()) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        this.dos.box.release();
+        this.onCommand(e.ctrlKey ? Cm.Run : Cm.Build);
+      }, true);
+    }
+  }
+
+  /**
+   * The DOS PC (OWLOSUI's DosTool - a DOS PC and nothing more): C: with the
+   * toolkit, A: and B: the browser's floppy folders, and the games -
+   * unpacked onto C:\GAMES once their bundles' names are read (start()).
+   * It starts into OUR DOS commander, A:\TOOLS\COMMANDR on the course disk
+   * (a copy of an OWLOSUI example - see its README), and a lesson's
+   * program, run from the page, gives way to it when it ends. A method of
+   * its own so a page built on the course (../site/) can change it.
+   */
+  dosOptions() {
+    return {
       storage: this.browser, commander: this.commander,
       open: (name, text, source, path, options) => this.documents.add(name, text, source, path, options),
       dosFiles: new URL('../owlosui/dos/', import.meta.url),
@@ -273,18 +306,12 @@ export class CourseApp {
         'C/COMMANDR.BAT': COMMANDR_BAT,
         ...Object.fromEntries(GAMES.map(g => [`C/${g.dir}.BAT`, `@echo off\ncd \\GAMES\\${g.dir}\n${g.exe}\ncd \\\n`])),
       },
-    });
-    this.dos.box.on(what => { if (what === 'crashed') this.showBuild(CRASHED); });
-    stretchWhenBig(this.dos.box, () => this.dosBig);
-    this.console = new ConsoleWindow(owl, { state: async () => this.state() });
-    this.course = null;
-    this.lesson = null;
-    this.list = new LessonsWindow(this);
-    this.buildWin = 0;
-    this.video = null;
-    this.box = 0;
-    log.info('page', `the core is running: ${owl.width}x${owl.height} cells`);
+    };
+  }
 
+  /** The menu bar and the status line - a method of its own, as dosOptions() is. */
+  buildMenus() {
+    const owl = this.owl;
     owl.menuBar(
       sub('~F~ile',
         ...this.documents.fileMenu(),
@@ -324,21 +351,6 @@ export class CourseApp {
       { label: '~Alt-F3~ Close', cmd: Cm.Close, key: 'F3', alt: true },
       { label: '~Alt-X~ Exit', cmd: Cm.Exit, key: 'x', alt: true },
     );
-
-    // F9 and Ctrl+F9 belong to the course even while DOS has the keyboard:
-    // caught on the way down, before the emulator's element, the way the
-    // DOS PC catches Right Ctrl. While the page has the keys, the status
-    // line answers them as usual. A lesson program never sees F9 - every
-    // build switches the PC off and on anyway.
-    if (typeof window !== 'undefined') {
-      window.addEventListener('keydown', e => {
-        if (e.key !== 'F9' || !this.dos.box.hasKeys()) return;
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        this.dos.box.release();
-        this.onCommand(e.ctrlKey ? Cm.Run : Cm.Build);
-      }, true);
-    }
   }
 
   /** The editors, by window: { text, source, path, name, crlf, binary }. */

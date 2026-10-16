@@ -2,9 +2,9 @@
     "playlist":  "PLYAv8-EdgIF8",
     "disk":  {
                  "url":  "disk.zip",
-                 "version":  "6D7890FC289E",
-                 "files":  374,
-                 "bytes":  9261289
+                 "version":  "90C4C8E51803",
+                 "files":  417,
+                 "bytes":  9860458
              },
     "lessons":  [
                     {
@@ -354,6 +354,18 @@
                         "size":  292161,
                         "video":  "QsAhPJk0-pM",
                         "length":  "5:34"
+                    },
+                    {
+                        "id":  "L29",
+                        "folder":  "L29",
+                        "lecture":  "",
+                        "title":  "The wing: lift, the angle of attack, and a stall that comes from the angle",
+                        "about":  "The aeroplane stops flying along its nose. The stick asks for a load - one G hands off, more as you pull - and the wing finds the angle of attack that gives it: alpha = ACRIT * Ncmd / Nmax, where Nmax grows with the air and the square of the speed. The lift, tilted by the bank, bends the path against the weight; pitch and heading are now the PATH, and the nose is the path plus alpha. The flight path marker shows where you are going, alpha below the gunsight on lesson 1C\u0027s ladder. Past the critical angle the wing stalls at any speed; the G meter reads the real load, minus one upside down; and the tape\u0027s stall line moves with the pull - a square root by Newton, six rounds",
+                        "main":  "WING.ASM",
+                        "buildable":  true,
+                        "size":  308177,
+                        "video":  null,
+                        "length":  null
                     }
                 ]
 }

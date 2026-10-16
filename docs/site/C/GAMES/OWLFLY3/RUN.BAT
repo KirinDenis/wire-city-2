@@ -1,0 +1,3 @@
+@echo off
+REM RUN.BAT - OWL FLY III. From C:\: cd GAMES\OWLFLY3, then RUN.
+OWLFLY3.EXE

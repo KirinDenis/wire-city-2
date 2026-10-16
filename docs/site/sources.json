@@ -1,0 +1,106 @@
+{
+    "games":  [
+                  {
+                      "dir":  "OWLFLY3",
+                      "title":  "OWL FLY III - seven video systems, three detail levels",
+                      "what":  "The third generation: Hercules to VGA, FULL to wireframe LOW",
+                      "main":  "GAMES/OWLFLY3/SRC/OWLFLY3.ASM"
+                  },
+                  {
+                      "dir":  "OWLFLY2",
+                      "title":  "OWL FLY II - the successor",
+                      "what":  "Five segments, net play, the NEWTON sky - the course at full scale",
+                      "main":  "GAMES/OWLFLY2/SRC/CITY.ASM"
+                  },
+                  {
+                      "dir":  "OWLFLY",
+                      "title":  "OWL FLY - the polygon combat sim",
+                      "what":  "The whole game in a 40 KB COM plus one resource file",
+                      "main":  "GAMES/OWLFLY/SRC/CITY.ASM"
+                  },
+                  {
+                      "dir":  "TRAINER",
+                      "title":  "THE FLIGHT SCHOOL - take-off and landing",
+                      "what":  "VR, the stall, the crosswind - a grease, a bounce or a crash",
+                      "main":  "GAMES/TRAINER/SRC/FIELD.ASM"
+                  },
+                  {
+                      "dir":  "WIRECITY",
+                      "title":  "WIRE CITY 86 - the wireframe night flight",
+                      "what":  "A procedural megacity in a five-kilobyte COM",
+                      "main":  "GAMES/WIRECITY/CITY.ASM"
+                  }
+              ],
+    "examples":  [
+                     {
+                         "title":  "The avionics",
+                         "what":  "A flying instrument panel with no world attached - arrows fly it",
+                         "main":  "EXAMPLES/AVIO.ASM"
+                     },
+                     {
+                         "title":  "The chat terminal",
+                         "what":  "Multi-user IPX broadcast chat against the real INT 7Ah API",
+                         "main":  "EXAMPLES/BBS.ASM"
+                     },
+                     {
+                         "title":  "The airshow",
+                         "what":  "Takeoff, level-off, a full roll and a hard pull - a scripted keyframe performance",
+                         "main":  "EXAMPLES/FLIGHT.ASM"
+                     },
+                     {
+                         "title":  "The hangar",
+                         "what":  "All five aircraft through the real pipeline - sort, clip, project, fill",
+                         "main":  "EXAMPLES/JET.ASM"
+                     },
+                     {
+                         "title":  "The measured landing",
+                         "what":  "Short final, the flare, the float in ground effect, the kiss, the rollout",
+                         "main":  "EXAMPLES/LAND.ASM"
+                     },
+                     {
+                         "title":  "The landing, by forces",
+                         "what":  "LAND with the script torn out - the approach emerges from lift, drag, mass, gravity",
+                         "main":  "EXAMPLES/LNDPHYS.ASM"
+                     },
+                     {
+                         "title":  "Wireframe relief, and one key that hides the hills",
+                         "what":  "A height-mapped island drawn as a lattice you fly over. H switches on a floating horizon - one byte a screen column - and the far half of the picture stops being a fishing net",
+                         "main":  "EXAMPLES/RELIEF.ASM"
+                     },
+                     {
+                         "title":  "The one-channel mixer",
+                         "what":  "A looping sound ring on auto-init DMA - effects ahead of the beam, healed behind",
+                         "main":  "EXAMPLES/RING.ASM"
+                     },
+                     {
+                         "title":  "The fire-and-smoke laboratory",
+                         "what":  "Fire particles age into smoke polygons that spin, swell and rise",
+                         "main":  "EXAMPLES/SMOKE.ASM"
+                     },
+                     {
+                         "title":  "The first solo",
+                         "what":  "The whole flight school in one machine - roll, rotate, fly, land",
+                         "main":  "EXAMPLES/SOLO.ASM"
+                     },
+                     {
+                         "title":  "The spool-up",
+                         "what":  "The 2.5 seconds before the takeoff roll, played on the game\u0027s own sound rig",
+                         "main":  "EXAMPLES/SPOOL.ASM"
+                     },
+                     {
+                         "title":  "The island factory",
+                         "what":  "Diamond-Square on a 64x64 torus, integer only - a fresh island per keypress",
+                         "main":  "EXAMPLES/TERRA.ASM"
+                     },
+                     {
+                         "title":  "The measured takeoff",
+                         "what":  "A keyframe replay of a real cockpit tape - no controls, no simulation",
+                         "main":  "EXAMPLES/TKOFF.ASM"
+                     },
+                     {
+                         "title":  "The takeoff, by forces",
+                         "what":  "TKOFF with the script torn out - thrust, drag, friction, and Newton sets the speed",
+                         "main":  "EXAMPLES/TKPHYS.ASM"
+                     }
+                 ]
+}

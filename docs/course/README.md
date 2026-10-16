@@ -43,11 +43,11 @@ YouTube descriptions yet; theirs would be `course/?l=18` … `?l=23`.
 | File | What |
 |---|---|
 | `index.html`, `course.css` | the page: a canvas, and the module that runs `CourseApp` |
-| `course.js` | the course: lessons list, layout of the four windows, open / build / run, the video window, the games, menus and keys - and the wiring of OWLOSUI's apps (below) |
+| `course.js` | the course: lessons list, layout of the four windows, open / build / run, the video window, the games, menus and keys - and the wiring of OWLOSUI's apps (below). **The new site, `../site/`, is built on it** (`SiteApp extends CourseApp`, 2026-10-16): it overrides `dosOptions()`, `buildMenus()`, `findGames()`, `start()` and `openLesson()`, and uses the exported `Cm` - change those with the site in mind (`Skill/SITETASK.md`) |
 | `../owlosui/apps/` | OWLOSUI's LIBRARY, used as it is: `Documents` (editors: New, Open, Save, Save as), `CommanderTool` (the web commander's two panels; the course's Enter on `.ASM` builds and runs it), `DosTool` (a DOS PC and nothing more: C: with OWLOSRES, A:/B: floppies, settings, network, monitors), `ConsoleWindow` + `log` (Tools > Console) |
 | `../../TOOLS/COMMANDR/` | the DOS commander the DOS PC starts into and comes back to - OURS: a copy of an OWLOSUI **example**, not library (see its README); on the course disk as `A:\TOOLS\COMMANDR`, started by `C:\COMMANDR.BAT` (`COMMANDR_BAT` in course.js) |
 | `course.json` | **generated** by `../pack-course.ps1`: every lesson, title, notes, main source, files, video |
-| `disk.zip` | **generated** by `../pack-course.ps1`: the course disk - TOOLS, ENGINE, LESSONS, EXAMPLES and three games - unpacked onto A: |
+| `disk.zip` | **generated** by `../pack-course.ps1`: the course disk - TOOLS, ENGINE, LESSONS, EXAMPLES and five games (the three OWL FLYs; WIRE CITY and the flight school since 2026-10-16, for the site's Sources) - unpacked onto A: |
 | `../owlosui/` | **a copy** of OWLOSUI's web library (windows, editor, js-dos host), by `../pull-owlosui.ps1`; never edited here — see its README |
 
 Nothing outside `docs/` is used: GitHub Pages serves `docs/` alone, and the

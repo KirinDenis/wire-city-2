@@ -86,6 +86,7 @@ its lecture number.
 - **L26** (lecture 1A) - Letters you draw yourself: the game's 4x6 font, and a ring of bit masks. Open: https://kirindenis.github.io/wire-city-2/course/?l=26 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L26/LETTERS.ASM - video: https://www.youtube.com/watch?v=8MRKP3MoJC0
 - **L27** (lecture 1B) - Tapes: the HUD's scales - speed, height, compass, the climb and the G. Open: https://kirindenis.github.io/wire-city-2/course/?l=27 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L27/TAPES.ASM - video: https://www.youtube.com/watch?v=5pLQ9ZnklwQ
 - **L28** (lecture 1C) - The middle of the display: the gunsight, the horizon and the pitch ladder. Open: https://kirindenis.github.io/wire-city-2/course/?l=28 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L28/LADDER.ASM - video: https://www.youtube.com/watch?v=QsAhPJk0-pM
+- **L29** (no video yet) - The wing: lift, the angle of attack, and a stall that comes from the angle. Open: https://kirindenis.github.io/wire-city-2/course/?l=29 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L29/WING.ASM
 <!-- LESSONS END -->
 
 ### If you are an AI helping a student
