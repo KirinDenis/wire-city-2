@@ -10,11 +10,10 @@ REM font laid out as bytes; the BOND draws its cockpit in code and carries
 REM its 246-byte font inside the program (VFONTF in SRC\VID.INC), so there
 REM is nothing left to load from disk.
 REM
-REM THIS ONE IS AN EXE, not a COM - the only one here. It carries five
-REM segments end to end: the main one at 64K, then SKYSEG, UISEG, SYMSEG and
-REM TOWNSEG, and the game works out where its back buffer goes by counting
-REM paragraphs past them. Change a segment's size and everything above it
-REM moves, so each ends by claiming its window with a reservation.
+REM THIS ONE IS AN EXE, not a COM. Its far segments - SKYSEG, UISEG,
+REM SYMSEG, TOWNSEG, VIDSEG - come first, packed, and the main 64K segment
+REM comes LAST, so its BSS and stack are reserved space rather than bytes
+REM in the file. The back buffer goes straight past the main segment.
 REM
 REM Run MAKE from this folder. Every path below is relative to here on
 REM purpose: a path from a drive root only works if the repository happens to

@@ -527,6 +527,8 @@ VCONV:  cmp  byte [vcard],VMCGA
 ; ============================================================================
 cbuf    dw 0                    ; bufseg, taken while DS still points home
 cy      dw 0                    ; the row being converted
+crsi    dw 0                    ; ...its first source byte in bufseg
+crdi    dw 0                    ; ...and its first byte on the glass
 vlutoff dw 512                  ; CGA: vpal*1024 + (night? 512 : 0) -
                                 ; four banks (day is set by the first
                                 ; APPLYPALF at takeoff)
@@ -537,17 +539,35 @@ hoff    dw 1024                 ; Hercules: 0 = day bank, 1024 = night
 hry     dw 0                    ; Hercules: the SCREEN row being written
 orcnt   db 0                    ; Hercules: screen rows this source row feeds
 
-; one converted pixel, plain lookup (the front door, or no bake file)
-macro CGPXP
+; ---- CGBYTE: four source pixels -> one output byte, CGA and Hercules
+; alike. The tables are the PRE-SHIFTED copies CGTBUILD makes in the main
+; segment (CVTAB, read through SS:): table k already holds each 2-bit ink
+; at its place for pixel k of the byte, so a pixel is XLAT and OR and
+; nothing else - the two SHLs a pixel are gone - and LODSW brings the
+; pixels in two at a time. BH walks the four tables (256 apart), BL stays
+; 0. Per four pixels: about 144 clocks of instructions became 123, and 41
+; bytes of code became 32 - on a real 8088, where every code byte costs
+; four clocks to fetch, the bytes are the bigger half of the win.
+macro CGBYTE
 {
-        lodsb
-        xlat [cs:bx]
-        shl  dl,1
-        shl  dl,1
+        lodsw                   ; pixels 0 and 1
+        xlat [ss:bx]            ; pixel 0, bits 7-6
+        mov  dl,al
+        inc  bh
+        mov  al,ah
+        xlat [ss:bx]            ; pixel 1, bits 5-4
         or   dl,al
-}                               ; BOND: no "xor bh,1" - the inks are SOLID
-                                ;  (BONDLUT), so the x&1 dither phase is one
-                                ;  table, not two; 4 of ~44 clocks a pixel
+        inc  bh
+        lodsw                   ; pixels 2 and 3
+        xlat [ss:bx]            ; pixel 2, bits 3-2
+        or   dl,al
+        inc  bh
+        mov  al,ah
+        xlat [ss:bx]            ; pixel 3, bits 1-0
+        or   al,dl
+        sub  bh,3
+        stosb
+}
 
 CGABLT:
         push ax
@@ -590,49 +610,54 @@ CGABLT:
         mov  ax,0B800h
         mov  es,ax
         cld
-        mov  ax,[cs:vr0]        ; BOND: from the first row this frame
-        mov  [cs:cy],ax         ;  converts (VBLITF sets vr0/vr1)
-.row:
-        ; ---- pass B: convert the row ----
-        mov  ax,[cs:cy]
-        mov  cx,320
-        mul  cx
-        mov  si,ax
-        mov  ds,[cs:cbuf]
+        ; ---- the first row's two addresses, by shifts (no MUL): the
+        ; source at cy*320 + the window's first column, the glass at
+        ; (cy/2)*80 + 2000h for an odd row + the first byte. After that a
+        ; row only ADDS: 320 a row in the buffer, and on the glass +2000h
+        ; into the odd bank or back -2000h+80 to the next even row.
+        mov  bx,[cs:vr0]        ; BOND: from the first row this frame
+        mov  [cs:cy],bx         ;  converts (VBLITF sets vr0/vr1)
+        mov  ah,bl
+        xor  al,al              ; cy*256
+        mov  cl,6
+        shl  bx,cl              ; cy*64
+        add  ax,bx
+        add  ax,[cs:vcx4]       ; the window's columns only (VBLITF)
+        mov  [cs:crsi],ax
         mov  ax,[cs:cy]
         shr  ax,1
-        mov  cx,80
-        mul  cx
+        mov  cl,4
+        shl  ax,cl              ; (cy/2)*16
+        mov  bx,ax
+        shl  ax,1
+        shl  ax,1               ; (cy/2)*64
+        add  ax,bx              ; (cy/2)*80
         test byte [cs:cy],1
-        jz   .ev
+        jz   @f
         add  ax,2000h
-.ev:   mov  di,ax
-        mov  bx,VLUT
-        add  bx,[cs:vlutoff]
+@@:    add  ax,[cs:vc0]
+        mov  [cs:crdi],ax
+        mov  ds,[cs:cbuf]
+.row:  mov  si,[cs:crsi]
+        mov  di,[cs:crdi]
+        mov  bx,CVTAB           ; even rows: tables 0..3
         test byte [cs:cy],1
-        jz   .t0
-        add  bx,256             ; BOND: odd rows, the next table (no x phase)
-.t0:
-        add  si,[cs:vcx4]       ; BOND: the window's columns only (VBLITF)
-        add  di,[cs:vc0]
-        mov  cx,[cs:vcn]
-.plain:
-        shr  cx,1               ; BOND: two bytes a turn - the loop's own
-.pl2:  xor  dx,dx              ;  17 clocks paid half as often (vcn is
-        CGPXP                   ;  always even: 80 or 48)
-        CGPXP
-        CGPXP
-        CGPXP
-        mov  al,dl
-        stosb
-        xor  dx,dx
-        CGPXP
-        CGPXP
-        CGPXP
-        CGPXP
-        mov  al,dl
-        stosb
-        loop .pl2
+        jz   @f
+        add  bh,4               ; odd rows: tables 4..7
+@@:    mov  cx,[cs:vcn]
+        shr  cx,1               ; two bytes a turn - the LOOP's 17 clocks
+        jnc  .pair              ;  paid half as often. An ODD count (the
+        inc  cx                 ;  bank strip is 33 bytes) enters the pair
+        jmp  .half              ;  at its second half
+.pair: CGBYTE
+.half: CGBYTE
+        loop .pair
+        add  word [cs:crsi],320
+        test byte [cs:cy],1
+        jnz  .odd
+        add  word [cs:crdi],2000h
+        jmp  .rowd
+.odd:  sub  word [cs:crdi],2000h-80
 .rowd:
         inc  word [cs:cy]
         mov  ax,[cs:cy]
@@ -690,6 +715,15 @@ HGCBLT:
         add  ax,bx
         add  ax,24
         mov  [cs:hry],ax        ; the first picture row under the box
+        mov  bx,[cs:vr0]        ; the source row's first byte, by shifts:
+        mov  ah,bl              ;  cy*256 ...
+        xor  al,al
+        mov  cl,6
+        shl  bx,cl              ;  ... + cy*64
+        add  ax,bx
+        add  ax,[cs:vcx4]       ; BOND: the window's columns only (VBLITF)
+        mov  [cs:crsi],ax
+        mov  ds,[cs:cbuf]
 .row:
         mov  al,2               ; even source rows paint two screen rows
         test byte [cs:cy],1
@@ -697,56 +731,48 @@ HGCBLT:
         dec  al
 .rc:   mov  [cs:orcnt],al
 .orow:
-        ; ---- where on the glass, and which grain ----
+        ; ---- where on the glass, and which grain - no MUL: the bank
+        ; (y&3)*2000h, then (y/4)*90 as 2q + 8q + 16q + 64q
         mov  ax,[cs:hry]
-        mov  dx,ax
-        and  dx,3
+        mov  bx,ax
+        and  bx,3               ; the row phase
+        mov  dx,bx
         mov  cl,13
         shl  dx,cl              ; (y&3)*2000h
-        mov  di,dx
         shr  ax,1
-        shr  ax,1
-        mov  bx,90
-        mul  bx
-        add  di,ax
+        shr  ax,1               ; q = y/4
+        shl  ax,1
+        mov  di,ax              ; 2q
+        shl  ax,1
+        shl  ax,1
+        add  di,ax              ; +8q
+        shl  ax,1
+        add  di,ax              ; +16q
+        shl  ax,1
+        shl  ax,1
+        add  di,ax              ; +64q = 90q
+        add  di,dx
         add  di,5               ; 40 dots of left box
-        mov  ax,[cs:hry]
-        and  ax,3
-        mov  bx,ax
-        mov  cl,8
-        shl  bx,cl              ; (y&3)*256: BOND, one table a row phase
-        add  bx,HLUT
-        add  bx,[cs:hoff]
-        ; ---- source row in, converted bits out ----
-        mov  ax,[cs:cy]
-        mov  cx,320
-        mul  cx
-        mov  si,ax
-        mov  ds,[cs:cbuf]
-        add  si,[cs:vcx4]       ; BOND: the window's columns only (VBLITF)
         add  di,[cs:vc0]
+        mov  cl,2
+        shl  bl,cl              ; four pre-shifted tables a row phase:
+        mov  bh,bl              ;  BX = CVTAB + phase*1024
+        xor  bl,bl
+        add  bh,CVTAB shr 8
+        mov  si,[cs:crsi]
         mov  cx,[cs:vcn]
-.plain:
-        shr  cx,1               ; BOND: two bytes a turn - the loop's own
-.pl2:  xor  dx,dx              ;  17 clocks paid half as often (vcn is
-        CGPXP                   ;  always even: 80 or 48)
-        CGPXP
-        CGPXP
-        CGPXP
-        mov  al,dl
-        stosb
-        xor  dx,dx
-        CGPXP
-        CGPXP
-        CGPXP
-        CGPXP
-        mov  al,dl
-        stosb
-        loop .pl2
+        shr  cx,1               ; two bytes a turn, an odd count entering
+        jnc  .pair              ;  at the second half (see CGABLT)
+        inc  cx
+        jmp  .half
+.pair: CGBYTE
+.half: CGBYTE
+        loop .pair
 .rowd:
         inc  word [cs:hry]
         dec  byte [cs:orcnt]
         jnz  .orow
+        add  word [cs:crsi],320
         inc  word [cs:cy]
         mov  ax,[cs:cy]
         cmp  ax,[cs:vr1]        ; BOND: to the last
@@ -780,7 +806,60 @@ VPALSW:                          ; the near core: CGABLT's H key needs it
 .d:    cmp  byte [cs:vpal],0   ; the CGA hardware palette picks its own
         je   .p                  ; pair of banks on top of day/night
         add  word [cs:vlutoff],1024
-.p:    ret
+.p:    ; fall into CGTBUILD: the bank changed, the shifted copies follow
+
+; ---- CGTBUILD - the converters' pre-shifted tables for the bank in use:
+; for every row phase (CGA: even and odd rows; Hercules: screen row & 3)
+; four copies of the 256-byte table, the ink shifted left by 6, 4, 2 and 0
+; - pixel 0..3 of an output byte. Into CVTAB in the main segment (ES = SS
+; = main): 2048 bytes for CGA, 4096 for Hercules - one card at a time, so
+; they share the space. Runs on every bank change (day/night, H): about
+; 13 ms (CGA) or 26 ms (Hercules) on the 8088, never in an ordinary frame.
+CGTBUILD:
+        push ax
+        push bx
+        push cx
+        push dx
+        push si
+        push di
+        push es
+        mov  ax,ss
+        mov  es,ax
+        mov  di,CVTAB
+        cld
+        cmp  byte [vcard],VMCGA ; DS = main
+        jne  .hgc
+        mov  si,VLUT
+        add  si,[cs:vlutoff]
+        mov  dl,2               ; CGA: the even-row table, then the odd
+        jmp  .par
+.hgc:  mov  si,HLUT
+        add  si,[cs:hoff]
+        mov  dl,4               ; Hercules: one per screen-row phase
+.par:  mov  dh,6               ; the shift for pixel 0
+.pos:  push si
+        mov  cl,dh
+        mov  bx,256
+.b:    mov  al,[cs:si]
+        inc  si
+        shl  al,cl
+        stosb
+        dec  bx
+        jnz  .b
+        pop  si
+        sub  dh,2               ; 6, 4, 2, 0 - and the borrow past 0 ends it
+        jnc  .pos
+        add  si,256             ; the next row phase's table
+        dec  dl
+        jnz  .par
+        pop  es
+        pop  di
+        pop  si
+        pop  dx
+        pop  cx
+        pop  bx
+        pop  ax
+        ret
 
 ; ============================================================================
 ;  VPANELF / VPSIDEF - THE BOND'S COCKPIT, DRAWN. v3 copied a 64000-byte
@@ -1302,9 +1381,8 @@ VPDL:
         VLINE 0,118,27,110,VPC
         VLINE 27,110,292,110,VPC
         VLINE 292,110,319,118,VPC
-        ; ---- the two annunciator columns at the panel's ends
-        VFRAME 11,126,22,54,VPC
-        VFRAME 287,126,22,54,VPC
+        ; ---- (the two annunciator columns draw their own lamp boxes:
+        ; SIDEPNL in UI.INC, x 11..33 and 286..308, rows 128..176)
         ; ---- the three screens: a white bezel, a frame-ink lip
         ; Measured off the code that draws INTO them, not off the photo:
         ; the screens are PZRDR/PZADI/PZMAP (50..104, 131..185, 213..267),

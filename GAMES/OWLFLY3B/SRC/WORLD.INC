@@ -214,9 +214,9 @@ BUILDINGS:
         mov  cl,8
         shr  ax,cl
         mov  [camgj],ax
-        mov  word [ring],2401-BONDCELLS ; reuse [ring] as the BORD index.
-                                ; BOND: start where only the nearest
-                                ; BONDCELLS remain - BORD runs far to near
+        mov  word [ring],0      ; reuse [ring] as the BORD index. BOND:
+                                ; BORD holds only the nearest BONDCELLS,
+                                ; far to near (see DATA.INC)
 .bl:   mov  si,[ring]
         add  si,si
         mov  al,[BORD+si]       ; di (signed)
@@ -227,7 +227,7 @@ BUILDINGS:
         mov  [cdj],ax
         call RENDERCELL
         inc  word [ring]
-        cmp  word [ring],2401
+        cmp  word [ring],BONDCELLS
         jl   .bl
         ret
 

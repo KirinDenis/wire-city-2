@@ -99,7 +99,9 @@ BONDDET = 2500                ; ...and past this a Shilka is hull and
                                 ;  turret only: no barrels, no dish
 BONDJLOD = 3000               ; BOND: past this an AI jet is its IFF marker
                                 ;  alone - square or diamond, no model
-BONDCELLS = 200               ; BOND: the city is walked over the nearest
+linereg = 1                   ; BOND: ENGINE\E_RAST.INC draws its lines with
+                                ;  the distances in registers (see LINE)
+BONDCELLS = 200              ; BOND: the city is walked over the nearest
                                 ;  200 cells of BORD (about radius 8),
                                 ;  not all 2401 (radius 24); 441 first,
                                 ;  200 since 2026-10-03
@@ -400,8 +402,8 @@ MAIN:
         ; the last segment), so it arrives as whatever the last program
         ; left in that memory, and v3 was written against the zeros its
         ; EXE used to carry.
-        mov  di,BSS
-        mov  cx,(BSSEND-BSS+1)/2
+        mov  di,KEYS            ; KEYS, KHIT, ZERO.INC and the BSS proper
+        mov  cx,(BSSEND-KEYS+1)/2
         xor  ax,ax
         cld
         rep  stosw
@@ -838,7 +840,7 @@ QUIT:
 ; ============================================================================
 ;  Key-state table (at the very end)
 ; ============================================================================
-KEYS    db 128 dup(0)
+KEYS    rb 128                  ; reserved, not stored: see ZERO.INC
 
 ; ---- and the LATCH, which is what makes the switches work on a slow machine
 ;  KEYS says what is held RIGHT NOW, and that was enough while a frame took
@@ -853,7 +855,8 @@ KEYS    db 128 dup(0)
 ;  whoever consumes it. A tap of any length survives until it is read.
 ;  Held keys - the stick, the throttle - go on reading KEYS and are
 ;  untouched by any of this.
-KHIT    db 128 dup(0)
+KHIT    rb 128
+        include 'ZERO.INC'   ; the zero-start variables, reserved
 
 ; ---- BSS: buffers that live past the initialized image ---------------------
 ; Everything below is fully written before first read (DSGEN/MMAPGEN at
@@ -901,6 +904,14 @@ label DSTB byte at BSS+DSTBA   ; ruins bitmap: 1 bit per world cell
 ;  segment has ever read a byte of it - and 180 bytes of the main
 ;  segment is 180 bytes, which is what the stack guard here trades in.)
 BSSEND  =  BSS+22695
+; BOND: the converters' PRE-SHIFTED tables, built by CGTBUILD (VID.INC)
+; for the bank in use: per row phase four 256-byte tables, one per pixel
+; position in the output byte, the 2-bit ink already shifted to its place
+; (CGA 2K, Hercules 4K - one card at a time). 256-aligned, because the
+; converters walk them with INC BH. Read through SS: (SS is this
+; segment), so they cost the file nothing.
+CVTAB   =  (BSSEND+255) and 0FF00h
+CVTOP   =  CVTAB+4096
 
 ; ---- THE STACK GUARD -------------------------------------------------------
 ; The 2026-07-23 lesson: the stack starts at FFFEh and grows DOWN into
@@ -910,7 +921,7 @@ BSSEND  =  BSS+22695
 ; leave the stack at least 512 bytes of clean fall (typical depth is
 ; under 300). Under pressure again? Evict cold code/data to SKYSEG the
 ; way GENBED went, or open a third segment for the model tables.
-if (BSSEND-START) > 0FDEEh
+if (CVTOP-START) > 0FDEEh
         %OUT *** BSS has eaten the stack: move data out of CODE ***
         .ERR
 end if

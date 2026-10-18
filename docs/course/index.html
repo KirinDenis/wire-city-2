@@ -19,6 +19,10 @@
   // (Tools > Console shows it).
   import { catchThePage } from '../owlosui/apps/log.js';
   import { run } from '../owlosui/owlosui.js';
+  // A DIAGNOSTIC (2026-10-16, ../site/drives.js says why): every removal
+  // from this browser's storage into localStorage site.removals.
+  import { journalRemovals } from '../site/drives.js';
+  journalRemovals();
   catchThePage();
   import { CourseApp } from './course.js';
   run(document.getElementById('screen'), owl => {

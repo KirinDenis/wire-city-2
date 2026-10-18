@@ -96,6 +96,31 @@ export function guardRemovals(storage, folders, log) {
   };
 }
 
+/**
+ * A DIAGNOSTIC, 2026-10-16, until the cause is found: twice that day every
+ * FILE of A: (the course disk) was found gone from this browser, its folders
+ * left - with guardTheDisk and guardRemovals in place, so not by DOS's
+ * mirroring. Every removal from this browser's storage, whoever asks for it,
+ * goes into localStorage `site.removals` (the last 300: when, the name, the
+ * calls that led there) - it outlives a reload, as the log does not.
+ * `JSON.parse(localStorage['site.removals'])` reads it.
+ */
+export function journalRemovals() {
+  const proto = globalThis.FileSystemDirectoryHandle?.prototype;
+  if (!proto || proto.removeEntry.journaled) return;
+  const removeEntry = proto.removeEntry;
+  proto.removeEntry = function (name, options) {
+    try {
+      const all = JSON.parse(localStorage.getItem('site.removals') ?? '[]');
+      all.push({ at: new Date().toISOString(), in: this.name, name, recursive: !!options?.recursive,
+        by: (new Error().stack ?? '').split('\n').slice(2, 8).map(s => s.trim()).join(' < ') });
+      localStorage.setItem('site.removals', JSON.stringify(all.slice(-300)));
+    } catch { /* storage full or refused: the removal goes on */ }
+    return removeEntry.call(this, name, options);
+  };
+  proto.removeEntry.journaled = true;
+}
+
 // ---- the table, kept in this browser -------------------------------------
 
 const TABLE_KEY = 'site.drives.1';

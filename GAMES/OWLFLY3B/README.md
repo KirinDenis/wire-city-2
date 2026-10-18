@@ -13,7 +13,7 @@ Forked from `GAMES/OWLFLY3` on 2026-10-02. OWL FLY III itself is unchanged.
 | Sound Blaster, PC speaker, silence | PC speaker or silence |
 | a photographed cockpit (64000-byte bitmap, two RLE side views, CGA/HGC bakes) | a cockpit DRAWN from stroke lists: lines, boxes and words (`VPDL`, `VPSL`, `VPSR` in `SRC/VID.INC`) |
 | panel captions dithered to imitate VGA colours | panel colours forced SOLID in the lookups (`BONDLUT`) |
-| far pages aligned to 64K for the Blaster's DMA, top near 640K | packed pages, the game ends at CS+4000h (256K) |
+| far pages aligned to 64K for the Blaster's DMA, top near 640K | packed pages, the game ends at CS+3000h |
 
 The network is v3's, byte for byte, so a BOND flies in the same sky as
 OWL FLY III.
@@ -22,27 +22,45 @@ OWL FLY III.
 
 | paragraphs from CS | what |
 |---|---|
-| 0000h-1FFFh | CODE, SKYSEG, UISEG, SYMSEG, TOWNSEG, VIDSEG |
-| 2000h | back buffer |
-| 3000h | scrseg: the minimap (0..1FFFh) and the radar phosphor (F000h) |
-| 4000h | end (`BONDTOP`) |
+| below CS | SKYSEG, UISEG, SYMSEG, TOWNSEG, VIDSEG, packed, each as long as its code |
+| 0000h | CODE: code, data, then reserved space - the zero-start variables (`SRC/ZERO.INC`), the BSS, the converters' tables (`CVTAB`) and the stack |
+| 1000h | back buffer |
+| 2000h | scrseg: the minimap (0..1FFFh) and the radar phosphor (F000h) |
+| 3000h | end (`BONDTOP`) |
 
 The game checks PSP:2 against `BONDTOP` before anything else and refuses
 with a message if DOS gave it less.
 
 ## Files
 
-`INSTALL/` holds everything that ships: `OWLFLY3B.EXE`, 125K, and nothing
-else. The game opens no files. The 4x6 font, once CITY.DAT, is built in
-(`VFONTF` in `SRC/VID.INC`), and v3's loaders for the photo cockpit, the
-side views, the CGA/EGA/HGC bakes, the Blaster samples and the Shilka's
-cabin are deleted.
+`INSTALL/` holds everything that ships: `OWLFLY3B.EXE`, 55K, and nothing
+else. The game opens no files: the 4x6 font is built in (`VFONTF` in
+`SRC/VID.INC`).
 
-The EXE is 125K although only about 51K of it is code and data, measured
-by compressing it. There are two reasons. Its six segments are padded to
-fixed windows (64K + 8 + 16 + 8 + 8 + 24), because the whole memory map
-hangs off those addresses. And the code the BOND cut is switched off
-(`ret`/`jmp` at its door) rather than deleted.
+What keeps the EXE small (it was 128K at the fork):
+
+- CODE is the LAST segment, so everything reserved at its end is not in
+  the file - DOS hands it over at load and MAIN clears it. That is the
+  BSS, the stack, and every variable whose start value is zero: declare
+  those in `SRC/ZERO.INC` with `rb`/`rw`, not in `DATA.INC` with `dw 0`.
+- The far segments come first and are not padded to fixed windows.
+- v3's code the BOND never runs is deleted, not switched off: EGA and
+  VGA, the Blaster, the Shilkas, traffic, clouds, relief, the photo
+  cockpit and its loaders.
+- `BORD` keeps only the nearest `BONDCELLS` of v3's city walk.
+
+## Speed tricks
+
+- **Pre-shifted conversion tables.** `CGTBUILD` (`SRC/VID.INC`) copies
+  the bank in use into `CVTAB` four times, the ink already shifted to
+  its place in the output byte, so the CGA and Hercules converters do
+  `LODSW`, `XLAT`, `OR` - no shifts - and read the tables through `SS:`.
+  They are rebuilt on every day/night or palette change.
+- **Row addresses by addition.** Neither converter multiplies per row.
+- **Lines with the distances in registers.** `linereg` switches
+  `ENGINE/E_RAST.INC`'s self-modifying `LINE` to a loop that keeps both
+  distances in SI and BP; the other programs that include the engine are
+  unaffected, byte for byte.
 
 ## Build and run
 
@@ -58,6 +76,13 @@ hangs off those addresses. And the code the BOND cut is switched off
 
 PCjs IBM PC XT (8088 at 4.77 MHz, 512K, CGA, PC DOS 2.00 or MS-DOS 3.21),
 `OWL360.IMG` in B:, parked on the strip.
+
+2026-10-18, the speed tricks above, ticks over 16 frames (x 3.4 = ms a
+frame): the conversion to CGA 60 -> 51..53, the ground lattice 24 ->
+20..23 (a different world each run, so that one is noisy). PCjs charges
+instructions by their execution time and hardly by their length; on a
+real 8088, where every code byte costs four clocks to fetch, the shorter
+converter loop (41 -> 32 bytes per four pixels) should gain more.
 
 **Ctrl+D is a profiler in the BOND.** It shows two lines of numbers: BIOS
 ticks spent in each stage of the frame, summed over 16 frames. Multiply by

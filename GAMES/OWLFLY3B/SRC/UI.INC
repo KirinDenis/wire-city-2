@@ -2046,16 +2046,15 @@ STATPGF:
 ;  warnings, red, except the target call which is only ever information.
 ;   ES = bufseg, DS = the main segment (UISEG's own words take cs:).
 ; ===========================================================================
-SPNX    dw 10,286               ; the two black plates inside their bezels
-SPPLW   = 23                  ; ...and how wide they are
-SPSY0   = 129                 ; first slot's top row; five of them
+SPNX    dw 11,286               ; the two lamp columns: x of their plates
+SPPLW   = 23                  ; ...and how wide a plate is: the longest word
+                                ;  (19 px) and a pixel of air inside the frame
+SPSY0   = 128                 ; first slot's top row; five of them
 SPSH    = 10                  ; ...pitch...
 SPFH    = 9                   ; ...how much of that is the lit plate...
 SPTY    = 2                   ; ...and the word's own row inside it, so
                                 ;  the legend is centred DOWN the slot as
                                 ;  well as across it
-SPNY0   = 129                 ; the plate's own top and bottom, for the
-SPNY1   = 180                 ;  speckle that goes down before the words
 SPDARK  = PNLDIM              ; the panel's own set, defined once in
 SPGRN   = PNLGRN              ;  DATA.INC beside the zone constants so
 SPAMB   = PNLAMB              ;  both segments read the same numbers
@@ -2980,46 +2979,10 @@ NETLAMP:
         ret
 
 SIDEPNL:
-        ; ---- the glass first. A flat black rectangle reads as a hole cut
-        ; in the panel; a few barely-lit specks read as glass with a lamp
-        ; somewhere behind it, and the words then sit ON something. The
-        ; pattern is fixed, not random - noise regenerated every frame
-        ; would crawl, and a crawling panel is worse than a flat one. ----
+        ; BOND: no glass speckle. v3 scattered dark specks over the black
+        ; plates before the words; on CGA they cut the frame lines into
+        ; dashes. Every lamp is its own rectangle now (see .sq1).
         cld
-        xor  si,si
-.nsp:  mov  bx,si
-        add  bx,bx
-        mov  di,[cs:SPNX+bx]
-        mov  word [dsx],SPNY0
-.nsr:  mov  ax,[dsx]
-        mov  bx,ax              ; the row's own offset: (y*3) and 3, which
-        add  bx,bx              ;  walks 0,3,2,1 down the plate and never
-        add  bx,ax              ;  lines the specks up into a stripe
-        and  bx,3
-        push bx                 ; UROW CLOBBERS BX - it builds row*64 in there
-        push di                 ;  on its way to row*320, and this was
-        call UROW               ;  being added back AFTERWARDS. The specks
-        pop  ax                 ;  were landing at row*384 + x: sixty-four
-        pop  bx                 ;  pixels further right every row, marching
-        add  di,ax              ;  diagonally across the whole panel, over
-        add  di,bx              ;  both MFDs and the map, and wrapping off the
-                                ;  top of the buffer past row 170. That is the
-                                ;  speckle the pilot kept seeing on his map,
-                                ;  and it is the SAME trap ROW320 and VLINE2
-                                ;  already carry notes about.
-        push ax
-        mov  al,PNLNOIS
-        mov  cx,5
-.nsx:  mov  [es:di],al
-        add  di,4
-        loop .nsx
-        pop  di
-        inc  word [dsx]
-        cmp  word [dsx],SPNY1
-        jbe  .nsr
-        inc  si
-        cmp  si,2
-        jb   .nsp
         mov  word [cs:spmsk],0
         cmp  byte [flaps],0 ; ---- left: what is hanging out ----
         je   .spg
@@ -3156,37 +3119,39 @@ SIDEPNL:
         push ax
         call UROW
         add  di,[cs:spplx]
-        push di
         mov  al,[cs:spcol]
         mov  cx,SPPLW
-        rep  stosb              ; flat, no banding
-        pop  di
-        pop  ax
-        push ax
-        mov  bx,ax              ; two specks, at y*7 and y*5 folded into
-        mov  cl,3               ;  the plate's width - cheap, and scattered
-        shl  bx,cl              ;  enough that no two rows agree
-        sub  bx,ax
-        and  bx,15
-        mov  byte [es:di+bx],PNLCAP
-        mov  bx,ax
-        mov  cl,2
-        shl  bx,cl
-        add  bx,ax
-        and  bx,7
-        add  bx,14
-        mov  byte [es:di+bx],PNLCAP
-        pop  ax
+        rep  stosb              ; flat - BOND: and no specks on it, which on
+        pop  ax                 ;  CGA read as crawling dots on a lit lamp
         inc  ax
         pop  cx
         loop .sq0
-.sq1:  mov  ax,[dsy]           ; the divider, lit slot or not
-        add  ax,SPFH
-        call UROW
-        add  di,[cs:spplx]
-        mov  al,PNLNOIS
+        jmp  .sq2
+.sq1:  mov  bx,si              ; this slot's word, six bytes a slot
+        add  bx,bx
+        mov  ax,bx
+        add  bx,bx
+        add  bx,ax
+        cmp  byte [cs:SPTXT+bx],0
+        je   .sq2               ; an empty slot is no lamp: no box
+        mov  ax,[dsy]           ; ---- a DARK lamp: its rectangle, in the
+        call UROW               ;  frame ink, the plate's own size - every
+        add  di,[cs:spplx]      ;  lamp a box of its own, a pixel apart
+        mov  al,PNLCAP
+        push di
         mov  cx,SPPLW
-        rep  stosb
+        rep  stosb              ; top
+        pop  di
+        mov  bx,SPFH-2
+.sqs:  add  di,320
+        mov  [es:di],al         ; the two sides
+        mov  [es:di+SPPLW-1],al
+        dec  bx
+        jnz  .sqs
+        add  di,320
+        mov  cx,SPPLW
+        rep  stosb              ; bottom
+.sq2:
         mov  di,si              ; the string: six bytes a slot
         add  di,di
         mov  bx,di

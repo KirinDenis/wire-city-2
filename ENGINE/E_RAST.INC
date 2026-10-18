@@ -613,6 +613,46 @@ end if
         mov  ax,[lsx]
         mov  [.mins+2],ax
 .go:    jmp  short .fl          ; THE RULE: patch, then jump
+if defined linereg
+        ; THE REGISTER LOOP (programs that define `linereg`, OWL FLY III
+        ; BOND first). The same line, pixel for pixel - but the two
+        ; distances sit in SI and BP instead of memory, so the three reads
+        ; a pixel ([ly], [lx], [lx]) become register adds: on an 8088 each
+        ; memory word is an address calculation plus two bus cycles, and
+        ; the loop is roughly 40% faster. And the start address is y*256 +
+        ; y*64 by shifts instead of MUL - a hundred clocks saved per line.
+.fl:    push si
+        push bp
+        mov  bx,[sy0]           ; where the line starts: y * 320 + x
+        mov  ah,bl
+        xor  al,al              ; y*256, mod 65536 exactly as MUL gave it
+        mov  cl,6
+        shl  bx,cl              ; y*64
+        add  ax,bx
+        add  ax,[sx0]
+        mov  di,ax
+        mov  bl,[COLOR]
+        mov  cx,[lx]
+        mov  bp,cx              ; BP = the long distance
+        mov  si,[ly]            ; SI = the short one
+        inc  cx                 ; both ends belong to the line
+        xor  dx,dx              ; DX = the debt, starting clean
+.px:    mov  [es:di],bl
+        add  dx,si              ; every step the debt grows by the short
+        cmp  dx,bp              ;  distance - reached the long one?
+        jb   .nod
+        sub  dx,bp              ; paid off...
+.mins:  add  di,320             ; ...with one sideways step   (REWRITTEN)
+.nod:
+.majs:  add  di,320             ; the driving step, every pixel (REWRITTEN)
+        loop .px
+        pop  bp
+        pop  si
+        pop  di
+        pop  dx
+        pop  cx
+        ret
+else
 .fl:    mov  ax,[sy0]           ; where the line starts: y * 320 + x
         mov  bx,320
         mul  bx
@@ -635,6 +675,7 @@ end if
         pop  dx
         pop  cx
         ret
+end if
 
 if defined fastp
 ; ---- LINEC: the classic, kept only for programs that want to compare ------

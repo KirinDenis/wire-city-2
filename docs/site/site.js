@@ -25,11 +25,15 @@ import { DriveGates } from '../owlosui/dosbox/gates.js';
 import { unzip } from '../owlosui/dosbox/unzip.js';
 import { log } from '../owlosui/apps/log.js';
 import { CourseApp, Cm, A } from '../course/course.js';
-import { Drive, LocalFolder, crlf, fingerprint, guardRemovals, loadTable, saveTable, keepHandle, handleOf, forgetHandle, freeFolder, statsOf, sizeText, dateText } from './drives.js';
+import { Drive, LocalFolder, crlf, fingerprint, guardRemovals, loadTable, saveTable, keepHandle, handleOf, forgetHandle, freeFolder, statsOf, sizeText, dateText, journalRemovals } from './drives.js';
 import { CellTable } from './table.js';
 import { Terminal, CmTerminalClose } from '../console/terminal.js';
 import { ANSI, RESET } from '../console/shell.js';
 import { siteShell } from './console.js';
+
+// Before anything can remove a file: every removal from this browser's
+// storage into a journal that outlives a reload (drives.js says why).
+journalRemovals();
 
 /** C:, the machine's hard disk, kept in this browser: what DOS writes there is there tomorrow. */
 const C_FOLDER = '/DOS C Drive/';

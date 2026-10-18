@@ -1267,6 +1267,19 @@ MMAPGENF:
         inc  word [dsx]
         cmp  word [dsx],16
         jl   .ci
+        ; ---- BOND: the map in two inks, BLACK ground and WHITE town, on
+        ; both pages. v3's land shades came out as one white field on CGA
+        ; with the towns punched black into it - the pilot wanted it the
+        ; other way round: a dark screen with the things on it lit.
+        xor  bx,bx
+.inv:  mov  al,VPK
+        cmp  byte [es:bx],18    ; the city brown
+        jne  .ink
+        mov  al,VPW
+.ink:  mov  [es:bx],al
+        inc  bx
+        cmp  bx,MMWIDE*2
+        jb   .inv
         pop  es
         retf
 
