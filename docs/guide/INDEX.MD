@@ -71,5 +71,7 @@ A:\LESSONS\Lnn\, A:\GAMES\..\SRC\, A:\EXAMPLES\).
   speed, drives and files, what pauses it, real-hardware differences.
 - TOOLS - building and testing: FASM's command line, BUILD.BAT, the
   site's `build`, converters, testing without a person.
+- COMMANDS - the site's console as an API: each command's effect and
+  data (`help --json`), which lines ask the person first, and why.
 - STYLE - the house style of code and text, a program's skeleton, what a
   game looks like when it is handed over.

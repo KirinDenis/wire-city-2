@@ -20,7 +20,8 @@
 // and a closed page leaves a token that opens nothing. `agent revoke` takes
 // one back at once.
 
-import { tokens as lineTokens, segments } from '../console/shell.js';
+import { tokens as lineTokens, segments, options } from '../console/shell.js';
+import { effectOf, ASK_EFFECTS } from '../console/commands.js';
 
 const KEPT = 'site.agent.1';
 const TASKS_KEPT = 'site.ai.tasks.1';
@@ -29,11 +30,16 @@ const YES = 960, NO = 961;
 const TEXT_MAX = 200000;           // what one answer carries of a file or a command's words
 const EVENTS_MAX = 500;
 
-/** What a model runs only after the person's Yes: it deletes, replaces, puts a screen on air or changes the setup. */
-const ASK_FIRST = new Set(['rm', 'mv', 'umount', 'relabel', 'mount', 'poweroff', 'dosbox', 'profile', 'source',
-  'alias', 'unalias', 'export', 'unset', 'share']);
-/** What a model never runs: its keys are the person's to make and to take back. */
-const NEVER = new Set(['agent']);
+// What a model may run is the command contract's (console/commands.js):
+// a command whose effect is in ASK_EFFECTS - it deletes or writes over,
+// changes the setup, or gives something out - runs after the person's Yes;
+// one marked model: 'never' (agent: the keys are the person's) not at all.
+/** The person's Yes box says, under the line, what each such command would do. */
+const EFFECT_SAID = {
+  deletes: 'takes away, or writes over, what was there',
+  setup: 'changes your setup - drives, settings, names',
+  shares: 'gives something to others, or out of this page',
+};
 /** A DOS name: 8 letters, a dot and 3 more at most - what DOS can open. */
 const DOS_NAME = /^[A-Z0-9_\-~!#$%&'(){}^@`]{1,8}(\.[A-Z0-9_\-~!#$%&'(){}^@`]{1,3})?$/i;
 
@@ -45,7 +51,7 @@ export const INSTRUCTIONS = `WIRE CITY is a website that is a DOS PC in a browse
 
 The drives: A: the course disk - LESSONS\\L01..L29 (a lesson each: its source and BUILD.BAT), EXAMPLES\\ (the teaching machines), ENGINE\\ (E_MATH, E_RAST, E_M3D, E_TERR, E_SND, E_8086 .INC - the modules the games are built from), TOOLS\\FASM (the assembler), GAMES\\ (the games' sources). C: the games, ready to play (\`play owlfly3\`). D: My files, the person's own.
 
-The tools: guide (what the work on the site's games found out - read its index first, then only the topics you need), console (one line of the site's console - \`help\` lists its commands, \`man NAME\` explains one), read_file, write_file and edit_file (text files on the drives), screen (what the DOS PC shows now, as a picture), keys (keys into the DOS PC, held as long as you say), task (what you are working on, for the person's AI > Tasks window).
+The tools: guide (what the work on the site's games found out - read its index first, then only the topics you need), console (one line of the site's console - \`help\` lists its commands, \`man NAME\` explains one and says its effect: reads, shows and runs go at once; deletes - rm, mv, cp onto a file that is there - setup and shares wait for the person's Yes), read_file, write_file and edit_file (text files on the drives), screen (what the DOS PC shows now, as a picture), keys (keys into the DOS PC, held as long as you say), task (what you are working on, for the person's AI > Tasks window).
 
 Every token you read and write is paid for by the person. Start with a small program that builds and runs, then grow it; fix a mistake with edit_file - a line, not the whole file written again; read the part of a lesson you need, not every lesson.
 
@@ -165,20 +171,31 @@ export function parseKeys(s) {
   return steps;
 }
 
-/** The commands a line would run, each part's and each pipe's first word, its alias undone - and whether it redirects. */
+/**
+ * The commands a line would run - each part's and each pipe's, its aliases
+ * undone as the shell undoes them - with the effect each has for its own
+ * options and words; and whether the line redirects. A name the shell does
+ * not know is left out: it runs nothing but its "command not found".
+ */
 function commandsOf(shell, line) {
   const list = [];
   let redirect = false;
+  const take = words => {
+    if (!words.length) return;
+    const [name, ...rest] = shell.expand(words);
+    const spec = shell.commands.get(name);
+    if (!spec) return;
+    const { opts, args } = options(rest, spec.valued ?? []);
+    list.push({ name, effect: effectOf(spec, opts, args), never: spec.model === 'never' });
+  };
   for (const { text } of segments(line)) {
-    let first = true;
+    let words = [];
     for (const t of lineTokens(text, shell.env)) {
       if (t.op === '>' || t.op === '>>') redirect = true;
-      if (t.op === '|') { first = true; continue; }
-      if (t.word === undefined || !first) continue;
-      first = false;
-      const alias = shell.aliases.get(t.word);
-      list.push((alias ? alias.split(/\s+/)[0] : t.word).toLowerCase());
+      if (t.op === '|') { take(words); words = []; continue; }
+      if (t.word !== undefined) words.push(t.word);
     }
+    take(words);
   }
   return { list, redirect };
 }
@@ -415,12 +432,14 @@ export class AgentLink {
     let cmds;
     try { cmds = commandsOf(shell, line); } catch (e) { return fail(e.message); }
     if (cmds.redirect) return fail('redirects (> and >>) are not for the model: write a file with write_file');
-    const never = cmds.list.find(n => NEVER.has(n));
-    if (never) return fail(`${never}: the person's own command - a model never runs it`);
-    const risky = cmds.list.find(n => ASK_FIRST.has(n)) ?? (/(^|\s)--reset\b/.test(line) ? 'lesson --reset' : null);
-    if (risky && !await this.confirm(`${who} wants to run:\n\n${line}\n\nLet it?`)) return fail(`the person said No to: ${line}`);
+    const never = cmds.list.find(c => c.never);
+    if (never) return fail(`${never.name}: the person's own command - a model never runs it`);
+    const risky = cmds.list.filter(c => ASK_EFFECTS.includes(c.effect));
+    if (risky.length && !await this.confirm(`${who} wants to run:\n\n${line}\n\n${risky.map(c => `${c.name}: ${EFFECT_SAID[c.effect]}`).join('\n')}\n\nLet it?`)) {
+      return fail(`the person said No to: ${line}`);
+    }
     // Its own questions ([y/N]): yes when the person has let the line already, else theirs to answer.
-    const ask = risky ? async () => 'y' : async q => ((await this.confirm(`${who}'s command asks:\n\n${q}`)) ? 'y' : 'n');
+    const ask = risky.length ? async () => 'y' : async q => ((await this.confirm(`${who}'s command asks:\n\n${q}`)) ? 'y' : 'n');
     const id = ++bus.seq;
     const from = who === 'Chat' ? 'chat' : 'bot';
     bus.emit('command', { id, line, from });

@@ -262,7 +262,8 @@ export class Shell {
         code = 1;
       }
       const result = json ? JSON.stringify(rows.length === 1 ? rows[0] : rows, null, 1).split('\n').map(text => ({ text, tone: 'text' })) : lines;
-      if (last && caught) { caught.lines.push(...lines); caught.data.push(...rows); }
+      // Caught lines are what the terminal shows - the JSON itself for --json (a model reads only lines).
+      if (last && caught) { caught.lines.push(...(to ? lines : result)); caught.data.push(...rows); }
       if (to) {
         try { await this.paths.write(this.paths.resolve(to), result.map(l => l.text).join('\n') + '\n', { append }); }
         catch (e) { ctx.err(String(e?.message ?? e)); return 1; }

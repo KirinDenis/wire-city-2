@@ -1,4 +1,4 @@
 The console's shared core, copied from OWLOS-LAN\web\console\
-commit c587f3a34d2627d9de8526be33e73ad57f2fd2e7 - plus changes not yet committed in web\console\ (1 entries)
-copied 2026-10-19 14:45 by docs\pull-console.ps1
+commit edeb807fd9006c253ce9764809490847a3c86a75 - plus changes not yet committed in web\console\ (2 entries)
+copied 2026-10-19 19:24 by docs\pull-console.ps1
 files: bus.js, cast.js, commands.js, shell.js, terminal.js
