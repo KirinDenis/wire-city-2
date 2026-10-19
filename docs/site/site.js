@@ -36,6 +36,8 @@ import { MANUALS, manualLines } from './manuals.js';
 import { Terminal, CmTerminalClose } from '../console/terminal.js';
 import { ANSI, RESET } from '../console/shell.js';
 import { siteShell, profileLines, quoted, dosboxLine } from './console.js';
+import { AgentLink } from './agent.js';
+import { AiSection } from './ai.js';
 
 // Before anything can remove a file: every removal from this browser's
 // storage into a journal that outlives a reload (drives.js says why).
@@ -757,6 +759,10 @@ export class SiteApp extends CourseApp {
     document.addEventListener('visibilitychange', () => this.netStatus());
     setInterval(() => this.netStatus(), 3000);
     this.presence.start();
+    // A model's hands in this page (agent.js): its line follows the presence's.
+    this.agent = new AgentLink(this);
+    // ...and the AI menu's windows over them (ai.js): the chat, the agents, their tasks, every call.
+    this.ai = new AiSection(this);
     this.netStatus();
   }
 
@@ -859,6 +865,7 @@ export class SiteApp extends CourseApp {
     // The prompt again, open or not: a window's command shows after it even while the terminal is closed.
     if (!this.terminal.busy) this.terminal.shell.prompt().then(x => { this.terminal.prompt = x; if (this.terminal.open) this.terminal.render(); });
     this.screens?.revive(p.people.filter(x => x.sharing).map(x => x.name));
+    this.agent?.tick();
     if (this.who.isOpen) {
       if (this.who.rows().length !== this.who.table?.rows.length) this.who.again();
       else { this.who.refreshRows(); this.who.place(); }      // the row in the bar may share now: its Watch
@@ -882,7 +889,7 @@ export class SiteApp extends CourseApp {
       rows: () => {
         const p = this.presence;
         if (!p || p.state !== 'on' || !p.me) return [[p?.state === 'connecting' ? 'connecting...' : 'not connected', `the server: ${serverUrl()}`, '', '']];
-        return p.people.map(x => [x.name + (x.name === p.me ? ' (you)' : ''), doingText(x, GAMES),
+        return p.people.map(x => [x.name + (x.name === p.me ? ' (you)' : '') + (x.bot ? ' +bot' : ''), doingText(x, GAMES),
           x.sharing ? `shares${x.viewers ? `, ${x.viewers}` : ''}` : '', since(x.since)]);
       },
       // Watch: someone else's shared screen; Share: this PC's, on and off.
@@ -1453,6 +1460,19 @@ export class SiteApp extends CourseApp {
         item(this.caster?.onAir ? '~S~top sharing my screen' : '~S~hare my screen', 'Your DOS screen for the others to watch, under your animal - Who is online shows who shares',
           { title: 'Share my screen', act: () => this.send(this.caster?.onAir ? 'share --stop' : 'share', 'LAN') }),
         item('~M~onitor', 'The network as it is: the relay, the delay, what is lost')),
+      // A model's hands on the site (agent.js, ai.js): the person's own model, paid for by their own key.
+      sub('~A~I',
+        item('~C~hat', 'A model works in this page while you watch: it writes, builds, runs and plays - on your own Anthropic API key',
+          { act: () => this.ai?.chat.show() }),
+        item('~A~gents', 'Who works here: the chat, and your own Claude Code through MCP - a new token, its line, taken back',
+          { act: () => this.ai?.agents.show() }),
+        item('~T~asks', 'What the models work on: each request, where it stands, what it cost',
+          { act: () => this.ai?.tasks.show() }),
+        item('C~o~nsole', 'Every call a model made here, as it happens',
+          { act: () => this.ai?.showConsole() }),
+        line(),
+        item('~N~ew token for Claude Code', 'A token, and the line that connects your own Claude Code to this page - on the clipboard',
+          { act: () => this.ai?.newToken() })),
       sub('~H~elp',
         item('~M~anual', 'How to play the game or the demo running now - its keys, what it is', { act: () => this.send('manual', 'Help') }),
         item('~D~rives and letters', 'How the drives work: a letter, where its files are, who sees them',
@@ -1894,6 +1914,7 @@ export class SiteApp extends CourseApp {
     if (this.terminal?.owns(this.owl.active())) { this.terminal.close(); return; }
     if (this.screens?.owns(this.owl.active())) { this.screens.closeWindow(this.owl.active()); return; }
     if (this.skymap?.owns(this.owl.active())) { this.skymap.close(); return; }
+    if (this.ai?.owns(this.owl.active())) { this.ai.closeWindow(this.owl.active()); return; }
     super.closeActive();
   }
 
@@ -1903,6 +1924,7 @@ export class SiteApp extends CourseApp {
     this.mapDrives?.poll();
     this.catalog?.poll();
     this.who?.poll();
+    this.ai?.poll();
   }
 
   onCommand(cmd) {
@@ -1917,7 +1939,7 @@ export class SiteApp extends CourseApp {
       this.send(`lesson ${(l.lecture || l.id).toLowerCase()}`, 'Lessons');
       return true;
     }
-    for (const t of [this.mapDrives, this.catalog, this.who]) if (t?.handles(cmd)) { t.onCommand(cmd); return true; }
+    for (const t of [this.mapDrives, this.catalog, this.who, this.agent, this.ai]) if (t?.handles(cmd)) { t.onCommand(cmd); return true; }
     switch (cmd) {
       // F9: what is in front, built - as `build`, on the bus. Nothing to build: the lessons.
       case Cm.Build: {

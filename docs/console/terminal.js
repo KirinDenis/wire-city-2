@@ -32,9 +32,16 @@ export class Terminal {
    * here as if typed, marked with its window, its words under it. title:
    * the window's; welcome: its first line, ANSI; historyKey: where this
    * browser keeps what was typed.
+   *
+   * A second terminal of a page - a chat whose "shell" is a model (the
+   * WIRE CITY site's AI > Chat, 2026-10-19) - says hotkey: false (Ctrl+`
+   * stays the first one's), a closeCmd of its own, place(owl): the window's
+   * { x, y, w, h } instead of the drop from the top, and status: its own
+   * status line.
    */
-  constructor(owl, { makeShell, makeBus = shell => new Bus({ shell }), app = null, log = null, title = 'Terminal', welcome = '', historyKey = 'console.history' } = {}) {
-    Object.assign(this, { owl, app, log, title, welcome, historyKey });
+  constructor(owl, { makeShell, makeBus = shell => new Bus({ shell }), app = null, log = null, title = 'Terminal', welcome = '', historyKey = 'console.history',
+    hotkey = true, closeCmd = CmTerminalClose, place = null, status = null } = {}) {
+    Object.assign(this, { owl, app, log, title, welcome, historyKey, hotkey, closeCmd, place, status });
     this.shell = makeShell({ write: t => this.write(t), ask: (q, o) => this.ask(q, o) });
     this.shell.exit = () => this.close();
     this.shell.saveHistory = () => this.saveHistory();
@@ -59,12 +66,13 @@ export class Terminal {
     this.lastTab = 0;
     this.pending = '';          // what was written while it was closed: shown when it opens
     window.addEventListener('keydown', e => this.key(e), true);
+    window.addEventListener('paste', e => this.pasteEvent(e), true);
   }
 
   // ------------------------------------------------------------ a tool of the page
 
-  handles(cmd) { return cmd === CmTerminalClose; }
-  onCommand(cmd) { if (cmd === CmTerminalClose) this.close(); }
+  handles(cmd) { return cmd === this.closeCmd; }
+  onCommand(cmd) { if (cmd === this.closeCmd) this.close(); }
   owns(id) { return id !== 0 && id === this.win; }
   closeWindow(id) { if (id === this.win) this.close(); }
   poll() {}
@@ -83,12 +91,13 @@ export class Terminal {
     if (this.open) { this.owl.activate(this.win); return; }
     const owl = this.owl;
     const W = owl.width, H = owl.height - 2;
-    this.win = owl.window(this.title, W, Math.max(8, Math.round(H * 0.382)), { x: 0, y: 1, style: Style.Terminal, closeCmd: CmTerminalClose });
+    const at = this.place?.(owl) ?? { x: 0, y: 1, w: W, h: Math.max(8, Math.round(H * 0.382)) };
+    this.win = owl.window(this.title, at.w, at.h, { x: at.x, y: at.y, style: Style.Terminal, closeCmd: this.closeCmd });
     this.con = owl.console(this.win, { scrollback: 2000 });
-    this.shell.width = W - 3;
-    owl.windowStatus(this.win,
+    this.shell.width = at.w - 3;
+    owl.windowStatus(this.win, ...(this.status ?? [
       { label: '~Tab~ Finish', cmd: 0 }, { label: '~Up~ Back', cmd: 0 }, { label: '~Ctrl-R~ Search', cmd: 0 },
-      { label: '~Ctrl-C~ Stop', cmd: 0 }, { label: '~Esc~ Close', cmd: 0 });
+      { label: '~Ctrl-C~ Stop', cmd: 0 }, { label: '~Esc~ Close', cmd: 0 }]));
     owl.activate(this.win);
     if (this.transcript) owl.consoleWrite(this.con, `${ANSI.muted}${this.transcript.replace(/\n/g, '\r\n')}${RESET}\r\n`);
     else if (this.welcome) this.write(`${this.welcome}\r\n`);
@@ -165,10 +174,39 @@ export class Terminal {
 
   key(e) {
     // Ctrl+`, wherever the keys are: by the key's place, so ё on a Russian layout opens it too.
-    if (e.ctrlKey && !e.altKey && e.code === 'Backquote') { e.preventDefault(); e.stopImmediatePropagation(); this.toggle(); return; }
+    if (this.hotkey && e.ctrlKey && !e.altKey && e.code === 'Backquote') { e.preventDefault(); e.stopImmediatePropagation(); this.toggle(); return; }
     if (!this.front) return;
     const handled = this.edit(e);
+    // A paste: the key is let through to the browser, whose own paste event brings the text (pasteEvent).
+    if (handled === 'native') { e.stopImmediatePropagation(); return; }
     if (handled) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }
+
+  /**
+   * Ctrl+V, Shift+Insert: the browser's own paste event brings the text -
+   * it needs no permission, where navigator.clipboard.readText() is refused
+   * in many places (a browser inside an app, a page not granted it) and
+   * said nothing: a key could not be pasted into the site's AI chat
+   * (2026-10-19). The old way stays, for a browser that sends no event.
+   */
+  awaitPaste() {
+    this.pasted = false;
+    setTimeout(() => { if (!this.pasted) navigator.clipboard?.readText?.().then(t => this.pasteText(t), () => {}); }, 200);
+  }
+
+  pasteEvent(e) {
+    if (!this.front) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    this.pasted = true;
+    this.pasteText(e.clipboardData?.getData('text') ?? '');
+  }
+
+  /** Pasted text into the line: its first line - Enter is the person's to press. */
+  pasteText(t) {
+    if (this.busy && !this.asking) return;
+    this.insert(String(t).split(/\r?\n/)[0]);
+    this.render();
   }
 
   /** One key while the terminal is in front: true when it was the line's. */
@@ -186,6 +224,7 @@ export class Terminal {
     if (k === 'Enter') { this.enter(); return true; }
     if (k === 'Tab') { this.tab(); return true; }
     if (k === 'ArrowUp' || k === 'ArrowDown') { this.history(k === 'ArrowUp' ? -1 : 1); return true; }
+    if (e.shiftKey && k === 'Insert') { this.awaitPaste(); return 'native'; }
     if (ctrl) {
       switch (k.toLowerCase()) {
         case 'a': this.caret = 0; break;
@@ -201,7 +240,7 @@ export class Terminal {
         }
         case 'l': this.write('\x1b[2J'); break;
         case 'r': if (!this.asking) { this.search = { query: '', at: -1 }; } break;
-        case 'v': navigator.clipboard?.readText?.().then(t => { this.insert(t.split('\n')[0]); this.render(); }, () => {}); return true;
+        case 'v': this.awaitPaste(); return 'native';
         default: return false;
       }
       this.render();

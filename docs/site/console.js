@@ -17,6 +17,7 @@ import { CORE_COMMANDS, CORE_GROUPS } from '../console/commands.js';
 import { statsOf, sizeText, dateText, LocalFolder } from './drives.js';
 import { doingText, serverUrl } from './net.js';
 import { MANUALS } from './manuals.js';
+import { zip, download } from './zip.js';
 
 /** A path's place: the root, /mnt, or a drive and the path inside it ('/' its top). */
 function locate(app, path) {
@@ -263,8 +264,8 @@ export const SITE_COMMANDS = [
       if (!p || p.state !== 'on' || !p.me) { ctx.err(`not connected to the server (${serverUrl()}) - ${p?.state === 'connecting' ? 'connecting' : 'it tries again by itself'}`); return 1; }
       ctx.out(`${p.here} here - you are ${p.me}`, 'heading');
       for (const x of p.people) {
-        ctx.data({ name: x.name, you: x.name === p.me, doing: x.doing, what: x.what, sharing: x.sharing, since: x.since });
-        ctx.out(`${(x.name + (x.name === p.me ? ' (you)' : '')).padEnd(18)} ${doingText(x, ctx.app.games).padEnd(28)}${x.sharing ? ' shares the screen' : ''}`, x.name === p.me ? 'good' : 'text');
+        ctx.data({ name: x.name, you: x.name === p.me, doing: x.doing, what: x.what, bot: !!x.bot, sharing: x.sharing, since: x.since });
+        ctx.out(`${(x.name + (x.name === p.me ? ' (you)' : '')).padEnd(18)} ${doingText(x, ctx.app.games).padEnd(28)}${x.bot ? ' with a model' : ''}${x.sharing ? ' shares the screen' : ''}`, x.name === p.me ? 'good' : 'text');
       }
       return 0;
     },
@@ -347,6 +348,46 @@ export const SITE_COMMANDS = [
       if (!app.games.some(g => g.room === room)) { ctx.err(`${room}: no game flies there - ${app.games.filter(g => g.room).map(g => g.room).join(', ')}`); return 1; }
       app.showSky(room);
       ctx.out(`the live map of ${room}${app.presence?.state === 'on' ? '' : ' - not connected to the server: it waits'}`, 'muted');
+      return 0;
+    },
+  },
+  {
+    // Your own model in this page, through MCP (agent.js, OWLOS-LAN Agents.cs): the token is made
+    // here and kept in this browser; the server is told only its hash.
+    name: 'agent', group: 'network', where: 'here', complete: () => ['token', 'revoke'],
+    summary: 'your own model (Claude, any MCP client) working in this page - agent token makes its key, agent revoke takes keys back',
+    usage: 'agent [token [--days N] | revoke N|all]',
+    options: { days: 'how long the token lives: 1 to 7 days (1)' },
+    async run(ctx) {
+      const app = ctx.app, a = app.agent, p = app.presence;
+      if (!a) { ctx.err('not here yet: the page is still starting'); return 1; }
+      const [word, arg] = ctx.args;
+      if (word === 'token') {
+        const days = ctx.opts.days === undefined ? 1 : Number(ctx.opts.days);
+        if (!Number.isInteger(days) || days < 1 || days > 7) { ctx.err('--days takes 1 to 7'); return 1; }
+        const token = await a.make(days);
+        ctx.out(`a token for your model, ${days} day${days > 1 ? 's' : ''} - it works while this page is open:`, 'heading');
+        ctx.out(token, 'good');
+        ctx.data({ token, address: a.address, days });
+        ctx.out(`Claude Code: claude mcp add --transport http wire-city ${a.address} --header "Authorization: Bearer ${token}"`);
+        ctx.out('Whoever has it acts in this page as you while it is open - keep it to yourself. agent revoke takes it back.', 'muted');
+        if (p?.state !== 'on') ctx.out(`not connected to the server (${serverUrl()}) - the model waits until it is`, 'bad');
+        return 0;
+      }
+      if (word === 'revoke') {
+        if (!arg || (arg !== 'all' && !(Number(arg) >= 1 && Number(arg) <= a.held.length))) { ctx.err(`agent revoke N (1..${a.held.length}) or all`); return 1; }
+        const n = await a.revoke(arg);
+        ctx.out(`${n} token${n === 1 ? '' : 's'} taken back - ${a.held.length} left`, 'muted');
+        return 0;
+      }
+      if (word) { ctx.err(`${word}: agent token, agent revoke N|all, or agent alone`); return 1; }
+      if (!a.held.length) { ctx.out('no model works here: agent token makes a key for one', 'muted'); return 0; }
+      ctx.out(`${a.held.length} token${a.held.length > 1 ? 's' : ''}; the line: ${a.state}, ${a.claimed} held by the server; ${a.calls} call${a.calls === 1 ? '' : 's'} this visit`, 'heading');
+      a.held.forEach((t, i) => {
+        ctx.data({ n: i + 1, made: t.made, until: t.until });
+        ctx.out(`${String(i + 1).padStart(2)}  ${t.token.slice(0, 6)}...  made ${new Date(t.made).toLocaleString()}, ends ${new Date(t.until).toLocaleString()}`);
+      });
+      ctx.out(`the address: ${a.address}`, 'muted');
       return 0;
     },
   },
@@ -500,6 +541,31 @@ export const SITE_COMMANDS = [
         if (await ctx.shell.paths.isDir(path) && !ctx.opts.r) { ctx.err(`${w}: a folder - rm -r takes it and all in it`); return 1; }
         await at.drive.remove(`${await ctx.shell.paths.spelled(at.drive, at.sub)}`.replace(/\/$/, ctx.opts.r ? '/' : ''));
       }
+    },
+  },
+  {
+    name: 'zip', group: 'files', where: 'here', complete: 'path',
+    summary: "a folder as a ZIP, into this computer's downloads - zip A:\\MY\\HELI gives HELI.ZIP with the folder in it",
+    usage: 'zip FOLDER',
+    async run(ctx) {
+      if (!ctx.args[0]) { ctx.err('which folder? zip A:\\MY\\HELI'); return 1; }
+      const paths = ctx.shell.paths, path = paths.resolve(ctx.args[0]), at = locate(ctx.app, path);
+      if (at.kind !== 'drive' || at.sub === '/' || !await paths.isDir(path)) { ctx.err(`${ctx.args[0]}: a folder inside a drive`); return 1; }
+      const top = (await paths.spelled(at.drive, at.sub)).replace(/\/$/, ''), base = top.split('/').pop();
+      const files = [];
+      const walk = async (dir, rel) => {
+        for (const e of await at.drive.list(dir)) {
+          if (e.dir) await walk(`${dir}${e.name}/`, `${rel}${e.name}/`);
+          else files.push({ path: `${rel}${e.name}`, bytes: await at.drive.readBytes(`${dir}${e.name}`), date: e.date });
+        }
+      };
+      await walk(`${top}/`, `${base}/`);
+      if (!files.length) { ctx.err(`${ctx.args[0]}: an empty folder - nothing to give`); return 1; }
+      const blob = await zip(files);
+      download(blob, `${base.toUpperCase()}.ZIP`);
+      ctx.data({ name: `${base.toUpperCase()}.ZIP`, files: files.length, size: blob.size });
+      ctx.out(`${base.toUpperCase()}.ZIP: ${files.length} file${files.length > 1 ? 's' : ''}, ${sizeText(blob.size)} - in this computer's downloads`, 'good');
+      return 0;
     },
   },
   {
