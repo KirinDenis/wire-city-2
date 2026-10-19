@@ -43,6 +43,55 @@ BOTHIT: push bx
         clc
         ret
 
+; ---- the sides (DATA.INC myside, pteam) -------------------------------------
+; FOE: is slot SI the pilot's enemy? ZF=0 a foe, ZF=1 a friend. Every
+; register kept. The side is pteam's, not the slot's parity: over the wire a
+; human is on the side he says, and the pilot may be on the odd one.
+FOE:    push ax
+        push bx
+        mov  bx,si
+        shr  bx,1
+        mov  al,[pteam+bx]
+        xor  al,[myside]
+        pop  bx
+        pop  ax
+        ret
+; FOEL: the same for a lock in SI - a jet (or the ghost), or a radar
+; station or a Shilka, which ride locki as base + index*2: theirs is the
+; index's parity, as it always was.
+FOEL:   cmp  si,NPLANE*2+2
+        jb   FOE
+        push ax
+        mov  ax,si
+        shr  ax,1
+        and  al,1
+        xor  al,[myside]
+        pop  ax
+        ret
+; SIDEA: slot SI's side itself, not the pilot's view of it - ZF=1 the even
+; side, ZF=0 the odd. For the war's own sums: who is left, who scored.
+SIDEA:  push bx
+        mov  bx,si
+        shr  bx,1
+        cmp  byte [pteam+bx],0
+        pop  bx
+        ret
+; SETSIDE: a new life is flown for the side the war host gave (wside, WAR.INC)
+; - the pilot, his slot and the ghost of his parked jet.
+SETSIDE:
+        mov  al,[wside]
+        mov  [myside],al
+        mov  [pteam],al
+        mov  [pteam+NPLANE],al
+        ret
+FOEF:   call FOE                ; the doors for UISEG's IFF
+        retf
+FOELF:  call FOEL
+        retf
+SETSIDEF:
+        call SETSIDE
+        retf
+
 PLANESUPD:
         mov  ax,[rspin]         ; the dishes sweep on the physics clock
         add  ax,RSPINV
@@ -370,7 +419,7 @@ PLANESUPD:
         shr  bx,1
         cmp  byte [pst+bx],0
         jne  .rcn
-        test si,2
+        call SIDEA              ; a human over the wire on his own side
         jnz  .rch
         inc  cl
         jmp  .rcn
@@ -571,7 +620,10 @@ PLANESDRAW:
         jle  .mr1
         mov  ax,24
 .mr1:  mov  [dsac],ax          ; half-size
-        test word [pidx],2
+        push si
+        mov  si,[pidx]
+        call FOE                ; the pilot's side, not the slot's parity
+        pop  si
         jnz  .hst
         ; friendly: green square, red when it is the locked one
         mov  byte [COLOR],95
@@ -1161,7 +1213,10 @@ LOCKHUD:
         cmp  ax,0FFFFh
         je   .ring
         mov  word [dsac],95
-        test ax,2
+        push si
+        mov  si,ax
+        call FOEL               ; the ring wears the pilot's IFF of it
+        pop  si
         jz   .ring
         mov  word [dsac],19
 .ring: mov  word [tpi],0
@@ -1254,7 +1309,7 @@ LOCKHUD:
 .text: mov  si,[locki]
         mov  byte [COLOR],19
         mov  bx,MSGTGT
-        test si,2
+        call FOEL               ; TARGET or FRIEND: the pilot's side decides
         jnz  .t2
         mov  byte [COLOR],95
         mov  bx,MSGFRD
@@ -1624,7 +1679,7 @@ BOOM:   mov  bx,si
         cmp  ax,si
         jne  .bk1
         mov  word [locki],0FFFFh
-.bk1:  test si,2               ; scoreboard: the other team scores
+.bk1:  call SIDEA              ; scoreboard: the other team scores
         jnz  .bsc
         inc  word [tsch]    ; a friendly fell
         jmp  .bsd
@@ -2577,7 +2632,7 @@ AMSLUPD:
         ; not a longer motor. Off, and the squadron goes back to shooting at
         ; whoever it noticed first, which is what it did before there was a
         ; radio in the game at all.
-        test si,2
+        call FOE
         jnz  .rno              ; the other side is not on our net
         cmp  byte [swair],0
         je   .rno
@@ -2600,13 +2655,14 @@ AMSLUPD:
 .rd2:  add  bx,ax
         cmp  bx,[airng]
         jl   .shoot            ; in reach: the order stands
-.rno:  mov  dx,si              ; hunt the OTHER team
-        and  dx,2
-        xor  dx,2
+.rno:  mov  bx,si              ; hunt the OTHER team - by pteam: a human
+        shr  bx,1               ;  over the wire is on the side he says,
+        mov  dl,[pteam+bx]      ;  not his slot's parity
+        xor  dl,1
         xor  di,di
 .tg:   mov  bx,di
-        and  bx,2
-        cmp  bx,dx
+        shr  bx,1
+        cmp  [pteam+bx],dl
         jne  .tgn
         mov  bx,di
         shr  bx,1
@@ -3069,7 +3125,7 @@ AIGUN:  cmp  byte [warcl],0     ; the war host's guns, not ours
         shr  bx,1
         cmp  byte [pst+bx],0
         jne  .no
-        test si,2               ; hostiles check the player first
+        call FOE                ; the pilot's enemies check him first
         jz   .ai
         cmp  byte [dying],0
         jne  .ai               ; the player is already falling
@@ -3089,13 +3145,14 @@ AIGUN:  cmp  byte [warcl],0     ; the war host's guns, not ours
         jge  .ai
         mov  di,0FFFFh          ; target: the player
         jmp  .fire
-.ai:   mov  dx,si              ; find a living enemy in knife range
-        and  dx,2
-        xor  dx,2
+.ai:   mov  bx,si              ; find a living enemy in knife range - by
+        shr  bx,1               ;  pteam, as the missiles hunt
+        mov  dl,[pteam+bx]
+        xor  dl,1
         xor  di,di
 .tg:   mov  bx,di
-        and  bx,2
-        cmp  bx,dx
+        shr  bx,1
+        cmp  [pteam+bx],dl
         jne  .tn
         mov  bx,di
         shr  bx,1

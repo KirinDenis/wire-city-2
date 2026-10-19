@@ -2,6 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>
+// Since 2026-10-19 this address opens the WIRE CITY site and starts the game in
+// its DOS PC (site/?play=owlfly). ?classic keeps this page - the stand-alone
+// player - as it was. The rest of the page stays: pack.ps1, pack-site.ps1 and
+// the course read the bundle's name from it.
+if (!/[?&]classic(=|&|$)/.test(location.search)) location.replace('site/?play=owlfly' + location.hash);
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WIRE CITY 86</title>
 <link rel="stylesheet" href="jsdos/js-dos.css">

@@ -496,7 +496,11 @@ PANELBMP:
 ; ============================================================================
 RBLIPS: cmp  byte [swtr],0  ; EMISSIONS OFF is the same picture as a
         je   .snow             ; dead station, and for the same reason:
-        cmp  byte [rsst],0  ; a radar that is not transmitting has
+        push bx                 ; (the pilot's OWN side's station: 0 or 1)
+        mov  bl,[myside]
+        xor  bh,bh
+        cmp  byte [rsst+bx],0  ; a radar that is not transmitting has
+        pop  bx
         je   .live             ; nothing to receive. Switch it off to stop
 .snow: call UISEG:RSNOISF   ; painting yourself on other people's
         ret                     ; scopes and you fly blind - that is the
@@ -565,7 +569,7 @@ RBLIPS: cmp  byte [swtr],0  ; EMISSIONS OFF is the same picture as a
         call ROW320
         add  di,[dsx]
         mov  al,95              ; our side: green
-        test si,2
+        call FOE                ;  (the pilot's side - pteam - not parity)
         jz   .fr
         mov  al,19              ; theirs: RED. It was yellow, and yellow is
                                 ; a caution colour, not an enemy one

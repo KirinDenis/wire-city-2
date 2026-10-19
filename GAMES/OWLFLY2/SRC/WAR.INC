@@ -22,11 +22,13 @@
 ;    'B' (host -> all, every WEVERY ticks): the bots, slots 1..WARN-1 -
 ;        where each is, its heading, down or flying and its armour, its
 ;        callsign; the round's countdown and winner and the two team
-;        scores. 13 + 35 x 9 = 328 bytes: under the 512 an old relay
-;        passes.
+;        scores; and the sides it deals the humans (THE SIDES ON THE
+;        WIRE, below). 13 + 35 x 9 + 1 + 5 x 3 = 344 bytes: under the
+;        512 an old relay passes.
 ;        +0 'B'  +1 gid  +3 host pid  +5 rndovr  +7 rwin  +8 tscf
 ;        +10 tsch  +12 n  then n x { pax pay paz (words)  pah (byte)
 ;        state (bit 7 down, 0..6 armour)  callsign (pcs<<6 | pnum) }
+;        then m  and m x { pid (word)  side (byte) }
 ;    'K' (host -> all, with every other 'B'): the twenty Shilkas, 206
 ;        bytes - laid out where WSENDK is.
 ;    'X' (client -> host): "my guns hit slot S for D" - the host's armour
@@ -96,7 +98,7 @@ wsent   dw 0                    ; the tick our last 'B' went (when we host)
 whold   dw NPLANE dup(0)        ; the tick we shot each bot down (client)
 WSECB   db ECBSZ dup(0)
 WSHDR   db HDRSZ dup(0)
-WSPAY   db 13+(WARN-1)*9 dup(0) ; the biggest that goes: a 'B'
+WSPAY   db 13+(WARN-1)*9+1+WTMAX*3 dup(0) ; the biggest that goes: a 'B', sides and all
 WRECB   db WLSTN*ECBSZ dup(0)
 WRBUF   db WLSTN*WBUF dup(0)
 
@@ -352,7 +354,8 @@ WTAKE:  mov  dx,word [cs:bx+1]  ; its sky
 .hb:    jmp  WSHKBURN           ; here, and in the next 'K'
 
 ; ---- WAPPLY: a host's 'B' onto our slots, BX -> its payload (CS) ------------
-WAPPLY: mov  ax,[cs:bx+5]
+WAPPLY: mov  [cs:wapb],bx       ; the payload's start: the sides follow the bots
+        mov  ax,[cs:bx+5]
         mov  [rndovr],ax        ; the round is the host's
         mov  al,[cs:bx+7]
         mov  [rwin],al
@@ -431,7 +434,7 @@ WAPPLY: mov  ax,[cs:bx+5]
         pop  cx
         dec  cx
         jmp  .s
-.done:  ret
+.done:  jmp  WTREAD             ; and the sides the host deals, after them
 
 ; ---- WTRAIL: the contrail ring of slot SI, all of it at where it is now ----
 ; (PLANESUPD's leash does the same: a jet that moved far must not drag a
@@ -461,7 +464,8 @@ WTRAIL: push bx
 WSENDB: cmp  byte [cs:WSECB+E_INUSE],0
         je   .go
         ret                     ; the last one still in flight: not over it
-.go:    mov  byte [cs:WSPAY],'B'
+.go:    call WTEAMS             ; the sides dealt first (ES = SKYSEG)
+        mov  byte [cs:WSPAY],'B'
         mov  ax,[ggid]
         mov  word [cs:WSPAY+1],ax
         mov  ax,[es:mypid]
@@ -502,7 +506,29 @@ WSENDB: cmp  byte [cs:WSECB+E_INUSE],0
         add  si,2
         cmp  si,WARN*2
         jb   .s
-        mov  cx,13+(WARN-1)*9
+        ; the sides (WTEAMS): n, then n x { pid (word), side (byte) }
+        mov  di,bx
+        inc  bx
+        xor  cx,cx
+        xor  si,si
+.wt:    mov  dx,si
+        add  dx,dx
+        xchg dx,di
+        mov  ax,[cs:wtpid+di]
+        xchg dx,di
+        or   ax,ax
+        jz   .wtn
+        mov  [cs:bx],ax
+        mov  al,[cs:wtsid+si]
+        mov  [cs:bx+2],al
+        add  bx,3
+        inc  cx
+.wtn:   inc  si
+        cmp  si,WTMAX
+        jb   .wt
+        mov  [cs:di],cl
+        mov  cx,bx
+        sub  cx,WSPAY           ; the whole payload
         jmp  WXMIT
 
 ; ---- WARHITF: our guns hit a bot of the host's war --------------------------
@@ -806,6 +832,277 @@ WNEAR:  sub  ax,[pax+si]
         ret
 .no:    stc
         ret
+
+; ============================================================================
+;  THE SIDES ON THE WIRE (the pilot, 2026-10-19): every human who joins is
+;  the enemy - the sides fill evenly - and when leaving makes them uneven by
+;  two, the latest to join crosses over. The WAR HOST deals them (WTEAMS),
+;  every 'B' carries the deal after its bots, and each pilot takes his own
+;  at his next life (AFSPAWN -> SETSIDE, PLANES.INC): nobody changes sides
+;  in mid-air. Everyone else reads a pilot's side from his own 'P' (+16,
+;  NET.INC) - his word, as his life is. The latest to join is the highest
+;  pid: the relay numbers its connections in order. A pilot who comes to
+;  host carries on with the deal he last heard (WTREAD keeps it).
+; ============================================================================
+WTMAX   = NRMT+1                ; the humans one sky holds: us and the wire's four
+wtpid   dw WTMAX dup(0)         ; the deal: who...
+wtsid   db WTMAX dup(0)         ; ...and which side (0 the even slots', 1 the odd)
+wapb    dw 0                    ; WAPPLY's payload, for WTREAD
+
+; ---- WTEAMS: the war host deals the sides. ES = SKYSEG -----------------------
+WTEAMS: push ax
+        push bx
+        push cx
+        push dx
+        push si
+        push di
+        ; the ones gone off the wire leave the deal
+        xor  si,si
+.g:     mov  bx,si
+        add  bx,bx
+        mov  ax,[cs:wtpid+bx]
+        or   ax,ax
+        jz   .gn
+        call WFLIES
+        jc   .gn
+        mov  word [cs:wtpid+bx],0
+.gn:    inc  si
+        cmp  si,WTMAX
+        jb   .g
+        ; us, not dealt yet: on the side we fly
+        mov  ax,[es:mypid]
+        call WINDEX
+        jc   .us
+        push ax
+        xor  ax,ax
+        call WINDEX             ; an empty entry (there is one: us + NRMT)
+        pop  ax
+        jnc  .us
+        mov  bx,di
+        add  bx,bx
+        mov  [cs:wtpid+bx],ax
+        mov  dl,[myside]
+        mov  [cs:wtsid+di],dl
+.us:    ; a pilot heard and not dealt: to the side with fewer - and, even,
+        ; against the latest to join
+        xor  si,si
+.p:     mov  ax,[es:rpid+si]
+        or   ax,ax
+        jz   .pn
+        mov  dx,[lasttk]
+        sub  dx,[es:rlast+si]
+        cmp  dx,WLIVE
+        jae  .pn
+        call WINDEX
+        jc   .pn               ; dealt already
+        push ax
+        xor  ax,ax
+        call WINDEX
+        pop  ax
+        jnc  .pn               ; no room
+        push di                 ; the empty entry
+        call WCOUNT             ; CL the even side's, CH the odd's
+        mov  dl,0
+        cmp  cl,ch
+        jb   .sd               ; fewer on the even side
+        mov  dl,1
+        ja   .sd               ; fewer on the odd
+        call WLAST              ; level: against the latest to join
+        cmp  di,0FFFFh
+        je   .sd
+        mov  dl,[cs:wtsid+di]
+        xor  dl,1
+.sd:    pop  di
+        mov  bx,di
+        add  bx,bx
+        mov  [cs:wtpid+bx],ax
+        mov  [cs:wtsid+di],dl
+.pn:    add  si,2
+        cmp  si,NRMT*2
+        jb   .p
+        ; two up on one side: its latest to join crosses (at his next life)
+        call WCOUNT
+        mov  al,ch
+        add  al,2
+        cmp  cl,al
+        jb   .b1
+        mov  al,0               ; the even side two up
+        jmp  .bm
+.b1:    mov  al,cl
+        add  al,2
+        cmp  ch,al
+        jb   .bx               ; even enough
+        mov  al,1
+.bm:    call WLASTON
+        cmp  di,0FFFFh
+        je   .bx
+        xor  byte [cs:wtsid+di],1
+.bx:    ; and our own next life's side, as we deal it to ourselves
+        mov  ax,[es:mypid]
+        call WINDEX
+        jnc  .x
+        mov  al,[cs:wtsid+di]
+        mov  [wside],al
+.x:     pop  di
+        pop  si
+        pop  dx
+        pop  cx
+        pop  bx
+        pop  ax
+        ret
+
+; WFLIES: does pid AX fly this sky - us, or a pilot heard lately? CF=1 yes. ES = SKYSEG.
+WFLIES: cmp  ax,[es:mypid]
+        je   .y
+        push si
+        push dx
+        xor  si,si
+.r:     cmp  ax,[es:rpid+si]
+        jne  .n
+        mov  dx,[lasttk]
+        sub  dx,[es:rlast+si]
+        cmp  dx,WLIVE
+        jb   .yy
+.n:     add  si,2
+        cmp  si,NRMT*2
+        jb   .r
+        pop  dx
+        pop  si
+        clc
+        ret
+.yy:    pop  dx
+        pop  si
+.y:     stc
+        ret
+
+; WINDEX: pid AX's entry in the deal (AX 0: an empty one): DI its index, CF=1 found.
+WINDEX: xor  di,di
+.l:     push di
+        add  di,di
+        cmp  ax,[cs:wtpid+di]
+        pop  di
+        je   .f
+        inc  di
+        cmp  di,WTMAX
+        jb   .l
+        clc
+        ret
+.f:     stc
+        ret
+
+; WCOUNT: CL, CH = the dealt pilots on the even side, on the odd.
+WCOUNT: push si
+        push bx
+        xor  cx,cx
+        xor  si,si
+.c:     mov  bx,si
+        add  bx,bx
+        cmp  word [cs:wtpid+bx],0
+        je   .cn
+        cmp  byte [cs:wtsid+si],0
+        jne  .c1
+        inc  cl
+        jmp  .cn
+.c1:    inc  ch
+.cn:    inc  si
+        cmp  si,WTMAX
+        jb   .c
+        pop  bx
+        pop  si
+        ret
+
+; WLAST / WLASTON: DI = the deal's latest to join (the highest pid) - on side
+; AL, or on either (WLAST) - never us: the host is not the one moved.
+; 0FFFFh: nobody. AX and the rest kept.
+WLAST:  push ax
+        mov  al,0FFh
+        call WLASTON
+        pop  ax
+        ret
+WLASTON:
+        push bx
+        push cx
+        push si
+        mov  di,0FFFFh
+        xor  cx,cx              ; the highest pid so far
+        xor  si,si
+.l:     mov  bx,si
+        add  bx,bx
+        mov  bx,[cs:wtpid+bx]
+        or   bx,bx
+        jz   .n
+        cmp  bx,[es:mypid]
+        je   .n
+        cmp  al,0FFh
+        je   .s
+        cmp  al,[cs:wtsid+si]
+        jne  .n
+.s:     cmp  bx,cx
+        jbe  .n
+        mov  cx,bx
+        mov  di,si
+.n:     inc  si
+        cmp  si,WTMAX
+        jb   .l
+        pop  si
+        pop  cx
+        pop  bx
+        ret
+
+; ---- WTREAD: a host's 'B' read past its bots, BX -> the sides it deals ----
+; The deal kept whole (we carry it on if we come to host), and our own entry
+; is our next life's side. An older host's 'B' has none: nothing changes.
+WTREAD: mov  di,[cs:wapb]
+        mov  ah,[cs:di-HDRSZ+2]  ; the IPX length, big-endian
+        mov  al,[cs:di-HDRSZ+3]
+        sub  ax,HDRSZ
+        add  ax,di               ; the payload's end
+        mov  dx,ax
+        mov  ax,bx
+        inc  ax
+        cmp  ax,dx
+        ja   .r                 ; no sides in it
+        xor  ch,ch
+        mov  cl,[cs:bx]
+        cmp  cl,WTMAX
+        ja   .r
+        mov  ax,cx
+        add  ax,ax
+        add  ax,cx
+        add  ax,bx
+        inc  ax                  ; BX + 1 + n*3
+        cmp  ax,dx
+        ja   .r                 ; cut short: the old deal stands
+        inc  bx
+        xor  si,si
+.z:     mov  di,si
+        add  di,di
+        mov  word [cs:wtpid+di],0
+        inc  si
+        cmp  si,WTMAX
+        jb   .z
+        push es
+        mov  ax,SKYSEG
+        mov  es,ax
+        xor  si,si
+.f:     jcxz .q
+        mov  ax,[cs:bx]
+        mov  di,si
+        add  di,di
+        mov  [cs:wtpid+di],ax
+        mov  dl,[cs:bx+2]
+        and  dl,1
+        mov  [cs:wtsid+si],dl
+        cmp  ax,[es:mypid]
+        jne  .nm
+        mov  [wside],dl          ; ours: the side of our next life
+        mov  byte [wdealt],1     ;  (and Enter may take a jet: SPECTUPF)
+.nm:    add  bx,3
+        inc  si
+        dec  cx
+        jmp  .f
+.q:     pop  es
+.r:     ret
 
 ; ---- THE WINDOW GUARD ------------------------------------------------------
 label WAREND byte

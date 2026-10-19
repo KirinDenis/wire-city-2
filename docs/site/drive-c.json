@@ -1,9 +1,9 @@
 {
-    "made":  "2026-10-18 21:49",
+    "made":  "2026-10-19 12:47",
     "source":  "released",
     "from":  {
-                 "OWLFLY3":  "owlfly3_v18.jsdos",
-                 "OWLFLY2":  "owlfly2_v71.jsdos",
+                 "OWLFLY3":  "owlfly3_v19.jsdos",
+                 "OWLFLY2":  "owlfly2_v72.jsdos",
                  "OWLFLY":  "owlfly_v53.jsdos",
                  "TRAINER":  "field_v32.jsdos",
                  "WIRECITY":  "wirecity_v4.jsdos"
@@ -11,7 +11,7 @@
     "files":  [
                   {
                       "path":  "GAMES/OWLFLY3/OWLFLY3.EXE",
-                      "size":  130084
+                      "size":  130733
                   },
                   {
                       "path":  "GAMES/OWLFLY3/CITY.DAT",

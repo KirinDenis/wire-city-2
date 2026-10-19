@@ -2,6 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>
+// Since 2026-10-19 this address opens the WIRE CITY site and starts the game in
+// its DOS PC (site/?play=owlfly3h). ?classic keeps this page - the stand-alone
+// player - as it was. The rest of the page stays: pack.ps1, pack-site.ps1 and
+// the course read the bundle's name from it.
+if (!/[?&]classic(=|&|$)/.test(location.search)) location.replace('site/?play=owlfly3h' + location.hash);
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OWL FLY III &mdash; HERCULES</title>
 <link rel="stylesheet" href="jsdos/js-dos.css">
@@ -93,7 +100,7 @@
   // The bundle, NAMED ONCE - version on the status line, same reason as
   // the colour page: a cached page serving a stale bundle is invisible
   // any other way, and stale-vs-fresh pilots fly separate skies.
-  var BUNDLE = "owlfly3h_v18.jsdos";
+  var BUNDLE = "owlfly3h_v19.jsdos";
   var VER = "v" + (BUNDLE.match(/_v(\d+)/) || [0, "?"])[1];
   document.getElementById("stat").textContent = "wire: connecting??? " + VER;
 
@@ -163,6 +170,7 @@
 </script>
 </body>
 </html>
+
 
 
 

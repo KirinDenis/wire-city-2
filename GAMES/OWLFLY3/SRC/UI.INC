@@ -1210,7 +1210,9 @@ SHKLOCK:
 
 ; ---------------------------------------------------------------------------
 SHKBLIP:
-        cmp  byte [rsst],0  ; our own radar out: no returns at all
+        mov  bl,[myside]        ; the pilot's OWN side's station
+        xor  bh,bh
+        cmp  byte [rsst+bx],0  ; our own radar out: no returns at all
         jne  .sbd
         mov  word [cs:shki],0
 .sb:   mov  bx,[cs:shki]
@@ -1244,7 +1246,8 @@ SHKBLIP:
         sub  ax,bx              ; ahead = up the screen
         mov  [bqy],ax
         mov  ax,[cs:shki]       ; even ours, odd theirs - the parity rule
-        test ax,1
+        xor  al,[myside]        ;  - from the pilot's side (myside)
+        test al,1
         mov  al,95
         jz   .sbc
         mov  al,19
@@ -2353,7 +2356,8 @@ SHKMAP: mov  word [cs:shki],0
         call UROW
         add  di,dx
         mov  ax,[cs:shki]       ; even ours, odd theirs - the parity rule
-        test ax,1
+        xor  al,[myside]        ;  - from the pilot's side (myside)
+        test al,1
         mov  al,95
         jz   .smc
         mov  al,19
@@ -2794,8 +2798,9 @@ SHINST:
 .rgs:  mov  bx,si
         cmp  byte [pst+bx],0
         jne  .rgn
-        test bx,1
-        jz   .rgn              ; even slot: a friend is not a range
+        mov  al,[pteam+bx]
+        xor  al,[myside]
+        jz   .rgn              ; our side: a friend is not a range
         add  bx,bx
         mov  ax,[pax+bx]
         sub  ax,[cs:shkb]
@@ -2934,7 +2939,8 @@ RDPLOT: sub  ax,[cs:shkb]
         add  ax,32+RDRMAP       ; ...from the centre, on the map's shelf
         mov  di,ax
         mov  al,15              ; a hostile answers WHITE-hot...
-        test si,1
+        mov  ah,[pteam+si]      ;  (its side against the pilot's)
+        xor  ah,[myside]
         jnz  .st
         mov  al,11              ; ...a friend quieter: born green, no
 .st:   push ds                 ;  white flash - the tube's own IFF.
@@ -3028,7 +3034,9 @@ SHKPICKF:
         shr  ax,cl
         mov  [cs:shkc],ax
         mov  dx,32767           ; best range so far
-        xor  si,si              ; the even slots are ours
+        mov  al,[myside]        ; the pilot's side's: the even slots, or -
+        cbw                     ;  on the odd side (DATA.INC myside) - the odd
+        mov  si,ax
 .p:    mov  bx,si
         cmp  byte [cs:shkst+bx],0
         jne  .pn               ; burning: not a seat any more
@@ -3500,9 +3508,9 @@ SHKAIM: mov  bx,[cs:shki]
         ; is the whole of IFF: the battery does not know a friend from a
         ; target, it only knows what answers the interrogation. Leave the box
         ; off over your own flak and your own flak will shoot you down, and
-        ; it will be right to.
-        or   bx,bx
-        jnz  .ifok
+        ; it will be right to. (His side is myside now - the odd one too.)
+        cmp  bl,[myside]
+        jne  .ifok
         cmp  byte [swiff],0
         jne  .axp              ; transponder up: our own guns leave us be
 .ifok: cmp  byte [dying],0
@@ -3528,9 +3536,8 @@ SHKAIM: mov  bx,[cs:shki]
         shr  bx,1
         cmp  byte [pst+bx],0
         jne  .axn              ; dead men are not targets
-        mov  ax,si
-        shr  ax,1
-        and  ax,1
+        mov  al,[pteam+bx]      ; its side (a human over the wire: his own)
+        cbw
         cmp  ax,[cs:shke]
         je   .axn              ; same side: not ours to shoot
         mov  ax,[pax+si]
@@ -3562,7 +3569,9 @@ SHKAIM: mov  bx,[cs:shki]
         ; something twenty kilometres away is simply not actionable.
         cmp  byte [swgnd],0
         je   .axf
-        cmp  word [cs:shke],0
+        mov  al,[myside]
+        cbw
+        cmp  ax,[cs:shke]
         jne  .axf              ; the other side is not on our net
         mov  di,[locki]
         cmp  di,NPLANE*2
@@ -4189,7 +4198,9 @@ SHKDRAW:
         mov  [pdy],ax
         mov  byte [COLOR],95
         mov  byte [gmks],0
-        test word [cs:shki],1
+        mov  al,byte [cs:shki]  ; the pilot's side against its own
+        xor  al,[myside]
+        test al,1
         jz   .smk
         mov  byte [COLOR],96
         mov  byte [gmks],1
@@ -5057,17 +5068,24 @@ GNDSCH: ; ---- the sink rate, kept every tick whether she is up or down,
 ;  point at the war and a takeoff needs no navigation.
 ; ===========================================================================
 AFSPAWN:
+        call CODE:SETSIDEF      ; a new life: for the side the war host gave
+        mov  bl,[myside]        ; the pilot's side's field: 0 the south's,
+        xor  bh,bh              ;  1 the north's - and on the north one she
+        add  bx,bx              ;  stands at the far threshold, facing south
         mov  ax,[netpid]        ; pilots of one wire line up ALONG the strip
         and  ax,3               ;  now, not fanned out east: four jets abreast
         mov  cx,AFSPACE         ;  on a 150-unit runway would be four jets in
         imul cx                 ;  the grass
         add  ax,AFSTART
         sub  ax,AFLEN
-        add  ax,[afz]
+        or   bx,bx
+        jz   .sth
+        neg  ax
+.sth:  add  ax,[afz+bx]
         mov  [camz],ax
-        mov  ax,[afx]
+        mov  ax,[afx+bx]
         mov  [camx],ax
-        mov  ax,[afy]
+        mov  ax,[afy+bx]
         mov  [lgnd],ax          ; SEED THE GROUND, and it is not optional.
                                 ;  lgnd is written by COLLIDE, which runs
                                 ;  AFTER the physics - so on the first tick
@@ -5081,7 +5099,10 @@ AFSPAWN:
                                 ;  and drop out of the sky from her own ramp
         add  ax,14              ; standing on her wheels
         mov  [camy],ax
-        mov  word [heading],0
+        mov  ax,bx              ; nose at the war: north (0) from the south,
+        mov  cl,6               ;  south (128) from the north
+        shl  ax,cl
+        mov  [heading],ax
         mov  word [roll],0
         mov  word [pitch],0
         mov  word [vel],0   ; STOPPED. The first thing any flight
@@ -5799,7 +5820,12 @@ STATPG: mov  ax,PZMAPY0+3             ; green square: kills by our team
         mov  byte [COLOR],95
         mov  word [ftx],PZMAPX0+8
         mov  word [fty],PZMAPY0+3
-        mov  ax,[tscf]
+        mov  ax,[tscf]          ; the even side's score, and the odd's:
+        mov  dx,[tsch]          ;  ours on the left - and ours is the
+        cmp  byte [myside],0    ;  odd side's on the odd side
+        je   .sco
+        xchg ax,dx
+.sco:  push dx
         call CODE:FNUMF
         mov  byte [COLOR],8 ; own kills, centre, white
         mov  word [ftx],PZMAPX0+21
@@ -5809,7 +5835,7 @@ STATPG: mov  ax,PZMAPY0+3             ; green square: kills by our team
         mov  byte [COLOR],96
         mov  word [ftx],PZMAPX0+31
         mov  word [fty],PZMAPY0+3
-        mov  ax,[tsch]
+        pop  ax                 ; theirs
         call CODE:FNUMF
         mov  byte [COLOR],97 ; cannon rounds
         mov  word [ftx],PZMAPX0+2
@@ -5920,7 +5946,7 @@ TGTVIEW:
         call CODE:FDRAWF
         ret
 .tgo:  mov  byte [COLOR],19 ; the callsign wears the IFF colour
-        test si,2
+        call CODE:FOELF         ;  - the pilot's, by pteam
         jnz  .tgc
         mov  byte [COLOR],95
 .tgc:  mov  word [ftx],PZADIX0+2

@@ -710,9 +710,23 @@ GNDMARK:
 ;  takes you through the war in order instead of dealing you a new hand.
 ; ============================================================================
 SPECTUPF:
-        cmp  byte [KEYS+SC_ENT],0
+        cmp  byte [spwt],SPWAIT ; the ticks watched, counted up to the most
+        jae  .w0                ;  that Enter ever waits for the deal
+        inc  byte [spwt]
+.w0:   cmp  byte [KEYS+SC_ENT],0
         je   .nj
-        ; ---- ENTER: take a jet. From here on this is an ordinary sortie.
+        ; ---- ENTER - but not before the war host has dealt us our side
+        ; (WAR.INC, THE SIDES ON THE WIRE): the first life is flown for the
+        ; side we were given, not one life for side 0 and then the other.
+        ; The deal comes in about a second; alone, or under a host that deals
+        ; nothing, SPWAIT lets Enter through anyway - with no wire, at once.
+        cmp  byte [netup],0
+        je   .take
+        cmp  byte [wdealt],0
+        jne  .take
+        cmp  byte [spwt],SPWAIT
+        jb   .nj
+.take: ; ---- ENTER: take a jet. From here on this is an ordinary sortie.
         mov  byte [spect],0
         mov  byte [tgtcam],0
         mov  byte [mcact],0

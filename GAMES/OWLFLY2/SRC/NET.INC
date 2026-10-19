@@ -382,7 +382,9 @@ NETPOS: cmp  byte [cs:netok],0
         mov  [cs:SPAY+13],al       ; may declare this jet down
         mov  ax,[lastklr]
         mov  word [cs:SPAY+14],ax  ; and who did it (his canopy scores)
-        mov  cx,16
+        mov  al,[myside]        ; and our side (teams on the wire, 2026-10-19)
+        mov  [cs:SPAY+16],al
+        mov  cx,17
         call NETXMIT
         cmp  byte [cs:nethost],0
         je   .r
@@ -635,7 +637,16 @@ NETPOLL:
         cmp  ax,[cs:mypid]         ; we shot him down: chalk it on the canopy
         jne  .rp
         inc  word [psc]
-.rp:   add  si,si              ; word index
+.rp:   ; HIS SIDE - his word, as his life is: +16 of a 17-byte 'P'. An
+        ; older game's 16 bytes say nothing, and his slot's parity stands in.
+        mov  al,[cs:bx-HDRSZ+3]  ; the IPX length, its low byte (big-endian)
+        cmp  al,HDRSZ+17
+        mov  ax,si
+        jb   .rps
+        mov  al,[cs:bx+16]
+.rps:  and  al,1
+        mov  [pteam+si],al
+        add  si,si              ; word index
         mov  ax,word [cs:bx+5]
         mov  [pax+si],ax
         mov  ax,word [cs:bx+7]
@@ -668,6 +679,9 @@ NETPOLL:
         add  bx,NETSLT
         mov  byte [pst+bx],1     ; the jet fades from the sky
         mov  byte [premote+bx],0
+        mov  al,bl              ; and the slot's side is its parity again
+        and  al,1
+        mov  [pteam+bx],al
 .swn:  inc  si
         cmp  si,NRMT
         jb   .sw

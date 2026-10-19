@@ -32,6 +32,7 @@ import { Presence, doingText, serverUrl } from './net.js';
 import { Screens } from './screens.js';
 import { Caster } from '../console/cast.js';
 import { SkyMap } from './skymap.js';
+import { MANUALS, manualLines } from './manuals.js';
 import { Terminal, CmTerminalClose } from '../console/terminal.js';
 import { ANSI, RESET } from '../console/shell.js';
 import { siteShell, profileLines, quoted, dosboxLine } from './console.js';
@@ -55,7 +56,10 @@ const SHIPPED_KEY = 'site.c.shipped.1';
  */
 const Mp = { Edit: 286, EditOk: 287, EditCancel: 288, Add: 291, Remove: 292, Open: 293, AddOk: 294, AddCancel: 295 };
 const MAP_BASE = 270;
-const Gm = { Play: 296, Source: 297, Folder: 298 };
+const Gm = { Play: 296, Source: 297, Folder: 298, Manual: 247 };
+/** The Manual window's close box; and which manuals have opened by themselves once (firstManual). */
+const MANUAL_CLOSE = 248;
+const MANUALS_SEEN = 'site.manuals.1';
 const HELP_CLOSE = 299;
 const WHO_BASE = 250;
 const Wh = { Watch: 257, Share: 258 };
@@ -152,6 +156,8 @@ const HELP_KEYS = `THE SITE
 THE DOS PC
   a click on its picture     the keys go to DOS: its title says "keys in DOS"
   Right Ctrl                 the keys come back to the site
+  Help > Manual              how to play the game or the demo running: all its
+                             keys - the main ones are on the window's frame
 
 THE GAMES AND MAP DRIVES
   arrows, PgUp, PgDn,        move the bar
@@ -243,18 +249,48 @@ const shortTitle = t => t.split(/: | - /)[0];
 /** A path of the course disk as DOS and the terminal write it: GAMES/X/Y.ASM -> A:\GAMES\X\Y.ASM. */
 const onA = path => `A:\\${path.replace(/\//g, '\\')}`;
 
-/** A first visit's picture: whole multiples of DOS's pixels, as the course's. */
+/**
+ * A first visit's machine, where it is not the library's: the picture in
+ * whole multiples of DOS's pixels, as the course's; and the CPU AS FAST AS
+ * IT GOES. The library's `auto` is DOSBox's: 3000 cycles a millisecond in
+ * real mode, where the games, the commander and DOS itself all run - OWL FLY
+ * III at about a frame a second, which a visitor takes for the site being
+ * slow (the pilot, 2026-10-19). `max` measured 113 million cycles a second
+ * against 3, the page as quick to answer. Nothing here runs too fast for it:
+ * the OWL FLYs and the Flight School keep time by the BIOS clock, WIRE CITY
+ * by the screen's retrace, and every lesson sets its own 30000 (course.js
+ * LESSON_CYCLES). `site` counts the changes a saved setting must follow.
+ */
 const SETTINGS_KEY = 'site.dosbox.1';
-const SITE_DOSBOX = { picture: 'sharp', always: false };
+const SITE_DOSBOX = { picture: 'sharp', always: false, cycles: 'max', site: 2 };
 function siteSettings() {
   try {
     if (!localStorage.getItem(SETTINGS_KEY)) localStorage.setItem(SETTINGS_KEY, JSON.stringify(SITE_DOSBOX));
+    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}');
     // A relay kept from before the site had its own (the course page's, a
     // developer's): forgotten, so the games meet in the server's sky (Sky.cs).
-    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}');
-    if (OLD_RELAYS.includes(s.relay)) { delete s.relay; localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
+    if (OLD_RELAYS.includes(s.relay)) delete s.relay;
+    // Saved before the site's default became `max`: an `auto` then was the
+    // default (the dialog saves every setting, chosen or not), not a choice.
+    if ((s.site ?? 1) < 2) {
+      if (s.cycles === undefined || s.cycles === 'auto') s.cycles = SITE_DOSBOX.cycles;
+      s.site = 2;
+    }
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
   } catch { /* storage refused: the library's defaults */ }
 }
+
+/**
+ * What an address's ?play=KEY starts (playFromAddress): the keys the old
+ * pages had - owlfly2.html's own, play.html's g= (field was the Flight
+ * School there) - a game of C: or an example of A:\EXAMPLES. A key not here
+ * is tried as an example's name: ?play=ring builds RING.ASM.
+ */
+const ADDRESS_PLAYS = {
+  owlfly3: { game: 'owlfly3' }, owlfly3h: { game: 'owlfly3', machine: 'hercules' }, owlfly2: { game: 'owlfly2' },
+  owlfly: { game: 'owlfly' }, trainer: { game: 'trainer' }, field: { game: 'trainer' }, wirecity: { game: 'wirecity' },
+  jet: { example: 'JET' }, terra: { example: 'TERRA' }, relief: { example: 'RELIEF' }, smoke: { example: 'SMOKE' }, avio: { example: 'AVIO' },
+};
 
 /** The relays the site's games used before its server hosted their sky. */
 const OLD_RELAYS = ['wss://view.owlos.sk', 'ws://localhost:1900'];
@@ -304,9 +340,47 @@ export class SiteApp extends CourseApp {
       },
       closed: () => this.presence?.follow(''),
     });
+    this.owl.afterPaint?.add(() => this.stackPictures());
     this.watchJet();
     this.buildMenus();         // again: the course's constructor built it before the drives were there
     this.makeTerminal();
+  }
+
+  /**
+   * The pictures under the windows - the DOS PC's, a watched screen's, the
+   * live map's - are page elements under the canvas, each seen through its
+   * window's hole. Where two such windows overlap, BOTH are holes there,
+   * and the order of the elements in the page decided which showed, not the
+   * order of the windows: a watched screen came out over the DOS window in
+   * front of it (the pilot's screenshot, 2026-10-19). So the windows' order
+   * is kept here as OWLOSUI shows it - the one made active last is in front,
+   * a new one opens in front - and the elements are stacked the same way,
+   * all still under the canvas (site.css lifts it to 10): the front one 9,
+   * the next 8... Not below 0: the page's own black would cover them. The
+   * lesson video is not one of them: it lies OVER the canvas and hides
+   * whenever anything covers it (course.js layVideo) - here at 11 (watch).
+   */
+  stackPictures() {
+    const pictures = [];
+    if (this.dos?.win && this.dos.box?.el) pictures.push({ win: this.dos.win, el: this.dos.box.el });
+    for (const v of this.screens?.views.values() ?? []) if (v.win && v.el) pictures.push({ win: v.win, el: v.el });
+    if (this.skymap?.win && this.skymap.el) pictures.push({ win: this.skymap.win, el: this.skymap.el });
+    const alive = new Set(pictures.map(p => p.win));
+    let order = (this.pictureOrder ?? []).filter(w => alive.has(w));
+    for (const p of pictures) if (!order.includes(p.win)) order.unshift(p.win);
+    const active = this.owl.active();
+    if (alive.has(active) && order[0] !== active) order = [active, ...order.filter(w => w !== active)];
+    this.pictureOrder = order;
+    for (const p of pictures) {
+      const z = String(Math.max(1, 9 - order.indexOf(p.win)));
+      if (p.el.style.zIndex !== z) p.el.style.zIndex = z;
+    }
+  }
+
+  /** The lesson video (course.js), over the site's canvas - which site.css lifts to 10 - as the course has it over its own. */
+  watch(...args) {
+    super.watch(...args);
+    if (this.video?.frame) this.video.frame.style.zIndex = '11';
   }
 
   /** The machine's own four: A: and B: floppies, C: the hard disk, D: My files - all kept in this browser. */
@@ -627,6 +701,7 @@ export class SiteApp extends CourseApp {
         { key: 'play', label: '~P~lay', cmd: Gm.Play, default: true, shown: true },
         { key: 'source', label: '~S~ource', cmd: Gm.Source, shown: true },
         { key: 'folder', label: '~F~older', cmd: Gm.Folder, shown: true },
+        { key: 'manual', label: '~M~anual', cmd: Gm.Manual, shown: true },
       ],
       keys: () => [
         { label: '~Enter~ Play', cmd: Gm.Play, key: 'Enter' },
@@ -721,10 +796,14 @@ export class SiteApp extends CourseApp {
     this.presence?.follow(room);
   }
 
-  /** The game this DOS PC flies in a networked room - the room's game - or null. */
+  /**
+   * The game this DOS PC flies in a networked room - the room's game - or
+   * null. Not without the IPX card: to fly alone is to switch the network
+   * off (the pilot, 2026-10-19), and then no new map restarts the game.
+   */
   flying(room) {
     const dos = this.dos, g = GAMES.find(x => x.key === dos.started);
-    return dos.box.running && !dos.program && g?.room === room ? g : null;
+    return dos.box.running && !dos.program && dos.settings.ipx && g?.room === room ? g : null;
   }
 
   /** A line of the network's in the terminal's record, as a file saved is. */
@@ -856,6 +935,7 @@ export class SiteApp extends CourseApp {
   fromCatalog(cmd) {
     const g = GAMES[this.catalog.current];
     if (!g) return;
+    if (cmd === Gm.Manual) { this.send(`manual ${g.key}`, 'Games'); return; }
     this.catalog.close();
     if (cmd === Gm.Play) this.send(`play ${g.key}`, 'Games');
     else if (cmd === Gm.Source) {
@@ -1203,8 +1283,12 @@ export class SiteApp extends CourseApp {
     this.startNet();
     // The front door: the lesson the address names (?l=7, as on the course
     // page - a lesson opened here writes it), else the games.
+    // ?play=owlfly2: a game or a demo the address names - the old pages send
+    // here - in front, with no catalog over it; one it does not know, the catalog.
     const asked = lessonFromAddress(this.course.lessons);
+    const wanted = asked ? null : new URLSearchParams(location.search).get('play');
     if (asked) await this.track(this.openLesson(asked));
+    else if (wanted) await this.track(this.playFromAddress(wanted));
     else this.showCatalog();
     // Files of the site's that vanished from C: and were put back (lostFromC): said, over all of it.
     if (this.cLost) {
@@ -1370,6 +1454,7 @@ export class SiteApp extends CourseApp {
           { title: 'Share my screen', act: () => this.send(this.caster?.onAir ? 'share --stop' : 'share', 'LAN') }),
         item('~M~onitor', 'The network as it is: the relay, the delay, what is lost')),
       sub('~H~elp',
+        item('~M~anual', 'How to play the game or the demo running now - its keys, what it is', { act: () => this.send('manual', 'Help') }),
         item('~D~rives and letters', 'How the drives work: a letter, where its files are, who sees them',
           { act: () => this.showHelp('Drives and letters', HELP_DRIVES) }),
         item('~K~eys', 'Every key of the site', { act: () => this.showHelp('Keys', HELP_KEYS) }),
@@ -1518,6 +1603,7 @@ export class SiteApp extends CourseApp {
       }
       x++;
     };
+    const fieldsAt = x;
     for (const [text, colour, width] of fields) {
       x += width - text.length;     // what the text leaves of its place: frame
       put('[');
@@ -1525,13 +1611,125 @@ export class SiteApp extends CourseApp {
       put(']');
       x++;                          // a cell of frame between two fields
     }
+    // The keys of the game or the demo running (manuals.js), on the frame's
+    // left: as much of them as the fields leave room for - the whole of
+    // them is in Help > Manual.
+    const keys = MANUALS[this.runningManual]?.keys;
+    const fits = fieldsAt - 2 - (left + 2);
+    if (keys && fits > 12) {
+      const text = ` ${keys} `;
+      x = left + 2;
+      for (const c of text.length <= fits ? text : `${text.slice(0, fits - 4)}... `) put(c, CGA[7]);
+    }
   }
 
-  /** A game from the Games menu: its own sky first, then the machine on, in its folder. */
-  play(g) {
+  /**
+   * A game: its own sky first, then the machine on, in its folder on C: -
+   * and the first time this browser plays it, its manual beside it.
+   * machine: a card for this run only (owlfly3h.html: Hercules), the
+   * settings left as they are.
+   */
+  play(g, { machine = null } = {}) {
     if (!this.ready) { this.tell(g.name, 'Drive C: is still being put together - a moment, and again.'); return; }
     if (g.room) this.dos.settings = { ...this.dos.settings, room: g.room };
-    this.track(this.dos.run(g.key));
+    const card = this.dos.settings.machine;
+    if (machine) this.dos.settings = { ...this.dos.settings, machine };
+    this.exampleKey = null;
+    this.track(this.dos.run(g.key)
+      .finally(() => { if (machine) this.dos.settings = { ...this.dos.settings, machine: card }; })
+      .then(() => this.firstManual(g.key)));
+  }
+
+  /**
+   * A build of A:\EXAMPLES - an F9, the console's `build`, an address's
+   * ?play=jet - remembers which demo runs, for the keys on the DOS window's
+   * frame and Help > Manual; and the first time, its manual beside it.
+   */
+  async build(o) {
+    const t = o ?? this.target();         // F9 passes nothing: the editor's source, as the course has it
+    const name = String(t?.asm ?? '').replace(/\.ASM$/i, '').toLowerCase();
+    this.exampleKey = /EXAMPLES\/$/i.test(t?.dir ?? '') && MANUALS[name]?.example ? name : null;
+    const done = await super.build(o);
+    if (this.exampleKey) this.firstManual(this.exampleKey);
+    return done;
+  }
+
+  /** The manual of what the DOS PC runs now: a game started by play, or a demo built from A:\EXAMPLES. */
+  get runningManual() {
+    const d = this.dos;
+    if (!d?.box.running) return null;
+    if (d.program) return this.exampleKey && /BUILD/i.test(d.program.name ?? '') ? this.exampleKey : null;
+    return MANUALS[d.started] ? d.started : null;
+  }
+
+  /** A manual opened by itself, the first time this browser plays the thing - once, and only where it fits beside the DOS window. */
+  firstManual(key) {
+    let seen = [];
+    try { seen = JSON.parse(localStorage.getItem(MANUALS_SEEN) ?? '[]'); } catch { /* none */ }
+    if (seen.includes(key)) return;
+    if (!this.showManual(key, { beside: true })) return;
+    try { localStorage.setItem(MANUALS_SEEN, JSON.stringify([...seen, key])); } catch { /* a private window */ }
+  }
+
+  /**
+   * A game's or a demo's manual (manuals.js) in a window BESIDE the DOS
+   * PC's, never over it - on its wider side, the shadow's two cells left
+   * clear - and the DOS window kept in front, the keys still in DOS. beside:
+   * opened by itself: where there is no room beside, not at all. Asked for
+   * (Help > Manual, `manual`), it goes in the middle when there is none.
+   * False if nothing was shown.
+   */
+  showManual(key, { beside = false } = {}) {
+    const m = MANUALS[key], owl = this.owl;
+    if (!m) return false;
+    if (this.manualWin && owl.place(this.manualWin)) owl.close(this.manualWin);
+    this.manualWin = 0;
+    const MIN = 26, WANT = 66, d = this.dos.win ? owl.place(this.dos.win) : null;
+    let x = null, w = Math.min(owl.width, WANT);
+    if (d) {
+      const leftRoom = d.x - 1, rightRoom = owl.width - (d.x + d.w + 1) - 2;     // the DOS window's shadow takes 2 on its right
+      const room = Math.max(leftRoom, rightRoom);
+      if (room >= MIN) {
+        w = Math.min(WANT, room);
+        x = rightRoom >= leftRoom ? d.x + d.w + 3 : leftRoom - w;
+      }
+    }
+    if (x === null) {
+      if (beside) return false;
+      x = Math.floor((owl.width - w) / 2);
+    }
+    const h = owl.height - 2;
+    // The frame drops a title it cannot fit beside the window's number: a narrow one is just "Manual".
+    const full = `Manual - ${m.title}`, title = full.length <= w - 10 ? full : 'Manual';
+    this.manualWin = owl.window(title, w, h, { x, y: 1, style: Style.Document, closeCmd: MANUAL_CLOSE });
+    owl.text(this.manualWin, manualLines(key, w - 4).join('\n'), { readOnly: true });
+    if (beside && this.dos.win && owl.place(this.dos.win)) owl.activate(this.dos.win);
+    owl.refresh?.();
+    return true;
+  }
+
+  /**
+   * ?play=KEY - what the old pages' addresses open (2026-10-19, the pilot:
+   * "a link to the game should open the new site and start that game"):
+   * owlfly2.html sends here with ?play=owlfly2, play.html?g=jet with
+   * ?play=jet. A game starts on C: by `play`; an example of A:\EXAMPLES is
+   * built by FASM on the DOS PC and run, by `build` - as F9 would. Both go
+   * by the bus, so the terminal shows what the address did.
+   */
+  async playFromAddress(key) {
+    const k = key.toLowerCase();
+    const p = ADDRESS_PLAYS[k] ?? (/^[a-z0-9_]{1,8}$/.test(k) ? { example: k.toUpperCase() } : null);
+    if (p?.game) {
+      this.send(`play ${p.game}${p.machine ? ` --machine ${p.machine}` : ''}`, 'the address');
+      return;
+    }
+    if (p?.example) {
+      await this.installDisk({ quiet: true });
+      const there = await this.browser.readBytes(`${A}EXAMPLES/${p.example}.ASM`).then(() => true, () => false);
+      if (there) { this.send(`build A:\\EXAMPLES\\${p.example}.ASM`, 'the address'); return; }
+    }
+    this.showCatalog();
+    this.tell('WIRE CITY', `The address asks for "${key}", and there is no game or demo of that name here. The catalog has them all.`);
   }
 
   /** The games, for the console's play. */
@@ -1741,7 +1939,7 @@ export class SiteApp extends CourseApp {
         if (this.lesson?.buildable) this.send(`lesson ${(this.lesson.lecture || this.lesson.id).toLowerCase()} --reset`, 'Reset', { say: true });
         else this.tell('Reset', 'Open a lesson first: Reset puts its files back as the course ships them.');
         return true;
-      case Gm.Play: case Gm.Source: case Gm.Folder: this.fromCatalog(cmd); return true;
+      case Gm.Play: case Gm.Source: case Gm.Folder: case Gm.Manual: this.fromCatalog(cmd); return true;
       case Wh.Watch: {
         const x = this.presence?.people[this.who.current];
         if (x?.sharing && x.name !== this.presence.me) this.send(`watch ${x.name.toLowerCase().replace(/\s+/g, '-')}`, 'Who is online');
@@ -1751,6 +1949,7 @@ export class SiteApp extends CourseApp {
       case SCREEN_CLOSE: this.screens.closeWindow(this.owl.active()); return true;
       case MAP_CLOSE: this.skymap.close(); return true;
       case HELP_CLOSE: if (this.helpWin && this.owl.place(this.helpWin)) this.owl.close(this.helpWin); this.helpWin = 0; return true;
+      case MANUAL_CLOSE: if (this.manualWin && this.owl.place(this.manualWin)) this.owl.close(this.manualWin); this.manualWin = 0; return true;
       case Mp.Edit: this.showEdit(); return true;
       case Mp.EditCancel: this.closeEdit(); return true;
       case Mp.EditOk: this.editFromDialog(); return true;

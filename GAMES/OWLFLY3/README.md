@@ -72,6 +72,13 @@ where it stood. Alone, or with no network, you run your own, as ever. The bots
 stay near whichever pilot is closest, not only near the one running the war.
 [`SRC/WAR.INC`](SRC/WAR.INC) has the packets and the rules.
 
+**Two human sides** (2026-10-19, in both games). Everyone who joins is the
+enemy: the pilot running the war deals the humans into two even sides, each
+newcomer to the smaller one. When people leave and the sides go uneven, the
+last to join changes sides - at their next life, never in the air. The second
+side takes off from the northern fields, facing south, and the IFF colours,
+the radar, the score and the bots all follow the side, not the seat.
+
 **On real hardware**, copy the files out of `INSTALL/` and run `OWLFLY3`.
 VGA is required; a Sound Blaster is not, but it is what the sound was
 written for.

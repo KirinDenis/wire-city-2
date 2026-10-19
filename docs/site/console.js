@@ -16,6 +16,7 @@ import { Shell, tokens, ANSI, RESET } from '../console/shell.js';
 import { CORE_COMMANDS, CORE_GROUPS } from '../console/commands.js';
 import { statsOf, sizeText, dateText, LocalFolder } from './drives.js';
 import { doingText, serverUrl } from './net.js';
+import { MANUALS } from './manuals.js';
 
 /** A path's place: the root, /mnt, or a drive and the path inside it ('/' its top). */
 function locate(app, path) {
@@ -54,6 +55,8 @@ const DOSBOX = {
   relay: { word: true, what: 'the network relay' },
   room: { word: true, what: 'the network room' },
 };
+/** The video cards a game can be played on for one run (play --machine). */
+const MACHINES = DOSBOX.machine.of;
 
 /** A setting's value from its word, or an Error that says what it takes. */
 function dosboxValue(dos, name, word) {
@@ -566,13 +569,30 @@ export const SITE_COMMANDS = [
 
   // ------------------------------------------------------------ games, programs, lessons
   {
-    name: 'play', group: 'programs', summary: 'a game: the machine on, in its folder on C:', usage: 'play GAME', where: 'here', complete: 'game',
+    name: 'play', group: 'programs', summary: 'a game: the machine on, in its folder on C:', usage: 'play GAME [--machine CARD]', where: 'here', complete: 'game',
+    options: { machine: `the video card for this run only, the settings left as they are: ${MACHINES.join(', ')}` },
+    valued: ['machine'],
     run(ctx) {
       const w = (ctx.args.join(' ') || '').toLowerCase();
       const g = ctx.app.games.find(x => x.key === w || x.name.toLowerCase() === w || x.dir.toLowerCase() === w);
       if (!g) { ctx.err(`which game? ${ctx.app.games.map(x => x.key).join(', ')}`); return 1; }
-      ctx.app.play(g);
-      ctx.out(`${g.name}: C:\\GAMES\\${g.dir}, RUN`, 'muted');
+      const machine = ctx.opts.machine ? String(ctx.opts.machine).toLowerCase() : null;
+      if (machine && !MACHINES.includes(machine)) { ctx.err(`--machine ${machine}: one of ${MACHINES.join(', ')}`); return 1; }
+      ctx.app.play(g, { machine });
+      ctx.out(`${g.name}: C:\\GAMES\\${g.dir}, RUN${machine ? `, on ${machine} this once` : ''}`, 'muted');
+    },
+  },
+  {
+    name: 'manual', group: 'programs', summary: "how to play a game or a demo - its keys, what it is - in a window beside the DOS PC; the one running now if none is named",
+    usage: 'manual [GAME]', where: 'here', complete: () => Object.keys(MANUALS),
+    run(ctx) {
+      const asked = (ctx.args[0] ?? ctx.app.runningManual ?? '').toLowerCase();
+      const key = { field: 'trainer', owlfly3h: 'owlfly3' }[asked] ?? asked;
+      if (!key) { ctx.err(`which one? nothing with a manual runs now - manual ${Object.keys(MANUALS).join(' | ')}`); return 1; }
+      if (!MANUALS[key]) { ctx.err(`${asked}: no manual - ${Object.keys(MANUALS).join(', ')}`); return 1; }
+      ctx.app.showManual(key);
+      ctx.out(`the manual of ${MANUALS[key].title}`, 'muted');
+      return 0;
     },
   },
   {

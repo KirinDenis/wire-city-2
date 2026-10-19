@@ -2,6 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>
+// Since 2026-10-19 play.html?g=jet opens the WIRE CITY site and starts that
+// game or demo in its DOS PC (site/?play=jet: a demo is built from its source
+// and run); without g=, the site itself. ?classic keeps this page - the
+// stand-alone arcade player - as it was; its list below stays for that.
+if (!/[?&]classic(=|&|$)/.test(location.search)) {
+  var wanted = (new URLSearchParams(location.search).get('g') || '').toLowerCase();
+  location.replace('site/' + (wanted ? '?play=' + encodeURIComponent(wanted) : '') + location.hash);
+}
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WIRE CITY 86 arcade</title>
 <link rel="stylesheet" href="jsdos/js-dos.css">

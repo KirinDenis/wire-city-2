@@ -2,6 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>
+// Since 2026-10-19 this address opens the WIRE CITY site and starts the game in
+// its DOS PC (site/?play=owlfly3). ?classic keeps this page - the stand-alone
+// player - as it was. The rest of the page stays: pack.ps1, pack-site.ps1 and
+// the course read the bundle's name from it.
+if (!/[?&]classic(=|&|$)/.test(location.search)) location.replace('site/?play=owlfly3' + location.hash);
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OWL FLY III &mdash; CGA / EGA</title>
 <link rel="stylesheet" href="jsdos/js-dos.css">
@@ -124,7 +131,7 @@
   // and two pilots on different builds fly separate skies while every
   // packet still "arrives". The number on the glass is what lets three
   // friends check they are on the same build in one glance.
-  var BUNDLE = "owlfly3_v18.jsdos";
+  var BUNDLE = "owlfly3_v19.jsdos";
   var VER = "v" + (BUNDLE.match(/_v(\d+)/) || [0, "?"])[1];
   document.getElementById("stat").textContent = "wire: connecting??? " + VER;
 
@@ -170,6 +177,7 @@
 </script>
 </body>
 </html>
+
 
 
 

@@ -142,6 +142,22 @@ warcl   db 0                    ; 1 = the war is a lower pilot's (WAR.INC): our
                                 ;  AI only watches slots 1..WARN-1, his 'B' moves them
 wlcx    dw 0                    ; the pilot a leashed jet re-enters beside
 wlcz    dw 0                    ;  (WLEASHF: this camera or one over the wire)
+; ---- THE SIDES (the pilot, 2026-10-19: every human who joins is the enemy,
+; the sides fill evenly, and a player is moved across when leaving makes
+; them uneven). A slot's side was its PARITY everywhere - even ours, odd
+; theirs, the pilot slot 0 and so always even. Now it is pteam's: the bots
+; keep their parity (the war host's slots are the same on every machine),
+; slot 0 is the pilot's own side - which can be the odd one - and a human
+; over the wire is on the side his 'P' says. Alone, pteam IS the parity.
+myside  db 0                    ; the pilot's side: 0 the even slots', 1 the odd
+wside   db 0                    ; the side the war host gives him: his NEXT life's
+wdealt  db 0                    ; 1 once a host other than us has dealt us one
+spwt    db 0                    ; ticks in the watching seat (SPECTUPF), to SPWAIT
+SPWAIT  = 36                    ; two seconds: the most Enter waits for a deal
+pteam:                          ; each slot's side, the ghost (NPLANE) too
+repeat NPLANE+1
+        db (% - 1) and 1
+end repeat
 nethdm  db 0                    ; damage points that arrived for US
 nethby  dw 0                    ; who dealt them (pid)
 lastklr dw 0                    ; who shot us down (rides our death POS)

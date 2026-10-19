@@ -1157,7 +1157,12 @@ CRASHHANDLE:
         jne  .cr               ; already falling
         mov  byte [dying],1
         mov  word [dytick],0
-        inc  word [tsch]    ; the player is a green too: his loss
+        cmp  byte [myside],0    ; the player is one of his side: his loss
+        jne  .lsf               ;  is the other side's point
+        inc  word [tsch]
+        jmp  .lsd
+.lsf:  inc  word [tscf]
+.lsd:
         mov  ax,[flbh]          ; the flashback starts at the oldest tick
         mov  [flbc],ax
         mov  word [flbcnt],FLBN

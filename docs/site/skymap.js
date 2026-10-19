@@ -61,7 +61,7 @@ export class SkyMap {
     owl.windowStatus(this.win, { label: '~+~ ~-~ ~Wheel~ Zoom', cmd: 0 }, { label: '~Home~ All', cmd: 0 }, { label: '~Space~ Me', cmd: 0 },
       { label: '~Drag~ Move', cmd: 0 }, { label: '~Click~ a shared screen', cmd: 0 });
     this.el = document.createElement('div');
-    this.el.style.cssText = 'position:fixed;visibility:hidden;background:#000;pointer-events:none;z-index:0';
+    this.el.style.cssText = 'position:fixed;visibility:hidden;background:#000;z-index:0;touch-action:none';
     this.canvas = document.createElement('canvas');
     this.el.append(this.canvas);
     document.body.append(this.el);
@@ -411,11 +411,31 @@ export class SkyMap {
     }
   }
 
-  /** The mouse over the window's inside, heard on the page's canvas (ours lies under it). */
+  /**
+   * The mouse over the window's inside. Over a hole OWLOSUI lets the mouse
+   * through its canvas (pointer-events none there, once the pointer has
+   * moved), as it does to the DOS PC's picture - so the canvas, where this
+   * used to listen, never heard a press or a wheel over the map: drag,
+   * click and wheel did nothing while the status line offered them (the
+   * pilot, 2026-10-19). Now it listens on the window and asks two things:
+   * is the cell under the pointer a hole (nothing drawn over the map there)
+   * - and of the pictures under the canvas, is ours the one in front there
+   * (site.js stackPictures orders them).
+   */
   listen() {
-    const target = this.owl.screen?.canvas ?? window;
-    const inside = e => this.area && this.owl.place(this.win) && e.clientX >= this.area.left && e.clientX < this.area.left + this.area.w &&
-      e.clientY >= this.area.top && e.clientY < this.area.top + this.area.h && this.owl.active() === this.win;
+    const target = window;
+    const inArea = e => this.area && this.owl.place(this.win) && e.clientX >= this.area.left && e.clientX < this.area.left + this.area.w &&
+      e.clientY >= this.area.top && e.clientY < this.area.top + this.area.h;
+    const inside = e => {
+      if (!inArea(e)) return false;
+      const { cellW, cellH, canvas } = this.owl.screen ?? {};
+      if (!canvas) return false;
+      const box = canvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - box.left) / cellW), y = Math.floor((e.clientY - box.top) / cellH);
+      if (!this.owl.holes().some(h => h.y === y && x >= h.x && x < h.x + h.w)) return false;
+      const top = document.elementsFromPoint(e.clientX, e.clientY).find(el => el !== canvas);
+      return !!top && (top === this.el || this.el.contains(top));
+    };
     const local = e => { const dpr = devicePixelRatio || 1; return { sx: (e.clientX - this.area.left) * dpr, sy: (e.clientY - this.area.top) * dpr }; };
     let drag = null;
     const down = e => { if (!inside(e)) return; drag = { ...local(e), cx: this.view.cx, cz: this.view.cz, moved: false }; };
