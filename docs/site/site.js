@@ -1661,6 +1661,20 @@ export class SiteApp extends CourseApp {
   }
 
   /**
+   * A program on the WIRE CITY relay for one run - `build ... --net`, `run
+   * ... --net` (the pilot, 2026-10-19: multiplayer through our server for
+   * the games a model makes): the IPX card on the line, in a room of the
+   * program's own - a room with no sky and no clock of the server's, its
+   * players only (OWLOS-LAN Sky.cs, [SKY] Rooms). The person's setup is
+   * theirs again when the run has started; the room stays, as a game's does.
+   */
+  async withNet(room, go) {
+    const was = this.dos.settings;
+    this.dos.settings = { ...was, ipx: true, always: true, room };
+    try { return await go(); } finally { this.dos.settings = { ...this.dos.settings, ipx: was.ipx, always: was.always }; }
+  }
+
+  /**
    * A build of A:\EXAMPLES - an F9, the console's `build`, an address's
    * ?play=jet - remembers which demo runs, for the keys on the DOS window's
    * frame and Help > Manual; and the first time, its manual beside it.

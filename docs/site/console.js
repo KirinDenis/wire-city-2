@@ -251,6 +251,18 @@ async function fileOn(ctx, word) {
   return { drive: at.drive, dir: spelled.slice(0, cut + 1), name: spelled.slice(cut + 1), path };
 }
 
+/** --net of build and run: a program's own room on the WIRE CITY relay (the pilot: "multiplayer through our server"). */
+const NET_OPTION = "the IPX card on the WIRE CITY relay for this run, in a room of the program's own - its folder's name (A:\\MY\\TAG: room tag), or --net=ROOM; everyone who runs it so meets there";
+
+/** The room --net names: the folder's name by default - letters and digits, 16 at most - never a game's that the server hosts a sky in. */
+function netRoom(ctx, given, dir) {
+  const word = given === true ? (dir.split('/').filter(Boolean).pop() ?? '') : String(given);
+  const room = word.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 16);
+  if (!room) { ctx.err('--net=ROOM: a room is letters and digits'); return null; }
+  if (ctx.app.games.some(g => g.room === room)) { ctx.err(`${room}: that is ${ctx.app.games.find(g => g.room === room).name}'s room - give your program one of its own (--net=ROOM)`); return null; }
+  return room;
+}
+
 export const SITE_GROUPS = [['drives', 'Drives and the DOS PC'], ['programs', 'Games, programs, lessons'], ['network', 'Who is here']];
 
 export const SITE_COMMANDS = [
@@ -357,7 +369,7 @@ export const SITE_COMMANDS = [
     name: 'agent', group: 'network', where: 'here', complete: () => ['token', 'revoke'],
     summary: 'your own model (Claude, any MCP client) working in this page - agent token makes its key, agent revoke takes keys back',
     usage: 'agent [token [--days N] | revoke N|all]',
-    options: { days: 'how long the token lives: 1 to 7 days (1)' },
+    options: { days: 'how long the token lives: 1 to 7 days (1)' }, valued: ['days'],
     async run(ctx) {
       const app = ctx.app, a = app.agent, p = app.presence;
       if (!a) { ctx.err('not here yet: the page is still starting'); return 1; }
@@ -369,7 +381,7 @@ export const SITE_COMMANDS = [
         ctx.out(`a token for your model, ${days} day${days > 1 ? 's' : ''} - it works while this page is open:`, 'heading');
         ctx.out(token, 'good');
         ctx.data({ token, address: a.address, days });
-        ctx.out(`Claude Code: claude mcp add --transport http wire-city ${a.address} --header "Authorization: Bearer ${token}"`);
+        ctx.out(`Claude Code: ${a.addLine(token)}`);
         ctx.out('Whoever has it acts in this page as you while it is open - keep it to yourself. agent revoke takes it back.', 'muted');
         if (p?.state !== 'on') ctx.out(`not connected to the server (${serverUrl()}) - the model waits until it is`, 'bad');
         return 0;
@@ -662,13 +674,17 @@ export const SITE_COMMANDS = [
     },
   },
   {
-    name: 'run', group: 'programs', summary: 'a program run on the DOS PC, where it is - run C:\\GAMES\\WIRECITY\\CITY.COM', usage: 'run PROGRAM', where: 'here', complete: 'path',
+    name: 'run', group: 'programs', summary: 'a program run on the DOS PC, where it is - run C:\\GAMES\\WIRECITY\\CITY.COM; --net puts it on the network', usage: 'run PROGRAM [--net[=ROOM]]', where: 'here', complete: 'path',
+    options: { net: NET_OPTION },
     async run(ctx) {
       if (!ctx.args[0]) { ctx.err('which program? run C:\\GAMES\\WIRECITY\\CITY.COM'); return 1; }
       const f = await fileOn(ctx, ctx.args[0]);
       if (!/\.(COM|EXE|BAT)$/i.test(f.name)) { ctx.err(`${f.name}: DOS runs a .COM, an .EXE or a .BAT`); return 1; }
-      ctx.app.commander.run(f.drive, f.dir, f.name);
-      ctx.out(`${f.drive.prefix}${f.dir.replace(/\//g, '\\')}${f.name} on the DOS PC`, 'muted');
+      const room = ctx.opts.net ? netRoom(ctx, ctx.opts.net, f.dir) : null;
+      if (ctx.opts.net && !room) return 1;
+      const go = () => ctx.app.commander.run(f.drive, f.dir, f.name);
+      if (room) await ctx.app.withNet(room, go); else go();
+      ctx.out(`${f.drive.prefix}${f.dir.replace(/\//g, '\\')}${f.name} on the DOS PC${room ? ` - on the network, room ${room}: ${ctx.app.dos.network.state}` : ''}`, 'muted');
     },
   },
   {
@@ -682,7 +698,8 @@ export const SITE_COMMANDS = [
   {
     name: 'build', group: 'programs', where: 'here', complete: 'path',
     summary: "an .ASM assembled with FASM on the DOS PC and run (F9) - a game's by its own MAKE.BAT; FASM's answer here",
-    usage: 'build FILE.ASM - build A:\\LESSONS\\L07\\LINE.ASM',
+    usage: 'build FILE.ASM [--net[=ROOM]] - build A:\\LESSONS\\L07\\LINE.ASM',
+    options: { net: NET_OPTION },
     async run(ctx) {
       if (!ctx.args[0]) { ctx.err('which source? build A:\\EXAMPLES\\TERRA.ASM'); return 1; }
       const f = await fileOn(ctx, ctx.args[0]);
@@ -690,7 +707,11 @@ export const SITE_COMMANDS = [
       // From A:, as the course page builds: BUILD.BAT beside the source calls A:\TOOLS\FASM.
       if (f.drive.letter !== 'A') { ctx.err(`${f.name}: the DOS PC builds on A: - copy it there (cp ${ctx.args[0]} A:\\) and build it there`); return 1; }
       const app = ctx.app;
-      await app.build({ dir: `${f.drive.root}${f.dir.slice(1)}`, asm: f.name.toUpperCase() });
+      const room = ctx.opts.net ? netRoom(ctx, ctx.opts.net, f.dir) : null;
+      if (ctx.opts.net && !room) return 1;
+      const go = () => app.build({ dir: `${f.drive.root}${f.dir.slice(1)}`, asm: f.name.toUpperCase() });
+      if (room) await app.withNet(room, go); else await go();
+      if (room) ctx.out(`on the network: room ${room} (${app.dos.network.state}) - everyone who runs this program with --net here meets there`, 'muted');
       // FASM's last words, if this build is the one they answer (a newer F9 takes over).
       const said = app.lastBuildShown ?? '';
       if (/bytes\.|error/i.test(said)) for (const l of said.split('\n').slice(0, -1)) ctx.out(l, /error/i.test(said) ? 'bad' : 'good');

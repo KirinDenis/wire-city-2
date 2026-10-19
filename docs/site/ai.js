@@ -400,7 +400,8 @@ export class AiSection {
     owl.staticText(win, 2, 3, '1. Copy the line - the Copy button, or click in it, Ctrl+A, Ctrl+C.', w - 6, 1);
     owl.staticText(win, 2, 4, '2. Paste it into a terminal - cmd, PowerShell, bash - and press Enter.', w - 6, 1);
     owl.staticText(win, 2, 5, '3. Start Claude Code there (claude) and ask: it works in this page.', w - 6, 1);
-    at.memo = owl.memo(win, 2, 7, w - 6, 5, text, { readOnly: true });
+    owl.staticText(win, 2, 12, 'Added one before? First: claude mcp remove wire-city -s user', w - 6, 1);
+    at.memo = owl.memo(win, 2, 7, w - 6, 4, text, { readOnly: true });
     owl.editor(at.memo, Offer.Edit, { wrap: true, readOnly: true });
     owl.buttonRow(win, 2, h - 4, [{ label: '~C~opy', cmd: LINE_COPY, default: true }, { label: 'Close', cmd: LINE_CLOSE, cancel: true }]);
     this.line = at;
