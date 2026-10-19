@@ -29,6 +29,12 @@
                       "title":  "WIRE CITY 86 - the wireframe night flight",
                       "what":  "A procedural megacity in a five-kilobyte COM",
                       "main":  "GAMES/WIRECITY/CITY.ASM"
+                  },
+                  {
+                      "dir":  "SOKOBAN",
+                      "title":  "MULTIPLAY SOKO - crates onto the red marks",
+                      "what":  "A brick warehouse on a CGA screen, 61 levels",
+                      "main":  "GAMES/SOKOBAN/SOKOBAN.ASM"
                   }
               ],
     "examples":  [

@@ -17,7 +17,8 @@
 # gives every release a new name). -Repo takes the repository's builds
 # instead (GAMES\<DIR>\INSTALL\, or the game's folder): on 2026-10-16
 # OWLFLY3.EXE, FLYOWL.COM and FIELD.COM there were newer than the released
-# ones, and OWL FLY III's INSTALL\ held files its release does not.
+# ones, and OWL FLY III's INSTALL\ held files its release does not. A game
+# with no page of its own (MULTIPLAY SOKO) always comes from the repository.
 #
 # docs\site\C\ is made again from nothing on every run.
 param([switch]$Repo)
@@ -37,7 +38,9 @@ $games = @(
   @{ dir = "OWLFLY2";  name = "OWL FLY II";        page = "owlfly2.html"; bundle = "owlfly2_v\d+\.jsdos";  repo = "GAMES\OWLFLY2\INSTALL"; exe = "FLYOWL2.EXE" },
   @{ dir = "OWLFLY";   name = "OWL FLY";           page = "owlfly.html";  bundle = "owlfly_v\d+\.jsdos";   repo = "GAMES\OWLFLY\INSTALL";  exe = "FLYOWL.COM" },
   @{ dir = "TRAINER";  name = "The Flight School"; page = "play.html";    bundle = "field_v\d+\.jsdos";    repo = "GAMES\TRAINER";         exe = "FIELD.COM" },
-  @{ dir = "WIRECITY"; name = "WIRE CITY";         page = "play.html";    bundle = "wirecity_v\d+\.jsdos"; repo = "GAMES\WIRECITY";        exe = "CITY.COM" }
+  @{ dir = "WIRECITY"; name = "WIRE CITY";         page = "play.html";    bundle = "wirecity_v\d+\.jsdos"; repo = "GAMES\WIRECITY";        exe = "CITY.COM" },
+  # No page and no bundle of its own: always the repository's build.
+  @{ dir = "SOKOBAN";  name = "MULTIPLAY SOKO";                                                         repo = "GAMES\SOKOBAN";         exe = "SOKOBAN.COM" }
 )
 
 # What of a game's folder in the repository is the game: the program and
@@ -57,7 +60,7 @@ function Put([string]$rel, [byte[]]$bytes) {
 
 foreach ($g in $games) {
   $dir = "GAMES/$($g.dir)"
-  if ($Repo) {
+  if ($Repo -or -not $g.page) {
     $src = Join-Path $root $g.repo
     $taken = Get-ChildItem -Path "$src\*" -File -Include $shipped | Sort-Object Name
     foreach ($f in $taken) { Put "$dir/$($f.Name.ToUpper())" ([IO.File]::ReadAllBytes($f.FullName)) }

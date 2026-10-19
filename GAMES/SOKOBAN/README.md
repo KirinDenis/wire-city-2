@@ -1,15 +1,13 @@
-# SOKOBAN
+# MULTIPLAY SOKO
 
-Crates onto the red marks, in an isometric brick warehouse on a **CGA**
-screen: 320x200, four colours, **8086 assembly**, flat FASM, one `.COM`.
-The 61 levels are the ones of
+Crates onto the red marks, in a brick warehouse seen from three quarters
+above, on a **CGA** screen: 320x200, four colours, **8086 assembly**, flat
+FASM, one `.COM`. The 61 levels are the ones of
 [Base-Z-47](https://github.com/KirinDenis/Base-Z-47-Rust-Game).
 
 ```
-Arrows    walk the grid: UP goes up-right on the screen, RIGHT down-right,
-          DOWN down-left, LEFT up-left
-9 3 1 7   the keypad (PgUp PgDn End Home): the same four, named the way
-          the screen shows them
+Arrows    walk, and push the crate in front of you
+W A S D   the same, for the left hand
 Z         the whole level / close up
 R R       the level anew (the first R only asks)
 N N, P P  the next, the previous level
@@ -49,18 +47,21 @@ pictures can be tried before DOS sees them.
 
 ## How the picture is made
 
-- **Isometric.** Grid cell (c, r) has its tile at `x = ox + (c-r)*hx`,
-  `y = oy + (c+r)*hy`. Everything is drawn back to front into a back buffer:
-  every floor first, then row by row the walls, crates and men. A tile lower
-  on the screen is always nearer, so it is drawn later.
-- **Two sizes.** Tiles of 24x12 by default, with the camera following your
-  man; `Z` switches to 16x8, where most levels fit on the screen whole. Both
-  are 2:1 diamonds with rows 2, 6, 10 ... pixels wide, so neighbours meet
-  without a gap.
-- **Low walls.** A wall is a block only 6 pixels high. At 8 the walls in
-  front hid the crates in Sokoban's one-tile corridors. The tops are a dark
-  red checker and the faces red bricks in black mortar, so the light floor,
-  the yellow crates and the men stand out.
+- **Three quarters from above.** Grid rows run across the screen; cell
+  (c, r) has its corner at `x = ox + c*cw`, `y = oy + r*cd`. A wall or a
+  crate shows its top face lifted and its front face under it. Everything is
+  drawn back to front into a back buffer: every floor first, then row by row
+  the walls, crates and men, so a nearer block covers the bottom of the cell
+  behind it.
+- **Why not isometric.** The first version was isometric, and prettier, but
+  there every grid direction is a diagonal of the screen: each arrow had to
+  be turned 45 degrees in the head. Here an arrow goes where it points.
+- **Two sizes.** Cells of 16x12 by default, with the camera following your
+  man; `Z` switches to 8x6, where every level fits on the screen whole.
+- **Low walls.** A wall is half a cell high (6 pixels of 12). Taller, and a
+  wall in front hides most of a corridor. The tops are a dark red checker and
+  the faces red bricks in black mortar, so the light floor, the yellow crates
+  and the men stand out.
 - **CGA in a byte.** Four pixels a byte, two bits each. A picture is
   compiled at start into a mask and an ink byte per four pixels, and drawn as
   `screen = (screen AND mask) OR ink`. The back buffer is linear; the copy

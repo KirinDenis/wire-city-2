@@ -222,6 +222,19 @@ export const MANUALS = {
     ],
   },
 
+  sokoban: {
+    title: 'MULTIPLAY SOKO',
+    keys: 'arrows or W A S D walk and push, Z whole level, R R anew, N N / P P next / previous',
+    blocks: [
+      { h: 'KEYS' },
+      { p: 'The arrows, or W A S D, walk; walking into a crate pushes it, if the cell behind it is free. Z shows the whole level or close up. R twice starts the level anew, N twice and P twice go to the next and the previous level - the first press only asks. Esc goes back to DOS.' },
+      { h: 'WHAT THIS IS' },
+      { p: 'Sokoban: push every crate onto a red mark and the next level comes. A crate onto a mark scores +10, off one -10, a solved level +50 to every man in the warehouse. The 61 levels are the ones of Base-Z-47. The warehouse holds eight men and keeps a list of them with their scores under the floor; for now it is you alone - the network game is the next step.' },
+      { h: 'WHY IT IS WORTH A LOOK' },
+      { p: 'CGA: four colours, four pixels to a byte, and the even and odd rows in two separate banks. Every picture is text in ART.INC - one character a pixel - compiled at the start into a mask and an ink byte for each four pixels, and drawn back to front into a back buffer that the copy splits into the two banks. Its first version was isometric, and prettier; it went three-quarter because there every arrow walked a diagonal of the screen.' },
+    ],
+  },
+
   jet: demo('THE HANGAR', 'Up/Down cycle the air force, arrows spin, Space blows it apart',
     'A model viewer: all five aircraft the combat sims fly, each with a spec sheet drawn in the ROM font. Cycle the air force, spin any airframe in your hands, and press Space to blow it apart.',
     'This is where you can actually see what the games only flash past you at 400 knots - and where the depth sort proves itself: after the explosion the painter\'s algorithm keeps ordering every tumbling fragment correctly, with no z-buffer and no floating point. The airframes come through the Blender -> OBJ -> 8086 precompiler, so a new plane is a modelling job, not an assembly job.',

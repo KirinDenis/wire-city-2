@@ -1,12 +1,13 @@
 {
-    "made":  "2026-10-19 12:47",
+    "made":  "2026-10-19 19:09",
     "source":  "released",
     "from":  {
                  "OWLFLY3":  "owlfly3_v19.jsdos",
                  "OWLFLY2":  "owlfly2_v72.jsdos",
                  "OWLFLY":  "owlfly_v53.jsdos",
                  "TRAINER":  "field_v32.jsdos",
-                 "WIRECITY":  "wirecity_v4.jsdos"
+                 "WIRECITY":  "wirecity_v4.jsdos",
+                 "SOKOBAN":  "GAMES\\SOKOBAN"
              },
     "files":  [
                   {
@@ -160,6 +161,14 @@
                   {
                       "path":  "GAMES/WIRECITY/RUN.BAT",
                       "size":  86
+                  },
+                  {
+                      "path":  "GAMES/SOKOBAN/SOKOBAN.COM",
+                      "size":  23549
+                  },
+                  {
+                      "path":  "GAMES/SOKOBAN/RUN.BAT",
+                      "size":  93
                   }
               ]
 }

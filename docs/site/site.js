@@ -141,6 +141,10 @@ const GAMES = [
     about: 'Where it started: a night flight over a wireframe city that the program builds rather than stores. One source file, small enough ' +
       'to read in a sitting, with the three ideas everything here is made of: fixed-point 3-D, hidden lines by the painter, a world from a seed.',
     keys: 'arrows steer - the horizon banks with you' },
+  { key: 'sokoban', name: 'MULTIPLAY SOKO', dir: 'SOKOBAN', hint: 'Sokoban on CGA: crates onto the red marks, 61 levels, a score and a player list',
+    about: 'Crates onto the red marks, in a brick warehouse seen from three quarters above, on a CGA screen in four colours. ' +
+      'The warehouse holds eight men and keeps a score for each; today it is one, and the network game is the next step.',
+    keys: 'arrows or W A S D walk and push, Z the whole level, R R the level anew, N N / P P the next or previous level' },
 ];
 
 /** Help > Keys: every key of the site, as the code has them. */
@@ -291,6 +295,7 @@ function siteSettings() {
 const ADDRESS_PLAYS = {
   owlfly3: { game: 'owlfly3' }, owlfly3h: { game: 'owlfly3', machine: 'hercules' }, owlfly2: { game: 'owlfly2' },
   owlfly: { game: 'owlfly' }, trainer: { game: 'trainer' }, field: { game: 'trainer' }, wirecity: { game: 'wirecity' },
+  sokoban: { game: 'sokoban' },
   jet: { example: 'JET' }, terra: { example: 'TERRA' }, relief: { example: 'RELIEF' }, smoke: { example: 'SMOKE' }, avio: { example: 'AVIO' },
 };
 

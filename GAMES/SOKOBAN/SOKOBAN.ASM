@@ -1,13 +1,13 @@
 ; ==================================================================
-;  SOKOBAN.ASM - crates onto the red marks, in an isometric brick
-;  warehouse on a CGA screen: 320x200, four colours.
+;  SOKOBAN.ASM - MULTIPLAY SOKO: crates onto the red marks, in a brick
+;  warehouse seen from three quarters above, on a CGA screen: 320x200,
+;  four colours.
 ;      MAKE in GAMES\SOKOBAN, MAKEWIN from Windows (the repository)
 ;      build A:\MY\SOKOBAN\SOKOBAN.ASM     (the site: FASM, then it runs)
-;  ARROWS walk the grid: UP goes up-right on the screen, RIGHT goes
-;         down-right, DOWN down-left, LEFT up-left.  The keypad's
-;         9 3 1 7 (PgUp PgDn End Home) are the same four, named the
-;         way the screen shows them.
+;  ARROWS or W A S D   walk, and push the crate in front of you
 ;  Z      the whole level / close up
+;  The first version was isometric: prettier, but every arrow went
+;  along a diagonal of the screen and had to be turned in the head.
 ;  R R    the level anew      N N, P P   the next, the previous level
 ;  ESC    back to DOS
 ;  A crate onto a goal +10, off one -10; a solved level +50 to every
@@ -33,7 +33,7 @@ PFTOP   = 8                     ; the playfield: rows 8..167; above it
 PFBOT   = 168                   ;  the level line, under it the players
 SOLVT   = 54                    ; ticks the SOLVED banner stays: 3 s
 PENDT   = 36                    ; ticks a "press again" waits: 2 s
-SPRMAX  = 4096                  ; compiled pictures: 3588 bytes today
+SPRMAX  = 4096                  ; compiled pictures: 1988 bytes today
 
 ; a player
 P_ON    = 0                     ; byte: 1 = in the warehouse
@@ -45,10 +45,10 @@ P_NAME  = 6                     ; 8 letters and a zero
 PSIZE   = 16
 
 ; a zoom: its steps, its lifts, its compiled pictures
-Z_HX    = 0                     ; px across per grid step: 8 or 12
-Z_HY    = 2                     ; px down per grid step: 4 or 6
+Z_HX    = 0                     ; a cell's width in px: 8 or 16
+Z_HY    = 2                     ; a cell's depth in px: 6 or 12
 Z_LWAL  = 4                     ; where each picture's top row goes,
-Z_LBOX  = 6                     ;  counted from the tile's own top row
+Z_LBOX  = 6                     ;  counted from the cell's own top row
 Z_LMAN  = 8
 Z_LYOU  = 10
 Z_FLR   = 12                    ; the compiled pictures
@@ -139,29 +139,29 @@ PREP:   mov  di,rowtab          ; rowtab[y] = bbuf + y*80
         add  ax,80              ; 80 bytes a row: 320 px, 4 a byte
         loop .row
         mov  di,sprbuf
-        SPR  FLRS,ZS+Z_FLR,4    ; small: 16 px = 4 bytes a row
-        SPR  GOLS,ZS+Z_GOL,4
-        SPR  WALS,ZS+Z_WAL,4
-        SPR  BOXS,ZS+Z_BOX,4
-        SPR  BOGS,ZS+Z_BOG,4
-        SPR  YOUS,ZS+Z_YOU,4
-        SPR  FLRB,ZB+Z_FLR,6    ; big: 24 px = 6 bytes a row
-        SPR  GOLB,ZB+Z_GOL,6
-        SPR  WALB,ZB+Z_WAL,6
-        SPR  BOXB,ZB+Z_BOX,6
-        SPR  BOGB,ZB+Z_BOG,6
-        SPR  YOUB,ZB+Z_YOU,6
+        SPR  FLRS,ZS+Z_FLR,2    ; small: 8 px = 2 bytes a row
+        SPR  GOLS,ZS+Z_GOL,2
+        SPR  WALS,ZS+Z_WAL,2
+        SPR  BOXS,ZS+Z_BOX,2
+        SPR  BOGS,ZS+Z_BOG,2
+        SPR  YOUS,ZS+Z_YOU,2
+        SPR  FLRB,ZB+Z_FLR,4    ; big: 16 px = 4 bytes a row
+        SPR  GOLB,ZB+Z_GOL,4
+        SPR  WALB,ZB+Z_WAL,4
+        SPR  BOXB,ZB+Z_BOX,4
+        SPR  BOGB,ZB+Z_BOG,4
+        SPR  YOUB,ZB+Z_YOU,4
         xor  bx,bx              ; the men, one per look, both sizes
 .man:   mov  dx,word [LOOKS+bx] ; DL = shirt, DH = cap and trousers
         mov  [ZS+Z_MAN+bx],di
         mov  si,MANS
-        mov  cl,4
+        mov  cl,2
         push bx
         call COMPILE
         pop  bx
         mov  [ZB+Z_MAN+bx],di
         mov  si,MANB
-        mov  cl,6
+        mov  cl,4
         push bx
         call COMPILE
         pop  bx
@@ -241,7 +241,7 @@ COMPILE:lodsb                   ; rows
 ;  TITLE - the name, a picture of the job, the keys.  Back on Enter.
 ; ------------------------------------------------------------------
 TITLE:  call CLS
-        mov  word [tcol],13     ; 7 big letters, 16 px each: from x 104
+        mov  word [tcol],6      ; 14 big letters, 16 px each: from x 48
         mov  word [trow],14
         mov  byte [tclr],2
         mov  si,TNAME
@@ -266,8 +266,8 @@ TITLE:  call CLS
         ret
 
 ; VIGNET - a man, a crate, a goal before a wall: the game in one row
-VIGNET: mov  word [ox],124      ; centres the 6 tiles: 96 px wide
-        mov  word [oy],60
+VIGNET: mov  word [ox],112      ; centres the 6 cells: 96 px wide
+        mov  word [oy],72
         mov  byte [vc],0
 .flr:   mov  al,[vc]            ; the floor: row 1, columns 0..5
         mov  ah,1
@@ -567,39 +567,35 @@ TIMERS: push ds
 .end:   ret
 
 ; ------------------------------------------------------------------
-;  CAMERA - ox, oy: where grid cell 0,0 lands.  Tile (c,r) has its top
-;  row at  x = ox + (c-r)*hx,  y = oy + (c+r)*hy.  A level that fits
+;  CAMERA - ox, oy: where grid cell 0,0 lands.  Cell (c,r) has its top
+;  left corner at  x = ox + c*cw,  y = oy + r*cd.  A level that fits
 ;  is centred; a bigger one follows your man, who walks the middle
 ;  half of the screen freely before it scrolls.
 ; ------------------------------------------------------------------
 CAMERA: mov  bx,[zoomp]
         mov  al,[lvw]
-        add  al,[lvh]
         xor  ah,ah
-        mov  [wph],ax           ; w+h: the level's span in steps
-        mul  word [bx+Z_HX]     ; (w+h)*hx: its width in px
+        mul  word [bx+Z_HX]     ; w * cw: the level's width in px
         mov  [wpx],ax
-        mov  ax,[wph]
-        mul  word [bx+Z_HY]     ; (w+h)*hy...
-        add  ax,6               ; ...and the back walls stand 6 above
-        mov  [hpx],ax
         mov  al,[lvh]
         xor  ah,ah
-        dec  ax                 ; h-1
-        mul  word [bx+Z_HX]
-        neg  ax                 ; xmin = -(h-1)*hx: the left corner
-        mov  [xmin],ax
+        mul  word [bx+Z_HY]     ; h * cd...
+        sub  ax,[bx+Z_LWAL]     ; ...and the back row's walls stand above
+        mov  [hpx],ax
+        mov  ax,[bx+Z_LWAL]
+        neg  ax
+        mov  [wtop],ax          ; how high those walls rise over row 0
         mov  si,[mep]
         mov  al,[si+P_COL]
-        sub  al,[si+P_ROW]
-        cbw                     ; c - r, signed
-        imul word [bx+Z_HX]
-        add  ax,[bx+Z_HX]       ; + hx: the middle of his tile
+        xor  ah,ah
+        mul  word [bx+Z_HX]     ; c * cw
+        mov  dx,[bx+Z_HX]
+        shr  dx,1               ; + half a cell: the middle of his
+        add  ax,dx
         mov  [manx],ax
-        mov  al,[si+P_COL]
-        add  al,[si+P_ROW]
-        xor  ah,ah              ; c + r
-        mul  word [bx+Z_HY]
+        mov  al,[si+P_ROW]
+        xor  ah,ah
+        mul  word [bx+Z_HY]     ; r * cd
         mov  [many],ax
 ; across
         mov  ax,[wpx]
@@ -607,8 +603,7 @@ CAMERA: mov  bx,[zoomp]
         ja   .xfol
         mov  ax,320
         sub  ax,[wpx]
-        sar  ax,1               ; the margin either side
-        sub  ax,[xmin]          ; ox = margin - xmin
+        sar  ax,1               ; the margin either side: ox itself
         jmp  .xset
 .xfol:  mov  ax,[ox]
         cmp  byte [camnew],0
@@ -625,13 +620,10 @@ CAMERA: mov  bx,[zoomp]
         jle  .xc
         sub  ax,dx              ; off the right quarter: ox -= x - 240
         add  ax,240
-.xc:    mov  dx,[xmin]
-        neg  dx                 ; the left edge stays off the screen:
-        cmp  ax,dx              ;  ox <= -xmin
-        jle  .xc2
-        mov  ax,dx
-.xc2:   mov  dx,320             ; and the right edge: ox >= 320-xmax,
-        sub  dx,[xmin]          ;  xmax = xmin + width
+.xc:    or   ax,ax              ; the left edge stays off the screen:
+        jle  .xc2               ;  ox <= 0
+        xor  ax,ax
+.xc2:   mov  dx,320             ; and the right edge: ox >= 320 - width
         sub  dx,[wpx]
         cmp  ax,dx
         jge  .xset
@@ -645,7 +637,8 @@ CAMERA: mov  bx,[zoomp]
         mov  ax,PFBOT-PFTOP
         sub  ax,[hpx]
         sar  ax,1               ; the margin above and below
-        add  ax,PFTOP+6         ; the back walls' tops are 6 over oy
+        add  ax,PFTOP
+        add  ax,[wtop]          ; the back walls' tops are wtop over oy
         jmp  .yset
 .yfol:  mov  ax,[oy]
         cmp  byte [camnew],0
@@ -662,10 +655,13 @@ CAMERA: mov  bx,[zoomp]
         jle  .yc
         sub  ax,dx              ; too low: oy -= y - bottom band
         add  ax,PFBOT-40
-.yc:    cmp  ax,PFTOP+6         ; the top edge stays off: oy-6 <= PFTOP
+.yc:    mov  dx,PFTOP           ; the top edge stays off:
+        add  dx,[wtop]          ;  oy - wtop <= PFTOP
+        cmp  ax,dx
         jle  .yc2
-        mov  ax,PFTOP+6
-.yc2:   mov  dx,PFBOT+6         ; the bottom too: oy-6+hpx >= PFBOT
+        mov  ax,dx
+.yc2:   mov  dx,PFBOT           ; the bottom too:
+        add  dx,[wtop]          ;  oy - wtop + hpx >= PFBOT
         sub  dx,[hpx]
         cmp  ax,dx
         jge  .yset
@@ -676,8 +672,9 @@ CAMERA: mov  bx,[zoomp]
 
 ; ------------------------------------------------------------------
 ;  RENDER - the warehouse into the back buffer, back to front: first
-;  every floor, then row by row the walls, crates and men - a tile
-;  further down the screen is always nearer, so it is drawn later.
+;  every floor, then row by row the walls, crates and men - a cell
+;  further down the screen is nearer: it is drawn later, and its walls
+;  and crates, standing up, cover the bottom of the cell behind.
 ; ------------------------------------------------------------------
 RENDER: call CLS
         call CAMERA
@@ -731,18 +728,14 @@ RENDER: call CLS
         call DRAWMEN
 .next:  mov  bx,[zoomp]
         mov  ax,[bx+Z_HX]
-        add  [curx],ax          ; a column on: right and down
-        mov  ax,[bx+Z_HY]
-        add  [cury],ax
+        add  [curx],ax          ; a column on: one cell right
         inc  word [cptr]
         inc  byte [ccol]
         mov  al,[ccol]
         cmp  al,[lvw]
         jb   .cell
-        mov  ax,[bx+Z_HX]
-        sub  [rowx],ax          ; a row on: left and down
         mov  ax,[bx+Z_HY]
-        add  [rowy],ax
+        add  [rowy],ax          ; a row on: one cell down
         add  word [cidx],NCOL
         inc  byte [crow]
         mov  al,[crow]
@@ -791,14 +784,13 @@ PUTAT:  push cx
         push si
         push ax
         mov  bx,[zoomp]
-        sub  al,ah
-        cbw                     ; c - r, signed
-        imul word [bx+Z_HX]     ; (DX goes too: c and r are on the stack)
+        xor  ah,ah              ; the column
+        mul  word [bx+Z_HX]     ; (DX goes too: c and r are on the stack)
         add  ax,[ox]
         mov  [curx],ax
         pop  ax
-        add  al,ah
-        xor  ah,ah              ; c + r
+        mov  al,ah
+        xor  ah,ah              ; the row
         mul  word [bx+Z_HY]
         add  ax,[oy]
         mov  [cury],ax
@@ -1175,14 +1167,14 @@ BLIT:   push es
 ; ------------------------------------------------------------------
 ;  Data
 ; ------------------------------------------------------------------
-MSGMEM  db 'SOKOBAN needs a whole 64 KB segment of memory.',13,10,'$'
-MSGSPR  db 'SOKOBAN: the pictures outgrew SPRMAX.',13,10,'$'
-TNAME   db 'SOKOBAN',0
+MSGMEM  db 'MULTIPLAY SOKO needs a whole 64 KB segment of memory.',13,10,'$'
+MSGSPR  db 'MULTIPLAY SOKO: the pictures outgrew SPRMAX.',13,10,'$'
+TNAME   db 'MULTIPLAY SOKO',0
 TLINES  db 7,36,1,'CRATES ONTO THE RED MARKS',0
         db 2,116,3,'ARROWS',0
-        db 10,116,1,'WALK: UP GOES UP-RIGHT',0
-        db 2,124,3,'9 3 1 7',0
-        db 10,124,1,'KEYPAD: THE SCREEN',27h,'S WAYS',0
+        db 10,116,1,'WALK AND PUSH',0
+        db 2,124,3,'W A S D',0
+        db 10,124,1,'THE SAME, LEFT HAND',0
         db 2,132,3,'Z',0
         db 10,132,1,'WHOLE LEVEL OR CLOSE UP',0
         db 2,140,3,'R R',0
@@ -1204,10 +1196,10 @@ TQ2     db ' N AGAIN: THE NEXT LEVEL ',0
 TQ3     db ' P AGAIN: THE PREVIOUS LEVEL ',0
 QTAB    dw 0,TQ1,TQ2,TQ3
 ; the keys that walk: scan code, direction (0 up 1 right 2 down 3 left)
-DIRKEYS db 48h,0, 49h,0         ; Up, PgUp (9): up-right on the screen
-        db 4Dh,1, 51h,1         ; Right, PgDn (3): down-right
-        db 50h,2, 4Fh,2         ; Down, End (1): down-left
-        db 4Bh,3, 47h,3         ; Left, Home (7): up-left
+DIRKEYS db 48h,0, 11h,0         ; Up, W: a row up the screen
+        db 4Dh,1, 20h,1         ; Right, D
+        db 50h,2, 1Fh,2         ; Down, S
+        db 4Bh,3, 1Eh,3         ; Left, A
 DSTEP   dw -NCOL, 1, NCOL, -1   ; a step in grid bytes, per direction
 ; shirt, cap and trousers: green 1, red 2, yellow 3; look 0 is yours
 LOOKS   db 3,2, 2,1, 1,2, 2,3, 1,3, 3,1
@@ -1215,10 +1207,12 @@ LOOKS   db 3,2, 2,1, 1,2, 2,3, 1,3, 3,1
 EXP4:
 rept 16 n:0 { db ((n shr 3) and 1)*0C0h + ((n shr 2) and 1)*30h + ((n shr 1) and 1)*0Ch + (n and 1)*3 }
 DBL4    db 00h,0Fh,0F0h,0FFh    ; 2 bits -> 4 pixels, each one twice
-; the two zooms: hx, hy, lifts of wall, crate, man, arrow; pictures
-ZS      dw 8,4, -6,-7,-9,-12
+; the two zooms: cell width, cell depth, then the lifts of wall, crate,
+; man and arrow (rows above the cell's top row, as ART.INC says); then
+; the pictures
+ZS      dw 8,6, -3,-3,-4,-7
         dw (6+NLOOK) dup 0
-ZB      dw 12,6, -6,-8,-11,-15
+ZB      dw 16,12, -6,-5,-8,-11
         dw (6+NLOOK) dup 0
 zoomp   dw ZB                   ; close up to begin with
 mep     dw players              ; this machine's man
@@ -1257,10 +1251,9 @@ cidx    dw 0
 cptr    dw 0
 pidx    dw 0
 pcol    dw 0
-wph     dw 0
+wtop    dw 0
 wpx     dw 0
 hpx     dw 0
-xmin    dw 0
 manx    dw 0
 many    dw 0
 tcol    dw 0
