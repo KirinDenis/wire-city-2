@@ -17,7 +17,7 @@
 //
 // Nothing here costs the site: a model is paid for by the key it runs on.
 
-import { Style } from '../owlosui/owlosui.js';
+import { Style, Offer } from '../owlosui/owlosui.js';
 import { Terminal } from '../console/terminal.js';
 import { ANSI, RESET } from '../console/shell.js';
 import { TableWindow } from './tablewin.js';
@@ -25,7 +25,7 @@ import { INSTRUCTIONS, TOOL_DEFS } from './agent.js';
 
 const KEY = 'site.ai.key';
 const SETTINGS = 'site.ai.1';
-const CHAT_CLOSE = 962, CONSOLE_CLOSE = 963;
+const CHAT_CLOSE = 962, CONSOLE_CLOSE = 963, LINE_COPY = 964, LINE_CLOSE = 965;
 const AGENTS_BASE = 900, Ag = { New: 907, Copy: 908, Revoke: 909, Chat: 910, Key: 911 };
 const TASKS_BASE = 920, Tk = { Stop: 927, Clear: 928 };
 const TURNS = 40;
@@ -384,11 +384,55 @@ export class AiSection {
     this.owl.refresh?.();
   }
 
-  /** A line onto the clipboard - and in a box, for when the browser would not. */
+  /**
+   * The line that connects Claude Code, in a window of its own (the pilot:
+   * "it must copy to the clipboard, or nobody will type it in"): the three
+   * steps, the line in a field to select and Ctrl+C - the library passes
+   * what its fields copy to the computer's clipboard - and a Copy button.
+   */
   async copy(text, what) {
-    let copied = false;
-    try { await navigator.clipboard.writeText(text); copied = true; } catch { /* no clipboard from here */ }
-    this.app.tell('AI', `${what} ${copied ? 'The line is on the clipboard' : 'Copy the line'} - run it in a terminal, then start Claude Code:\n\n${text}\n\nWhoever has it acts in this page as you while it is open; Revoke takes it back.`);
+    const owl = this.owl;
+    this.closeLine();
+    const W = owl.width, H = owl.height, w = Math.min(W - 2, 82), h = 19;
+    const win = owl.window('AI - connect Claude Code', w, h, { x: Math.floor((W - w) / 2), y: Math.max(1, Math.floor((H - h) / 3)), style: Style.Dialog, closeCmd: LINE_CLOSE });
+    const at = { win, w, text, said: 0 };
+    owl.staticText(win, 2, 1, what, w - 6, 1);
+    owl.staticText(win, 2, 3, '1. Copy the line - the Copy button, or click in it, Ctrl+A, Ctrl+C.', w - 6, 1);
+    owl.staticText(win, 2, 4, '2. Paste it into a terminal - cmd, PowerShell, bash - and press Enter.', w - 6, 1);
+    owl.staticText(win, 2, 5, '3. Start Claude Code there (claude) and ask: it works in this page.', w - 6, 1);
+    at.memo = owl.memo(win, 2, 7, w - 6, 5, text, { readOnly: true });
+    owl.editor(at.memo, Offer.Edit, { wrap: true, readOnly: true });
+    owl.buttonRow(win, 2, h - 4, [{ label: '~C~opy', cmd: LINE_COPY, default: true }, { label: 'Close', cmd: LINE_CLOSE, cancel: true }]);
+    this.line = at;
+    this.lineSays('Whoever has the line acts in this page as you while it is open: keep it to yourself. Revoke takes it back.');
+    owl.activate(win);
+    owl.refresh?.();
+    await this.copyLine();
+  }
+
+  /** The words under the line: what to do, or how the copy went. */
+  lineSays(text) {
+    const l = this.line;
+    if (!l || !this.owl.place(l.win)) return;
+    if (l.said) this.owl.close(l.said);
+    l.said = this.owl.staticText(l.win, 2, 13, text, l.w - 6, 2);
+    this.owl.refresh?.();
+  }
+
+  async copyLine() {
+    const l = this.line;
+    if (!l) return;
+    try {
+      await navigator.clipboard.writeText(l.text);
+      this.lineSays('Copied: paste it into a terminal and press Enter. Whoever has the line acts in this page as you while it is open.');
+    } catch {
+      this.lineSays('The browser would not copy it from here: click in the line, then Ctrl+A and Ctrl+C.');
+    }
+  }
+
+  closeLine() {
+    if (this.line && this.owl.place(this.line.win)) this.owl.close(this.line.win);
+    this.line = null;
   }
 
   // ------------------------------------------------------------ AI > Tasks
@@ -439,7 +483,7 @@ export class AiSection {
   // ------------------------------------------------------------ the page's tool
 
   handles(cmd) {
-    return cmd === CONSOLE_CLOSE || Object.values(Ag).includes(cmd) || Object.values(Tk).includes(cmd)
+    return cmd === CONSOLE_CLOSE || cmd === LINE_COPY || cmd === LINE_CLOSE || Object.values(Ag).includes(cmd) || Object.values(Tk).includes(cmd)
       || this.chat.term.handles(cmd) || this.agents.handles(cmd) || this.tasks.handles(cmd);
   }
 
@@ -448,13 +492,19 @@ export class AiSection {
     if (this.agents.handles(cmd)) return this.agents.onCommand(cmd);
     if (this.tasks.handles(cmd)) return this.tasks.onCommand(cmd);
     if (Object.values(Ag).includes(cmd)) return this.agentDo(cmd);
+    if (cmd === LINE_COPY) { this.copyLine(); return; }
+    if (cmd === LINE_CLOSE) { this.closeLine(); return; }
     if (cmd === Tk.Stop) { this.chat.stop(); return; }
     if (cmd === Tk.Clear) { this.agent.clearTasks(); this.tasks.again(); return; }
     if (cmd === CONSOLE_CLOSE && this.con.win) { if (this.owl.place(this.con.win)) this.owl.close(this.con.win); this.con = { win: 0, view: 0 }; }
   }
 
-  owns(id) { return id !== 0 && (this.chat.term.owns(id) || id === this.con.win); }
-  closeWindow(id) { if (this.chat.term.owns(id)) this.chat.term.close(); else if (id === this.con.win) this.onCommand(CONSOLE_CLOSE); }
+  owns(id) { return id !== 0 && (this.chat.term.owns(id) || id === this.con.win || id === this.line?.win); }
+  closeWindow(id) {
+    if (this.chat.term.owns(id)) this.chat.term.close();
+    else if (id === this.con.win) this.onCommand(CONSOLE_CLOSE);
+    else if (id === this.line?.win) this.closeLine();
+  }
   poll() { this.agents.poll(); this.tasks.poll(); }
 }
 
