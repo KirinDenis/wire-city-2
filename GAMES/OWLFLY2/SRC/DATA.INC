@@ -101,7 +101,7 @@ mmcol0  dw 0                    ; the window's top-left node, column...
 mmrow0  dw 0                    ;  ...and row (row 0 is the world's north)
 mmspx   dw 0                    ; how many nodes fit across at this zoom...
 mmspy   dw 0                    ;  ...and down. Both change with mmzs.
-resseg  dw 0                    ; segment CITY.DAT is loaded into (CS+2000h)
+resseg  dw 0                    ; segment CITY.DAT is loaded into (CS+2C00h)
 pimgo   dw 0                    ; cockpit bitmap in resseg (0 = none)
 cpsseg  dw 0                    ; CPSIDE.DAT's own page, ABOVE scrseg so that
                                 ; opening it moves nothing (0 = not loaded)
@@ -138,6 +138,10 @@ pltr    db NPLANE dup(0)        ; callsign letter of the human in the
 ; his next POS resurrected him one tick later (the Highlander bug 2026-07-27).
 netdead dw 0FFFFh               ; plane the wire says is down
 netboom db 0                    ; 1 = this BOOM is the wire's, let it pass
+warcl   db 0                    ; 1 = the war is a lower pilot's (WAR.INC): our
+                                ;  AI only watches slots 1..WARN-1, his 'B' moves them
+wlcx    dw 0                    ; the pilot a leashed jet re-enters beside
+wlcz    dw 0                    ;  (WLEASHF: this camera or one over the wire)
 nethdm  db 0                    ; damage points that arrived for US
 nethby  dw 0                    ; who dealt them (pid)
 lastklr dw 0                    ; who shot us down (rides our death POS)

@@ -73,6 +73,7 @@ sentk   dw 0                    ; last tick a POS went out
 rpid    dw NRMT dup(0)          ; who wears remote slot i (0 = nobody)
 rlast   dw NRMT dup(0)          ; the tick their last POS arrived
 adtk    dw 0                    ; the tick the last sky ad went out
+nhai    db 0                    ; 1 = this 'H' is a bot's (NETHITAIF): no shooter
 ; send: ECB + header + payload, header and payload CONTIGUOUS - the
 ; one fragment covers both
 SECB    db ECBSZ dup(0)
@@ -95,6 +96,11 @@ NETHOSTF:
 NETPOSF:
         call NETPOS
         retf
+; ---- NETHITAIF: a BOT's round reached a real pilot (the shared war's host,
+; WAR.INC) - the same 'H', from NO shooter: whoever's machine runs the bots,
+; it is not that pilot's kill, and nobody's canopy is chalked for it.
+NETHITAIF:
+        mov  byte [cs:nhai],1
 ; ---- NETHITF: our guns hit a REAL pilot - tell him, do not kill him -------
 ; in: AL = his plane slot (NETSLT..NETSLT+NRMT-1), AH = damage points.
 ; His machine decides whether that was the last one; ours only reports.
@@ -119,11 +125,15 @@ NETHITF:
         mov  ax,[ggid]
         mov  word [cs:SPAY+3],ax   ; our sky
         mov  ax,[cs:mypid]
-        mov  word [cs:SPAY+5],ax   ; the shooter
+        cmp  byte [cs:nhai],0
+        je   .shot
+        xor  ax,ax                  ; a bot's: no shooter
+.shot: mov  word [cs:SPAY+5],ax   ; the shooter
         mov  [cs:SPAY+7],dh
         mov  cx,8
         call NETXMIT
-.hx:   pop  si
+.hx:   mov  byte [cs:nhai],0
+        pop  si
         pop  dx
         pop  cx
         pop  bx

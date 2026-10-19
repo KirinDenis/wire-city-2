@@ -100,6 +100,16 @@ export const CORE_COMMANDS = [
     },
   },
   {
+    name: 'unset', group: 'shell', summary: 'forget a variable', usage: 'unset NAME', where: 'here',
+    run(ctx) {
+      for (const w of ctx.words) {
+        if (['HOME', 'USER', '?'].includes(w)) { ctx.err(`${w} stays: the shell needs it`); return 1; }
+        if (!(w in ctx.shell.env)) { ctx.err(`${w}: no such variable`); return 1; }
+        delete ctx.shell.env[w];
+      }
+    },
+  },
+  {
     name: 'set', group: 'shell', summary: 'set -x: show what each command becomes (an API call, a step here); set +x: stop', usage: 'set -x | set +x', where: 'here',
     options: { x: 'show what each command becomes' },
     run(ctx) {

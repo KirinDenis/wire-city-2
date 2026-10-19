@@ -1128,7 +1128,9 @@ INPUT:
         call SKYSEG:NETHITF
         pop  si
         jmp  .gnf
-.gai:  dec  byte [php+bx]
+.gai:  mov  al,1               ; the war host's bot: he is told the hit
+        call WARHITM
+        dec  byte [php+bx]
         jnz  .gnf              ; wounded, still flying
         push si
         call BOOM

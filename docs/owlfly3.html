@@ -40,12 +40,12 @@
     for the Hercules mono edition
     <a href="owlfly3h.html">fly the amber machine</a></div>
   <div id="dos"></div>
-  <div class="hint">OWL FLY II's war, flown the way 1988 saw it &middot; pure 8086 assembly, running in DOSBox (WASM) via <a href="https://js-dos.com" target="_blank" rel="noopener">js-dos</a> &middot; <a href="https://github.com/KirinDenis/wire-city-2/tree/main/GAMES/OWLFLY3" target="_blank" rel="noopener">source</a> &middot; <a href="https://www.facebook.com/groups/OWLOS" target="_blank" rel="noopener">community</a> &middot; built by <a href="https://owlos.sk/" target="_blank" rel="noopener">Owlos</a> &mdash; legacy systems are our day job</div>
+  <div class="hint">OWL FLY II's war, flown on CGA, EGA, VGA and Hercules &middot; pure 8086 assembly, running in DOSBox (WASM) via <a href="https://js-dos.com" target="_blank" rel="noopener">js-dos</a> &middot; <a href="https://github.com/KirinDenis/wire-city-2/tree/main/GAMES/OWLFLY3" target="_blank" rel="noopener">source</a> &middot; <a href="https://www.facebook.com/groups/OWLOS" target="_blank" rel="noopener">community</a> &middot; built by <a href="https://owlos.sk/" target="_blank" rel="noopener">Owlos</a> &mdash; legacy systems are our day job</div>
 
   <div id="manual">
     <h2>THE FRONT STEP</h2>
     <table>
-      <tr><td class="k">2) CGA 320x200</td><td>the classic palette 1 &mdash; <span class="cyn">cyan</span>, <span class="mag">magenta</span>, white &mdash; with the cockpit redrawn as 1988 line art; <b>H</b> swaps the hardware palette in flight to green/red/yellow and back</td></tr>
+      <tr><td class="k">2) CGA 320x200</td><td>the classic palette 1 &mdash; <span class="cyn">cyan</span>, <span class="mag">magenta</span>, white &mdash; with the cockpit redrawn as CGA line art; <b>H</b> swaps the hardware palette in flight to green/red/yellow and back</td></tr>
       <tr><td class="k">3) EGA 320x200</td><td>sixteen colours on ANY EGA &mdash; the 64K launch card included</td></tr>
       <tr><td class="k">4) EGA 640x350</td><td>EGA's best: sixteen curated colours, the drawn grey cockpit, no dither anywhere</td></tr>
       <tr><td class="k">6) VGA 320x200</td><td>the game as born, 256 colours</td></tr>
@@ -64,7 +64,7 @@
       Two more screens follow: <b>GRAPHICS DETAIL</b> &mdash; FULL, MEDIUM
       or LOW, conditions that skip work, not different games &mdash; and
       <b>SELECT SOUND SYSTEM</b>: the Sound Blaster's recorded turbine, the
-      <b>PC speaker</b> bending one square wave the way 1988 did, or no
+      <b>PC speaker</b> bending one square wave, or no
       sound at all. The speaker row is quizzed too &mdash; a machine with
       no Blaster gets a voice by default, not silence. ENTER on each screen
       takes the sensible answer.
@@ -124,9 +124,9 @@
   // and two pilots on different builds fly separate skies while every
   // packet still "arrives". The number on the glass is what lets three
   // friends check they are on the same build in one glance.
-  var BUNDLE = "owlfly3_v17.jsdos";
+  var BUNDLE = "owlfly3_v18.jsdos";
   var VER = "v" + (BUNDLE.match(/_v(\d+)/) || [0, "?"])[1];
-  document.getElementById("stat").textContent = "wire: connecting… " + VER;
+  document.getElementById("stat").textContent = "wire: connecting??? " + VER;
 
   // The stick, the buttons and the switch panel are OWL FLY II's, shared
   // rather than copied - this page was forked from the GAME and shipped
@@ -170,6 +170,7 @@
 </script>
 </body>
 </html>
+
 
 
 

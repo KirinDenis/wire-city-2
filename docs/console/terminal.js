@@ -18,6 +18,7 @@
 
 import { Style } from '../owlosui/owlosui.js';
 import { ANSI, RESET } from './shell.js';
+import { Bus } from './bus.js';
 
 export const CmTerminalClose = 950;
 const HISTORY_MAX = 500;
@@ -26,14 +27,23 @@ const clean = s => s.replace(/[\x00-\x1f\x7f]/g, '');
 export class Terminal {
   /**
    * makeShell({ write, ask }): the UI's shell (./shell.js, with its own
-   * commands and paths). title: the window's; welcome: its first line, ANSI;
-   * historyKey: where this browser keeps what was typed.
+   * commands and paths). makeBus(shell): its bus (./bus.js, or a UI's own
+   * over it) - what the windows send runs in this same shell and shows
+   * here as if typed, marked with its window, its words under it. title:
+   * the window's; welcome: its first line, ANSI; historyKey: where this
+   * browser keeps what was typed.
    */
-  constructor(owl, { makeShell, app = null, log = null, title = 'Terminal', welcome = '', historyKey = 'console.history' } = {}) {
+  constructor(owl, { makeShell, makeBus = shell => new Bus({ shell }), app = null, log = null, title = 'Terminal', welcome = '', historyKey = 'console.history' } = {}) {
     Object.assign(this, { owl, app, log, title, welcome, historyKey });
     this.shell = makeShell({ write: t => this.write(t), ask: (q, o) => this.ask(q, o) });
     this.shell.exit = () => this.close();
     this.shell.saveHistory = () => this.saveHistory();
+    this.bus = makeBus(this.shell);
+    // The prompt from the start: a window's command sent before the terminal
+    // was ever opened shows after it too, not after a bare >.
+    this.shell.prompt().then(p => { if (!this.prompt) this.prompt = p; }, () => {});
+    this.bus.on('command', ({ line, from }) => this.write(`\r\x1b[K${this.prompt || '> '}${line}${from ? `${ANSI.muted}  # ${from}${RESET}` : ''}\r\n`));
+    this.bus.on('answer', () => { if (!this.busy || this.asking) this.render(); });
     try { this.shell.history = JSON.parse(localStorage.getItem(historyKey) ?? '[]').slice(-HISTORY_MAX); } catch { this.shell.history = []; }
     this.win = 0;
     this.con = 0;

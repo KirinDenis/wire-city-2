@@ -523,6 +523,7 @@ MAIN:
         call SKYSEG:NETINITF
         mov  [netup],al
         mov  [netpid],dx        ; 0 when the wire is dark
+        call VIDSEG:WARINITF    ; the shared war's own socket (WAR.INC)
         call UISEG:UISPLASH
         call UISEG:UIMENU   ; blocks until a sky is picked
         ; ---- EVERY arrival watches first, joined or created alike, and
@@ -803,6 +804,7 @@ GAMELOOP:
         call SKYSEG:NETPOSF   ; tell the wire where we are (1/tick)...
         call SKYSEG:NETPOLLF   ; ...and learn where everyone else is
         call NETAPPLY           ; deaths and hits the wire brought us
+        call VIDSEG:WARTICKF    ; the shared war: its host's bots, or ours sent
         call SYMSEG:STG1F   ; *** TEMP marker: the wire is done ***
 
         ; --- render (runs as fast as it can; speed no longer tied to it) ---

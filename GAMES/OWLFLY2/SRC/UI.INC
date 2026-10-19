@@ -2459,6 +2459,8 @@ SHKTICK:
         mov  al,[cs:shkd+bx]    ; THE RADAR sweeps, steadily, always. This
         add  al,SHKDSPN         ; is the part that spins - it was the guns
         mov  [cs:shkd+bx],al    ; doing it, which read as a nervous tic
+        cmp  byte [warcl],0     ; a client: the war host's 'K' drives it,
+        jne  .tn               ;  aims it and fires it (WAR.INC)
         call SHKAI              ; decide where to drive
         call SHKMOVE            ; ...and drive there
         mov  bx,[cs:shki]
@@ -2992,10 +2994,8 @@ SHKGUN: mov  bx,[cs:shki]
         jb   .gno
         call CODE:CRASHF   ; five hits and the flak got him
         ret
-.ghai: mov  bx,si
-        shr  bx,1
-        dec  byte [php+bx]
-.gno:  ret
+.ghai: call WARSEG:WSHKGF     ; an AI jet loses one; a pilot over the
+.gno:  ret                     ;  wire is told (WAR.INC)
 
 ; ---------------------------------------------------------------------------
 ;  SHKHIT - did something of ours land on a Shilka? Same shape as RSHIT:
@@ -3025,6 +3025,7 @@ SHKHIT: mov  word [cs:shki],0
         js   .hn               ; underground
         cmp  ax,SHKHBOX
         jg   .hn
+        call WARSEG:WSHKXF      ; a client tells the war host too
         call SHKDAM
         mov  ax,1
         ret

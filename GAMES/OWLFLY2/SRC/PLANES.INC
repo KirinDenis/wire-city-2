@@ -12,6 +12,37 @@
 ;  PLANESUPD - one physics tick of the AI: fly gentle circles, stay near
 ;  the player (leash respawn when too far). Called from INPUT.
 ; ---------------------------------------------------------------------------
+; ---- the shared war's gates (WAR.INC) ---------------------------------------
+; WARCLT: CF=1 when slot SI is the war host's to decide - we are its client
+; (warcl) and SI is one of the war's slots. Its packets move the jet; we only
+; fly it on along its heading between them.
+WARCLT: cmp  byte [warcl],0
+        je   .n                 ; equal: CF=0
+        cmp  si,WARN*2          ; CF=1 below WARN
+.n:     ret
+; WARHITM: our guns hit slot SI for AL points - a client tells the host too.
+WARHITM:
+        cmp  byte [warcl],0
+        je   .r
+        call WARSEG:WARHITF
+.r:     ret
+; BOTHIT: a bot's round or missile reaches slot SI for AH points. A real pilot
+; over the wire is TOLD (NETHITAIF: no shooter, nobody's canopy gets him) and
+; CF=1; an AI jet, CF=0, and the caller settles it as before.
+BOTHIT: push bx
+        mov  bx,si
+        shr  bx,1
+        cmp  byte [premote+bx],0
+        je   .ai
+        mov  al,bl
+        call SKYSEG:NETHITAIF
+        pop  bx
+        stc
+        ret
+.ai:    pop  bx
+        clc
+        ret
+
 PLANESUPD:
         mov  ax,[rspin]         ; the dishes sweep on the physics clock
         add  ax,RSPINV
@@ -36,6 +67,8 @@ PLANESUPD:
         ; ---- specials: patrol an east-west lane at formation altitude;
         ; the lane's z never moves, so the border is never crossed
         mov  word [pspd],10
+        call WARCLT             ; the war host turns it at the lane's end
+        jc   .mv
         mov  ax,[pax+si]
         cmp  ax,24576+7000
         jl   .sp1
@@ -45,6 +78,8 @@ PLANESUPD:
         mov  word [pah+si],64
         jmp  .mv
 .fgt:
+        call WARCLT             ; the war host's jet: its heading is his
+        jc   .mv
         ; gentle circle: nudge the heading on every 4th tick
         mov  ax,[lasttk]
         and  ax,3
@@ -76,6 +111,10 @@ PLANESUPD:
         idiv bx
         pop  si
         add  [paz+si],ax
+        call WARCLT             ; the war host's jet: no leash to OUR camera,
+        jnc  .own               ;  no building he did not hit - only our ram
+        jmp  .nbld              ;  and its contrail are ours to see to
+.own:
         ; leash: wandered too far -> respawn in a random spot nearby
         ; (fighters only: the specials hold their formation lanes)
         mov  bx,si
@@ -83,18 +122,8 @@ PLANESUPD:
         cmp  byte [ptype+bx],0
         je   .lsh
         jmp  .trl
-.lsh:  mov  ax,[pax+si]
-        sub  ax,[camx]
-        jns  .l1
-        neg  ax
-.l1:   cmp  ax,12000
-        jge  .resp
-        mov  ax,[paz+si]
-        sub  ax,[camz]
-        jns  .l2
-        neg  ax
-.l2:   cmp  ax,12000
-        jl   .trl              ; inside the leash: go drop a trail point
+.lsh:  call WARSEG:WLEASHF     ; near ANY pilot - this camera or one over the
+        jnc  .trl              ;  wire: inside the leash, drop a trail point
 .resp: mov  ax,[locki]         ; a teleported target is a lost target
         cmp  ax,si
         jne  .rlk
@@ -118,7 +147,7 @@ PLANESUPD:
         imul word [cty]
         mov  bx,256
         idiv bx
-        add  ax,[camx]
+        add  ax,[wlcx]          ; beside the pilot WLEASHF named
         mov  [pax+si],ax
         mov  ax,[ctx]
         add  ax,64
@@ -128,7 +157,7 @@ PLANESUPD:
         imul word [cty]
         mov  bx,256
         idiv bx
-        add  ax,[camz]
+        add  ax,[wlcz]
         mov  [paz+si],ax
         push si
         call RND16
@@ -279,7 +308,10 @@ PLANESUPD:
         xor  ax,ax
 .th2:  mov  [tlh],ax
 .nth:  ; ---- midair collisions: one candidate jet per tick vs all ----
-        mov  ax,[lasttk]
+        cmp  byte [warcl],0     ; the war host sees its midairs: his 'B'
+        je   .mca               ;  brings them down here
+        jmp  .mce
+.mca:  mov  ax,[lasttk]
         xor  dx,dx
         mov  bx,NPLANE
         div  bx
@@ -326,7 +358,10 @@ PLANESUPD:
 .mce:
         ; ---- attrition: when a team is wiped, run the victory banner,
         ; then field two fresh squadrons (scores carry over) ----
-        cmp  word [rndovr],0
+        cmp  byte [warcl],0     ; the round is the war host's: his 'B'
+        je   .att               ;  carries its countdown and its winner
+        jmp  .rret
+.att:  cmp  word [rndovr],0
         je   .rchk
         dec  word [rndovr]
         jnz  .rret
@@ -950,6 +985,9 @@ RND16F:   ; the Shilkas fire from UISEG and need the
 CRASHF:
         call CRASHHANDLE
         retf
+BOOMF:   ; the shared war (WAR.INC, WARSEG) brings a bot down: SI = it
+        call BOOM
+        retf
 TERRHF:
         call TERRH
         retf
@@ -1546,7 +1584,9 @@ MSLUPD1:
         mov  ah,5               ; missile is the whole five at once
         call SKYSEG:NETHITF
         jmp  .pkd              ; his death packet will chalk our canopy
-.pkai: call BOOM
+.pkai: mov  al,5               ; the war host's bot: he is told the five
+        call WARHITM
+        call BOOM
         inc  word [psc]     ; chalk one on the canopy
 .pkd:  call MCEND
         mov  byte [msact],0
@@ -2501,7 +2541,9 @@ AMSLUPD:
         je   .tcy
         dec  word [aifire]
         jmp  .fly
-.tcy:  mov  word [aifire],24
+.tcy:  cmp  byte [warcl],0     ; the war host launches; what is already
+        jne  .fly               ;  in the air here still flies home
+        mov  word [aifire],24
         xor  bx,bx              ; a free launch rail?
 .fs:   cmp  byte [amact+bx],0
         je   .have
@@ -2671,6 +2713,9 @@ AMSLUPD:
 .b3:   add  dx,ax
         cmp  dx,40
         jge  .step
+        mov  ah,5               ; a real pilot is told, his machine counts
+        call BOTHIT             ;  the whole five
+        jc   .fiz
         push word [wcc]     ; BOOM reuses this scratch
         call BOOM               ; SI = the target
         pop  word [wcc]
@@ -3010,7 +3055,10 @@ GUNDRAW:
 ;  hit. Jets lose HP down to the usual BOOM; the player soaks 8 hits,
 ;  flashes the ring red, and rides the crash screen on the last one.
 ; ---------------------------------------------------------------------------
-AIGUN:  cmp  word [aigt],0
+AIGUN:  cmp  byte [warcl],0     ; the war host's guns, not ours
+        je   .own
+        ret
+.own:  cmp  word [aigt],0
         je   .go
         dec  word [aigt]
         ret
@@ -3178,7 +3226,11 @@ AIGUN:  cmp  word [aigt],0
         jb   .no2
         call CRASHHANDLE        ; shot down (resets pdam itself)
         ret
-.hai:  mov  bx,di
+.hai:  mov  si,di              ; a real pilot is told, his machine counts
+        mov  ah,1               ;  the hit
+        call BOTHIT
+        jc   .no2
+        mov  bx,di
         shr  bx,1
         dec  byte [php+bx]
         jnz  .no2

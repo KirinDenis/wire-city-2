@@ -93,9 +93,9 @@
   // The bundle, NAMED ONCE - version on the status line, same reason as
   // the colour page: a cached page serving a stale bundle is invisible
   // any other way, and stale-vs-fresh pilots fly separate skies.
-  var BUNDLE = "owlfly3h_v17.jsdos";
+  var BUNDLE = "owlfly3h_v18.jsdos";
   var VER = "v" + (BUNDLE.match(/_v(\d+)/) || [0, "?"])[1];
-  document.getElementById("stat").textContent = "wire: connecting… " + VER;
+  document.getElementById("stat").textContent = "wire: connecting??? " + VER;
 
   // The stick, the buttons and the switch panel are OWL FLY II's, shared
   // rather than copied - see owlcontrols.js. This page was forked from the
@@ -163,6 +163,7 @@
 </script>
 </body>
 </html>
+
 
 
 

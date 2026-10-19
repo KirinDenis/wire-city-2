@@ -1,9 +1,9 @@
 {
-    "made":  "2026-10-16 14:03",
+    "made":  "2026-10-18 21:49",
     "source":  "released",
     "from":  {
-                 "OWLFLY3":  "owlfly3_v17.jsdos",
-                 "OWLFLY2":  "owlfly2_v70.jsdos",
+                 "OWLFLY3":  "owlfly3_v18.jsdos",
+                 "OWLFLY2":  "owlfly2_v71.jsdos",
                  "OWLFLY":  "owlfly_v53.jsdos",
                  "TRAINER":  "field_v32.jsdos",
                  "WIRECITY":  "wirecity_v4.jsdos"
@@ -11,7 +11,7 @@
     "files":  [
                   {
                       "path":  "GAMES/OWLFLY3/OWLFLY3.EXE",
-                      "size":  124864
+                      "size":  130084
                   },
                   {
                       "path":  "GAMES/OWLFLY3/CITY.DAT",
@@ -24,6 +24,10 @@
                   {
                       "path":  "GAMES/OWLFLY3/SFX.DAT",
                       "size":  53389
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/SHCAB.DAT",
+                      "size":  42086
                   },
                   {
                       "path":  "GAMES/OWLFLY3/CPCGA.DAT",
@@ -50,12 +54,40 @@
                       "size":  128000
                   },
                   {
+                      "path":  "GAMES/OWLFLY3/SHCCGA.DAT",
+                      "size":  42086
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/SHCEGA.DAT",
+                      "size":  42086
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/SHCHGC.DAT",
+                      "size":  42086
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/SHSIDE.DAT",
+                      "size":  38581
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/SHSCGA.DAT",
+                      "size":  21830
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/SHSEGA.DAT",
+                      "size":  22972
+                  },
+                  {
+                      "path":  "GAMES/OWLFLY3/SHSHGC.DAT",
+                      "size":  21833
+                  },
+                  {
                       "path":  "GAMES/OWLFLY3/RUN.BAT",
                       "size":  90
                   },
                   {
                       "path":  "GAMES/OWLFLY2/FLYOWL2.EXE",
-                      "size":  107424
+                      "size":  115728
                   },
                   {
                       "path":  "GAMES/OWLFLY2/CITY.DAT",

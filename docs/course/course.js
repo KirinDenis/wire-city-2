@@ -135,7 +135,7 @@ async function courseDisk(url) {
  * never do). ?l=5b is the second lecture on L05 - its own entry, L05B, with
  * its own program and video. ?l=L23 works too. Anything else: none.
  */
-function lessonFromAddress(lessons) {
+export function lessonFromAddress(lessons) {
   const v = new URLSearchParams(globalThis.location?.search ?? '').get('l');
   const m = /^L?0*(\d{1,2})([a-z]?)$/i.exec(v?.trim() ?? '');
   if (!m) return null;
@@ -152,7 +152,7 @@ function lessonFromAddress(lessons) {
  * now lets /course/ through; a visitor still holding the old one has it
  * updated here, and the page reloads once. True: a reload is on its way.
  */
-async function leaveIsolation() {
+export async function leaveIsolation() {
   if (!globalThis.crossOriginIsolated || !navigator.serviceWorker?.controller) return false;
   try {
     if (sessionStorage.getItem('course.unisolate')) return false;   // tried once this tab: go on as we are

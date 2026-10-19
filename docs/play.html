@@ -22,7 +22,7 @@
 <body>
 <div id="wrap">
   <h1 id="ttl">WIRE CITY 86</h1>
-  <div class="hint">click the screen first to grab the keyboard &middot; <a href="index.html">back to the arcade</a></div>
+  <div class="hint">click the screen first to grab the keyboard &middot; <a href="arcade.html">back to the arcade</a></div>
   <div id="dos"></div>
   <div class="hint" id="sub"></div>
   <div id="about"></div>
@@ -41,7 +41,7 @@
   // sees a black screen and no idea what it is.
   var GH = "https://github.com/KirinDenis/wire-city-2/";
   var machines = {
-    wirecity: {b:"wirecity_v4.jsdos", t:"WIRE CITY (1986 original)",
+    wirecity: {b:"wirecity_v4.jsdos", t:"WIRE CITY (the original)",
                s:"the ancestor: a 5.5 KB wireframe night-flight - arrows steer, banking turns",
                r:"tree/main/GAMES/WIRECITY",
                d:"<h2>WHAT THIS IS</h2><p>The program that started the whole" +
@@ -132,7 +132,7 @@
                  " the readout shows both rates live. It is the cheapest way" +
                  " to feel why a simulation that looks smooth on one machine" +
                  " goes wrong on a faster one &mdash; the lesson that keeps" +
-                 " the games honest on hardware from 1986 to WASM.</p>"},
+                 " the games honest on hardware from the 8086 to WASM.</p>"},
     avio:     {b:"avio_v2.jsdos", t:"THE AVIONICS",
                s:"arrows = stick, +/- = throttle - fly the instruments themselves",
                r:"blob/main/EXAMPLES/AVIO.ASM",
@@ -154,7 +154,7 @@
     pick.s;
   document.getElementById("about").innerHTML = pick.d +
     '<p><a href="' + GH + pick.r + '" target="_blank" rel="noopener">source' +
-    '</a> &middot; <a href="index.html">back to the arcade</a> &middot; a real' +
+    '</a> &middot; <a href="arcade.html">back to the arcade</a> &middot; a real' +
     ' DOS program in 8086 assembly, running in DOSBox compiled to WebAssembly' +
     ' via <a href="https://js-dos.com" target="_blank" rel="noopener">js-dos' +
     '</a></p>';

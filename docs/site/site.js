@@ -21,15 +21,20 @@
 import { sub, line, Style, Color } from '../owlosui/owlosui.js';
 import { DocCm } from '../owlosui/apps/documents.js';
 import { DosDrive } from '../owlosui/files/dosdrive.js';
+import { DosCm } from '../owlosui/apps/dos.js';
 import { DriveGates } from '../owlosui/dosbox/gates.js';
 import { unzip } from '../owlosui/dosbox/unzip.js';
 import { log } from '../owlosui/apps/log.js';
-import { CourseApp, Cm, A } from '../course/course.js';
+import { CourseApp, Cm, A, lessonFromAddress, leaveIsolation } from '../course/course.js';
 import { Drive, LocalFolder, crlf, fingerprint, guardRemovals, loadTable, saveTable, keepHandle, handleOf, forgetHandle, freeFolder, statsOf, sizeText, dateText, journalRemovals } from './drives.js';
-import { CellTable } from './table.js';
+import { TableWindow } from './tablewin.js';
+import { Presence, doingText, serverUrl } from './net.js';
+import { Screens } from './screens.js';
+import { Caster } from '../console/cast.js';
+import { SkyMap } from './skymap.js';
 import { Terminal, CmTerminalClose } from '../console/terminal.js';
 import { ANSI, RESET } from '../console/shell.js';
-import { siteShell } from './console.js';
+import { siteShell, profileLines, quoted, dosboxLine } from './console.js';
 
 // Before anything can remove a file: every removal from this browser's
 // storage into a journal that outlives a reload (drives.js says why).
@@ -42,23 +47,23 @@ const MY_FILES = '/My files/';
 /** What the site last put on C:, file by file, to tell the visitor's changes from its own (seedC). */
 const SHIPPED_KEY = 'site.c.shipped.1';
 
-/** Map Drives' commands: numbers of the site's own, past its menu's. */
-const Mp = {
-  Up: 280, Down: 281, PageUp: 282, PageDown: 283, Home: 284, End: 285, Edit: 286, EditOk: 287, EditCancel: 288,
-  Close: 290, Add: 291, Remove: 292, Open: 293, AddOk: 294, AddCancel: 295,
-};
+/**
+ * The site's own command numbers, past its menu's (100 on) and below
+ * OWLOSUI's tools (300..549). A table window takes seven from its base -
+ * its bar's keys and Close: Map Drives from MAP_BASE, the Games catalog
+ * from GAME_BASE.
+ */
+const Mp = { Edit: 286, EditOk: 287, EditCancel: 288, Add: 291, Remove: 292, Open: 293, AddOk: 294, AddCancel: 295 };
+const MAP_BASE = 270;
+const Gm = { Play: 296, Source: 297, Folder: 298 };
+const HELP_CLOSE = 299;
+const WHO_BASE = 250;
+const Wh = { Watch: 257, Share: 258 };
+const SCREEN_CLOSE = 259;
+const MAP_CLOSE = 249;
+const GAME_BASE = 260;
 /** The smallest Map Drives can be made: the four buttons in a row (the pilot asked for about 50 columns), the table's Drive, Kind, Size and Where. */
 const MAP_MIN = { w: 56, h: 20 };
-
-/** How many lines a static folds `text` into at `width`: a word that does not fit goes to the next line. */
-function wrappedLines(text, width) {
-  let lines = 1, used = 0;
-  for (const word of text.split(/\s+/)) {
-    const need = (used ? 1 : 0) + word.length;
-    if (used + need > width) { lines++; used = word.length; } else used += need;
-  }
-  return lines;
-}
 
 /** The kinds Map Drives can add, in its radio buttons' order. */
 const ADD_KINDS = [
@@ -110,12 +115,114 @@ function item(label, hint, { title = label.replace(/~/g, '').trim(), shortcut, a
  * The networked ones join the same sky as their own pages on the relay.
  */
 const GAMES = [
-  { key: 'owlfly3', name: 'OWL FLY III', dir: 'OWLFLY3', room: 'owlfly3', hint: 'CGA, EGA, VGA and a Hercules edition of the same war; multiplayer' },
-  { key: 'owlfly2', name: 'OWL FLY II', dir: 'OWLFLY2', room: 'owlfly2', hint: 'One shared sky over the network, an F-15 cockpit with three MFD pages' },
-  { key: 'owlfly', name: 'OWL FLY', dir: 'OWLFLY', hint: 'The combat flight simulator: an island, a city, two air forces' },
-  { key: 'trainer', name: 'The Flight School', dir: 'TRAINER', hint: 'Take off, fly the pattern, land: an airfield and a flight model that stalls' },
-  { key: 'wirecity', name: 'WIRE CITY', dir: 'WIRECITY', hint: 'Where it started: a wireframe night flight over a city, one source file' },
+  { key: 'owlfly3', name: 'OWL FLY III', dir: 'OWLFLY3', room: 'owlfly3', hint: 'CGA, EGA, VGA and a Hercules edition of the same war; multiplayer',
+    about: 'The same war on every video card a PC could have: CGA in cyan and magenta, EGA, VGA, and a Hercules edition in monochrome. ' +
+      'Its first menu asks the machine - a card it has not got refuses the key - and every card has a cockpit drawn for it.',
+    keys: 'arrows fly, W/S throttle, A burner, Enter locks, Space cannon, Backspace missile, F2-F7 views, Esc pauses' },
+  { key: 'owlfly2', name: 'OWL FLY II', dir: 'OWLFLY2', room: 'owlfly2', hint: 'One shared sky over the network, an F-15 cockpit with three MFD pages',
+    about: 'One shared sky over the network, and no menu: you arrive watching the war through an orbit camera, and Enter takes a jet on your own runway. ' +
+      'An F-15 cockpit with a radar, three MFD pages, and a name over every human pilot in view.',
+    keys: 'before a jet: arrows swing the camera, Z/X in and out, Enter takes one; then arrows fly, W/S throttle, Enter locks, Space cannon' },
+  { key: 'owlfly', name: 'OWL FLY', dir: 'OWLFLY', hint: 'The combat flight simulator: an island, a city, two air forces',
+    about: 'The combat flight simulator: an island made by the program, a city that can be destroyed, two air forces of five aircraft types ' +
+      'across a front line, homing missiles, a cockpit with a working radar, and a jet engine on the Sound Blaster.',
+    keys: 'arrows fly, W/S or +/- throttle, Space (hold) cannon, Backspace missile, F4 orbits the target; after GAME OVER Space flies again' },
+  { key: 'trainer', name: 'The Flight School', dir: 'TRAINER', hint: 'Take off, fly the pattern, land: an airfield and a flight model that stalls',
+    about: 'Take off, fly the pattern, land. An airfield - a numbered runway, a taxiway, hangars, a tower and a turning radar - and a flight model ' +
+      'that knows the take-off speed, the stall and the ground cushion. Its 3-D models came from Blender, through the OBJ-to-8086 converter.',
+    keys: 'W/S or +/- throttle, arrows steer; F flaps, G gear, B brakes, V view, R starts again' },
+  { key: 'wirecity', name: 'WIRE CITY', dir: 'WIRECITY', hint: 'Where it started: a wireframe night flight over a city, one source file',
+    about: 'Where it started: a night flight over a wireframe city that the program builds rather than stores. One source file, small enough ' +
+      'to read in a sitting, with the three ideas everything here is made of: fixed-point 3-D, hidden lines by the painter, a world from a seed.',
+    keys: 'arrows steer - the horizon banks with you' },
 ];
+
+/** Help > Keys: every key of the site, as the code has them. */
+const HELP_KEYS = `THE SITE
+  F10, or Alt and a letter   the menu - Alt+F Files, Alt+G Games, Alt+S Sources,
+                             Alt+L Lessons, Alt+N LAN, Alt+H Help
+  F1                         the lessons
+  F3                         the games
+  F2                         save the file in front
+  F9                         build the source in front on the DOS PC, and run it
+  F5                         the window in front as big as the screen, and back
+  Alt+F3                     close the window in front
+  Ctrl+\`                     the terminal - Esc closes it
+
+THE DOS PC
+  a click on its picture     the keys go to DOS: its title says "keys in DOS"
+  Right Ctrl                 the keys come back to the site
+
+THE GAMES AND MAP DRIVES
+  arrows, PgUp, PgDn,        move the bar
+  Home, End
+  Enter                      play the game; open the drive
+  F4                         the game's source; edit the drive
+  Ins, Del                   add a drive; take one away (its files stay)
+
+KIRIN COMMANDER FOR WEB
+  Alt+F1, Alt+F2             a drive for the left panel, for the right
+  F3 view, F4 edit, F5 copy, F6 rename or move, F7 new folder, F8 delete
+  Ctrl+U                     the panels change places
+
+THE TERMINAL
+  Tab finishes a word, Up and Down walk back through what was typed, Ctrl+R
+  searches it, Ctrl+C stops a command. help lists the commands, man NAME
+  says more of one. What the menu and the windows do - play a game, open a
+  drive, add one - shows there as the command it is: the next time it can
+  be typed.
+`;
+
+/** Help > Drives and letters. */
+const HELP_DRIVES = `A drive is a letter, and every part of the site sees the same ones: the
+Files menu, Map Drives, both Kirin Commanders, the terminal (/mnt/a,
+/mnt/c ...) and the DOS PC.
+
+  A:  the course disk - the lessons, the examples, the games' sources and
+      FASM. Kept in this browser.
+  B:  a second floppy, in this browser - for an installer that asks for
+      disk 2.
+  C:  the DOS PC's hard disk, in this browser: C:\\GAMES. What DOS saves
+      there is there tomorrow. When the site brings a newer game, it
+      replaces only the files you have not changed.
+  D:  My files, in this browser: your own.
+  E: to Z:  what Map Drives adds - a folder of this browser; a folder on
+      this computer (Chrome and Edge; the browser asks you first, and DOS
+      writes to it only if you said it may); or a ZIP, from this computer
+      or from a link, copied into this browser.
+
+"In this browser" is the browser's storage for this site. Nobody else sees
+it - and a clean-up of the site's data in the browser takes all of it, D:
+too. Files > Save profile keeps the table of drives (not their files) in a
+file on your computer, and Files > Load profile puts it back. What you
+want to keep, copy to a folder of this computer.
+
+DOS sees a change in the table at its next switch-on. A file deleted inside
+DOS comes back at the next switch-on: nothing is deleted only because DOS
+no longer shows it. Delete in Kirin Commander for Web or in the terminal.
+`;
+
+/** Help > Who sees what: the network, as it is (the pilot, 2026-10-18). */
+const HELP_PRIVACY = `Nobody signs in here. When the site opens, it connects to our server, and
+the server names that connection an animal - Rabbit, Fox - different from
+the others open now. The name lasts as long as the connection: a reload,
+or the next visit, is a new animal.
+
+WHAT THE OTHERS HERE SEE OF YOU (LAN > Who is online)
+  your animal, and what you are doing, as one of these words: here,
+  plays GAME, in lesson N, builds a program, edits a file, goes through
+  files, in the terminal, away. Never a file's or a folder's name, never
+  what you type, never what is on your drives.
+
+WHAT THE SERVER SEES
+  the connection, as every server does - your address comes with it. The
+  server passes it nowhere: not into the list, not to the others, not into
+  its log. It keeps nothing about you once you have gone.
+
+WHAT NEVER LEAVES THIS BROWSER
+  your files - A: to Z: are this browser's and this computer's; the
+  terminal's history; your profile, unless you save it yourself.
+`;
 
 /**
  * The lessons by topic, each in the course's order: all of them do not fit
@@ -133,13 +240,27 @@ const TOPICS = [
 /** A lesson's title, up to its colon or dash: what fits in a menu. */
 const shortTitle = t => t.split(/: | - /)[0];
 
+/** A path of the course disk as DOS and the terminal write it: GAMES/X/Y.ASM -> A:\GAMES\X\Y.ASM. */
+const onA = path => `A:\\${path.replace(/\//g, '\\')}`;
+
 /** A first visit's picture: whole multiples of DOS's pixels, as the course's. */
 const SETTINGS_KEY = 'site.dosbox.1';
+const SITE_DOSBOX = { picture: 'sharp', always: false };
 function siteSettings() {
   try {
-    if (!localStorage.getItem(SETTINGS_KEY)) localStorage.setItem(SETTINGS_KEY, JSON.stringify({ picture: 'sharp', always: false }));
+    if (!localStorage.getItem(SETTINGS_KEY)) localStorage.setItem(SETTINGS_KEY, JSON.stringify(SITE_DOSBOX));
+    // A relay kept from before the site had its own (the course page's, a
+    // developer's): forgotten, so the games meet in the server's sky (Sky.cs).
+    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}');
+    if (OLD_RELAYS.includes(s.relay)) { delete s.relay; localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
   } catch { /* storage refused: the library's defaults */ }
 }
+
+/** The relays the site's games used before its server hosted their sky. */
+const OLD_RELAYS = ['wss://view.owlos.sk', 'ws://localhost:1900'];
+
+/** A profile's name on the visitor's computer. */
+const PROFILE_FILE = 'wirecity-profile.txt';
 
 /** The sixteen colours of the IBM CGA, as OWLOSUI's screen draws them. */
 const CGA = [
@@ -161,11 +282,30 @@ export class SiteApp extends CourseApp {
     this.mountDrives();
     this.frameByStart();
     this.watchMachine();
-    // Map Drives laid out again when its corner is let go (watchMapSize).
-    this.owl.afterPaint.add(() => this.watchMapSize());
-    window.addEventListener('pointerdown', () => { this.mouseDown = true; }, true);
-    window.addEventListener('pointerup', () => { this.mouseDown = false; }, true);
-    this.buildMenus();          // again: the course's constructor built it before the drives were there
+    this.dosOnBus();
+    this.documents.saved = doc => this.savedOnBus(doc);
+    this.mapDrives = this.makeMapDrives();
+    this.catalog = this.makeCatalog();
+    this.who = this.makeWho();
+    // Screens: this PC's, on air (the console core's Caster), and others', watched (screens.js).
+    this.caster = new Caster(this.dos.box, log);
+    const stop = this.caster.stop.bind(this.caster);
+    this.caster.stop = () => { const was = this.caster.onAir; stop(); if (was) this.buildMenus(); };
+    this.screens = new Screens(this.owl, {
+      url: name => `${serverUrl()}/site/watch/${encodeURIComponent(name)}`,
+      closeCmd: SCREEN_CLOSE, changed: () => this.netStatus(), log,
+    });
+    // The live map (skymap.js): a room's sky from the server, its ground from world.js.
+    this.skymap = new SkyMap(this.owl, {
+      closeCmd: MAP_CLOSE, games: GAMES, log,
+      loadWorld: async seed => { const m = await import('./world.js'); return { ...m.buildWorld(seed), built: m.built, building: m.building }; },
+      onPick: p => {
+        if (p.sharing && p.name && p.name !== this.presence?.me) this.send(`watch ${p.name.toLowerCase().replace(/\s+/g, '-')}`, 'Live map');
+      },
+      closed: () => this.presence?.follow(''),
+    });
+    this.watchJet();
+    this.buildMenus();         // again: the course's constructor built it before the drives were there
     this.makeTerminal();
   }
 
@@ -321,8 +461,27 @@ export class SiteApp extends CourseApp {
   }
 
   /** One drive into the table from its entry: { letter, kind, title, folder?, url?, write? }. */
+  /**
+   * A folder of this browser for a new drive: the one there, whatever the
+   * case of its name, or a new one - none made if a letter has it already.
+   */
+  async folderFor(name) {
+    const there = (await this.browser.list('/')).find(e => e.dir && e.name.toLowerCase() === name.toLowerCase());
+    const folder = `/${there?.name ?? name}/`;
+    this.oneLetter(folder);
+    if (!there) await this.browser.mkdir(folder);
+    return folder;
+  }
+
+  /** One folder, one letter: two would be two of DOS's floppies over the same files, each mirroring what the other wrote. */
+  oneLetter(folder) {
+    const owner = this.drives.find(x => x.base === this.browser && x.root.toLowerCase() === folder.toLowerCase());
+    if (owner) throw new Error(`the folder ${folder.slice(1, -1)} is ${owner.prefix} already - one folder, one letter`);
+  }
+
   async addDrive(e, { keep = true } = {}) {
     const S = this.browser;
+    if (e.kind === 'folder') this.oneLetter(e.folder);
     let d;
     if (e.kind === 'local') {
       const handle = e.handle ?? await handleOf(e.letter);
@@ -361,7 +520,7 @@ export class SiteApp extends CourseApp {
   afterTable() {
     this.applyMounts();
     this.buildMenus();
-    if (this.mapWin && this.owl.place(this.mapWin)) this.showDrives(this.mapRect);   // where and as big as it was
+    this.mapDrives.again();       // where and as big as it was
     this.owl.refresh?.();
   }
 
@@ -388,79 +547,26 @@ export class SiteApp extends CourseApp {
   // ------------------------------------------------------------ Map Drives
 
   /**
-   * Files > Map Drives, worked out with the pilot (2026-10-16):
+   * Files > Map Drives, worked out with the pilot (2026-10-16) - the window
+   * every table window of the site is now made as (tablewin.js):
    *
-   *  - the window by the golden section: 61.8% of the screen wide (no
-   *    narrower than its table needs), as tall as that over 1.618 in pixels,
-   *    its top at 38.2% of the room above and below it - not fitted to the
-   *    four drives there are now. Its corner makes it bigger and smaller,
-   *    its zoom box whole-screen and back: what is in it is laid out again
-   *    WHILE it changes (watchMapSize, layoutDrives), and a window let go
-   *    smaller than MAP_MIN goes back to MAP_MIN;
-   *  - the table one thing, heads and rows in one frame, single lines
-   *    between the columns, a colour a column, the classic bar (CellTable);
-   *    a narrower table leaves columns out, the least needed first;
+   *  - the window by the golden section, resizable, back to MAP_MIN when let
+   *    go smaller; the table one thing, heads and rows in one frame, a colour
+   *    a column, the classic bar (CellTable);
    *  - what each drive IS, not only its name: how many files, how big, when
    *    it last changed - and where its files really are;
    *  - the drive's own buttons - Open, Add, Edit, Remove - in a row a line
-   *    under the table, and the window's Close alone at the bottom right:
-   *    working on the drives is one thing, leaving the window another. Edit
-   *    and Remove are there only for a drive they can do something to - A:
-   *    to D: are the machine's own.
+   *    under the table, and Close alone at the bottom right. Edit and Remove
+   *    are there only for a drive they can do something to - A: to D: are
+   *    the machine's own.
    *
    * Keys: Enter opens, Ins adds, F4 edits, Del takes away (its files stay
    * where they are), the arrows, Home, End and the page keys move the bar.
-   * rect: where the window goes, if not where the golden section puts it.
    */
-  showDrives(rect = null) {
-    const owl = this.owl, sc = owl.screen;
-    if (this.mapWin && owl.place(this.mapWin)) owl.close(this.mapWin);
-    const W = owl.width, H = owl.height;
-    let { x, y, w, h } = rect ?? {};
-    if (!rect) {
-      w = Math.max(100, Math.round(W * 0.618));
-      h = Math.round((w * (sc?.cellW ?? 10)) / ((sc?.cellH ?? 22) * 1.618));
-    }
-    w = Math.min(W, Math.max(MAP_MIN.w, w));
-    h = Math.min(H - 2, Math.max(MAP_MIN.h, h));
-    if (!rect) { x = Math.floor((W - w) / 2); y = 1 + Math.round((H - 2 - h) * 0.382); }
-    // Grey as a dialog, but its size the person's: the core's FIXED bit
-    // (0x02) and NO_ZOOM bit (0x04) taken off - the corner to drag, and the
-    // zoom box to make it the whole screen and back.
-    this.mapWin = owl.window('Map Drives', w, h, { x, y, style: Style.Dialog & ~0x06, closeCmd: Mp.Close });
-    this.mapRect = { x, y, w, h };
-    this.mapViews = [];
-    this.mapButtons = { y: 0, rows: {} };
-    this.layoutDrives();
-    this.track(this.countDrives());
-  }
-
-  /**
-   * What is in Map Drives, for the size it has now - made again whenever
-   * that changes, inside the same window, so a drag of its corner goes on.
-   * Inside: a margin of two columns and a row; the table, the whole width;
-   * a line under it, on the left, the drive's own buttons; under them the
-   * words, as many lines as they need at this width; at the bottom right,
-   * alone, Close. Below MAP_MIN the views keep MAP_MIN's size, and the
-   * window cuts them until it is let go.
-   */
-  layoutDrives() {
-    const owl = this.owl, win = this.mapWin, p = win && owl.place(win);
-    if (!p) return;
-    const keep = this.mapTable?.current ?? 0;
-    for (const id of [...this.mapViews, ...Object.values(this.mapButtons.rows)]) owl.close(id);
-    this.mapViews = [];
-    this.mapButtons.rows = {};
-    const w = Math.max(MAP_MIN.w, p.w + 2), h = Math.max(MAP_MIN.h, p.h + 2);
-    this.mapSize = { w: p.w + 2, h: p.h + 2 };
-    const hint = 'Enter opens a drive in Kirin Commander for Web; Ins adds one, F4 edits it, Del takes it away ' +
-      '- its files stay. One table for the menu, both commanders and DOS: DOS sees a change at its next switch-on.';
-    // A static folds a column short of its width: counted at w - 7, it came out right at 56 and at 106.
-    const hr = wrappedLines(hint, w - 7);
-    // A free line between the words and Close: the table gives it up (the pilot - Close stays where it is).
-    const tw = w - 2 - 4, th = Math.max(6, h - 10 - hr);
-    this.mapTable = new CellTable(owl, win, {
-      x: 2, y: 1, w: tw, h: th,
+  makeMapDrives() {
+    const own = i => { const d = this.drives[i]; return !d || 'ABCD'.includes(d.letter); };
+    return new TableWindow(this, {
+      title: 'Map Drives', base: MAP_BASE, min: MAP_MIN,
       columns: [
         { head: 'Drive', width: 7, colour: Color.White },
         { head: 'Kind', width: 11, colour: Color.Yellow, drop: 2 },
@@ -470,77 +576,293 @@ export class SiteApp extends CourseApp {
         { head: 'Changed', width: 13, colour: Color.White, drop: 5 },
         { head: 'Where', width: 0, colour: Color.LightCyan },
       ],
-      rows: this.driveRows(),
-      onOpen: () => this.onCommand(Mp.Open),
-      onSelect: () => this.driveButtons(),
+      rows: () => this.driveRows(),
+      buttons: i => [
+        { key: 'open', label: '~O~pen', cmd: Mp.Open, default: true, shown: true },
+        { key: 'add', label: '~A~dd...', cmd: Mp.Add, shown: true },
+        { key: 'edit', label: '~E~dit...', cmd: Mp.Edit, shown: !own(i) },
+        { key: 'remove', label: '~R~emove', cmd: Mp.Remove, shown: !own(i) },
+      ],
+      keys: i => [
+        { label: '~Enter~ Open', cmd: Mp.Open, key: 'Enter' },
+        { label: '~Ins~ Add', cmd: Mp.Add, key: 'Insert' },
+        ...(own(i) ? [] : [{ label: '~F4~ Edit', cmd: Mp.Edit, key: 'F4' }, { label: '~Del~ Remove', cmd: Mp.Remove, key: 'Delete' }]),
+      ],
+      words: () => ['Enter opens a drive in Kirin Commander for Web; Ins adds one, F4 edits it, Del takes it away ' +
+        '- its files stay. One table for the menu, both commanders and DOS: DOS sees a change at its next switch-on.'],
+      open: () => this.onCommand(Mp.Open),
     });
-    this.mapViews.push(this.mapTable.canvas);
-    this.mapButtons.y = 1 + th + 1;
-    this.mapViews.push(owl.staticText(win, 2, 1 + th + 4, hint, w - 6, hr));
-    // By hand, not owl.buttons: a dialog's own row makes its first button the
-    // default, and Enter must open the drive, not close the window. Esc closes.
-    this.mapViews.push(owl.buttonRow(win, w - 2 - 2 - 10, h - 2 - 2, [{ label: 'Close', cmd: Mp.Close, cancel: true }]));
-    this.mapTable.select(keep);           // and with it the drive's buttons and keys
+  }
+
+  /** Map Drives open - the drives counted as it shows them. */
+  showDrives() {
+    this.mapDrives.show();
+    this.track(this.countDrives());
+  }
+
+  // ------------------------------------------------------------ the Games catalog
+
+  /**
+   * Games > Catalog (F3), and what the site opens on: the games on C:, a
+   * row each, made as Map Drives is (tablewin.js) - under the table the game
+   * in the bar, what it is and its keys. Play runs it on the DOS PC, Source
+   * puts its source in an editor, Folder shows the game on C: beside its
+   * source on A: in Kirin Commander for Web.
+   */
+  makeCatalog() {
+    return new TableWindow(this, {
+      title: 'Games', base: GAME_BASE, min: MAP_MIN, tall: true,
+      columns: [
+        { head: 'Game', width: 19, colour: Color.White },
+        { head: 'What it is', width: 0, colour: Color.LightCyan },
+        { head: 'Players', width: 13, colour: Color.Yellow, drop: 2 },
+        { head: 'Size', width: 9, align: 'right', colour: Color.LightGreen, drop: 1 },
+        { head: 'On C:', width: 19, colour: Color.White, drop: 3 },
+      ],
+      rows: () => GAMES.map(g => {
+        const s = this.gameStats?.get(g.key);
+        return [g.name, g.hint, g.room ? 'network too' : 'one', s ? sizeText(s.bytes) : '...', `C:\\GAMES\\${g.dir}`];
+      }),
+      buttons: () => [
+        { key: 'play', label: '~P~lay', cmd: Gm.Play, default: true, shown: true },
+        { key: 'source', label: '~S~ource', cmd: Gm.Source, shown: true },
+        { key: 'folder', label: '~F~older', cmd: Gm.Folder, shown: true },
+      ],
+      keys: () => [
+        { label: '~Enter~ Play', cmd: Gm.Play, key: 'Enter' },
+        { label: '~F4~ Source', cmd: Gm.Source, key: 'F4' },
+      ],
+      words: i => [GAMES[i].about, `Keys: ${GAMES[i].keys}.`],
+      open: () => this.fromCatalog(Gm.Play),
+    });
+  }
+
+  // ------------------------------------------------------------ who is here
+
+  /**
+   * The network, the anonymous way (the pilot, 2026-10-18; net.js): this
+   * page's connection to the server, named an animal by it, and its status
+   * - what it does, as a code - kept up to date from what this page does:
+   * a game on the DOS PC, a lesson's program, the last command on the bus,
+   * away while the tab is hidden. The terminal's prompt says the animal.
+   */
+  startNet() {
+    if (this.presence) return;
+    this.presence = new Presence({
+      log, onChange: () => this.netChanged(),
+      // The server's clock on the maps (Sky.cs): a minute's warning, then the new map -
+      // a game of that room flown here starts again into it, with everyone else's.
+      onSoon: (room, seconds) => {
+        this.mapSoon = { room, at: Date.now() + seconds * 1000 };
+        this.netEvent(`a new map of ${room} in ${seconds} s${this.flying(room) ? ' - your game starts again into it' : ''}`);
+      },
+      onPilots: m => {
+        this.skymap.me = this.jet?.room === m.room ? this.jet.pid : null;
+        this.skymap.update(m);
+      },
+      onMap: ({ sky }) => {
+        this.mapSoon = null;
+        this.netEvent(`the server's new map of ${sky.room}: seed ${sky.seed}`);
+        const g = this.flying(sky.room);
+        if (g) this.send(`play ${g.key}`, 'new map');
+        else this.dos.retitle();
+      },
+    });
+    // The DOS window's title counts the warning's minute down.
+    setInterval(() => { if (this.mapSoon && this.flying(this.mapSoon.room)) this.dos.retitle(); }, 1000);
+    this.terminal.bus.on('command', ({ line, from }) => {
+      const [word, arg = ''] = line.trim().split(/\s+/);
+      if (!from) this.lastDoing = ['terminal'];
+      else if (word === 'lesson') this.lastDoing = ['lesson', arg];
+      else if (word === 'build') this.lastDoing = ['build'];
+      else if (word === 'edit') this.lastDoing = ['edit'];
+      else if (word === 'commander') this.lastDoing = ['files'];
+      this.netStatus();
+    });
+    document.addEventListener('visibilitychange', () => this.netStatus());
+    setInterval(() => this.netStatus(), 3000);
+    this.presence.start();
+    this.netStatus();
   }
 
   /**
-   * The drive's own buttons for the drive in the bar: Open and Add always;
-   * Edit and Remove only where they can do something - shown and taken away
-   * as the bar moves, and the status line's keys with them.
+   * This DOS PC's jet: the relay's first answer on a game's line (/site/ipx/
+   * <room>) is its registration, whose destination is this machine's IPX
+   * address - and OWL FLY names its pilot by the last two bytes of it,
+   * little-endian (NET.INC). Told to the server with the status, it puts
+   * this animal's name on this jet on the live map. Heard as js-dos opens
+   * the line: the page's WebSocket, wrapped once more (the network tap is
+   * one such wrapping already).
    */
-  driveButtons() {
-    const owl = this.owl, b = this.mapButtons, win = this.mapWin;
-    if (!b || !win || !owl.place(win)) return;
-    const d = this.selectedDrive(), own = !d || 'ABCD'.includes(d.letter);
-    const slots = [
-      ['open', '~O~pen', Mp.Open, true, true],
-      ['add', '~A~dd...', Mp.Add, false, true],
-      ['edit', '~E~dit...', Mp.Edit, false, !own],
-      ['remove', '~R~emove', Mp.Remove, false, !own],
-    ];
-    // Each button where it always is - a hidden one leaves its place - with
-    // the same gap after each: its words, the padding and shadow, two cells.
-    let x = 2;
-    for (const [key, label, cmd, dflt, shown] of slots) {
-      const at = b.rows[key];
-      if (shown && !at) b.rows[key] = owl.buttonRow(win, x, b.y, [{ label, cmd, default: dflt }]);
-      if (!shown && at) { owl.close(at); delete b.rows[key]; }
-      x += label.replace(/~/g, '').length + 4 + 1 + 2;
+  watchJet() {
+    const Base = window.WebSocket, app = this;
+    window.WebSocket = class extends Base {
+      constructor(url, protocols) {
+        super(url, protocols);
+        const m = /\/site\/ipx\/([a-z0-9]+)/i.exec(String(url));
+        if (!m) return;
+        const room = m[1].toLowerCase();
+        this.addEventListener('message', async e => {
+          if (app.jet?.room === room) return;
+          const b = new Uint8Array(e.data instanceof Blob ? await e.data.arrayBuffer() : e.data);
+          if (b.length < 30 || b[0] !== 0xFF || b[1] !== 0xFF || ((b[16] << 8) | b[17]) !== 2) return;
+          app.jet = { room, pid: b[14] | (b[15] << 8) };
+          app.netStatus();
+        });
+        this.addEventListener('close', () => { if (app.jet?.room === room) { app.jet = null; app.netStatus(); } });
+      }
+    };
+  }
+
+  /** The live map of a room - the one named, else the game this PC flies, else OWL FLY III's: `sky`. */
+  showSky(room) {
+    this.skymap.show(room);
+    this.skymap.me = this.jet?.room === room ? this.jet.pid : null;
+    this.presence?.follow(room);
+  }
+
+  /** The game this DOS PC flies in a networked room - the room's game - or null. */
+  flying(room) {
+    const dos = this.dos, g = GAMES.find(x => x.key === dos.started);
+    return dos.box.running && !dos.program && g?.room === room ? g : null;
+  }
+
+  /** A line of the network's in the terminal's record, as a file saved is. */
+  netEvent(text) {
+    const t = this.terminal;
+    t.write(`\r\x1b[K${ANSI.muted}# ${text}${RESET}\r\n`);
+    if (!t.busy) t.render();
+  }
+
+  /** What this page is doing now, as the others will see it. */
+  netStatus() {
+    const dos = this.dos, p = this.presence;
+    if (!p) return;
+    // The jet goes with every status while the game flies - away in another tab, the jet still flies there.
+    const jet = this.jet && this.flying(this.jet.room) ? this.jet : null;
+    if (document.hidden) return p.status('away', '', jet);
+    if (dos.box.running && !dos.program && GAMES.some(g => g.key === dos.started)) return p.status('play', dos.started, jet);
+    if (dos.box.running && dos.program && this.lesson) return p.status('lesson', this.lesson.lecture);
+    if (this.screens?.watching.length) return p.status('watch');
+    p.status(...(this.lastDoing ?? ['here']));
+  }
+
+  /**
+   * `share`: this DOS PC's screen on air, under this connection's animal -
+   * its token proves it is ours (Site.cs). It ends with `share --stop`, or
+   * with the connection: a new connection, a new animal, a new `share`.
+   */
+  shareScreen() {
+    const p = this.presence;
+    if (!p || p.state !== 'on' || !p.token) throw new Error(`not connected to the server (${serverUrl()}) - it tries again by itself`);
+    if (this.caster.onAir) return false;
+    this.caster.start(p.me, `${serverUrl()}/site/cast?token=${p.token}`);
+    this.buildMenus();
+    return true;
+  }
+
+  stopSharing() {
+    if (!this.caster.onAir) return false;
+    this.caster.stop();
+    return true;
+  }
+
+  /** A person in the list by name, whatever its case: Fox, fox. */
+  person(name) {
+    const w = String(name).toLowerCase().replace(/-/g, ' ');
+    return this.presence?.people.find(x => x.name.toLowerCase() === w) ?? null;
+  }
+
+  /** The name or the list changed: the prompt, the open window. */
+  netChanged() {
+    const p = this.presence, sh = this.terminal.shell;
+    sh.env.USER = p.me ? p.me.toLowerCase().replace(/\s+/g, '-') : 'guest';
+    // The prompt again, open or not: a window's command shows after it even while the terminal is closed.
+    if (!this.terminal.busy) this.terminal.shell.prompt().then(x => { this.terminal.prompt = x; if (this.terminal.open) this.terminal.render(); });
+    this.screens?.revive(p.people.filter(x => x.sharing).map(x => x.name));
+    if (this.who.isOpen) {
+      if (this.who.rows().length !== this.who.table?.rows.length) this.who.again();
+      else { this.who.refreshRows(); this.who.place(); }      // the row in the bar may share now: its Watch
     }
-    owl.windowStatus(win,
-      { label: '~Enter~ Open', cmd: Mp.Open, key: 'Enter' },
-      { label: '~Ins~ Add', cmd: Mp.Add, key: 'Insert' },
-      ...(own ? [] : [{ label: '~F4~ Edit', cmd: Mp.Edit, key: 'F4' }, { label: '~Del~ Remove', cmd: Mp.Remove, key: 'Delete' }]),
-      { label: '', cmd: Mp.Up, key: 'ArrowUp' }, { label: '', cmd: Mp.Down, key: 'ArrowDown' },
-      { label: '', cmd: Mp.PageUp, key: 'PageUp' }, { label: '', cmd: Mp.PageDown, key: 'PageDown' },
-      { label: '', cmd: Mp.Home, key: 'Home' }, { label: '', cmd: Mp.End, key: 'End' });
+  }
+
+  /**
+   * LAN > Who is online: the connections there are, an animal each, what
+   * each is doing - as Map Drives is made (tablewin.js). Yours is marked.
+   */
+  makeWho() {
+    const since = s => (s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)} min` : `${Math.floor(s / 3600)} h`);
+    return new TableWindow(this, {
+      title: 'Who is online', base: WHO_BASE, min: MAP_MIN,
+      columns: [
+        { head: 'Who', width: 20, colour: Color.White },
+        { head: 'Doing', width: 0, colour: Color.LightCyan },
+        { head: 'Screen', width: 10, colour: Color.Yellow, drop: 2 },
+        { head: 'Here for', width: 12, colour: Color.LightGreen, drop: 1 },
+      ],
+      rows: () => {
+        const p = this.presence;
+        if (!p || p.state !== 'on' || !p.me) return [[p?.state === 'connecting' ? 'connecting...' : 'not connected', `the server: ${serverUrl()}`, '', '']];
+        return p.people.map(x => [x.name + (x.name === p.me ? ' (you)' : ''), doingText(x, GAMES),
+          x.sharing ? `shares${x.viewers ? `, ${x.viewers}` : ''}` : '', since(x.since)]);
+      },
+      // Watch: someone else's shared screen; Share: this PC's, on and off.
+      buttons: i => {
+        const x = this.presence?.people[i], p = this.presence;
+        return [
+          { key: 'watch', label: '~W~atch', cmd: Wh.Watch, default: true, shown: !!x?.sharing && x.name !== p?.me },
+          { key: 'share', label: this.caster?.onAir ? '~S~top sharing' : '~S~hare my screen', cmd: Wh.Share, shown: p?.state === 'on' },
+        ];
+      },
+      keys: i => {
+        const x = this.presence?.people[i];
+        return x?.sharing && x.name !== this.presence?.me ? [{ label: '~Enter~ Watch', cmd: Wh.Watch, key: 'Enter' }] : [];
+      },
+      open: () => this.onCommand(Wh.Watch),
+      words: () => {
+        const p = this.presence, n = p?.here ?? 0;
+        return [`${p?.state === 'on' ? `${n} here now${p.me ? ` - you are ${p.me}` : ''}.` : 'Not connected to the server yet.'} ` +
+          'A name belongs to a connection: a reload is a new animal. Nobody\'s address is shown or kept; ' +
+          'what each one does is a word - never a file\'s name, never what was typed. Help > Who sees what says all of it.'];
+      },
+    });
+  }
+
+  /** The catalog open - each game's folder on C: weighed as it shows them. */
+  showCatalog() {
+    this.catalog.show();
+    this.track((async () => {
+      this.gameStats ??= new Map();
+      for (const g of GAMES) {
+        try { this.gameStats.set(g.key, await statsOf(this.drives[2], `/GAMES/${g.dir}/`)); } catch { /* not on C: yet */ }
+        this.catalog.refreshRows();
+      }
+    })());
+  }
+
+  /** A page of Help, in a window of its own: read-only text, the keys of an editor to move in it. */
+  showHelp(title, text) {
+    const owl = this.owl;
+    if (this.helpWin && owl.place(this.helpWin)) owl.close(this.helpWin);
+    const lines = text.split('\n').length;
+    const w = Math.min(owl.width, Math.max(...text.split('\n').map(l => l.length)) + 4), h = Math.min(owl.height - 2, lines + 2);
+    this.helpWin = owl.window(title, w, h, { x: Math.floor((owl.width - w) / 2), y: 1 + Math.round((owl.height - 2 - h) * 0.382),
+      style: Style.Document, closeCmd: HELP_CLOSE });
+    owl.text(this.helpWin, text, { readOnly: true });
     owl.refresh?.();
   }
 
-  /**
-   * After every paint: whether Map Drives changed its size - its corner, its
-   * zoom box, Ctrl+F5. Laid out again at once, not after the paint it was
-   * heard in. Let go smaller than MAP_MIN - the core lets a window go down
-   * to 6 by 3 - it is made again at MAP_MIN, where it stood.
-   */
-  watchMapSize() {
-    const owl = this.owl, win = this.mapWin;
-    const p = win && owl.place(win);
-    if (!p || !this.mapSize) return;
-    const now = { x: p.x - 1, y: p.y - 1, w: p.w + 2, h: p.h + 2 };
-    this.mapRect = now;
-    if (now.w !== this.mapSize.w || now.h !== this.mapSize.h) {
-      this.mapSize = { w: now.w, h: now.h };
-      setTimeout(() => { if (this.mapWin === win) { this.layoutDrives(); owl.refresh?.(); } });
-    }
-    if (now.w >= MAP_MIN.w && now.h >= MAP_MIN.h) return;
-    clearTimeout(this.mapResize);
-    this.mapResize = setTimeout(() => {
-      const q = this.mapWin === win && owl.place(win);
-      if (!q) return;
-      if (this.mouseDown) { this.watchMapSize(); return; }
-      if (q.w + 2 < MAP_MIN.w || q.h + 2 < MAP_MIN.h) this.showDrives({ x: q.x - 1, y: q.y - 1, w: q.w + 2, h: q.h + 2 });
-    }, 250);
+  /** Play, Source or Folder for the game in the catalog's bar. */
+  fromCatalog(cmd) {
+    const g = GAMES[this.catalog.current];
+    if (!g) return;
+    this.catalog.close();
+    if (cmd === Gm.Play) this.send(`play ${g.key}`, 'Games');
+    else if (cmd === Gm.Source) {
+      const s = this.sources?.games.find(x => x.dir === g.dir);
+      if (s) this.send(`edit ${onA(s.main)}`, 'Games');
+      else this.tell(g.name, `Its source is not on the course disk.`);
+    } else this.send(`commander C:\\GAMES\\${g.dir} A:\\GAMES\\${g.dir}`, 'Games');
   }
 
   /** The table's rows: a drive each - what it is, what it holds, where its files are. */
@@ -564,11 +886,11 @@ export class SiteApp extends CourseApp {
         if (d.base instanceof LocalFolder && !this.mounted(d)) this.driveStats.set(d.letter, 'asks');
         else this.driveStats.set(d.letter, await statsOf(d));
       } catch { this.driveStats.delete(d.letter); }
-      if (this.mapTable && this.mapWin && this.owl.place(this.mapWin)) this.mapTable.setRows(this.driveRows());
+      this.mapDrives.refreshRows();
     }
   }
 
-  selectedDrive() { return this.mapTable ? this.drives[this.mapTable.current] : null; }
+  selectedDrive() { return this.mapDrives.isOpen ? this.drives[this.mapDrives.current] : null; }
 
   /**
    * F4 in Map Drives: a drive's letter and what it is called - and for a
@@ -592,21 +914,37 @@ export class SiteApp extends CourseApp {
 
   closeEdit() { if (this.editWin && this.owl.place(this.editWin)) this.owl.close(this.editWin); this.editWin = 0; }
 
-  /** OK in Edit: the drive out of the table and in again, under its new letter and name - its files where they were. */
-  async editFromDialog() {
+  /** OK in Edit: what changed, as `relabel` - the drive under its new letter and name, its files where they were. */
+  editFromDialog() {
     const owl = this.owl, ed = this.editing, d = ed.d;
-    const letter = owl.getText(ed.letter).trim().toUpperCase();
+    const letter = owl.getText(ed.letter).trim().toUpperCase().replace(/:$/, '');
     const title = owl.getText(ed.title).trim() || d.title;
-    const write = ed.write ? owl.clusterState(ed.write).on[0] : d.entry?.write;
+    const write = ed.write ? owl.clusterState(ed.write).on[0] : null;
     this.closeEdit();
-    if (!/^[E-Z]$/.test(letter)) throw new Error('A drive Map Drives adds takes a letter from E to Z.');
-    if (letter !== d.letter && this.drives.some(x => x.letter === letter)) throw new Error(`${letter}: is taken.`);
+    const changes = [
+      letter !== d.letter ? `--letter ${quoted(letter)}` : '',
+      title !== d.title ? `--name ${quoted(title)}` : '',
+      write !== null && write !== !!d.entry?.write ? (write ? '--write' : '--read-only') : '',
+    ].filter(Boolean);
+    if (changes.length) this.send(`relabel ${d.prefix} ${changes.join(' ')}`, 'Map Drives');
+  }
+
+  /**
+   * A drive under another letter, another name - for a folder on this
+   * computer, written to by DOS or not: out of the table and in again, its
+   * files where they were. What `relabel` does.
+   */
+  async relabelDrive(d, { letter = d.letter, title = d.title, write = d.entry?.write } = {}) {
+    if ('ABCD'.includes(d.letter)) throw new Error(`${d.prefix} is one of the machine's own four: A: to D: stay as they are`);
+    if (!/^[E-Z]$/.test(letter)) throw new Error('a drive Map Drives adds takes a letter from E: to Z:');
+    if (letter !== d.letter && this.drives.some(x => x.letter === letter)) throw new Error(`${letter}: is taken`);
     const e = { ...d.entry, letter, title, write };
     if (d.base instanceof LocalFolder) e.handle = d.base.handle;
     await this.removeDrive(d);
     await this.addDrive(e);
     this.afterTable();
-    this.mapTable?.select(this.drives.findIndex(x => x.letter === letter));
+    this.mapDrives.select(this.drives.findIndex(x => x.letter === letter));
+    return this.drives.find(x => x.letter === letter);
   }
 
   /** Ins in Map Drives: what the new drive is - a folder of this browser, of this computer, a ZIP, a link. */
@@ -630,46 +968,69 @@ export class SiteApp extends CourseApp {
   closeAdd() { if (this.addWin && this.owl.place(this.addWin)) this.owl.close(this.addWin); this.addWin = 0; }
 
   /**
-   * OK in Add: the drive made and put in the table. A folder of this
-   * browser is made if it is not there; a folder of this computer comes
-   * from the browser's folder picker; a ZIP from its file picker; a link is
-   * fetched - a site that does not let pages take its files says no, and
-   * then the ZIP downloaded and added as a ZIP does it.
+   * OK in Add: what was asked, as `mount` - the terminal's record shows it
+   * and the next time it can be typed. A link that is not one is the
+   * dialog's to say, before anything is sent.
    */
-  async addFromDialog() {
+  addFromDialog() {
     const owl = this.owl, a = this.adding;
     const kind = ADD_KINDS[Math.max(0, owl.clusterState(a.kind).on.indexOf(true))][0];
     const name = owl.getText(a.name).trim().replace(/[\\/:*?"<>|]/g, ' ').trim();
     const link = owl.getText(a.link).trim();
     const write = owl.clusterState(a.write).on[0];
     this.closeAdd();
-    const S = this.browser, letter = a.letter;
-    if (kind === 'folder') {
-      const title = name || `Drive ${letter}`;
-      const folder = `/${title}/`;
-      await S.mkdir(folder);
-      await this.addDrive({ letter, kind, title, folder });
-    } else if (kind === 'local') {
-      if (!globalThis.showDirectoryPicker) throw new Error('This browser cannot give a page a folder of this computer: Chrome and Edge can.');
-      const handle = await showDirectoryPicker({ mode: write ? 'readwrite' : 'read' });
-      const total = await sizeOf(new LocalFolder(handle), '/', LIMIT);
-      if (total > LIMIT) throw new Error(`${handle.name} holds more than ${LIMIT >> 20} MB: DOS gets every file of a drive at switch-on. A smaller folder, please.`);
-      await this.addDrive({ letter, kind, title: name || handle.name, write, handle });
-    } else if (kind === 'zip') {
-      const file = await pickFile('.zip');
-      if (!file) return;
-      if (file.size > LIMIT) throw new Error(`${file.name} is bigger than ${LIMIT >> 20} MB.`);
-      await this.addZip(letter, { kind, title: name || file.name }, new Uint8Array(await file.arrayBuffer()));
-    } else {
-      if (!/^https?:\/\//i.test(link)) throw new Error('A link begins with https:// - type it in the Link box, then OK.');
-      let r;
-      try { r = await fetch(link); } catch {
-        throw new Error('That site does not let a page take its files. Download the ZIP, then add it as a ZIP on this computer.');
-      }
-      if (!r.ok) throw new Error(`${link}: ${r.status} ${r.statusText}`);
-      const bytes = new Uint8Array(await r.arrayBuffer());
-      await this.addZip(letter, { kind, title: name || decodeURIComponent(link.split(/[?#]/)[0].split('/').pop() || 'link'), url: link }, bytes);
+    if (kind === 'link' && !/^https?:\/\//i.test(link)) { this.tell('Map Drives', 'A link begins with https:// - type it in the Link box, then OK.'); return; }
+    const L = `${a.letter}:`, named = name ? ` --name ${quoted(name)}` : '';
+    this.send(kind === 'folder' ? `mount ${L} ${quoted(name || `Drive ${a.letter}`)}`
+      : kind === 'local' ? `mount ${L} --computer${write ? ' --write' : ''}${named}`
+        : kind === 'zip' ? `mount ${L} --zip${named}`
+          : `mount ${L} ${quoted(link)}${named}`, 'Map Drives');
+  }
+
+  // What `mount` does, a kind of drive each. Each puts the drive in the
+  // table and says so to the menu, the commanders and DOS (afterTable).
+
+  /** A folder of this browser - the one there, or a new one. */
+  async mountFolder(letter, name) {
+    const folder = await this.folderFor(name);
+    await this.addDrive({ letter, kind: 'folder', title: folder.slice(1, -1), folder });
+    this.afterTable();
+  }
+
+  /** A folder of this computer, through the browser's picker - its name, or null if none was chosen. */
+  async mountComputer(letter, { write = false, name = '' } = {}) {
+    if (!globalThis.showDirectoryPicker) throw new Error('this browser cannot give a page a folder of this computer: Chrome and Edge can');
+    let handle;
+    try { handle = await showDirectoryPicker({ mode: write ? 'readwrite' : 'read' }); } catch (e) {
+      if (e.name === 'AbortError') return null;
+      throw e;
     }
+    const total = await sizeOf(new LocalFolder(handle), '/', LIMIT);
+    if (total > LIMIT) throw new Error(`${handle.name} holds more than ${LIMIT >> 20} MB: DOS gets every file of a drive at switch-on - a smaller folder, please`);
+    await this.addDrive({ letter, kind: 'local', title: name || handle.name, write, handle });
+    this.afterTable();
+    return handle.name;
+  }
+
+  /** A ZIP of this computer, through the browser's file picker, copied into this browser - its name, or null. */
+  async mountZip(letter, name = '') {
+    const file = await pickFile('.zip');
+    if (!file) return null;
+    if (file.size > LIMIT) throw new Error(`${file.name} is bigger than ${LIMIT >> 20} MB`);
+    await this.addZip(letter, { kind: 'zip', title: name || file.name }, new Uint8Array(await file.arrayBuffer()));
+    this.afterTable();
+    return file.name;
+  }
+
+  /** A link to a ZIP, fetched and copied into this browser - a site that does not let pages take its files says no. */
+  async mountLink(letter, url, name = '') {
+    let r;
+    try { r = await fetch(url); } catch {
+      throw new Error('that site does not let a page take its files - download the ZIP, then mount it with --zip');
+    }
+    if (!r.ok) throw new Error(`${url}: ${r.status} ${r.statusText}`);
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    await this.addZip(letter, { kind: 'link', title: name || decodeURIComponent(url.split(/[?#]/)[0].split('/').pop() || 'link'), url }, bytes);
     this.afterTable();
   }
 
@@ -702,6 +1063,9 @@ export class SiteApp extends CourseApp {
     return {
       ...o,
       settingsKey: SETTINGS_KEY,
+      // The networked games on the site's own server, in its rooms (/site/ipx/owlfly3):
+      // there the server hosts one sky for all (OWLOS-LAN Sky.cs); without it, each flies its own.
+      network: { relay: `${serverUrl()}/site`, room: 'owlfly3' },
       // The library's two floppies, C: and D: - all four kept in this browser.
       floppies: [{ letter: 'A', folder: A }, { letter: 'B', folder: '/DOS B Drive/' }, { letter: 'C', folder: C_FOLDER }, { letter: 'D', folder: MY_FILES }],
       starts: {
@@ -726,7 +1090,10 @@ export class SiteApp extends CourseApp {
    * what the visitor did there. What the site put last time is remembered
    * by its fingerprint: a file still as the site left it gets the new one;
    * a file the visitor changed is kept; a file the visitor deleted stays
-   * deleted. A release the site has seen already is not fetched again.
+   * deleted - remembered in `gone`, for good: until 2026-10-18 it was
+   * forgotten at once, and back at the next load. A release the site has
+   * seen already is not fetched again. And a file that was LOST is not
+   * taken for one the visitor deleted: see lostFromC.
    */
   async seedC(list) {
     const S = this.browser;
@@ -735,12 +1102,13 @@ export class SiteApp extends CourseApp {
     const first = !was;
     was ??= { release: null, files: {} };
     const sameRelease = was.release === list.made;
-    const now = { release: list.made, files: {} };
+    const now = { release: list.made, files: {}, gone: [] };
     const files = [
       ...list.files.map(f => ({ path: f.path, url: new URL(`C/${f.path}`, import.meta.url).href })),
       ...this.dos.diskList.map(([path, url]) => ({ path, url })),
       ...Object.entries(this.dos.written).filter(([p]) => p.startsWith('C/')).map(([p, text]) => ({ path: p.slice(2), bytes: new TextEncoder().encode(crlf(text)) })),
     ];
+    const lost = first ? new Set() : await this.lostFromC(files, was);
     let put = 0;
     await S.hush(async () => {
       for (const f of files) {
@@ -750,7 +1118,11 @@ export class SiteApp extends CourseApp {
         // The library's floppy README, written into C:'s folder before the
         // site kept it out (2026-10-16): the library's words, not the visitor's.
         const gates = have && f.path === 'README.TXT' && new TextDecoder().decode(have.slice(0, 64)).startsWith('This folder is drive C:');
-        if (!have && !first && mine !== undefined) continue;                       // the visitor deleted it
+        if (!have && !first && mine !== undefined && !lost.has(f.path)) {          // the visitor deleted it: it stays so
+          now.files[f.path] = mine;
+          now.gone.push(f.path);
+          continue;
+        }
         if (have && !first && !gates && mine !== undefined && fingerprint(have) !== mine) {  // the visitor changed it
           now.files[f.path] = mine;
           continue;
@@ -766,11 +1138,54 @@ export class SiteApp extends CourseApp {
   }
 
   /**
+   * FILES VANISH FROM THIS BROWSER, FOLDERS STAY (2026-10-16 every file of
+   * A:, twice; 2026-10-18 WELCOME.TXT, then every file of C:) - and nothing
+   * deleted them that the removal journal (drives.js) could see. seedC took
+   * every missing file for one the visitor had deleted, and C: stayed empty.
+   * So a loss is told from a deletion by its shape: a folder still standing
+   * with MORE THAN HALF of what the site put in it gone since the last load
+   * is a loss, and all of it goes back - said in the log, in a box when the
+   * screen is up (start), and in localStorage `site.losses` for whoever
+   * hunts the cause. A file or two gone, or a whole folder, is the visitor's.
+   * The price: a visitor who empties a folder of the site's files by hand,
+   * and keeps the folder, gets them back once - the box says to delete the
+   * folder itself. Returns the paths (as in drive-c.json) to put back.
+   */
+  async lostFromC(files, was) {
+    const S = this.browser, gone = new Set(was.gone ?? []), byDir = new Map();
+    for (const f of files) {
+      if (was.files[f.path] === undefined || gone.has(f.path)) continue;    // never ours there, or deleted long since
+      const dir = f.path.slice(0, f.path.lastIndexOf('/') + 1);             // '' is C:\ itself
+      if (!byDir.has(dir)) byDir.set(dir, { names: await S.list(`${C_FOLDER}${dir}`).then(l => new Set(l.map(e => e.name)), () => null), ours: 0, missing: [] });
+      const d = byDir.get(dir);
+      d.ours++;
+      if (d.names && !d.names.has(f.path.slice(dir.length))) d.missing.push(f.path);
+    }
+    const lost = new Set(), dirs = [];
+    for (const [dir, d] of byDir) {
+      // No folder at all: deleted whole, the visitor's. Half or less: theirs too.
+      if (!d.names || d.missing.length * 2 <= d.ours) continue;
+      for (const p of d.missing) lost.add(p);
+      dirs.push(`C:\\${dir.replace(/\//g, '\\')}`);
+    }
+    if (!lost.size) return lost;
+    log.warn('site', `C: ${lost.size} of the site's files had vanished from this browser - their folders still there, nothing deleted that anyone asked for - and are put back: ${dirs.join(', ')}`);
+    this.cLost = { count: lost.size, dirs };
+    try {
+      const all = JSON.parse(localStorage.getItem('site.losses') ?? '[]');
+      all.push({ at: new Date().toISOString(), page: location.pathname + location.search, drive: 'C', files: lost.size, dirs });
+      localStorage.setItem('site.losses', JSON.stringify(all.slice(-50)));
+    } catch { /* storage full or refused: the files go back all the same */ }
+    return lost;
+  }
+
+  /**
    * The course's list and the games' files; the menu again, now with the
    * lessons in it. Unlike the course, nothing opens by itself, and the
    * course disk goes onto A: only when a lesson first needs it.
    */
   async start() {
+    if (await leaveIsolation()) return;      // YouTube in a lesson's window, in Firefox too: as the course page
     this.course = await (await fetch(new URL('../course/course.json', import.meta.url))).json();
     this.sources = await (await fetch(new URL('sources.json', import.meta.url))).json();
     log.info('site', `${this.course.lessons.length} lessons, ${this.sources.games.length + this.sources.examples.length} sources`);
@@ -781,7 +1196,63 @@ export class SiteApp extends CourseApp {
     this.ready = true;
     await this.waitForScreen();
     this.buildMenus();
+    // The course disk onto A: behind the games: the Sources menu, the
+    // commanders and the console find it there without opening a lesson.
+    this.track(this.installDisk({ quiet: true }));
+    // Who is here: this page's connection, an animal (net.js).
+    this.startNet();
+    // The front door: the lesson the address names (?l=7, as on the course
+    // page - a lesson opened here writes it), else the games.
+    const asked = lessonFromAddress(this.course.lessons);
+    if (asked) await this.track(this.openLesson(asked));
+    else this.showCatalog();
+    // Files of the site's that vanished from C: and were put back (lostFromC): said, over all of it.
+    if (this.cLost) {
+      this.tell('Drive C:', `${this.cLost.count} of the site's files had vanished from this browser's storage - their folders still there, `
+        + `nothing deleted that anyone asked for - and they are back: ${this.cLost.dirs.join(', ')}. `
+        + 'If you emptied a folder yourself, delete the folder itself, and it stays deleted.');
+    }
     this.owl.refresh?.();
+  }
+
+  /** What went wrong, in a box with the site's name - the course's says Course. */
+  track(promise) {
+    this.pending = promise.catch(e => { log.error('site', e.message); this.tell('WIRE CITY 86', e.message); }).finally(() => this.owl.refresh?.());
+    return this.pending;
+  }
+
+  /**
+   * Until the canvas has its size. The course waits for 80 columns - a
+   * phone never has them, and the site stood still: here, until the width
+   * holds for half a second, or 80 come.
+   */
+  waitForScreen() {
+    return new Promise(resolve => {
+      let last = -1, same = 0;
+      const t = setInterval(() => {
+        const w = this.owl.width;
+        same = w > 0 && w === last ? same + 1 : 0;
+        last = w;
+        if (w >= 80 || same >= 10) { clearInterval(t); resolve(); }
+      }, 50);
+    });
+  }
+
+  /**
+   * The course's installDisk, once at a time: the one started behind the
+   * games is the one a lesson opened meanwhile waits for. quiet: without the
+   * course's Build strip - nobody asked for it yet.
+   */
+  installDisk({ quiet = false } = {}) {
+    if (!this.diskJob) {
+      const show = this.showBuild;
+      if (quiet) this.showBuild = () => {};
+      this.diskJob = super.installDisk()
+        .then(() => { if (quiet) this.commander.refreshSource?.(this.browser); })
+        .catch(e => { this.diskJob = null; throw e; })
+        .finally(() => { this.showBuild = show; });
+    }
+    return this.diskJob;
   }
 
   async openLesson(lesson) {
@@ -800,25 +1271,28 @@ export class SiteApp extends CourseApp {
     const a = this.drives?.[0];
     return [
       item('~C~atalog...', 'Every program whose source is here, in the commander: the games on the left, the examples on the right',
-        { title: 'Sources', act: () => this.track(this.panels(a, '/GAMES/', a, '/EXAMPLES/')) }),
+        { title: 'Sources', act: () => this.send('commander A:\\GAMES A:\\EXAMPLES', 'Sources') }),
       line(),
-      ...s.games.map((g, i) => item(`~${i + 1}~ ${GAMES.find(x => x.dir === g.dir)?.name ?? g.dir}`, `${g.main.replace(/\//g, '\\')}: ${g.what}`,
-        { title: g.title, act: () => this.track(this.openSource(g.main)) })),
+      ...s.games.map((g, i) => item(`~${i + 1}~ ${GAMES.find(x => x.dir === g.dir)?.name ?? g.dir}`, `${onA(g.main)}: ${g.what}`,
+        { title: g.title, act: () => this.send(`edit ${onA(g.main)}`, 'Sources') })),
       line(),
-      sub('~E~xamples', ...s.examples.map(e => item(shortTitle(e.title), `${e.main.replace(/\//g, '\\')}: ${e.what}`,
-        { title: e.title, act: () => this.track(this.openSource(e.main)) }))),
+      sub('~E~xamples', ...s.examples.map(e => item(shortTitle(e.title), `${onA(e.main)}: ${e.what}`,
+        { title: e.title, act: () => this.send(`edit ${onA(e.main)}`, 'Sources') }))),
       item('The e~n~gine', 'The modules every game and lesson is built from: A:\\ENGINE, in the commander',
-        { act: () => this.track(this.panels(a, '/ENGINE/', a, '/')) }),
+        { act: () => this.send('commander A:\\ENGINE A:\\', 'Sources') }),
     ];
   }
 
-  /** A source from the course disk in an editor - the one already open, if it is. */
-  async openSource(main) {
-    await this.installDisk();
-    const path = `${A}${main}`;
-    const open = [...this.docs].find(([, d]) => d.path === path);
-    if (open) { this.owl.activate(open[0]); return; }
-    this.documents.add(main.split('/').pop(), await this.browser.read(path), this.browser, path);
+  /**
+   * A file in an editor - the one already open, if it is. The course disk
+   * is put on A: first, if it is not there yet. What `edit` does.
+   */
+  async editFile(drive, path) {
+    if (drive.letter === 'A') await this.installDisk();
+    const b = this.toBase(drive, path);
+    const open = [...this.docs].find(([, d]) => d.path === b.path && (!d.source || d.source === b.source));
+    if (open) { this.owl.activate(open[0]); this.owl.refresh?.(); return; }
+    this.commander.open(path.split('/').pop(), await drive.read(path), drive, path, { readOnly: drive.readOnly });
   }
 
   /** The Lessons menu: the course's list, then a submenu a topic. */
@@ -828,10 +1302,16 @@ export class SiteApp extends CourseApp {
     const named = new Set(TOPICS.flatMap(([, , ids]) => ids));
     const topics = [...TOPICS, ['More', 'Lessons newer than this menu', lessons.filter(l => !named.has(l.id)).map(l => l.id)]];
     const lessonItem = l => item(`${l.lecture.padEnd(3)}${shortTitle(l.title)}`, l.title,
-      { title: `Lesson ${l.lecture}`, act: () => this.track(this.openLesson(l)) });
+      { title: `Lesson ${l.lecture}`, act: () => this.send(`lesson ${l.lecture.toLowerCase()}`, 'Lessons') });
     return [
       item('~C~atalog...', 'Every lesson: its video, its source, and a DOS machine that builds and runs it',
         { title: 'Lessons', shortcut: 'F1', act: () => this.list.show() }),
+      line(),
+      // As the course page has them - Build, Run and Reset go on the bus (onCommand).
+      { label: '~B~uild and run', cmd: Cm.Build, shortcut: 'F9', hint: 'Save, assemble the .ASM in front with FASM on the DOS PC, and run what it made' },
+      { label: '~R~un', cmd: Cm.Run, shortcut: 'Ctrl+F9', hint: 'Run it again as it was last built' },
+      { label: '~W~atch the video', cmd: Cm.Watch, hint: 'The lesson on YouTube, in a window of its own' },
+      { label: 'Re~s~et this lesson', cmd: Cm.Reset, hint: "The lesson's files as the course ships them - your changes go" },
       line(),
       ...topics.map(([name, hint, ids]) => ({ name, hint, list: ids.map(id => byId.get(id)).filter(Boolean) }))
         .filter(t => t.list.length)
@@ -845,10 +1325,11 @@ export class SiteApp extends CourseApp {
     next = 100;
     items.clear();
     const about = item('~A~bout WIRE CITY 86', 'What this site is', {
-      act: () => this.tell('WIRE CITY 86', 'A DOS machine in your browser, with real files: our games, their sources, and the lessons ' +
-        'that teach how they are made. A mockup: Games and Lessons work, every other item says what it will do.'),
+      act: () => this.tell('WIRE CITY 86', 'A DOS PC in your browser, with real drives: our games on C:, their sources and the ' +
+        'lessons that teach how they are made on A:, your own files on D: - and the assembler, to change them and build them again.\n\n' +
+        'Free, and the sources are open: github.com/KirinDenis/wire-city-2. LAN, the network, comes next.'),
     });
-    const catalog = item('~C~atalog...', 'Every game, with a short video: Enter plays', { title: 'Games Catalog', shortcut: 'F3' });
+    const catalog = item('~C~atalog...', 'Every game on C:, what it is and its keys: Enter plays', { title: 'Games', shortcut: 'F3', act: () => this.showCatalog() });
     this.helpCmd = about.cmd;
     this.catalogCmd = catalog.cmd;
 
@@ -861,30 +1342,39 @@ export class SiteApp extends CourseApp {
         // A: to D: carry their letter as the key; the rest would take the other items' keys (K, L, M, P, T, W).
         ...(this.drives ?? []).map(d => item(`${'ABCD'.includes(d.letter) ? `~${d.letter}~` : d.letter}:  ${d.kind} - ${d.title}` +
           (this.mounted(d) ? '' : ' (asks to be let in)'), d.about,
-          { title: `Drive ${d.prefix}`, act: () => this.track(this.panels(d, '/', d === this.drives[3] ? this.drives[0] : this.drives[3])) })),
+          { title: `Drive ${d.prefix}`, act: () => this.send(`commander ${d.prefix}`, 'Files') })),
         line(),
         item('~K~irin Commander for DOS', 'The file manager in DOS, on the same drives: Alt+F1, Alt+F2 pick a drive',
-          { act: () => this.track(this.dos.run('commander')) }),
+          { act: () => this.send('commander dos', 'Files') }),
         item('Kirin Commander for ~W~eb', 'The same two panels in the page, over the same drives: A: on the left, D: on the right',
-          { act: () => this.track(this.panels(this.drives[0])) }),
+          { act: () => this.send('commander', 'Files') }),
         item('~T~erminal', 'The console: the same drives as /mnt/a, /mnt/c, and what every window does', { shortcut: 'Ctrl+`', act: () => this.terminal?.toggle() }),
         line(),
-        item('Save ~p~rofile...', 'Your drives and settings as a list of commands, in a file on your computer'),
-        item('~L~oad profile...', 'Put a saved profile back: the drives come back with their letters')),
+        item('Save ~p~rofile...', 'Your drives and settings as a list of commands, in a file on your computer',
+          { act: () => this.send('profile --save', 'Save profile', { say: true }) }),
+        item('~L~oad profile...', 'Put a saved profile back: the drives come back with their letters',
+          { act: async () => { await this.terminal.show(); this.send('profile --load', 'Load profile'); } })),
       sub('~G~ames',
         catalog,
         line(),
-        ...GAMES.map((g, i) => item(`~${i + 1}~ ${g.name}`, g.hint, { title: g.name, act: () => this.play(g) }))),
+        ...GAMES.map((g, i) => item(`~${i + 1}~ ${g.name}`, g.hint, { title: g.name, act: () => this.send(`play ${g.key}`, 'Games') }))),
       sub('~S~ources', ...this.sourcesMenu()),
       sub('~L~essons', ...this.lessonsMenu()),
       sub('LA~N~',
-        item('~W~ho is online', 'Who else is here now, and what they are doing'),
+        item('~W~ho is online', 'Who else is here now, and what they are doing - an animal a connection, nothing more',
+          { act: () => this.who.show() }),
+        item('~L~ive map', 'The server\'s sky of the game you fly - or OWL FLY III\'s: every jet where it is, a click watches a shared screen',
+          { act: () => this.send('sky', 'LAN') }),
         item('~C~hat', 'Talk to everyone here, the IRC way: channels, nicks, /join, /me'),
-        item('~S~creens', 'DOS screens people share: watch a game being played'),
+        item(this.caster?.onAir ? '~S~top sharing my screen' : '~S~hare my screen', 'Your DOS screen for the others to watch, under your animal - Who is online shows who shares',
+          { title: 'Share my screen', act: () => this.send(this.caster?.onAir ? 'share --stop' : 'share', 'LAN') }),
         item('~M~onitor', 'The network as it is: the relay, the delay, what is lost')),
       sub('~H~elp',
-        item('~D~rives and letters', 'How the drives work: a letter, where its files are, who sees them'),
-        item('~K~eys', 'Every key of the site'),
+        item('~D~rives and letters', 'How the drives work: a letter, where its files are, who sees them',
+          { act: () => this.showHelp('Drives and letters', HELP_DRIVES) }),
+        item('~K~eys', 'Every key of the site', { act: () => this.showHelp('Keys', HELP_KEYS) }),
+        item('~W~ho sees what', 'What the others here see of you, what the server sees, what is never sent',
+          { act: () => this.showHelp('Who sees what', HELP_PRIVACY) }),
         line(),
         about),
     );
@@ -893,6 +1383,7 @@ export class SiteApp extends CourseApp {
       { label: '~F2~ Save', cmd: DocCm.Save, key: 'F2' },
       { label: '~F3~ Games', cmd: this.catalogCmd, key: 'F3' },
       { label: '~F9~ Build+run', cmd: Cm.Build, key: 'F9' },
+      { label: '~Ctrl-F9~ Run', cmd: Cm.Run, key: 'F9', ctrl: true },
       { label: '~F5~ Zoom', cmd: Cm.Zoom, key: 'F5' },
       { label: '~Alt-F3~ Close', cmd: Cm.Close, key: 'F3', alt: true },
     );
@@ -948,8 +1439,19 @@ export class SiteApp extends CourseApp {
       if (!dos.win) return;
       const name = dos.program?.name ?? dos.starts[dos.started]?.name ?? 'DOS';
       const state = dos.box.crashed ? ' (crashed)' : !dos.box.running ? ' (off)' : dos.box.hasKeys() ? ' - keys in DOS' : '';
-      owl.setText(dos.win, `DOS: ${name}${state}`);
+      // The server's minute before a new map, counted down while this game flies that room.
+      const soon = this.mapSoon && this.flying(this.mapSoon.room) ? ` - new map in ${Math.max(0, Math.ceil((this.mapSoon.at - Date.now()) / 1000))} s` : '';
+      owl.setText(dos.win, `DOS: ${name}${state}${soon}`);
       owl.windowTag(dos.win, '');
+      owl.refresh?.();
+    };
+    // The drive lights by the table: the library adds a C: of DOSBox's own
+    // to its floppies - here C: is one of them, and it said C: twice and
+    // never E: on.
+    dos.showLights = () => {
+      if (!dos.win) return;
+      const lights = this.drives.filter(d => this.mounted(d)).map(d => (dos.lit.has(d.letter) ? `~${d.prefix}~` : d.prefix));
+      owl.windowIndicator(dos.win, `[${lights.join(' ')}]`);
       owl.refresh?.();
     };
     owl.afterPaint.add(() => this.drawMachineLine());
@@ -980,7 +1482,9 @@ export class SiteApp extends CourseApp {
     const awake = ['☼', dos.box.keepRunning ? CGA[10] : CGA[7], 1];
     const net = ['↕', s === 'connected' ? CGA[10] : s === 'connecting' ? CGA[14] : s.startsWith('not connected') ? CGA[12] : CGA[7], 1];
     const cpu = [this.cycles === null ? '- cyc' : `${this.cycles} cyc`, CGA[14], '999999 cyc'.length];
-    return [cpu, awake, net];
+    // On air: this DOS screen shared (share), in red as a studio's light.
+    const cast = ['►', this.caster?.onAir ? CGA[12] : CGA[7], 1];
+    return [cpu, awake, net, cast];
   }
 
   /** The machine's line, over the bottom of the DOS window's frame: after every paint. */
@@ -1046,20 +1550,161 @@ export class SiteApp extends CourseApp {
       makeShell: io => siteShell(this, io),
       historyKey: 'site.history',
       welcome: `${ANSI.heading}WIRE CITY 86${RESET} ${ANSI.muted}- help lists the commands, man NAME says more, Tab finishes a word. ` +
-        `The drives are /mnt/a, /mnt/c... - C:\\GAMES works too; ~ is D:, My files.${RESET}`,
+        `The drives are /mnt/a, /mnt/c... - C:\\GAMES works too; ~ is D:, My files. What the menu and the windows do shows here too.${RESET}`,
     });
+    this.keepShell();
+    // What is not a command but is worth seeing there: a file saved.
+    this.terminal.bus.on('file.saved', ({ path }) => {
+      const t = this.terminal;
+      t.write(`\r\x1b[K${ANSI.muted}# saved ${path}${RESET}\r\n`);
+      if (!t.busy) t.render();
+    });
+  }
+
+  /**
+   * The DOS window's own actions on the bus, as the menu's are (the pilot,
+   * 2026-10-18): its close box and Alt+F3 - the PC switched off with it -
+   * are `poweroff`; its Machine menu's Switch on, DOS prompt and starts are
+   * `dos`, `dos prompt`, `play GAME`, `commander dos`, and Stop `poweroff`;
+   * the Settings dialog's OK is `dosbox NAME=VALUE... --now`. The library's
+   * own ways stay, for the commands to call (powerOff).
+   */
+  dosOnBus() {
+    const dos = this.dos;
+    const close = dos.closeWindow.bind(dos), stop = dos.stop.bind(dos), onCommand = dos.onCommand.bind(dos), settingsOk = dos.settingsOk.bind(dos);
+    this.powerOff = async () => { if (dos.win && this.owl.place(dos.win)) await close(dos.win); else await stop(); };
+    dos.closeWindow = id => (id && id === dos.win ? this.send('poweroff', 'DOS') : close(id));
+    dos.onCommand = cmd => {
+      if (cmd === DosCm.Stop || cmd === DosCm.Close) return this.send('poweroff', 'DOS');
+      if (cmd === DosCm.Restart) return this.send('dos', 'DOS');
+      if (cmd === DosCm.Prompt) return this.send('dos prompt', 'DOS');
+      if (cmd >= DosCm.Start && cmd < DosCm.Start + dos.pageStarts.length) {
+        const k = dos.pageStarts[cmd - DosCm.Start];
+        return this.send(GAMES.some(g => g.key === k) ? `play ${k}` : k === 'commander' ? 'commander dos' : `dos ${k}`, 'DOS');
+      }
+      return onCommand(cmd);
+    };
+    dos.settingsOk = () => {
+      // The dialog's own OK keeps the settings; its switch-on again is the command's.
+      const before = { ...dos.settings }, run = dos.run;
+      dos.run = () => Promise.resolve();
+      try { settingsOk(); } finally { dos.run = run; }
+      const line = dosboxLine(before, dos.settings);
+      if (line) this.send(`${line} --now`, 'DOS settings');
+    };
+  }
+
+  /** A file saved in an editor: an event on the bus, its place as DOS and the terminal write it. */
+  savedOnBus(doc) {
+    let path = doc.path ?? doc.name;
+    if (doc.source instanceof Drive) path = `${doc.source.prefix}${path}`;
+    else {
+      const d = this.drives.filter(x => x.base === doc.source && path.startsWith(x.root)).sort((a, b) => b.root.length - a.root.length)[0];
+      if (d) path = `${d.prefix}${path.slice(d.root.length - 1)}`;
+    }
+    this.terminal.bus.emit('file.saved', { path: path.replace(/\//g, '\\') });
+  }
+
+  /**
+   * The terminal's aliases and variables kept in this browser, as its
+   * history is and the drives are: what was set up yesterday is there
+   * today. Taken back at the start, put away after every command.
+   */
+  keepShell() {
+    const sh = this.terminal.shell, KEY = 'site.shell.1';
+    try {
+      const kept = JSON.parse(localStorage.getItem(KEY) ?? '{}');
+      for (const [k, v] of kept.aliases ?? []) sh.aliases.set(k, v);
+      Object.assign(sh.env, kept.env ?? {});
+    } catch { /* none, or not ours */ }
+    const fixed = new Set(['HOME', 'USER', '?']);
+    const run = sh.run.bind(sh);
+    sh.run = async (...a) => {
+      try { return await run(...a); } finally {
+        try {
+          localStorage.setItem(KEY, JSON.stringify({
+            aliases: [...sh.aliases].filter(([k]) => !sh.builtinAliases.has(k)),
+            env: Object.fromEntries(Object.entries(sh.env).filter(([k]) => !fixed.has(k))),
+          }));
+        } catch { /* a private window: this visit only */ }
+      }
+    };
+  }
+
+  /** The DOS PC's settings as a first visit has them: the library's, with the site's own picture and network. */
+  get dosDefaults() { return { ...this.dos.defaults, ...SITE_DOSBOX }; }
+
+  /**
+   * `profile --save` (Files > Save profile): the profile - the drives Map
+   * Drives added, the DOS PC's settings, the terminal's aliases - in a text
+   * file on the visitor's computer, where a clean-up of the site's data does
+   * not reach. Chrome and Edge ask where; the others put it in Downloads.
+   * What it says, or null when the picker was closed.
+   */
+  async saveProfile() {
+    const lines = profileLines(this, this.terminal.shell);
+    const text = crlf(`${lines.join('\n')}\n`);
+    const said = lines.filter(l => l && !l.startsWith('#')).length;
+    const what = said ? `${said} command${said === 1 ? '' : 's'}` : 'nothing to set up yet';
+    const back = 'Files > Load profile puts it back - here after a clean-up, or in another browser';
+    if (globalThis.showSaveFilePicker) {
+      let file;
+      try {
+        file = await showSaveFilePicker({ suggestedName: PROFILE_FILE, types: [{ description: 'A WIRE CITY profile', accept: { 'text/plain': ['.txt'] } }] });
+      } catch (e) {
+        if (e.name === 'AbortError') return null;    // the picker closed: nothing saved, nothing to say
+        throw e;
+      }
+      const w = await file.createWritable();
+      await w.write(text);
+      await w.close();
+      return `${file.name} is on your computer: ${what}. ${back}.`;
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+    a.download = PROFILE_FILE;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    return `${PROFILE_FILE} went to your downloads: ${what}. ${back}.`;
+  }
+
+  /** `profile --load` (Files > Load profile): a profile from this computer - { name, lines } without its comments, or null. */
+  async pickProfile() {
+    const file = await pickFile('.txt,text/plain');
+    if (!file) return null;
+    if (file.size > 64 * 1024) throw new Error(`${file.name} is ${sizeText(file.size)}: a profile is a few lines - not this one`);
+    return { name: file.name, lines: (await file.text()).split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#')) };
+  }
+
+  /**
+   * What the menu and the windows DO, as commands on the bus (the pilot,
+   * 2026-10-18, OWLOS LAN's way, one person for now): run in the terminal's
+   * shell as if typed, shown in its record marked with where they came
+   * from - so every click can be typed next time, and read back. What went
+   * wrong comes back in a box; say: what it said, too.
+   */
+  async send(line, from, { say = false } = {}) {
+    const a = await this.terminal.bus.send(line, { from });
+    if (a.errors.length) this.tell(from, a.errors.join('\n'));
+    else if (say && a.lines.length) this.tell(from, a.lines.map(l => l.text).join('\n'));
+    this.owl.refresh?.();
+    return a;
   }
 
   /** Alt+F3 on the terminal: closed its own way, its record kept for the next time. */
   closeActive() {
     if (this.terminal?.owns(this.owl.active())) { this.terminal.close(); return; }
+    if (this.screens?.owns(this.owl.active())) { this.screens.closeWindow(this.owl.active()); return; }
+    if (this.skymap?.owns(this.owl.active())) { this.skymap.close(); return; }
     super.closeActive();
   }
 
-  /** What is not a command: the course's tools, and a click on Map Drives' table. */
+  /** What is not a command: the course's tools, and a click on a table window's table. */
   poll() {
     super.poll();
-    if (this.mapTable && this.mapWin && this.owl.place(this.mapWin)) this.mapTable.poll();
+    this.mapDrives?.poll();
+    this.catalog?.poll();
+    this.who?.poll();
   }
 
   onCommand(cmd) {
@@ -1067,40 +1712,66 @@ export class SiteApp extends CourseApp {
     // site is left by its browser tab.
     if (cmd === Cm.Exit) return true;
     if (this.terminal?.handles(cmd)) { this.terminal.onCommand(cmd); return true; }
-    const t = this.mapTable;
+    // The course's list of lessons opens one as the menu does: `lesson N`, on the bus.
+    if (cmd === Cm.Open && this.list.owns(this.owl.active()) && this.list.current()) {
+      const l = this.list.current();
+      this.list.close();
+      this.send(`lesson ${(l.lecture || l.id).toLowerCase()}`, 'Lessons');
+      return true;
+    }
+    for (const t of [this.mapDrives, this.catalog, this.who]) if (t?.handles(cmd)) { t.onCommand(cmd); return true; }
     switch (cmd) {
-      case Mp.Close:
-        if (this.mapWin && this.owl.place(this.mapWin)) this.owl.close(this.mapWin);
-        this.mapWin = 0; this.mapTable = null; this.mapButtons = null; this.mapRect = null;
+      // F9: what is in front, built - as `build`, on the bus. Nothing to build: the lessons.
+      case Cm.Build: {
+        const t = this.target();
+        if (t) this.send(`build A:\\${(t.dir.slice(A.length) + t.asm).replace(/\//g, '\\')}`, 'F9');
+        else this.list.show();
         return true;
-      case Mp.Up: t?.move(-1); return true;
-      case Mp.Down: t?.move(1); return true;
-      case Mp.PageUp: t?.move(-(t?.room ?? 1)); return true;
-      case Mp.PageDown: t?.move(t?.room ?? 1); return true;
-      case Mp.Home: t?.home(); return true;
-      case Mp.End: t?.end(); return true;
+      }
+      // Ctrl+F9: what was built, run again - a game by its RUN.BAT, a lesson's or an example's .COM at the lessons' speed.
+      case Cm.Run: {
+        const t = this.target();
+        const game = t && this.gameOf(t.dir);
+        if (!t) this.list.show();
+        else if (game) this.send(`run A:\\${game.slice(A.length).replace(/\//g, '\\')}RUN.BAT`, 'Ctrl+F9');
+        else this.send(`run A:\\${(t.dir.slice(A.length) + t.asm.replace(/\.ASM$/i, '.COM')).replace(/\//g, '\\')}`, 'Ctrl+F9');
+        return true;
+      }
+      case Cm.Reset:
+        if (this.lesson?.buildable) this.send(`lesson ${(this.lesson.lecture || this.lesson.id).toLowerCase()} --reset`, 'Reset', { say: true });
+        else this.tell('Reset', 'Open a lesson first: Reset puts its files back as the course ships them.');
+        return true;
+      case Gm.Play: case Gm.Source: case Gm.Folder: this.fromCatalog(cmd); return true;
+      case Wh.Watch: {
+        const x = this.presence?.people[this.who.current];
+        if (x?.sharing && x.name !== this.presence.me) this.send(`watch ${x.name.toLowerCase().replace(/\s+/g, '-')}`, 'Who is online');
+        return true;
+      }
+      case Wh.Share: this.send(this.caster.onAir ? 'share --stop' : 'share', 'Who is online'); return true;
+      case SCREEN_CLOSE: this.screens.closeWindow(this.owl.active()); return true;
+      case MAP_CLOSE: this.skymap.close(); return true;
+      case HELP_CLOSE: if (this.helpWin && this.owl.place(this.helpWin)) this.owl.close(this.helpWin); this.helpWin = 0; return true;
       case Mp.Edit: this.showEdit(); return true;
       case Mp.EditCancel: this.closeEdit(); return true;
-      case Mp.EditOk: this.track(this.editFromDialog()); return true;
+      case Mp.EditOk: this.editFromDialog(); return true;
       case Mp.Add: this.showAdd(); return true;
       case Mp.AddCancel: this.closeAdd(); return true;
-      case Mp.AddOk: this.track(this.addFromDialog()); return true;
+      case Mp.AddOk: this.addFromDialog(); return true;
       case Mp.Remove: {
         const d = this.selectedDrive();
-        if (d && 'ABCD'.includes(d.letter)) this.tell('Map Drives', `${d.prefix} is one of the machine's own four: A: to D: stay.`);
-        else if (d) this.track(this.removeDrive(d));
+        if (d) this.send(`umount ${d.prefix}`, 'Map Drives');
         return true;
       }
       case Mp.Open: {
         const d = this.selectedDrive();
-        if (d) { this.onCommand(Mp.Close); this.track(this.panels(d, '/', d === this.drives[3] ? this.drives[0] : this.drives[3])); }
+        if (d) { this.mapDrives.close(); this.send(`commander ${d.prefix}`, 'Map Drives'); }
         return true;
       }
     }
     const it = items.get(cmd);
     if (!it) return super.onCommand(cmd);
     if (it.act) it.act();
-    else this.tell(it.title, `${it.hint}.\n\nMockup: not built yet.`);
+    else this.tell(it.title, `${it.hint}.\n\nThat comes with LAN, the network: not on this site yet.`);
     return true;
   }
 }

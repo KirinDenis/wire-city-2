@@ -26,10 +26,12 @@ if (typeof window === 'undefined') {
         if (r.cache === "only-if-cached" && r.mode !== "same-origin") {
             return;
         }
-        // wire-city-2: the course page (/course/) must NOT be isolated - it
-        // frames YouTube, which an isolated page in Firefox cannot - and it
-        // needs no isolation for js-dos. Its page is passed through untouched.
-        if (r.mode === "navigate" && new URL(r.url).pathname.includes("/course/")) {
+        // wire-city-2: the course page (/course/) and the site (/site/), built
+        // on it, must NOT be isolated - they frame YouTube, which an isolated
+        // page in Firefox cannot - and need no isolation for js-dos. Their
+        // pages are passed through untouched.
+        const at = r.mode === "navigate" ? new URL(r.url).pathname : "";
+        if (at.includes("/course/") || at.includes("/site/")) {
             return;
         }
 

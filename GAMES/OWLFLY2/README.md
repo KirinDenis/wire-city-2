@@ -56,7 +56,7 @@ The first build is byte-identical to OWL FLY (`FLYOWL2.COM` and
    the OBJ (or export one from Blender with PALnn materials),
    ceilings are 25 vertices / 16 faces
 6. **flying** — the network arc, first light 2026-07-23: `SRC/NET.INC`
-   is IPX multiplayer the 1990 way. Joining a game is a TWO-BYTE
+   is IPX multiplayer the DOS way. Joining a game is a TWO-BYTE
    handshake - the world is procedural, so the newcomer broadcasts
    HELLO, whoever is flying answers with the world seed, and DSGEN
    builds the same island, city and clouds on both machines. Then
@@ -158,6 +158,18 @@ is joining runs `NETJOIN.BAT <your-ip>`. Both are DOSBox's own `ipxnet`, which
 is IPX over UDP - the same packets the browser build tunnels through a
 WebSocket, so a DOS box and a browser tab can end up in the same war.
 
+**One war for everyone in it** (2026-10-18, the same as OWL FLY III's). In a
+shared sky the bots and the Shilkas are one war, not one per machine. The
+pilot with the lowest name on the wire - the first to join - runs it and
+sends it to the others four times a second on an IPX socket of its own,
+5858h; the others' guns still hit at once on their own screens and tell
+that pilot. When they leave, the next one carries the war on from where it
+stood. Alone, or with no network, you run your own, as ever. The bots stay
+near whichever
+pilot is closest, not only near the one running the war.
+[`SRC/WAR.INC`](SRC/WAR.INC) has the packets and the rules - the same file
+as OWL FLY III's, in a segment of its own here.
+
 **On real hardware**, copy the four files out of `INSTALL/` and run
 `FLYOWL2`. VGA is required; a Sound Blaster is not, but it is what the sound
 was written for. Single player needs nothing but the machine - the multiplayer
@@ -182,10 +194,12 @@ The assembler is [flat assembler](https://flatassembler.net/) in `TOOLS/FASM`,
 free to use and to pass on, and it writes the executable itself: no linker.
 
 **This is the only EXE here**, and the only program with more than one
-segment. Five sit end to end - the main one at 64K, then SKYSEG, UISEG,
-SYMSEG and TOWNSEG - and the game works out where its back buffer goes by
-counting paragraphs past all of them. That is why each segment ends by
-claiming its whole window: change a size and everything above it moves.
+segment. Six sit end to end - the main one at 64K, then SKYSEG, UISEG,
+SYMSEG, TOWNSEG and WARSEG (the shared war, 2026-10-18) - and the game works
+out where its back buffer goes by counting paragraphs past all of them. That
+is why each segment ends by claiming its whole window: change a size and
+everything above it moves. (WARSEG moved the back buffer and CITY.DAT up
+200h; `MAKEWIN CHECK` now shows that segment as the difference.)
 
 From Windows, `MAKEWIN` and `RUNWIN` drive the same build through DOSBox, and
 `MAKEWIN CHECK` accounts for every byte of the difference against the Turbo

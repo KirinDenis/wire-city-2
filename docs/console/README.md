@@ -1,8 +1,10 @@
 # docs/console - a copy, never edited here
 
 The console's shared core - the shell's grammar (`shell.js`), its own
-commands (`commands.js`: the shell's, files and paths, text in pipes) and the
-terminal Ctrl+` drops (`terminal.js`) - belongs to **OWLOS LAN**
+commands (`commands.js`: the shell's, files and paths, text in pipes), the
+terminal Ctrl+` drops (`terminal.js`), the bus (`bus.js`: what the menu
+and the windows do, sent as commands and shown in the terminal) and the
+screens' codec and sender (`cast.js`) - belongs to **OWLOS LAN**
 (`C:\repos\OWLOS-LAN\web\console\`): one server, several UIs, one console.
 
 `../pull-console.ps1` copies it here; `VERSION.txt` says from which commit.

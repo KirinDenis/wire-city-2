@@ -12,9 +12,10 @@
 // Names inside a drive are found whatever their case, as DOS finds them.
 // HOME is D:, My files: ~ and a bare cd go there.
 
-import { Shell } from '../console/shell.js';
+import { Shell, tokens, ANSI, RESET } from '../console/shell.js';
 import { CORE_COMMANDS, CORE_GROUPS } from '../console/commands.js';
 import { statsOf, sizeText, dateText, LocalFolder } from './drives.js';
+import { doingText, serverUrl } from './net.js';
 
 /** A path's place: the root, /mnt, or a drive and the path inside it ('/' its top). */
 function locate(app, path) {
@@ -24,6 +25,113 @@ function locate(app, path) {
   if (!m[1]) return { kind: 'mnt' };
   const drive = app.drives.find(d => d.letter === m[1].toUpperCase());
   return drive ? { kind: 'drive', drive, sub: m[2] ?? '/' } : { kind: 'none' };
+}
+
+/**
+ * The DOS PC's settings, as OWLOSUI's DOSBox dialog offers them (its
+ * apps/dos.js, PAGES): a choice of these, a number between two, yes or no,
+ * or a word. What a profile keeps of the machine; `dosbox` reads and sets them.
+ */
+const yesNo = { yes: true, no: false, on: true, off: false, true: true, false: false };
+const DOSBOX = {
+  machine: { of: ['svga_s3', 'vgaonly', 'ega', 'cga', 'hercules', 'tandy'], what: 'the video card' },
+  memsize: { of: [16, 32, 63], what: 'its memory, MB' },
+  picture: { of: ['sharp', 'fill', 'monitor'], what: 'the picture: whole pixels, the whole window, a smoothed monitor' },
+  core: { of: ['auto', 'dynamic', 'normal', 'simple'], what: 'how DOSBox runs the code - FASM needs normal' },
+  cputype: { of: ['auto', '386', '486_slow', 'pentium_slow'], what: 'the processor' },
+  cycles: { of: ['auto', 'max', 'fixed'], what: 'the speed: auto, as fast as it goes, or the fixed below' },
+  fixed: { from: 100, to: 1000000, what: 'cycles a millisecond, when cycles is fixed' },
+  sbtype: { of: ['sb16', 'sbpro2', 'sb2', 'none'], what: 'the Sound Blaster - none for silence' },
+  rate: { of: [44100, 22050, 11025], what: 'the sound, samples a second' },
+  gus: { yes: true, what: 'a Gravis Ultrasound too' },
+  pcspeaker: { yes: true, what: 'the PC speaker' },
+  ems: { yes: true, what: 'EMS memory' },
+  umb: { yes: true, what: 'upper memory blocks' },
+  awake: { yes: true, what: 'it keeps running in a background tab' },
+  start: { starts: true, what: 'what a switch-on starts' },
+  ipx: { yes: true, what: 'an IPX network card' },
+  always: { yes: true, what: 'the network for every program, not only the networked games' },
+  relay: { word: true, what: 'the network relay' },
+  room: { word: true, what: 'the network room' },
+};
+
+/** A setting's value from its word, or an Error that says what it takes. */
+function dosboxValue(dos, name, word) {
+  const s = DOSBOX[name];
+  if (!s) return new Error(`${name}: no such setting (dosbox lists them)`);
+  if (s.of) {
+    const v = s.of.find(x => String(x).toLowerCase() === word.toLowerCase());
+    return v ?? new Error(`${name} takes ${s.of.join(', ')}`);
+  }
+  if (s.from) {
+    const n = Number(word);
+    return Number.isInteger(n) && n >= s.from && n <= s.to ? n : new Error(`${name} takes a number from ${s.from} to ${s.to}`);
+  }
+  if (s.yes) return yesNo[word.toLowerCase()] ?? new Error(`${name} takes yes or no`);
+  if (s.starts) return dos.starts[word.toLowerCase()] ? word.toLowerCase() : new Error(`${name} takes ${Object.keys(dos.starts).join(', ')}`);
+  return word.trim() ? word.trim() : new Error(`${name} takes a word`);
+}
+const dosboxWord = v => (v === true ? 'yes' : v === false ? 'no' : String(v));
+
+/** What changed between two sets of settings, as a `dosbox` line - or null: what the Settings dialog's OK says on the bus. */
+export function dosboxLine(before, after) {
+  const changed = Object.keys(DOSBOX).filter(k => after[k] !== undefined && after[k] !== before[k]);
+  return changed.length ? `dosbox ${changed.map(k => `${k}=${quoted(dosboxWord(after[k]))}`).join(' ')}` : null;
+}
+
+/** A word as the shell reads it back: quoted if it has a space or a sign the shell would take. */
+export const quoted = v => (/^[\w./:@%+,=-]*$/.test(v) ? v : v.includes("'") ? `"${v.replace(/(["\\$`])/g, '\\$1')}"` : `'${v}'`);
+
+/** What a profile may hold, and Files > Load profile runs: nothing that deletes or starts anything. */
+export const PROFILE_COMMANDS = ['mount', 'dosbox', 'alias', 'export'];
+
+/**
+ * Why Files > Load profile will not run a line - or null, it may. A profile
+ * can come from someone else, so a line is one of PROFILE_COMMANDS and only
+ * that: no ; | && > riding behind it, no alias that would make `mount` or
+ * `ls` mean something else, no HOME moved under the visitor's feet.
+ */
+export function profileRefuses(shell, line) {
+  let toks;
+  try { toks = tokens(line, {}); } catch (e) { return e.message; }
+  if (toks.some(t => t.op)) return 'one command a line - no ; | && or > in a profile';
+  const [first, second = ''] = toks.map(t => t.word);
+  if (!PROFILE_COMMANDS.includes(first)) return `a profile runs ${PROFILE_COMMANDS.join(', ')} - nothing else`;
+  const name = second.split('=')[0];
+  if (first === 'alias' && (shell.commands.has(name) || shell.builtinAliases.has(name))) return `${name} is a command already - an alias does not change what it does`;
+  if (first === 'export' && ['HOME', 'USER'].includes(name)) return `${name} stays as it is`;
+  return null;
+}
+
+/**
+ * A profile: the commands that set a browser up as this one is - the drives
+ * Map Drives added, the DOS PC's settings that are not a first visit's, the
+ * aliases and variables made in the terminal. Its files are not in it: a
+ * folder of this browser comes back by its name, empty in another browser.
+ * The `profile` command prints it; Files > Save profile puts it in a file.
+ */
+export function profileLines(app, shell) {
+  const now = new Date(), two = v => String(v).padStart(2, '0');
+  const out = ['# WIRE CITY 86 - a profile: Files > Load profile puts it back, or source FILE in the terminal',
+    `# saved ${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())} ${two(now.getHours())}:${two(now.getMinutes())}`];
+  const drives = [];
+  for (const d of app.drives.filter(x => !'ABCD'.includes(x.letter))) {
+    const e = d.entry ?? {};
+    if (e.kind === 'folder') drives.push(`mount ${d.prefix} ${quoted(e.folder.slice(1, -1))}`);
+    else if (e.kind === 'link') drives.push(`mount ${d.prefix} ${e.url}`);
+    else if (e.kind === 'local') drives.push(`# ${d.prefix} the folder ${d.title} of this computer: the browser asks for it again - mount ${d.prefix} --computer${e.write ? ' --write' : ''}`);
+    else drives.push(`# ${d.prefix} ${d.title}: a copy of a ZIP in this browser - add the ZIP again in Files > Map Drives`);
+  }
+  if (drives.length) out.push('', '# the drives added in Map Drives', ...drives);
+  const dos = app.dos, first = app.dosDefaults;
+  // Not the room: each networked game sets its own when it starts (play).
+  const changed = Object.keys(DOSBOX).filter(k => k !== 'room' && dos.settings[k] !== undefined && dos.settings[k] !== first[k]);
+  if (changed.length) out.push('', "# the DOS PC's settings a first visit does not have", `dosbox ${changed.map(k => `${k}=${quoted(dosboxWord(dos.settings[k]))}`).join(' ')}`);
+  const mine = [...shell.aliases].filter(([k]) => !shell.builtinAliases.has(k)).map(([k, v]) => `alias ${k}=${quoted(v)}`);
+  const vars = Object.entries(shell.env).filter(([k]) => !['HOME', 'USER', '?'].includes(k)).map(([k, v]) => `export ${k}=${quoted(v)}`);
+  if (mine.length || vars.length) out.push('', '# made in the terminal', ...mine, ...vars);
+  if (out.length === 2) out.push('', '# nothing yet: no drives added, the DOS PC as a first visit has it');
+  return out;
 }
 
 /** The bytes of a text file look like text: no NUL, few control codes. */
@@ -118,6 +226,12 @@ export class SitePaths {
     if (how === 'letter') return this.app.drives.map(d => d.prefix).filter(l => l.toLowerCase().startsWith(word.toLowerCase()));
     if (how === 'game') return this.app.games.map(g => g.key).filter(k => k.startsWith(word.toLowerCase()));
     if (how === 'lesson') return (this.app.course?.lessons ?? []).map(l => l.lecture.toLowerCase()).filter(k => k.startsWith(word.toLowerCase()));
+    if (how === 'setting') {
+      // NAME=VALUE whole: cyc and Tab gives cycles=, a second Tab what it takes.
+      const dos = this.app.dos;
+      return Object.entries(DOSBOX).flatMap(([k, s]) => (s.of ?? (s.yes ? ['yes', 'no'] : s.starts ? Object.keys(dos.starts) : [dosboxWord(dos.settings[k])]))
+        .map(v => `${k}=${v}`)).filter(c => c.toLowerCase().startsWith(word.toLowerCase()));
+    }
     return [];
   }
 }
@@ -127,51 +241,180 @@ async function fileOn(ctx, word) {
   const paths = ctx.shell.paths, path = paths.resolve(word);
   const at = locate(ctx.app, path);
   if (at.kind !== 'drive' || at.sub === '/') throw new Error(`${word}: not a file on a drive`);
+  if (at.drive.letter === 'A') await ctx.app.installDisk();      // the course disk, if a fresh visit has not got it yet
   const spelled = (await paths.spelled(at.drive, at.sub)).replace(/\/$/, '');
   const cut = spelled.lastIndexOf('/');
   return { drive: at.drive, dir: spelled.slice(0, cut + 1), name: spelled.slice(cut + 1), path };
 }
 
-export const SITE_GROUPS = [['drives', 'Drives and the DOS PC'], ['programs', 'Games, programs, lessons']];
+export const SITE_GROUPS = [['drives', 'Drives and the DOS PC'], ['programs', 'Games, programs, lessons'], ['network', 'Who is here']];
 
 export const SITE_COMMANDS = [
+  // ------------------------------------------------------------ who is here
+  {
+    name: 'who', group: 'network', where: 'here',
+    summary: 'who is here now: an animal a connection - yours too - and what each one does (LAN > Who is online)',
+    usage: 'who [--json]',
+    run(ctx) {
+      const p = ctx.app.presence;
+      if (!p || p.state !== 'on' || !p.me) { ctx.err(`not connected to the server (${serverUrl()}) - ${p?.state === 'connecting' ? 'connecting' : 'it tries again by itself'}`); return 1; }
+      ctx.out(`${p.here} here - you are ${p.me}`, 'heading');
+      for (const x of p.people) {
+        ctx.data({ name: x.name, you: x.name === p.me, doing: x.doing, what: x.what, sharing: x.sharing, since: x.since });
+        ctx.out(`${(x.name + (x.name === p.me ? ' (you)' : '')).padEnd(18)} ${doingText(x, ctx.app.games).padEnd(28)}${x.sharing ? ' shares the screen' : ''}`, x.name === p.me ? 'good' : 'text');
+      }
+      return 0;
+    },
+  },
+  {
+    name: 'share', group: 'network', where: 'here',
+    summary: 'your DOS screen on air, for the others here to watch - under your animal; --stop ends it',
+    usage: 'share [--stop]',
+    options: { stop: 'off the air' },
+    run(ctx) {
+      const app = ctx.app, p = app.presence;
+      if (ctx.opts.stop) {
+        ctx.out(app.stopSharing() ? 'your screen is off the air' : 'your screen is not on the air', 'muted');
+        return 0;
+      }
+      if (app.caster.onAir) {
+        const n = p?.people.find(x => x.name === p.me)?.viewers ?? 0;
+        ctx.out(`your screen is on the air as ${p?.me} - ${n} watching; share --stop ends it`, 'info');
+        return 0;
+      }
+      app.shareScreen();
+      ctx.out(`your DOS screen is on the air as ${p.me}${app.dos.box.running ? '' : ' - it shows when the DOS PC is on'}; share --stop ends it`, 'good');
+      return 0;
+    },
+  },
+  {
+    name: 'watch', group: 'network', where: 'here', complete: (word, sh) => (sh.app.presence?.people ?? [])
+      .filter(x => x.sharing && x.name !== sh.app.presence.me).map(x => x.name.toLowerCase().replace(/\s+/g, '-')).filter(n => n.startsWith(word.toLowerCase())),
+    summary: "someone's shared DOS screen, in a window - watch fox; alone, who shares",
+    usage: 'watch [NAME]',
+    run(ctx) {
+      const app = ctx.app, p = app.presence;
+      if (!p || p.state !== 'on' || !p.me) { ctx.err(`not connected to the server (${serverUrl()})`); return 1; }
+      const sharing = p.people.filter(x => x.sharing && x.name !== p.me);
+      if (!ctx.args[0]) {
+        if (!sharing.length) { ctx.out('nobody shares a screen now', 'muted'); return 0; }
+        for (const x of sharing) { ctx.data({ name: x.name, doing: x.doing, what: x.what, viewers: x.viewers }); ctx.out(`${x.name.padEnd(18)} ${doingText(x, app.games)}`); }
+        return 0;
+      }
+      const x = app.person(ctx.args.join(' '));
+      if (!x) { ctx.err(`${ctx.args.join(' ')}: nobody of that name here now (who lists them)`); return 1; }
+      if (x.name === p.me) { ctx.err('that is you - your own screen is the DOS window'); return 1; }
+      if (!x.sharing) { ctx.err(`${x.name} does not share a screen now`); return 1; }
+      app.screens.open(x.name);
+      ctx.out(`watching ${x.name}`, 'muted');
+      return 0;
+    },
+  },
+  {
+    name: 'map', group: 'network', where: 'here', complete: () => ['owlfly3', 'owlfly2'],
+    summary: "the map a game room flies: the server's, one for everyone, a new one every half hour (alone, without the server, a game flies its own)",
+    usage: 'map [ROOM]',
+    async run(ctx) {
+      const app = ctx.app, p = app.presence;
+      // The room: the one named, else the game this PC flies, else OWL FLY III's.
+      const playing = app.games.find(g => g.key === app.dos.started && g.room);
+      const room = (ctx.args[0] ?? playing?.room ?? 'owlfly3').toLowerCase();
+      if (!app.games.some(g => g.room === room)) { ctx.err(`${room}: no game flies there - ${app.games.filter(g => g.room).map(g => g.room).join(', ')}`); return 1; }
+      if (!p || p.state !== 'on') { ctx.err(`not connected to the server (${serverUrl()}) - a game started now flies a map of its own`); return 1; }
+      const s = (await p.map(room)).sky;
+      ctx.data(s);
+      const down = [0, 1].filter(i => s.rubble & (1 << i)).map(i => `radar ${i + 1}`);
+      const next = s.next >= 60 ? `${Math.round(s.next / 60)} min` : `${s.next} s`;
+      ctx.out(`${room}: seed ${s.seed}, ${s.pilots.length} flying${down.length ? `, ${down.join(' and ')} down` : ''}; a new map in ${next} (every ${s.every} min, the server's)`);
+      // The shared war, as its host's last packets had it (WAR.INC): who runs it, what is left.
+      const w = s.war;
+      if (w) ctx.out(`the war: run by jet ${String.fromCharCode(65 + (w.host % 26))} (pid ${w.host}); bots ${w.bots} up, ${w.down} down; Shilkas ${w.shilkas} up, ${w.burning} burning`);
+      else if (s.pilots.length) ctx.out('the war: nobody runs it on the wire yet', 'muted');
+      return 0;
+    },
+  },
+  {
+    name: 'sky', group: 'network', where: 'here', complete: () => ['owlfly3', 'owlfly2'],
+    summary: 'the live map of a game room: its ground, every jet in the server\'s sky - who, how high, a shared screen to click',
+    usage: 'sky [ROOM]',
+    run(ctx) {
+      const app = ctx.app;
+      const playing = app.games.find(g => g.key === app.dos.started && g.room);
+      const room = (ctx.args[0] ?? playing?.room ?? 'owlfly3').toLowerCase();
+      if (!app.games.some(g => g.room === room)) { ctx.err(`${room}: no game flies there - ${app.games.filter(g => g.room).map(g => g.room).join(', ')}`); return 1; }
+      app.showSky(room);
+      ctx.out(`the live map of ${room}${app.presence?.state === 'on' ? '' : ' - not connected to the server: it waits'}`, 'muted');
+      return 0;
+    },
+  },
   // ------------------------------------------------------------ drives
   {
     name: 'mount', group: 'drives', where: 'here', complete: 'letter',
-    summary: 'the drives, a letter each - or a new one: a folder of this browser, a folder of this computer, a link to a ZIP',
-    usage: 'mount [LETTER: FOLDER | LETTER: https://LINK | LETTER: --computer [--write]]',
-    options: { computer: 'a folder of this computer, through the browser\'s picker (Chrome, Edge)', write: 'DOS may write to that folder' },
+    summary: 'the drives, a letter each - or a new one: a folder of this browser, a folder or a ZIP of this computer, a link to a ZIP',
+    usage: 'mount [LETTER: FOLDER | LETTER: https://LINK | LETTER: --computer [--write] | LETTER: --zip] [--name NAME]',
+    options: {
+      computer: 'a folder of this computer, through the browser\'s picker (Chrome, Edge)', write: 'DOS may write to that folder',
+      zip: 'a ZIP of this computer, through the browser\'s file picker, copied into this browser', name: 'what the drive is called',
+    },
+    valued: ['name'],
     async run(ctx) {
       const app = ctx.app;
-      if (!ctx.args.length && !ctx.opts.computer) {
+      if (!ctx.args.length) {
         for (const d of app.drives) {
           ctx.data({ letter: d.letter, kind: d.kind, what: d.title, where: d.where });
           ctx.out(`${d.prefix}  ${d.kind.padEnd(11)} ${d.title.padEnd(24)} ${d.where}`, 'ABCD'.includes(d.letter) ? 'text' : 'info');
         }
         return 0;
       }
-      const letter = (ctx.args[0] ?? '').replace(/:$/, '').toUpperCase();
+      const letter = ctx.args[0].replace(/:$/, '').toUpperCase();
       if (!/^[E-Z]$/.test(letter)) { ctx.err('a new drive takes a letter from E: to Z: - mount E: GAMES'); return 1; }
-      if (app.drives.some(d => d.letter === letter)) { ctx.err(`${letter}: is taken - umount ${letter}: first, or another letter`); return 1; }
-      const what = ctx.args.slice(1).join(' ');
-      if (ctx.opts.computer) {
-        if (!globalThis.showDirectoryPicker) { ctx.err('this browser cannot give a page a folder of this computer: Chrome and Edge can'); return 1; }
-        const handle = await showDirectoryPicker({ mode: ctx.opts.write ? 'readwrite' : 'read' });
-        await app.addDrive({ letter, kind: 'local', title: what || handle.name, write: !!ctx.opts.write, handle });
-      } else if (/^https?:\/\//i.test(what)) {
-        const r = await fetch(what).catch(() => null);
-        if (!r) { ctx.err('that site does not let a page take its files - download the ZIP and add it in Files > Map Drives'); return 1; }
-        if (!r.ok) { ctx.err(`${what}: ${r.status} ${r.statusText}`); return 1; }
-        await app.addZip(letter, { kind: 'link', title: decodeURIComponent(what.split(/[?#]/)[0].split('/').pop() || 'link'), url: what }, new Uint8Array(await r.arrayBuffer()));
-      } else {
-        if (!what) { ctx.err(`which folder? mount ${letter}: NAME - a folder of this browser, made if it is not there`); return 1; }
-        const name = what.replace(/[\\/:*?"<>|]/g, ' ').trim();
-        await app.browser.mkdir(`/${name}/`);
-        await app.addDrive({ letter, kind: 'folder', title: name, folder: `/${name}/` });
+      const what = ctx.args.slice(1).join(' '), called = typeof ctx.opts.name === 'string' ? ctx.opts.name.trim() : '';
+      const name = what.replace(/[\\/:*?"<>|]/g, ' ').trim();
+      const taken = app.drives.find(d => d.letter === letter);
+      if (taken) {
+        // The same drive again - a profile loaded twice - is no mistake.
+        const e = taken.entry ?? {};
+        if ((e.kind === 'folder' && name && e.folder.toLowerCase() === `/${name}/`.toLowerCase()) || (e.kind === 'link' && e.url === what)) {
+          ctx.out(`${letter}: is ${taken.title} already`, 'muted');
+          return 0;
+        }
+        ctx.err(`${letter}: is taken - umount ${letter}: first, or another letter`);
+        return 1;
       }
-      app.afterTable();
+      if (ctx.opts.computer) {
+        if (!await app.mountComputer(letter, { write: !!ctx.opts.write, name: called || what })) { ctx.out('no folder chosen - nothing mounted', 'muted'); return 0; }
+      } else if (ctx.opts.zip) {
+        if (!await app.mountZip(letter, called || what)) { ctx.out('no ZIP chosen - nothing mounted', 'muted'); return 0; }
+      } else if (/^https?:\/\//i.test(what)) {
+        await app.mountLink(letter, what, called);
+      } else {
+        if (!name) { ctx.err(`which folder? mount ${letter}: NAME - a folder of this browser, made if it is not there`); return 1; }
+        await app.mountFolder(letter, name);
+      }
       const d = app.drives.find(x => x.letter === letter);
       ctx.out(`${letter}: ${d.kind} - ${d.title} (${d.where}); DOS sees it at its next switch-on`, 'good');
+      return 0;
+    },
+  },
+  {
+    name: 'relabel', group: 'drives', where: 'here', complete: 'letter',
+    summary: 'a drive under another letter or name - its files stay where they are; a folder of this computer written to by DOS, or not',
+    usage: 'relabel LETTER: [--letter NEW] [--name NAME] [--write | --read-only]',
+    options: { letter: 'the new letter, E to Z', name: 'the new name', write: 'DOS may write to the folder of this computer', 'read-only': 'DOS only reads it' },
+    valued: ['letter', 'name'],
+    async run(ctx) {
+      const app = ctx.app, at = (ctx.args[0] ?? '').replace(/:$/, '').toUpperCase();
+      const d = app.drives.find(x => x.letter === at);
+      if (!d) { ctx.err(`${ctx.args[0] ?? '?'}: no such drive (mount lists them)`); return 1; }
+      const next = {};
+      if (typeof ctx.opts.letter === 'string') next.letter = ctx.opts.letter.replace(/:$/, '').toUpperCase();
+      if (typeof ctx.opts.name === 'string' && ctx.opts.name.trim()) next.title = ctx.opts.name.trim();
+      if (ctx.opts.write) next.write = true;
+      if (ctx.opts['read-only']) next.write = false;
+      if (!Object.keys(next).length) { ctx.err(`what of ${d.prefix}? relabel ${d.prefix} --letter G, --name NAME, --write or --read-only`); return 1; }
+      if ('write' in next && !(d.base instanceof LocalFolder)) { ctx.err(`${d.prefix} is not a folder of this computer: --write and --read-only are for those`); return 1; }
+      const now = await app.relabelDrive(d, next);
+      ctx.out(`${now.prefix} ${now.kind} - ${now.title} (${now.where}); DOS sees it at its next switch-on`, 'good');
       return 0;
     },
   },
@@ -198,7 +441,7 @@ export const SITE_COMMANDS = [
         ctx.out(`${d.prefix.padEnd(7)}${d.kind.padEnd(12)}${(s ? String(s.files) : '-').padStart(6)}${(s ? sizeText(s.bytes) : '-').padStart(10)}  ${s ? dateText(s.newest) : 'asks to be let in'}`);
       }
       const est = await navigator.storage?.estimate?.().catch(() => null);
-      if (est) ctx.out(`this browser holds ${sizeText(est.usage ?? 0)} of the ${sizeText(est.quota ?? 0)} it allows this site - a clean-up of the site's data takes it all: profile > D:\\PROFILE.TXT`, 'warn');
+      if (est) ctx.out(`this browser holds ${sizeText(est.usage ?? 0)} of the ${sizeText(est.quota ?? 0)} it allows this site - a clean-up of the site's data takes it all, D: too: Files > Save profile keeps the drive table on your computer`, 'warn');
     },
   },
   {
@@ -258,20 +501,66 @@ export const SITE_COMMANDS = [
   },
   {
     name: 'profile', group: 'drives', where: 'here',
-    summary: 'the commands that set this browser up again - the drives you added, your aliases; profile > D:\\PROFILE.TXT, source it back',
-    usage: 'profile',
-    run(ctx) {
+    summary: "the commands that set a browser up as this one - the drives you added, the DOS PC's settings, your aliases; Files > Save profile puts them in a file",
+    usage: 'profile [--save | --load]',
+    options: { save: 'into a file on this computer (Files > Save profile)', load: 'from a file of this computer, line by line (Files > Load profile)' },
+    async run(ctx) {
       const app = ctx.app, sh = ctx.shell;
-      ctx.out('# WIRE CITY - this browser set up again: source this file');
-      for (const d of app.drives.filter(x => !'ABCD'.includes(x.letter))) {
-        const e = d.entry ?? {};
-        if (e.kind === 'folder') ctx.out(`mount ${d.prefix} ${e.folder.slice(1, -1)}`);
-        else if (e.kind === 'link') ctx.out(`mount ${d.prefix} ${e.url}`);
-        else if (e.kind === 'local') ctx.out(`# ${d.prefix} the folder ${d.title} of this computer: mount ${d.prefix} --computer${e.write ? ' --write' : ''}`);
-        else ctx.out(`# ${d.prefix} ${d.title}: a copy of a ZIP, in this browser's ${e.folder} - add the ZIP again in Files > Map Drives`);
+      if (ctx.opts.save) {
+        const said = await app.saveProfile();
+        if (said) ctx.out(said, 'good');          // the picker closed: nothing to say
+        return 0;
       }
-      for (const [k, v] of sh.aliases) if (!sh.builtinAliases.has(k)) ctx.out(`alias ${k}='${v}'`);
-      for (const [k, v] of Object.entries(sh.env)) if (!['HOME', 'USER', '?'].includes(k)) ctx.out(`export ${k}=${v}`);
+      if (ctx.opts.load) {
+        const p = await app.pickProfile();
+        if (!p) return 0;
+        // Each line shown as if typed, then run - written at once, not
+        // gathered as ctx.out's are, so each comes before what it prints.
+        // Only what a profile holds runs (profileRefuses): it may be a file
+        // someone else passed on.
+        sh.write(`${ANSI.muted}# ${p.name}: ${p.lines.length} command${p.lines.length === 1 ? '' : 's'}${RESET}\r\n`);
+        for (const l of p.lines) {
+          sh.write(`${await sh.prompt()}${l}\r\n`);
+          const no = profileRefuses(sh, l);
+          if (no) { sh.write(`${ANSI.warn}skipped: ${no}${RESET}\r\n`); continue; }
+          await sh.run(l, { signal: ctx.signal });
+          if (ctx.signal?.aborted) break;
+        }
+        return 0;
+      }
+      for (const l of profileLines(app, sh)) ctx.out(l, l.startsWith('#') ? 'muted' : 'text');
+    },
+  },
+  {
+    name: 'dosbox', group: 'drives', where: 'here', complete: 'setting',
+    summary: "the DOS PC's settings - dosbox cycles=max sbtype=none; it takes them at its next switch-on, or --now",
+    usage: 'dosbox [NAME=VALUE ...] [--now]',
+    options: { now: 'a running PC switched on again with them, as the Settings dialog does' },
+    run(ctx) {
+      const dos = ctx.app.dos, first = ctx.app.dosDefaults;
+      if (!ctx.args.length) {
+        for (const [k, s] of Object.entries(DOSBOX)) {
+          const v = dos.settings[k];
+          ctx.data({ name: k, value: v, first: first[k] });
+          ctx.out(`${`${k}=${dosboxWord(v)}`.padEnd(22)} ${s.what}`, v === first[k] ? 'muted' : 'info');
+        }
+        return 0;
+      }
+      const next = {};
+      for (const w of ctx.args) {
+        const m = /^([a-z]+)=(.*)$/i.exec(w);
+        if (!m) { ctx.err(`${w}: NAME=VALUE - dosbox cycles=max`); return 1; }
+        const v = dosboxValue(dos, m[1].toLowerCase(), m[2]);
+        if (v instanceof Error) { ctx.err(v.message); return 1; }
+        next[m[1].toLowerCase()] = v;
+      }
+      dos.settings = { ...dos.settings, ...next };
+      try { localStorage.setItem(dos.settingsKey, JSON.stringify(dos.settings)); } catch { /* a private window: for this visit only */ }
+      const again = ctx.opts.now && dos.box.running;
+      if (again) ctx.app.track(dos.run(dos.started ?? dos.settings.start, { program: dos.program }));
+      ctx.out(`${Object.entries(next).map(([k, v]) => `${k}=${dosboxWord(v)}`).join(' ')}: ` +
+        `${again ? 'the DOS PC switches on again with them' : dos.box.running ? 'the DOS PC takes them at its next switch-on' : 'kept'}`, 'good');
+      return 0;
     },
   },
 
@@ -301,36 +590,93 @@ export const SITE_COMMANDS = [
     async run(ctx) {
       if (!ctx.args[0]) { ctx.err('which file? edit A:\\EXAMPLES\\TERRA.ASM'); return 1; }
       const f = await fileOn(ctx, ctx.args[0]);
-      ctx.app.commander.open(f.name, await f.drive.read(`${f.dir}${f.name}`), f.drive, `${f.dir}${f.name}`, { readOnly: f.drive.readOnly });
+      await ctx.app.editFile(f.drive, `${f.dir}${f.name}`);
     },
   },
   {
-    name: 'build', group: 'programs', summary: 'an .ASM assembled with FASM on the DOS PC, then run (F9) - a game by its own MAKE.BAT', usage: 'build FILE.ASM', where: 'here', complete: 'path',
+    name: 'build', group: 'programs', where: 'here', complete: 'path',
+    summary: "an .ASM assembled with FASM on the DOS PC and run (F9) - a game's by its own MAKE.BAT; FASM's answer here",
+    usage: 'build FILE.ASM - build A:\\LESSONS\\L07\\LINE.ASM',
     async run(ctx) {
       if (!ctx.args[0]) { ctx.err('which source? build A:\\EXAMPLES\\TERRA.ASM'); return 1; }
       const f = await fileOn(ctx, ctx.args[0]);
       if (!/\.ASM$/i.test(f.name)) { ctx.err(`${f.name}: FASM assembles an .ASM`); return 1; }
-      await ctx.app.commander.associations.asm({ source: f.drive, dir: f.dir, name: f.name, path: `${f.dir}${f.name}`, commander: ctx.app.commander });
-      ctx.out(`${f.name}: FASM on the DOS PC - its words in the Build strip`, 'muted');
+      // From A:, as the course page builds: BUILD.BAT beside the source calls A:\TOOLS\FASM.
+      if (f.drive.letter !== 'A') { ctx.err(`${f.name}: the DOS PC builds on A: - copy it there (cp ${ctx.args[0]} A:\\) and build it there`); return 1; }
+      const app = ctx.app;
+      await app.build({ dir: `${f.drive.root}${f.dir.slice(1)}`, asm: f.name.toUpperCase() });
+      // FASM's last words, if this build is the one they answer (a newer F9 takes over).
+      const said = app.lastBuildShown ?? '';
+      if (/bytes\.|error/i.test(said)) for (const l of said.split('\n').slice(0, -1)) ctx.out(l, /error/i.test(said) ? 'bad' : 'good');
+      else if (/MAKE\.BAT/.test(said)) ctx.out(said, 'muted');
+      return /error/i.test(said) ? 1 : 0;
     },
   },
   {
-    name: 'lesson', group: 'programs', summary: 'a lesson opened: its source, its build, its video - lesson 3, lesson 1C', usage: 'lesson NUMBER', where: 'here', complete: 'lesson',
+    name: 'lesson', group: 'programs', summary: "a lesson opened: its source, its build, its video - lesson 3, lesson 1C; --reset puts its files back as the course ships them",
+    usage: 'lesson NUMBER [--reset]', where: 'here', complete: 'lesson',
+    options: { reset: "its files on A: as the course ships them - what was changed in them is gone" },
     async run(ctx) {
       const w = (ctx.args[0] ?? '').toUpperCase().replace(/^L/, '');
       const all = ctx.app.course?.lessons ?? [];
       const l = all.find(x => x.lecture.toUpperCase() === w) ?? all.find(x => x.id === `L${w.padStart(2, '0')}`);
       if (!l) { ctx.err(`which lesson? ${all.map(x => x.lecture).join(' ')}`); return 1; }
+      if (ctx.opts.reset) {
+        if (!l.buildable) { ctx.err(`${l.id} has no source to put back`); return 1; }
+        await ctx.app.installDisk();
+        await ctx.app.install(l, true);
+        ctx.out(`${l.id} is on A: as the course ships it - an editor open on it still holds the old text: close it, open it again`, 'good');
+        return 0;
+      }
       ctx.out(`${l.lecture}  ${l.title}`, 'muted');
       await ctx.app.openLesson(l);
     },
   },
   {
-    name: 'commander', group: 'programs', summary: 'Kirin Commander - for Web (the page\'s two panels), or for DOS', usage: 'commander [web|dos]', where: 'here',
-    complete: () => ['web', 'dos'],
+    name: 'dos', group: 'programs', where: 'here', complete: () => ['prompt', 'commander'],
+    summary: 'the DOS PC switched on - into what it runs, else what its settings say; or into START: prompt, commander, a game',
+    usage: 'dos [START]',
     async run(ctx) {
-      if ((ctx.args[0] ?? 'web') === 'dos') { ctx.app.dos.run('commander'); return 0; }
-      await ctx.app.panels(ctx.app.drives[0]);
+      const dos = ctx.app.dos, w = (ctx.args[0] ?? '').toLowerCase();
+      if (w && !dos.starts[w]) { ctx.err(`${w}: no such start - ${Object.keys(dos.starts).join(', ')}`); return 1; }
+      const start = w || dos.started || dos.settings.start;
+      ctx.app.track(dos.run(start));
+      ctx.out(`the DOS PC: ${dos.starts[start]?.name ?? start}`, 'muted');
+      return 0;
+    },
+  },
+  {
+    name: 'poweroff', group: 'programs', where: 'here',
+    summary: 'the DOS PC switched off - what DOS saved goes back to its drives first; its window closes',
+    usage: 'poweroff',
+    async run(ctx) {
+      if (!ctx.app.dos.box.running && !ctx.app.dos.win) { ctx.out('the DOS PC is off already', 'muted'); return 0; }
+      await ctx.app.powerOff();
+      ctx.out('the DOS PC is off', 'muted');
+      return 0;
+    },
+  },
+  {
+    name: 'commander', group: 'programs', where: 'here', complete: 'path',
+    summary: "Kirin Commander - for Web, the page's two panels, at a drive or a folder each; or for DOS",
+    usage: 'commander [dos | [LEFT [RIGHT]]] - commander C:\\GAMES\\WIRECITY A:\\GAMES\\WIRECITY',
+    async run(ctx) {
+      const app = ctx.app, words = ctx.args.filter(w => w !== 'web');
+      if (words[0] === 'dos') { app.track(app.dos.run('commander')); ctx.out('Kirin Commander for DOS, on the DOS PC', 'muted'); return 0; }
+      const side = async w => {
+        const path = ctx.shell.paths.resolve(w), at = locate(app, path);
+        if (at.kind !== 'drive') throw new Error(`${w}: not a drive, nor a folder on one`);
+        if (at.drive.letter === 'A') await app.installDisk();
+        if (at.sub !== '/' && !await ctx.shell.paths.isDir(path)) throw new Error(`${w}: not a folder`);
+        return { drive: at.drive, dir: at.sub === '/' ? '/' : await ctx.shell.paths.spelled(at.drive, at.sub) };
+      };
+      // As the Files menu has it: A: on the left, D: on the right - or, D: on the left, A: beside it.
+      const left = words[0] ? await side(words[0]) : { drive: app.drives[0], dir: '/' };
+      const right = words[1] ? await side(words[1]) : { drive: left.drive === app.drives[3] ? app.drives[0] : app.drives[3], dir: '/' };
+      await app.panels(left.drive, left.dir, right.drive, right.dir);
+      const dos = s => `${s.drive.prefix}${s.dir.replace(/\//g, '\\')}`;
+      ctx.out(`Kirin Commander for Web: ${dos(left)} and ${dos(right)}`, 'muted');
+      return 0;
     },
   },
 ];

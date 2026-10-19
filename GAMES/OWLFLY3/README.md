@@ -3,8 +3,8 @@
 The third generation. Forked 2026-08-18 from [`GAMES\OWLFLY2`](../OWLFLY2) —
 the finished, released game — the same way OWL FLY II itself was forked from
 a proven core: start from what works, whole, and grow the next version there.
-OWL FLY II stays as it shipped; nothing in its folder changes because of this
-one.
+OWL FLY II stays its own game; what moves between the two moves on purpose -
+the shared war (2026-10-18) went into both.
 
 At the fork the two games are the same program. The main source is
 `SRC\OWLFLY3.ASM` (OWL FLY II called it `CITY.ASM`), it builds to
@@ -49,7 +49,7 @@ ENTER - and every one of them flies:
 7. VGA 640x480x16 - the crispest geometry of all, VGA only
 
 Pick what the machine actually has: the retro entries talk to their
-cards the way 1988 did, and a mode the hardware lacks will not appear
+cards directly, and a mode the hardware lacks will not appear
 by magic. The renderer itself never changes - every mode converts the
 same finished 320x200x256 frame, and the cockpit on the retro cards is
 its own drawn artwork, baked offline (TOOLS\VidRig), not a per-pixel
@@ -62,6 +62,15 @@ you would otherwise fly on the VGA host.
 **A shared sky.** `NETHOST.BAT` starts one and prints nothing clever; whoever
 is joining runs `NETJOIN.BAT <your-ip>`. Both are DOSBox's own `ipxnet`, which
 is IPX over UDP.
+
+**One war for everyone in it.** In a shared sky the bots and the Shilkas are
+one war, not one per machine. The pilot with the lowest name on the wire - the
+first to join - runs it and sends it to the others four times a second on an
+IPX socket of its own, 5858h; the others' guns still hit at once on their own
+screens and tell that pilot. When they leave, the next one carries the war on from
+where it stood. Alone, or with no network, you run your own, as ever. The bots
+stay near whichever pilot is closest, not only near the one running the war.
+[`SRC/WAR.INC`](SRC/WAR.INC) has the packets and the rules.
 
 **On real hardware**, copy the files out of `INSTALL/` and run `OWLFLY3`.
 VGA is required; a Sound Blaster is not, but it is what the sound was
@@ -87,8 +96,9 @@ is generated at startup by GENBED.
 The assembler is [flat assembler](https://flatassembler.net/) in `TOOLS/FASM`,
 free to use and to pass on, and it writes the executable itself: no linker.
 
-**This is an EXE of five segments** sitting end to end - the main one at
-64K, then SKYSEG, UISEG, SYMSEG and TOWNSEG - and the game works out where
+**This is an EXE of six segments** sitting end to end - the main one at
+64K, then SKYSEG, UISEG, SYMSEG, TOWNSEG and VIDSEG (the video cards, and the
+shared war in its tail) - and the game works out where
 its back buffer goes by counting paragraphs past all of them. That is why
 each segment ends by claiming its whole window: change a size and everything
 above it moves. `ARCHITECTURE.md` in this folder has the whole story.

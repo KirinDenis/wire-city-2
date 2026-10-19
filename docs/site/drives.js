@@ -108,17 +108,31 @@ export function guardRemovals(storage, folders, log) {
 export function journalRemovals() {
   const proto = globalThis.FileSystemDirectoryHandle?.prototype;
   if (!proto || proto.removeEntry.journaled) return;
-  const removeEntry = proto.removeEntry;
-  proto.removeEntry = function (name, options) {
+  const note = (dir, name, recursive) => {
     try {
       const all = JSON.parse(localStorage.getItem('site.removals') ?? '[]');
-      all.push({ at: new Date().toISOString(), in: this.name, name, recursive: !!options?.recursive,
-        by: (new Error().stack ?? '').split('\n').slice(2, 8).map(s => s.trim()).join(' < ') });
+      all.push({ at: new Date().toISOString(), page: location.pathname + location.search, in: dir, name, recursive,
+        by: (new Error().stack ?? '').split('\n').slice(3, 9).map(s => s.trim()).join(' < ') });
       localStorage.setItem('site.removals', JSON.stringify(all.slice(-300)));
     } catch { /* storage full or refused: the removal goes on */ }
+  };
+  const removeEntry = proto.removeEntry;
+  proto.removeEntry = function (name, options) {
+    note(this.name, name, !!options?.recursive);
     return removeEntry.call(this, name, options);
   };
   proto.removeEntry.journaled = true;
+  // 2026-10-18: WELCOME.TXT left this browser's storage with nothing in the
+  // journal - so the other way a page can delete, a handle's own remove(),
+  // is journaled too.
+  const handle = globalThis.FileSystemHandle?.prototype;
+  if (handle?.remove) {
+    const remove = handle.remove;
+    handle.remove = function (options) {
+      note('(its own remove)', this.name, !!options?.recursive);
+      return remove.call(this, options);
+    };
+  }
 }
 
 // ---- the table, kept in this browser -------------------------------------

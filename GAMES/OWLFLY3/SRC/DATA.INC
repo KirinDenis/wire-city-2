@@ -193,6 +193,10 @@ pdlim   dw NPLANE*2             ; PLANESDRAW's bound: the render raises
 ; his next POS resurrected him one tick later (the Highlander bug 2026-07-27).
 netdead dw 0FFFFh               ; plane the wire says is down
 netboom db 0                    ; 1 = this BOOM is the wire's, let it pass
+warcl   db 0                    ; 1 = the war is a lower pilot's (WAR.INC): our
+                                ;  AI only watches slots 1..WARN-1, his 'B' moves them
+wlcx    dw 0                    ; the pilot a leashed jet re-enters beside
+wlcz    dw 0                    ;  (WLEASHF: this camera or one over the wire)
 nethdm  db 0                    ; damage points that arrived for US
 nethby  dw 0                    ; who dealt them (pid)
 lastklr dw 0                    ; who shot us down (rides our death POS)

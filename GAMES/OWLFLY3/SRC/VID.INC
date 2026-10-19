@@ -1498,6 +1498,11 @@ VSGETB: push bx
                                 ; TOOLS\VidRig emit - regenerate after any
                                 ; PALDAY/PALNITE change
 
+        include 'WAR.INC'      ; the shared war (2026-10-18): its socket,
+                                ; buffers and code live in this window's
+                                ; free tail - the main 64K and SKYSEG's 8K
+                                ; have no room for its packet buffers
+
 label VIDEND byte
         rb 5FF0h - $   ; claim the whole window - TWENTY-FOUR K since the
                         ; second CGA palette's banks (each growth moved

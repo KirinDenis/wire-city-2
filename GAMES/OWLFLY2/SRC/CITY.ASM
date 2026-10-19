@@ -325,9 +325,10 @@ MAIN:
         ; it. SKYSEG gets a full 8K window (CS+1000h..CS+11FFh) with
         ; its own assemble-time guard, and the far map starts past it.
         mov  ax,cs
-        add  ax,1A00h           ; past SKYSEG (CS+1000h, 8K), UISEG
+        add  ax,1C00h           ; past SKYSEG (CS+1000h, 8K), UISEG
         mov  [bufseg],ax        ; (CS+1200h, SIXTEEN K), SYMSEG (CS+1600h,
-                                ; 8K) and TOWNSEG (CS+1800h, 8K) - each
+                                ; 8K), TOWNSEG (CS+1800h, 8K) and WARSEG
+                                ; (CS+1A00h, 8K, the shared war) - each
                                 ; with its own guard
 
         ; hook INT 9
@@ -344,7 +345,7 @@ MAIN:
         ; ---- load CITY.DAT into its own segment (resources: font, ...) ----
         ; PAST THE BACK BUFFER, and mind the arithmetic. The buffer is
         ; 64000 bytes = 0FA0h paragraphs, so it reaches bufseg+0FA0h:
-        ;   buffer 1A00h .. 29A0h   ->   this must start at 2A00h.
+        ;   buffer 1C00h .. 2BA0h   ->   this must start at 2C00h.
         ;
         ; THIS HAS NOW GONE WRONG TWICE, BOTH TIMES THE SAME WAY. Opening
         ; SYMSEG pushed the buffer up 200h and it ate the front of the
@@ -354,6 +355,10 @@ MAIN:
         ; straight back up as the TOP of the cockpit, pixel for pixel -
         ; which looks like a deliberate reflection effect rather than a
         ; fault, and that is exactly why it gets missed.
+        ; (WARSEG, 2026-10-18, moved the pair a THIRD 200h - this note read
+        ; first, both constants in one edit, and the far map walked: CITY.DAT
+        ; now ends at CS+3BB1h, under sndseg's floor at CS+4000h; sndseg,
+        ; scrseg and cpsseg reckon from CS+4FFFh/5FFFh and do not move.)
         ;
         ; THE RULE: opening a far segment moves the back buffer, and
         ; moving the back buffer moves EVERYTHING STACKED ABOVE IT. Walk
@@ -361,7 +366,7 @@ MAIN:
         ; aligned from CS+4000h) and scrseg above it - before believing
         ; the new segment cost nothing.
         mov  ax,cs
-        add  ax,2A00h           ; past the back buffer at CS+1A00h
+        add  ax,2C00h           ; past the back buffer at CS+1C00h
         mov  [resseg],ax
         mov  dx,FNAME
         mov  ax,3D00h           ; open read-only
@@ -489,6 +494,7 @@ MAIN:
         call SKYSEG:NETINITF
         mov  [netup],al
         mov  [netpid],dx        ; 0 when the wire is dark
+        call WARSEG:WARINITF    ; the shared war's own socket (WAR.INC)
         call UISEG:UISPLASH
         call UISEG:UIMENU   ; blocks until a sky is picked
         ; ---- EVERY arrival watches first, joined or created alike, and
@@ -626,6 +632,7 @@ GAMELOOP:
         call SKYSEG:NETPOSF   ; tell the wire where we are (1/tick)...
         call SKYSEG:NETPOLLF   ; ...and learn where everyone else is
         call NETAPPLY           ; deaths and hits the wire brought us
+        call WARSEG:WARTICKF    ; the shared war: its host's bots, or ours sent
         call SYMSEG:STG1F   ; *** TEMP marker: the wire is done ***
 
         ; --- render (runs as fast as it can; speed no longer tied to it) ---
@@ -802,4 +809,5 @@ end if
         include 'UI.INC'   ; the front door: splash + sky list
         include 'SYM.INC'   ; the fourth segment: the scope's symbols
         include 'TOWN.INC'   ; the fifth: the windows and the traffic
+        include 'WAR.INC'    ; the sixth: the shared war (2026-10-18)
 

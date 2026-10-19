@@ -3412,7 +3412,9 @@ SHKTICK:
         mov  dl,[cs:shked+bx]   ; ...and his barrels' - the slew below
         xor  dh,dh              ;  keeps SHKTRAV/SHKELEV: the lag IS the
         jmp  .slw               ;  vehicle, whoever's hands are on it
-.tai:  call SHKAI              ; decide where to drive
+.tai:  cmp  byte [warcl],0     ; a client: the war host's 'K' drives it,
+        jne  .tn               ;  aims it and fires it (WAR.INC)
+        call SHKAI              ; decide where to drive
         call SHKMOVE            ; ...and drive there
         mov  bx,[cs:shki]
         mov  byte [cs:shktrg+bx],0
@@ -4012,10 +4014,8 @@ SHKGUN: mov  bx,[cs:shki]
         jb   .gno
         call CODE:CRASHF   ; five hits and the flak got him
         ret
-.ghai: mov  bx,si
-        shr  bx,1
-        dec  byte [php+bx]
-.gno:  ret
+.ghai: call VIDSEG:WSHKGF     ; an AI jet loses one; a pilot over the
+.gno:  ret                     ;  wire is told (WAR.INC)
 
 ; ---------------------------------------------------------------------------
 ;  SHKHIT - did something of ours land on a Shilka? Same shape as RSHIT:
@@ -4045,6 +4045,7 @@ SHKHIT: mov  word [cs:shki],0
         js   .hn               ; underground
         cmp  ax,SHKHBOX
         jg   .hn
+        call VIDSEG:WSHKXF      ; a client tells the war host too
         call SHKDAM
         mov  ax,1
         ret
