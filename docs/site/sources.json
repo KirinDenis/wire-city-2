@@ -31,10 +31,10 @@
                       "main":  "GAMES/WIRECITY/CITY.ASM"
                   },
                   {
-                      "dir":  "SOKOBAN",
+                      "dir":  "MULTSOKO",
                       "title":  "MULTIPLAY SOKO - crates onto the red marks",
-                      "what":  "A brick warehouse on a CGA screen, 61 levels",
-                      "main":  "GAMES/SOKOBAN/SOKOBAN.ASM"
+                      "what":  "One brick warehouse for up to eight on the network, CGA, 61 levels",
+                      "main":  "GAMES/MULTSOKO/MULTSOKO.ASM"
                   }
               ],
     "examples":  [

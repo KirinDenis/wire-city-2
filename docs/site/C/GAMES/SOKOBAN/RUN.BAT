@@ -1,3 +1,0 @@
-@echo off
-REM RUN.BAT - MULTIPLAY SOKO. From C:\: cd GAMES\SOKOBAN, then RUN.
-SOKOBAN.COM

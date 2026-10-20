@@ -1,10 +1,10 @@
 @echo off
 REM ============================================================================
-REM MAKEWIN.BAT - build SOKOBAN from Windows, without opening DOSBox by hand.
+REM MAKEWIN.BAT - build MULTSOKO from Windows, without opening DOSBox by hand.
 REM
 REM   MAKEWIN         assemble it, exactly the way MAKE does inside DOS
 REM   MAKEWIN CHECK   assemble it a second time with the Windows build of
-REM                   FASM into SOKOBANW.COM and compare the two
+REM                   FASM into MULTSOKOW.COM and compare the two
 REM
 REM It does not reimplement the build: it starts DOSBox and runs this folder's
 REM own MAKE.BAT EXIT. There is one build, and it is the DOS one.
@@ -16,17 +16,17 @@ if "%DOSBOX%"=="" set DOSBOX=dosbox.exe
 if /i "%~1"=="CHECK" goto check
 
 echo Assembling in DOS...
-"%DOSBOX%" -noautoexec -noconsole -c "mount c %CD%" -c "c:" -c "cd GAMES\SOKOBAN" -c "MAKE.BAT EXIT"
-if not exist GAMES\SOKOBAN\SOKOBAN.COM goto failed
+"%DOSBOX%" -noautoexec -noconsole -c "mount c %CD%" -c "c:" -c "cd GAMES\MULTSOKO" -c "MAKE.BAT EXIT"
+if not exist GAMES\MULTSOKO\MULTSOKO.COM goto failed
 echo.
-echo Built GAMES\SOKOBAN\SOKOBAN.COM
+echo Built GAMES\MULTSOKO\MULTSOKO.COM
 goto end
 
 :check
 echo Assembling with the Windows FASM for comparison...
-TOOLS\FASM\WIN\FASM.EXE GAMES\SOKOBAN\SOKOBAN.ASM GAMES\SOKOBAN\SOKOBANW.COM
+TOOLS\FASM\WIN\FASM.EXE GAMES\MULTSOKO\MULTSOKO.ASM GAMES\MULTSOKO\MULTSOKOW.COM
 if errorlevel 1 goto failed
-fc /b GAMES\SOKOBAN\SOKOBAN.COM GAMES\SOKOBAN\SOKOBANW.COM >nul
+fc /b GAMES\MULTSOKO\MULTSOKO.COM GAMES\MULTSOKO\MULTSOKOW.COM >nul
 if errorlevel 1 goto differ
 echo.
 echo The DOS and Windows assemblers agree, byte for byte.

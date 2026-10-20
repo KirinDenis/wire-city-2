@@ -73,5 +73,8 @@ A:\LESSONS\Lnn\, A:\GAMES\..\SRC\, A:\EXAMPLES\).
   site's `build`, converters, testing without a person.
 - COMMANDS - the site's console as an API: each command's effect and
   data (`help --json`), which lines ask the person first, and why.
+- PAGES - a page of one's own, made by a model, put on by the person: an
+  INI desktop (menus, keys, windows) or a whole HTML page (Bootstrap or
+  any look, the DOS PC in it, buttons that are console lines).
 - STYLE - the house style of code and text, a program's skeleton, what a
   game looks like when it is handed over.

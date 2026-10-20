@@ -468,11 +468,15 @@ export class AiSection {
 
   // ------------------------------------------------------------ AI > Console
 
-  showConsole() {
+  /** rect: a page's place for it (window calls right); one open elsewhere opens again there. */
+  showConsole(rect = null) {
     const owl = this.owl;
-    if (this.con.win && owl.place(this.con.win)) { owl.activate(this.con.win); return; }
-    const W = owl.width, H = owl.height, w = Math.min(W, Math.max(60, Math.round(W * 0.618))), h = Math.max(10, Math.round((H - 2) * 0.5));
-    this.con.win = owl.window('AI - console: every call', w, h, { x: Math.floor((W - w) / 2), y: H - 1 - h, style: Style.Document, closeCmd: CONSOLE_CLOSE });
+    if (this.con.win && owl.place(this.con.win)) {
+      if (!rect) { owl.activate(this.con.win); return; }
+      owl.close(this.con.win);
+    }
+    const W = owl.width, H = owl.height, w = rect?.w ?? Math.min(W, Math.max(60, Math.round(W * 0.618))), h = rect?.h ?? Math.max(10, Math.round((H - 2) * 0.5));
+    this.con.win = owl.window('AI - console: every call', w, h, { x: rect?.x ?? Math.floor((W - w) / 2), y: rect?.y ?? H - 1 - h, style: Style.Document, closeCmd: CONSOLE_CLOSE });
     this.con.view = owl.console(this.con.win, { scrollback: 1000 });
     owl.windowStatus(this.con.win, { label: '~End~ Newest', cmd: 0 }, { label: '~Alt-F3~ Close', cmd: 0 });
     const ev = this.agent.events;

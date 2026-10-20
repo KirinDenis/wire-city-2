@@ -15,31 +15,67 @@ ESC       back to DOS
 ```
 
 A crate onto a goal scores +10, off one -10; a solved level gives +50 to
-every man in the warehouse. The list under the playfield shows the men and
-their scores. Today there is one man; the warehouse is built for eight, and
-the network game fills the other places.
+every man in the warehouse. The list under the playfield shows the men,
+their names and their scores; a star marks the host.
+
+## On the network
+
+Up to eight players work one warehouse. On the WIRE CITY site everyone who
+plays MULTIPLAY SOKO is in the room `multsoko`; in desktop DOSBox, start the
+DOSBoxes on one `ipxnet`. The title screen asks for a name (up to eight
+letters and digits; none typed is PLAYER).
+
+- **One machine keeps the warehouse.** The crates, the level, the men and
+  the scores belong to the host - the lowest name on the wire. It sends the
+  world whole (`'W'`) twice a second and after every change; the others send
+  it their steps and orders (`'M'`) and their name (`'H'`, twice a second),
+  and draw what it sends. A step therefore goes there and back before the
+  man moves - a tenth of a second on the relay - and two men can never push
+  one crate two ways.
+- **A newcomer** listens two seconds for a world. Hearing one, it is a
+  client; the host gives its man the free floor nearest the start. Hearing
+  none, it opens a warehouse of its own at level 1 and hosts it. Two that
+  started alone at once become one: the higher name yields when it hears the
+  lower one's world.
+- **Leaving.** A man not heard for 3 s is taken off the floor. A host not
+  heard for 2 s is replaced by the lowest name still heard, which carries on
+  from the world it last drew.
+- **R R, N N, P P** go to the host, and change the level for everyone.
+- **Everything off the wire is checked:** a level past the last drops the
+  packet; a crate or a man off the floor is left out; a name is made
+  printable.
+- No IPX card, or no address within 15 s (Enter stops the wait): alone, the
+  same game.
+
+The network calls are `ENGINE\E_NET.INC`. It was tested with a fake player,
+`tests\SokoPilot\sokopilot.mjs` in the OWLOS-LAN repository, against the
+game in the site's page on a test server: as a client (its man in, its
+steps applied, dropped 3 s after it went quiet) and as the host (the game
+joined its warehouse, its steps went there and back, and it took the
+warehouse over 1.7 s after the host went quiet).
 
 ## Build it, run it
 
 In DOSBox, with the repository mounted:
 
 ```
-cd GAMES\SOKOBAN
+cd GAMES\MULTSOKO
 MAKE
 RUN
 ```
 
 From Windows: `MAKEWIN`, then `RUNWIN` (`RUNWIN CGA` plays it on DOSBox's
-real CGA machine). On the WIRE CITY site, a copy in `A:\MY\SOKOBAN` builds
-with `build A:\MY\SOKOBAN\SOKOBAN.ASM`.
+real CGA machine). On the WIRE CITY site, a copy in `A:\MY\MULTSOKO` builds
+with `build A:\MY\MULTSOKO\MULTSOKO.ASM`.
 
 ## The files
 
 | File | What it is |
 |---|---|
-| `SOKOBAN.ASM` | the game |
+| `MULTSOKO.ASM` | the game |
 | `ART.INC` | the pictures as text, one character a pixel: `.` see-through, `0`-`3` the four colours, `S` and `P` the man's shirt and cap. Edit them by hand. |
 | `LEVELS.INC` | the levels, made by `TOOLS\LevConv` from Base-Z-47's `level0.rs` ... `level60.rs` |
+| `..\..\ENGINE\E_NET.INC` | the network: IPX, everyone in the room hears everyone |
 
 `TOOLS\ArtGen` draws the floor, walls and crates by rule, writes them out as
 `ART.INC` text and renders a level the way the game does, as PNG, so the

@@ -40,6 +40,17 @@ const EFFECT_SAID = {
   setup: 'changes your setup - drives, settings, names',
   shares: 'gives something to others, or out of this page',
 };
+/**
+ * Each risky command in words for the Yes box: its effect - or, from a
+ * command that can say more (spec.explain: `page --use` says the page), that.
+ */
+async function explained(risky, shell) {
+  return Promise.all(risky.map(async c => {
+    let more = null;
+    try { more = await c.spec.explain?.(c, shell); } catch { /* says only its effect */ }
+    return `${c.name}: ${more ?? EFFECT_SAID[c.effect]}`;
+  }));
+}
 /** A DOS name: 8 letters, a dot and 3 more at most - what DOS can open. */
 const DOS_NAME = /^[A-Z0-9_\-~!#$%&'(){}^@`]{1,8}(\.[A-Z0-9_\-~!#$%&'(){}^@`]{1,3})?$/i;
 
@@ -55,7 +66,7 @@ The tools: guide (what the work on the site's games found out - read its index f
 
 Every token you read and write is paid for by the person. Start with a small program that builds and runs, then grow it; fix a mistake with edit_file - a line, not the whole file written again; read the part of a lesson you need, not every lesson.
 
-Making a program: give it a folder of its own on A: with DOS 8.3 names - A:\\MY\\HELI\\HELI.ASM; the DOS PC builds on A: only. \`build A:\\MY\\HELI\\HELI.ASM\` assembles it with FASM on the DOS PC and runs it at once; FASM's words come back, errors with their line numbers. Then \`screen\` to see it and \`keys\` to play it; a build or a run again replaces what runs. \`zip A:\\MY\\HELI\` hands the folder to the person as a ZIP - it lands in their downloads. A game for several players: \`build ... --net\` puts it on the site's relay, in a room of its folder's name - guide("MULTI") is the way, A:\\ENGINE\\E_NET.INC the calls.
+Making a program: give it a folder of its own on A: with DOS 8.3 names - A:\\MY\\HELI\\HELI.ASM; the DOS PC builds on A: only. \`build A:\\MY\\HELI\\HELI.ASM\` assembles it with FASM on the DOS PC and runs it at once; FASM's words come back, errors with their line numbers. Then \`screen\` to see it and \`keys\` to play it; a build or a run again replaces what runs. \`zip A:\\MY\\HELI\` hands the folder to the person as a ZIP - it lands in their downloads. A game for several players: \`build ... --net\` puts it on the site's relay, in a room of its folder's name - guide("MULTI") is the way, A:\\ENGINE\\E_NET.INC the calls. A page of the person's own - the site with only the menus, keys and windows they want, an INI file; or the whole look their own, an HTML page with Bootstrap or any CSS - is a file you write on D:\\PAGES: guide("PAGES").
 
 The house style: flat FASM; a .COM (org 100h) for the 8086 in real mode; VGA mode 13h (320x200, 256 colours) for pictures; read A:\\LESSONS and A:\\ENGINE before writing - the games here are made from them; a comment beside every arithmetic instruction; Esc always quits back to DOS and restores text mode 3; no dates or years invented in any text.
 
@@ -175,18 +186,19 @@ export function parseKeys(s) {
  * The commands a line would run - each part's and each pipe's, its aliases
  * undone as the shell undoes them - with the effect each has for its own
  * options and words; and whether the line redirects. A name the shell does
- * not know is left out: it runs nothing but its "command not found".
+ * not know is said apart (unknown): it runs nothing but its "command not
+ * found" - a model's line runs anyway, a page's is refused (page.js).
  */
-function commandsOf(shell, line) {
-  const list = [];
+export function commandsOf(shell, line) {
+  const list = [], unknown = [];
   let redirect = false;
   const take = words => {
     if (!words.length) return;
     const [name, ...rest] = shell.expand(words);
     const spec = shell.commands.get(name);
-    if (!spec) return;
+    if (!spec) { unknown.push(name); return; }
     const { opts, args } = options(rest, spec.valued ?? []);
-    list.push({ name, effect: effectOf(spec, opts, args), never: spec.model === 'never' });
+    list.push({ name, spec, opts, args, effect: effectOf(spec, opts, args), never: spec.model === 'never' });
   };
   for (const { text } of segments(line)) {
     let words = [];
@@ -197,7 +209,7 @@ function commandsOf(shell, line) {
     }
     take(words);
   }
-  return { list, redirect };
+  return { list, unknown, redirect };
 }
 
 /**
@@ -380,14 +392,22 @@ export class AgentLink {
   /** A line of the model's, muted in the terminal's record. */
   note(text, who) { this.app.netEvent(`${who ?? 'bot'}: ${text}`); }
 
-  /** The person's Yes or No, in a box of its own; Esc and the default are No. */
-  confirm(text) {
-    return new Promise(resolve => {
+  /**
+   * The person's Yes or No, in a box of its own; Esc and the default are No.
+   * One box at a time - a model's and a page's item may ask at once: the
+   * second waits for the first one's answer. Over an HTML page the box is
+   * the page's own (htmlpage.js): the desktop's would be under it, unseen.
+   */
+  confirm(text, title = 'The model asks') {
+    const ask = () => (this.app.htmlPage?.shown ? this.app.htmlPage.ask(text, title) : new Promise(resolve => {
       const owl = this.app.owl;
-      const box = owl.messageBox('The model asks', text, { label: '~Y~es', cmd: YES }, { label: '~N~o', cmd: NO, default: true, cancel: true });
+      const box = owl.messageBox(title, text, { label: '~Y~es', cmd: YES }, { label: '~N~o', cmd: NO, default: true, cancel: true });
       this.asking = { box, resolve };
       owl.refresh?.();
-    });
+    }));
+    const answer = (this.boxes ?? Promise.resolve()).then(ask);
+    this.boxes = answer.catch(() => false);
+    return answer;
   }
 
   handles(cmd) { return cmd === YES || cmd === NO; }
@@ -435,7 +455,7 @@ export class AgentLink {
     const never = cmds.list.find(c => c.never);
     if (never) return fail(`${never.name}: the person's own command - a model never runs it`);
     const risky = cmds.list.filter(c => ASK_EFFECTS.includes(c.effect));
-    if (risky.length && !await this.confirm(`${who} wants to run:\n\n${line}\n\n${risky.map(c => `${c.name}: ${EFFECT_SAID[c.effect]}`).join('\n')}\n\nLet it?`)) {
+    if (risky.length && !await this.confirm(`${who} wants to run:\n\n${line}\n\n${(await explained(risky, shell)).join('\n')}\n\nLet it?`)) {
       return fail(`the person said No to: ${line}`);
     }
     // Its own questions ([y/N]): yes when the person has let the line already, else theirs to answer.

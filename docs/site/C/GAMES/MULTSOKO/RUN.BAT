@@ -1,0 +1,3 @@
+@echo off
+REM RUN.BAT - MULTIPLAY SOKO. From C:\: cd GAMES\MULTSOKO, then RUN.
+MULTSOKO.COM

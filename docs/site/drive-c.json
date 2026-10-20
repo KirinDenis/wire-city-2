@@ -1,5 +1,5 @@
 {
-    "made":  "2026-10-19 19:09",
+    "made":  "2026-10-20 10:41",
     "source":  "released",
     "from":  {
                  "OWLFLY3":  "owlfly3_v19.jsdos",
@@ -7,7 +7,7 @@
                  "OWLFLY":  "owlfly_v53.jsdos",
                  "TRAINER":  "field_v32.jsdos",
                  "WIRECITY":  "wirecity_v4.jsdos",
-                 "SOKOBAN":  "GAMES\\SOKOBAN"
+                 "MULTSOKO":  "GAMES\\MULTSOKO"
              },
     "files":  [
                   {
@@ -163,12 +163,12 @@
                       "size":  86
                   },
                   {
-                      "path":  "GAMES/SOKOBAN/SOKOBAN.COM",
-                      "size":  23549
+                      "path":  "GAMES/MULTSOKO/MULTSOKO.COM",
+                      "size":  28985
                   },
                   {
-                      "path":  "GAMES/SOKOBAN/RUN.BAT",
-                      "size":  93
+                      "path":  "GAMES/MULTSOKO/RUN.BAT",
+                      "size":  95
                   }
               ]
 }

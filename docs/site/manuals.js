@@ -222,14 +222,16 @@ export const MANUALS = {
     ],
   },
 
-  sokoban: {
+  multsoko: {
     title: 'MULTIPLAY SOKO',
     keys: 'arrows or W A S D walk and push, Z whole level, R R anew, N N / P P next / previous',
     blocks: [
       { h: 'KEYS' },
       { p: 'The arrows, or W A S D, walk; walking into a crate pushes it, if the cell behind it is free. Z shows the whole level or close up. R twice starts the level anew, N twice and P twice go to the next and the previous level - the first press only asks. Esc goes back to DOS.' },
       { h: 'WHAT THIS IS' },
-      { p: 'Sokoban: push every crate onto a red mark and the next level comes. A crate onto a mark scores +10, off one -10, a solved level +50 to every man in the warehouse. The 61 levels are the ones of Base-Z-47. The warehouse holds eight men and keeps a list of them with their scores under the floor; for now it is you alone - the network game is the next step.' },
+      { p: 'Sokoban for up to eight: push every crate onto a red mark and the next level comes for everyone. A crate onto a mark scores +10, off one -10, a solved level +50 to every man in the warehouse. Everyone who plays it on the site works the same warehouse; the title asks your name, and the list under the floor shows every man, his name and his score - a star marks the host. Alone in the room, you open the warehouse yourself. The 61 levels are the ones of Base-Z-47.' },
+      { h: 'ON THE NETWORK' },
+      { p: 'One machine keeps the warehouse - the lowest name on the wire: the crates, the level, the men and the scores. The others send it their steps and draw the world it sends back twice a second, so two men can never push one crate two ways. A man not heard for 3 seconds leaves the floor; when the host goes quiet for 2, the next lowest carries on from the world it last drew.' },
       { h: 'WHY IT IS WORTH A LOOK' },
       { p: 'CGA: four colours, four pixels to a byte, and the even and odd rows in two separate banks. Every picture is text in ART.INC - one character a pixel - compiled at the start into a mask and an ink byte for each four pixels, and drawn back to front into a back buffer that the copy splits into the two banks. Its first version was isometric, and prettier; it went three-quarter because there every arrow walked a diagonal of the screen.' },
     ],

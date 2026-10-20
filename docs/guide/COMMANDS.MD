@@ -66,15 +66,17 @@ before it replaces a file the model did not write itself.
 ## The commands, by what they do
 
 - reads: help, man, echo, pwd, ls, cat, grep, sort, head, tail, wc, who,
-  map, df, du, history, profile; and alone: alias, export, mount, dosbox.
+  map, df, du, history, profile, net, machine, page (alone, FILE: its
+  check, --parts), info --list; and alone: alias, export, mount, dosbox.
 - shows: clear, set, exit, cd, watch, sky, manual, edit, commander,
-  lesson, share --stop.
+  lesson, window (a window opened, or tile, cascade, next, zoom, list...),
+  info (a help page), share --stop.
 - runs: play, run, build, dos, poweroff.
-- writes: mkdir, zip, profile --save.
+- writes: mkdir, zip, profile --save, page --example.
 - deletes: rm, mv, cp (a copy onto a file that is there writes over it),
   history -c, lesson --reset.
 - setup: alias, unalias, export, unset, source, mount, relabel, umount,
-  dosbox, profile --load.
+  dosbox, profile --load, page --use, page --off.
 - shares: share.
 - never by a model: agent.
 
@@ -84,8 +86,9 @@ before it replaces a file the model did not write itself.
   screen and the keys; files by write_file and edit_file, not cp.
   `zip A:\MY\GAME` gives the folder to the person (writes).
 - Several players: `build ... --net` [MULTI].
-- A page of one's own is a set of these lines behind buttons; what it
-  shows is their `--json`. What asks a model asks there too.
+- A page of one's own is these lines behind its menu items and keys
+  [PAGES]: what asks when a model runs it asks when it is clicked there,
+  and what a model may never run, a page never runs.
 
 ## For whoever adds a command
 

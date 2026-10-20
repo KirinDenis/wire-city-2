@@ -35,9 +35,13 @@ import { SkyMap } from './skymap.js';
 import { MANUALS, manualLines } from './manuals.js';
 import { Terminal, CmTerminalClose } from '../console/terminal.js';
 import { ANSI, RESET } from '../console/shell.js';
-import { siteShell, profileLines, quoted, dosboxLine } from './console.js';
+import { siteShell, profileLines, quoted, dosboxLine, pageFile } from './console.js';
 import { AgentLink } from './agent.js';
 import { AiSection } from './ai.js';
+import { PAGE_KEPT, PAGES_DIR, EXAMPLES, parsePage, checkPage, judgeLine, pageBrief, isHtml, exampleName } from './page.js';
+import { HtmlPage, checkHtmlPage } from './htmlpage.js';
+import { Help } from './help.js';
+import { DosBox } from '../owlosui/dosbox/dosbox.js';
 
 // Before anything can remove a file: every removal from this browser's
 // storage into a journal that outlives a reload (drives.js says why).
@@ -62,12 +66,14 @@ const Gm = { Play: 296, Source: 297, Folder: 298, Manual: 247 };
 /** The Manual window's close box; and which manuals have opened by themselves once (firstManual). */
 const MANUAL_CLOSE = 248;
 const MANUALS_SEEN = 'site.manuals.1';
-const HELP_CLOSE = 299;
 const WHO_BASE = 250;
 const Wh = { Watch: 257, Share: 258 };
 const SCREEN_CLOSE = 259;
 const MAP_CLOSE = 249;
 const GAME_BASE = 260;
+/** Files > Pages (page.js): the person's pages and the two examples, a row each. */
+const PAGES_BASE = 930;
+const Pg = { Use: 937, Edit: 938, Off: 939 };
 /** The smallest Map Drives can be made: the four buttons in a row (the pilot asked for about 50 columns), the table's Drive, Kind, Size and Where. */
 const MAP_MIN = { w: 56, h: 20 };
 
@@ -141,100 +147,11 @@ const GAMES = [
     about: 'Where it started: a night flight over a wireframe city that the program builds rather than stores. One source file, small enough ' +
       'to read in a sitting, with the three ideas everything here is made of: fixed-point 3-D, hidden lines by the painter, a world from a seed.',
     keys: 'arrows steer - the horizon banks with you' },
-  { key: 'sokoban', name: 'MULTIPLAY SOKO', dir: 'SOKOBAN', hint: 'Sokoban on CGA: crates onto the red marks, 61 levels, a score and a player list',
+  { key: 'multsoko', name: 'MULTIPLAY SOKO', dir: 'MULTSOKO', room: 'multsoko', hint: 'Sokoban on CGA for up to eight: one warehouse, 61 levels, a score each; multiplayer',
     about: 'Crates onto the red marks, in a brick warehouse seen from three quarters above, on a CGA screen in four colours. ' +
-      'The warehouse holds eight men and keeps a score for each; today it is one, and the network game is the next step.',
+      'Everyone who plays it on the site works the same warehouse: up to eight men, a score each, the next level for all when the last crate is home.',
     keys: 'arrows or W A S D walk and push, Z the whole level, R R the level anew, N N / P P the next or previous level' },
 ];
-
-/** Help > Keys: every key of the site, as the code has them. */
-const HELP_KEYS = `THE SITE
-  F10, or Alt and a letter   the menu - Alt+F Files, Alt+G Games, Alt+S Sources,
-                             Alt+L Lessons, Alt+N LAN, Alt+H Help
-  F1                         the lessons
-  F3                         the games
-  F2                         save the file in front
-  F9                         build the source in front on the DOS PC, and run it
-  F5                         the window in front as big as the screen, and back
-  Alt+F3                     close the window in front
-  Ctrl+\`                     the terminal - Esc closes it
-
-THE DOS PC
-  a click on its picture     the keys go to DOS: its title says "keys in DOS"
-  Right Ctrl                 the keys come back to the site
-  Help > Manual              how to play the game or the demo running: all its
-                             keys - the main ones are on the window's frame
-
-THE GAMES AND MAP DRIVES
-  arrows, PgUp, PgDn,        move the bar
-  Home, End
-  Enter                      play the game; open the drive
-  F4                         the game's source; edit the drive
-  Ins, Del                   add a drive; take one away (its files stay)
-
-KIRIN COMMANDER FOR WEB
-  Alt+F1, Alt+F2             a drive for the left panel, for the right
-  F3 view, F4 edit, F5 copy, F6 rename or move, F7 new folder, F8 delete
-  Ctrl+U                     the panels change places
-
-THE TERMINAL
-  Tab finishes a word, Up and Down walk back through what was typed, Ctrl+R
-  searches it, Ctrl+C stops a command. help lists the commands, man NAME
-  says more of one. What the menu and the windows do - play a game, open a
-  drive, add one - shows there as the command it is: the next time it can
-  be typed.
-`;
-
-/** Help > Drives and letters. */
-const HELP_DRIVES = `A drive is a letter, and every part of the site sees the same ones: the
-Files menu, Map Drives, both Kirin Commanders, the terminal (/mnt/a,
-/mnt/c ...) and the DOS PC.
-
-  A:  the course disk - the lessons, the examples, the games' sources and
-      FASM. Kept in this browser.
-  B:  a second floppy, in this browser - for an installer that asks for
-      disk 2.
-  C:  the DOS PC's hard disk, in this browser: C:\\GAMES. What DOS saves
-      there is there tomorrow. When the site brings a newer game, it
-      replaces only the files you have not changed.
-  D:  My files, in this browser: your own.
-  E: to Z:  what Map Drives adds - a folder of this browser; a folder on
-      this computer (Chrome and Edge; the browser asks you first, and DOS
-      writes to it only if you said it may); or a ZIP, from this computer
-      or from a link, copied into this browser.
-
-"In this browser" is the browser's storage for this site. Nobody else sees
-it - and a clean-up of the site's data in the browser takes all of it, D:
-too. Files > Save profile keeps the table of drives (not their files) in a
-file on your computer, and Files > Load profile puts it back. What you
-want to keep, copy to a folder of this computer.
-
-DOS sees a change in the table at its next switch-on. A file deleted inside
-DOS comes back at the next switch-on: nothing is deleted only because DOS
-no longer shows it. Delete in Kirin Commander for Web or in the terminal.
-`;
-
-/** Help > Who sees what: the network, as it is (the pilot, 2026-10-18). */
-const HELP_PRIVACY = `Nobody signs in here. When the site opens, it connects to our server, and
-the server names that connection an animal - Rabbit, Fox - different from
-the others open now. The name lasts as long as the connection: a reload,
-or the next visit, is a new animal.
-
-WHAT THE OTHERS HERE SEE OF YOU (LAN > Who is online)
-  your animal, and what you are doing, as one of these words: here,
-  plays GAME, in lesson N, builds a program, edits a file, goes through
-  files, in the terminal, away. Never a file's or a folder's name, never
-  what you type, never what is on your drives.
-
-WHAT THE SERVER SEES
-  the connection, as every server does - your address comes with it. The
-  server passes it nowhere: not into the list, not to the others, not into
-  its log. It keeps nothing about you once you have gone.
-
-WHAT NEVER LEAVES THIS BROWSER
-  your files - A: to Z: are this browser's and this computer's; the
-  terminal's history; your profile, unless you save it yourself.
-`;
 
 /**
  * The lessons by topic, each in the course's order: all of them do not fit
@@ -295,7 +212,7 @@ function siteSettings() {
 const ADDRESS_PLAYS = {
   owlfly3: { game: 'owlfly3' }, owlfly3h: { game: 'owlfly3', machine: 'hercules' }, owlfly2: { game: 'owlfly2' },
   owlfly: { game: 'owlfly' }, trainer: { game: 'trainer' }, field: { game: 'trainer' }, wirecity: { game: 'wirecity' },
-  sokoban: { game: 'sokoban' },
+  multsoko: { game: 'multsoko' }, sokoban: { game: 'multsoko' },
   jet: { example: 'JET' }, terra: { example: 'TERRA' }, relief: { example: 'RELIEF' }, smoke: { example: 'SMOKE' }, avio: { example: 'AVIO' },
 };
 
@@ -330,6 +247,9 @@ export class SiteApp extends CourseApp {
     this.mapDrives = this.makeMapDrives();
     this.catalog = this.makeCatalog();
     this.who = this.makeWho();
+    this.pagesWin = this.makePages();
+    this.htmlPage = new HtmlPage(this);
+    this.help = new Help(this);
     // Screens: this PC's, on air (the console core's Caster), and others', watched (screens.js).
     this.caster = new Caster(this.dos.box, log);
     const stop = this.caster.stop.bind(this.caster);
@@ -369,9 +289,10 @@ export class SiteApp extends CourseApp {
    */
   stackPictures() {
     const pictures = [];
-    if (this.dos?.win && this.dos.box?.el) pictures.push({ win: this.dos.win, el: this.dos.box.el });
+    // In an HTML page's slot the DOS picture is the page's to place (htmlpage.js layoutDos), over the page.
+    if (this.dos?.win && this.dos.box?.el && !this.htmlPage?.slot('dos')) pictures.push({ win: this.dos.win, el: this.dos.box.el });
     for (const v of this.screens?.views.values() ?? []) if (v.win && v.el) pictures.push({ win: v.win, el: v.el });
-    if (this.skymap?.win && this.skymap.el) pictures.push({ win: this.skymap.win, el: this.skymap.el });
+    if (this.skymap?.win && this.skymap.el && !this.htmlPage?.slot('map')) pictures.push({ win: this.skymap.win, el: this.skymap.el });
     const alive = new Set(pictures.map(p => p.win));
     let order = (this.pictureOrder ?? []).filter(w => alive.has(w));
     for (const p of pictures) if (!order.includes(p.win)) order.unshift(p.win);
@@ -919,9 +840,9 @@ export class SiteApp extends CourseApp {
     });
   }
 
-  /** The catalog open - each game's folder on C: weighed as it shows them. */
-  showCatalog() {
-    this.catalog.show();
+  /** The catalog open - each game's folder on C: weighed as it shows them; rect: a page's place for it. */
+  showCatalog(rect = null) {
+    this.catalog.show(rect);
     this.track((async () => {
       this.gameStats ??= new Map();
       for (const g of GAMES) {
@@ -929,18 +850,6 @@ export class SiteApp extends CourseApp {
         this.catalog.refreshRows();
       }
     })());
-  }
-
-  /** A page of Help, in a window of its own: read-only text, the keys of an editor to move in it. */
-  showHelp(title, text) {
-    const owl = this.owl;
-    if (this.helpWin && owl.place(this.helpWin)) owl.close(this.helpWin);
-    const lines = text.split('\n').length;
-    const w = Math.min(owl.width, Math.max(...text.split('\n').map(l => l.length)) + 4), h = Math.min(owl.height - 2, lines + 2);
-    this.helpWin = owl.window(title, w, h, { x: Math.floor((owl.width - w) / 2), y: 1 + Math.round((owl.height - 2 - h) * 0.382),
-      style: Style.Document, closeCmd: HELP_CLOSE });
-    owl.text(this.helpWin, text, { readOnly: true });
-    owl.refresh?.();
   }
 
   /** Play, Source or Folder for the game in the catalog's bar. */
@@ -1293,14 +1202,18 @@ export class SiteApp extends CourseApp {
     this.track(this.installDisk({ quiet: true }));
     // Who is here: this page's connection, an animal (net.js).
     this.startNet();
+    // A page of the person's own, if one is on (page.js) - its menus now, its windows below.
+    const paged = this.restorePage();
     // The front door: the lesson the address names (?l=7, as on the course
     // page - a lesson opened here writes it), else the games.
     // ?play=owlfly2: a game or a demo the address names - the old pages send
     // here - in front, with no catalog over it; one it does not know, the catalog.
+    // With a page on, its own windows instead of the games.
     const asked = lessonFromAddress(this.course.lessons);
     const wanted = asked ? null : new URLSearchParams(location.search).get('play');
     if (asked) await this.track(this.openLesson(asked));
     else if (wanted) await this.track(this.playFromAddress(wanted));
+    else if (paged) await this.track(this.openPageWindows());
     else this.showCatalog();
     // Files of the site's that vanished from C: and were put back (lostFromC): said, over all of it.
     if (this.cLost) {
@@ -1401,7 +1314,7 @@ export class SiteApp extends CourseApp {
       { title: `Lesson ${l.lecture}`, act: () => this.send(`lesson ${l.lecture.toLowerCase()}`, 'Lessons') });
     return [
       item('~C~atalog...', 'Every lesson: its video, its source, and a DOS machine that builds and runs it',
-        { title: 'Lessons', shortcut: 'F1', act: () => this.list.show() }),
+        { title: 'Lessons', shortcut: 'F1', act: () => this.send('window lessons', 'Lessons') }),
       line(),
       // As the course page has them - Build, Run and Reset go on the bus (onCommand).
       { label: '~B~uild and run', cmd: Cm.Build, shortcut: 'F9', hint: 'Save, assemble the .ASM in front with FASM on the DOS PC, and run what it made' },
@@ -1415,24 +1328,22 @@ export class SiteApp extends CourseApp {
     ];
   }
 
-  /** The site's menu bar and status line, over the course's. */
+  /** The site's menu bar and status line, over the course's - or a page's of the person's own. */
   buildMenus() {
+    if (this.page?.kind === 'ini') { this.buildPageMenus(); return; }
     const owl = this.owl;
     next = 100;
     items.clear();
-    const about = item('~A~bout WIRE CITY 86', 'What this site is', {
-      act: () => this.tell('WIRE CITY 86', 'A DOS PC in your browser, with real drives: our games on C:, their sources and the ' +
-        'lessons that teach how they are made on A:, your own files on D: - and the assembler, to change them and build them again.\n\n' +
-        'Free, and the sources are open: github.com/KirinDenis/wire-city-2. LAN, the network, comes next.'),
-    });
-    const catalog = item('~C~atalog...', 'Every game on C:, what it is and its keys: Enter plays', { title: 'Games', shortcut: 'F3', act: () => this.showCatalog() });
+    const about = item('A~b~out WIRE CITY 86', 'What this site is, and what it is made with: OWLOSUI, js-dos, DOSBox, FASM...',
+      { act: () => this.send('info about', 'Help') });
+    const catalog = item('~C~atalog...', 'Every game on C:, what it is and its keys: Enter plays', { title: 'Games', shortcut: 'F3', act: () => this.send('window catalog', 'Games') });
     this.helpCmd = about.cmd;
     this.catalogCmd = catalog.cmd;
 
     owl.menuBar(
       sub('~F~iles',
         item('~M~ap Drives...', 'Which letter is where: one table for this menu, both commanders and DOS',
-          { act: () => this.showDrives() }),
+          { act: () => this.send('window drives', 'Files') }),
         line(),
         // The table, a letter a line: Enter opens the drive in the web commander.
         // A: to D: carry their letter as the key; the rest would take the other items' keys (K, L, M, P, T, W).
@@ -1449,7 +1360,9 @@ export class SiteApp extends CourseApp {
         item('Save ~p~rofile...', 'Your drives and settings as a list of commands, in a file on your computer',
           { act: () => this.send('profile --save', 'Save profile', { say: true }) }),
         item('~L~oad profile...', 'Put a saved profile back: the drives come back with their letters',
-          { act: async () => { await this.terminal.show(); this.send('profile --load', 'Load profile'); } })),
+          { act: async () => { await this.terminal.show(); this.send('profile --load', 'Load profile'); } }),
+        item('Pa~g~es...', 'A page of your own: only the menus, keys and windows you want - an INI file on D:, made by you or your AI',
+          { act: () => this.send('window pages', 'Files') })),
       sub('~G~ames',
         catalog,
         line(),
@@ -1458,35 +1371,29 @@ export class SiteApp extends CourseApp {
       sub('~L~essons', ...this.lessonsMenu()),
       sub('LA~N~',
         item('~W~ho is online', 'Who else is here now, and what they are doing - an animal a connection, nothing more',
-          { act: () => this.who.show() }),
+          { act: () => this.send('window who', 'LAN') }),
         item('~L~ive map', 'The server\'s sky of the game you fly - or OWL FLY III\'s: every jet where it is, a click watches a shared screen',
           { act: () => this.send('sky', 'LAN') }),
         item('~C~hat', 'Talk to everyone here, the IRC way: channels, nicks, /join, /me'),
         item(this.caster?.onAir ? '~S~top sharing my screen' : '~S~hare my screen', 'Your DOS screen for the others to watch, under your animal - Who is online shows who shares',
           { title: 'Share my screen', act: () => this.send(this.caster?.onAir ? 'share --stop' : 'share', 'LAN') }),
-        item('~M~onitor', 'The network as it is: the relay, the delay, what is lost')),
+        item('~M~onitor', 'The network as the DOS PC has it: the relay, its state, bytes each way, a graph of the last minute, every packet',
+          { act: () => this.send('window netmon', 'LAN') })),
       // A model's hands on the site (agent.js, ai.js): the person's own model, paid for by their own key.
       sub('~A~I',
         item('~C~hat', 'A model works in this page while you watch: it writes, builds, runs and plays - on your own Anthropic API key',
-          { act: () => this.ai?.chat.show() }),
+          { act: () => this.send('window chat', 'AI') }),
         item('~A~gents', 'Who works here: the chat, and your own Claude Code through MCP - a new token, its line, taken back',
-          { act: () => this.ai?.agents.show() }),
+          { act: () => this.send('window agents', 'AI') }),
         item('~T~asks', 'What the models work on: each request, where it stands, what it cost',
-          { act: () => this.ai?.tasks.show() }),
+          { act: () => this.send('window tasks', 'AI') }),
         item('C~o~nsole', 'Every call a model made here, as it happens',
-          { act: () => this.ai?.showConsole() }),
+          { act: () => this.send('window calls', 'AI') }),
         line(),
         item('~N~ew token for Claude Code', 'A token, and the line that connects your own Claude Code to this page - on the clipboard',
           { act: () => this.ai?.newToken() })),
-      sub('~H~elp',
-        item('~M~anual', 'How to play the game or the demo running now - its keys, what it is', { act: () => this.send('manual', 'Help') }),
-        item('~D~rives and letters', 'How the drives work: a letter, where its files are, who sees them',
-          { act: () => this.showHelp('Drives and letters', HELP_DRIVES) }),
-        item('~K~eys', 'Every key of the site', { act: () => this.showHelp('Keys', HELP_KEYS) }),
-        item('~W~ho sees what', 'What the others here see of you, what the server sees, what is never sent',
-          { act: () => this.showHelp('Who sees what', HELP_PRIVACY) }),
-        line(),
-        about),
+      this.windowMenu(),
+      this.helpMenu(about),
     );
     owl.statusLine(
       { label: '~F1~ Lessons', cmd: Cm.Lessons, key: 'F1' },
@@ -1522,6 +1429,8 @@ export class SiteApp extends CourseApp {
     const run = dos.run.bind(dos);
     dos.run = (start, opts = {}) => {
       if (dos.win && styleOf(dos.starts[start] ? start : 'prompt', opts.program) !== style) { owl.close(dos.win); dos.win = 0; }
+      // A page that put the DOS PC somewhere (window dos right): a window opened anew goes there.
+      if (!opts.rect && this.dosPlace && !(dos.win && owl.place(dos.win))) opts = { ...opts, rect: this.dosPlace };
       return run(start, opts);
     };
   }
@@ -1795,6 +1704,8 @@ export class SiteApp extends CourseApp {
       const t = this.terminal;
       t.write(`\r\x1b[K${ANSI.muted}# saved ${path}${RESET}\r\n`);
       if (!t.busy) t.render();
+      // A page saved in the editor: the Pages window, if open, checks it again.
+      if (this.pagesWin?.isOpen) this.track(this.loadPages());
     });
   }
 
@@ -1928,12 +1839,414 @@ export class SiteApp extends CourseApp {
     return a;
   }
 
+  // ------------------------------------------------------------ a page of the person's own (page.js)
+
+  /**
+   * The page kept in this browser, on again at the start: its menus now,
+   * its windows when start() opens them. Not on ?ui=off - the whole site
+   * for this visit, whatever the page did - nor when what was kept no longer
+   * reads as a page.
+   */
+  restorePage() {
+    let kept = null;
+    try { kept = JSON.parse(localStorage.getItem(PAGE_KEPT) ?? 'null'); } catch { /* none kept */ }
+    if (!kept?.text) return false;
+    if (new URLSearchParams(location.search).get('ui') === 'off') {
+      this.tell('Your page', `${kept.file} is your page. ?ui=off in the address shows the whole site this visit; the address without it brings your page back - or WIRE CITY > Whole site, then Files > Pages.`);
+      return false;
+    }
+    // Checked again as it is put on again: an HTML page is taken apart anew each time (htmlpage.js).
+    const html = isHtml(kept.file);
+    const c = html ? checkHtmlPage(this.terminal.bus.shell, kept.file, kept.text) : null;
+    const page = html ? null : parsePage(kept.text);
+    const problems = c?.problems ?? page.problems;
+    if (problems.length) {
+      this.tell('Your page', `${kept.file} no longer reads as a page - the whole site instead:\n\n${problems.join('\n')}`);
+      return false;
+    }
+    this.page = html ? { file: kept.file, name: c.page.name, kind: 'html', text: kept.text } : { file: kept.file, name: page.name, kind: 'ini', page };
+    this.buildMenus();
+    return true;
+  }
+
+  /** `page FILE --use`: what was checked is kept - not the file, which may change after - and put on. */
+  async usePage(r) {
+    try { localStorage.setItem(PAGE_KEPT, JSON.stringify({ file: r.file, text: r.text })); } catch { /* for this visit only */ }
+    this.htmlPage.unmount();
+    this.page = r.kind === 'html' ? { file: r.file, name: r.page.name, kind: 'html', text: r.text } : { file: r.file, name: r.page.name, kind: 'ini', page: r.page };
+    this.buildMenus();
+    await this.openPageWindows();
+  }
+
+  /** `page --off`: the whole site again; the page's file stays where it is. The file that was kept, if one was - on or not (?ui=off). */
+  async pageOff() {
+    let kept = null;
+    try { kept = JSON.parse(localStorage.getItem(PAGE_KEPT) ?? 'null')?.file ?? null; localStorage.removeItem(PAGE_KEPT); } catch { /* nothing kept */ }
+    kept ??= this.page?.file ?? null;
+    this.htmlPage.unmount();
+    this.page = null;
+    this.dosPlace = null;
+    this.buildMenus();
+    this.owl.refresh?.();
+    return kept;
+  }
+
+  /** An HTML page that hid or covered the WIRE CITY button: taken off, and said why. */
+  async pageTripped(why) {
+    const file = this.page?.file;
+    await this.pageOff();
+    this.tell('Your page', `${file} is off: ${why}. The button is the way back to the whole site - a page may not take it away. Its file stays on D:.`);
+  }
+
+  /** What tells and asks while an HTML page is shown: its own boxes over it - the desktop's would be under it, unseen. */
+  tell(title, text) {
+    if (this.htmlPage?.shown) { this.htmlPage.tell(title, text); return; }
+    super.tell(title, text);
+  }
+
+  /** The windows the page's Open= names, in its order - one that cannot open says why in the log, the rest still do. An HTML page: laid over the desktop. */
+  async openPageWindows() {
+    if (this.page?.kind === 'html') { await this.htmlPage.mount(this.page); return; }
+    for (const o of this.page?.page.open ?? []) {
+      try { await this.showWindow(o.window, o.at); } catch (e) { log.warn('site', `page: ${o.window}: ${e.message}`); }
+    }
+    this.owl.refresh?.();
+  }
+
+  /** Where a place puts a window, in cells: the menu bar above it, the status line below. */
+  placeRect(at) {
+    const W = this.owl.width, H = this.owl.height, half = Math.floor(W / 2), mid = Math.floor((H - 2) / 2);
+    return {
+      left: { x: 0, y: 1, w: half, h: H - 2 }, right: { x: half, y: 1, w: W - half, h: H - 2 },
+      top: { x: 0, y: 1, w: W, h: mid }, bottom: { x: 0, y: 1 + mid, w: W, h: H - 2 - mid },
+      full: { x: 0, y: 1, w: W, h: H - 2 },
+    }[at] ?? null;
+  }
+
+  /** The DOS window in a place: its picture as big as the place holds - in whole multiples when sharp, 4:3 else - centred in it. */
+  dosRect(box) {
+    const sc = this.owl.screen, cw = sc?.cellW ?? 10, ch = sc?.cellH ?? 22;
+    let iw, ih;
+    if (this.dos.settings.picture === 'sharp') ({ w: iw, h: ih } = DosBox.insideFor(this.owl, box.w - 2, box.h - 2));
+    else {
+      ih = box.h - 2;
+      iw = Math.round((ih * ch * 4) / 3 / cw);
+      if (iw > box.w - 2) { iw = box.w - 2; ih = Math.round((iw * cw * 3) / 4 / ch); }
+    }
+    return { x: box.x + Math.floor((box.w - iw - 2) / 2), y: box.y + Math.floor((box.h - ih - 2) / 2), w: iw + 2, h: ih + 2 };
+  }
+
+  /** A terminal - the console's, the chat's - at a place, or at its own; one open elsewhere opens again there. */
+  placeTerminal(term, box) {
+    if (!('homePlace' in term)) term.homePlace = term.place;      // null for the console's: its own default
+    term.place = box ? () => box : term.homePlace;
+    if (box && term.open) term.close();
+    return term.show();
+  }
+
+  /**
+   * `window tile`, `window next`...: the windows arranged as the course's
+   * Window menu does it (its onCommand - the DOS window zoomed its own way).
+   * Over an HTML page the desktop steps forward first: it is what they move.
+   * False when there is no window in front for what wants one.
+   */
+  arrangeWindows(op) {
+    const cm = { tile: Cm.Tile, cascade: Cm.Cascade, next: Cm.Next, previous: Cm.Previous, zoom: Cm.Zoom,
+      minimize: Cm.Minimize, close: Cm.Close, list: Cm.List, size: Cm.SizeMove }[op];
+    if (!cm) return false;
+    if (['zoom', 'minimize', 'close', 'size'].includes(op) && !this.owl.active()) return false;
+    if (this.htmlPage?.shown) this.htmlPage.peek(true);
+    this.onCommand(cm);
+    this.owl.refresh?.();
+    return true;
+  }
+
+  /** The Help menu: its pages (help.js), as `info` lines on the bus; Manual is the game's own. */
+  helpMenu(about) {
+    const page = (label, topic, hint) => item(label, hint, { title: `Help: ${topic}`, act: () => this.send(topic === 'index' ? 'info' : `info ${topic}`, 'Help') });
+    return sub('~H~elp',
+      page('~C~ontents', 'index', 'The help: every page, and what can be opened from it at once'),
+      item('~M~anual', 'How to play the game or the demo running now - its keys, what it is', { act: () => this.send('manual', 'Help') }),
+      line(),
+      page('The ~g~ames', 'games', 'What each game is, and a link that plays it'),
+      page('The ~l~essons', 'lessons', 'The course in 8086 assembly: a video, a source and a DOS PC each'),
+      page('~D~rives and letters', 'drives', 'How the drives work: a letter, where its files are, who sees them'),
+      page('~K~eys', 'keys', 'Every key of the site'),
+      page('~W~indows', 'windows', 'Side by side, one over the other, the list - and a window in a half of the screen'),
+      page('The ~t~erminal', 'console', 'The commands every window and menu runs, and what each command does'),
+      page('The ~n~etwork', 'network', 'Who is here, shared screens, the live map, games for several'),
+      page('~A~I', 'ai', 'A model that writes, builds and plays in this page, on your own key'),
+      page('~P~ages of your own', 'pages', 'The site with only what you want - or a look all your own'),
+      page('Who ~s~ees what', 'privacy', 'What the others here see of you, what the server sees, what is never sent'),
+      line(),
+      about);
+  }
+
+  /** The Window menu, as lines on the bus - the whole site's and an INI page's alike: arranging windows is the site's. */
+  windowMenu() {
+    const w = (label, op, hint, shortcut) => item(label, hint, { title: `Window: ${op}`, ...(shortcut ? { shortcut } : {}), act: () => this.send(`window ${op}`, 'Window') });
+    return sub('~W~indow',
+      w('~T~ile', 'tile', 'Every window side by side'),
+      w('C~a~scade', 'cascade', 'Every window one over the other, each title seen'),
+      line(),
+      w('~N~ext', 'next', 'The next window to the front', 'F6'),
+      w('~P~revious', 'previous', 'The window before it', 'Shift+F6'),
+      w('~Z~oom', 'zoom', 'The window in front as big as it goes - or back', 'F5'),
+      w('~S~ize/Move', 'size', 'The window in front moved or sized with the arrows; Enter when done', 'Ctrl+F5'),
+      w('Mi~n~imize', 'minimize', 'The window in front put away into its bar, bottom right'),
+      w('~C~lose', 'close', 'The window in front closed', 'Alt+F3'),
+      line(),
+      w('~L~ist...', 'list', 'Every window there is, to pick one', 'Alt+0'));
+  }
+
+  /** `window NAME [AT]`: a window of the site, where a page - or anyone - says. */
+  async showWindow(name, at = null) {
+    const box = at ? this.placeRect(at) : null;
+    // Over an HTML page a desktop window is unseen: the page steps aside for it - not for the DOS PC in its slot.
+    if (this.htmlPage?.shown && !(name === 'dos' && this.htmlPage.slot('dos'))) this.htmlPage.peek(true);
+    switch (name) {
+      case 'dos': {
+        // A running machine stays as it is - a new place would switch it off and on - and takes the place at its next window.
+        if (box) this.dosPlace = this.dosRect(box);
+        if (this.dos.win && this.owl.place(this.dos.win) && this.dos.box.running) { this.owl.activate(this.dos.win); return; }
+        this.track(this.dos.run(this.dos.started || this.dos.settings.start));
+        return;
+      }
+      case 'chat': await this.placeTerminal(this.ai.chat.term, box); return;
+      case 'terminal': await this.placeTerminal(this.terminal, box); return;
+      case 'calls': this.ai.showConsole(box); return;
+      case 'agents': this.ai.agents.show(box); return;
+      case 'tasks': this.ai.tasks.show(box); return;
+      case 'who': this.who.show(box); return;
+      case 'drives': this.mapDrives.show(box); this.track(this.countDrives()); return;
+      case 'catalog': this.showCatalog(box); return;
+      case 'pages': await this.loadPages(); this.pagesWin.show(box); return;
+      // OWLOSUI's own monitors of the DOS PC (apps/monitors.js), as its window's Machine menu opens them.
+      case 'netmon': this.dos.monitors.showNet(); return;
+      case 'machine': this.dos.monitors.showMachine(); return;
+      case 'lessons': this.list.show(); return;
+      case 'commander': await this.send('commander', 'window'); return;
+      default: throw new Error(`${name}: no such window`);
+    }
+  }
+
+  /**
+   * The page's menus and keys, and the site's own WIRE CITY menu after
+   * them - the whole site again, the pages, the terminal, the tokens: what
+   * a page never takes away. Each item's hint is its line and what it does.
+   */
+  buildPageMenus() {
+    const owl = this.owl, p = this.page.page, shell = this.terminal?.bus.shell;
+    next = 100;
+    items.clear();
+    const says = text => {
+      const j = shell ? judgeLine(shell, text) : null;
+      return j?.problem ? `refused: ${j.problem}` : j ? `${j.effect}${j.asks ? ', asks you first' : ''}` : '';
+    };
+    const runs = (label, text) => item(label, `${text} - ${says(text)}`, { title: label.replace(/~/g, '').trim(), act: () => this.runPageLine(text, label) });
+    const about = item('A~b~out WIRE CITY 86', 'What this site is, and what it is made with', { act: () => this.send('info about', 'WIRE CITY') });
+    owl.menuBar(
+      ...p.menus.map(m => sub(m.title, ...m.items.map(x => (x.line ? runs(x.label, x.line) : line())))),
+      this.windowMenu(),
+      sub('~W~IRE CITY',
+        item('The ~w~hole site', `Every menu of the site again - ${this.page.file} stays where it is, page FILE --use puts it back`,
+          { act: () => this.send('page --off', 'WIRE CITY') }),
+        item('~P~ages...', 'Your pages and the one that is on: another put on, one edited', { act: () => this.send('window pages', 'WIRE CITY') }),
+        item('~T~erminal', 'The console: every line this page runs is there, and every command', { shortcut: 'Ctrl+`', act: () => this.terminal?.toggle() }),
+        item('~A~gents and tokens', 'Who works here, and the tokens of your own Claude Code - the site\'s, never a page\'s',
+          { act: () => this.send('window agents', 'AI') }),
+        line(),
+        item('~H~elp', 'The site\'s help: pages with links - to other pages, and to what they tell of, opened at once',
+          { act: () => this.send('info', 'WIRE CITY') }),
+        item('Who ~s~ees what', 'What the others here see of you, what the server sees, what is never sent',
+          { act: () => this.send('info privacy', 'WIRE CITY') }),
+        about),
+    );
+    owl.statusLine(
+      ...p.keys.map(k => {
+        const label = k.label || k.line.split(/\s+/)[0];
+        const it = runs(label, k.line);
+        return { label: `~${k.ctrl ? 'Ctrl-' : k.alt ? 'Alt-' : ''}${k.key}~ ${label}`, cmd: it.cmd, key: k.key, ...(k.ctrl ? { ctrl: true } : {}), ...(k.alt ? { alt: true } : {}) };
+      }),
+      { label: '~F2~ Save', cmd: DocCm.Save, key: 'F2' },
+      { label: '~F5~ Zoom', cmd: Cm.Zoom, key: 'F5' },
+      { label: '~Alt-F3~ Close', cmd: Cm.Close, key: 'F3', alt: true },
+    );
+  }
+
+  /**
+   * A page's item or key: its line run as if typed - after the person's Yes
+   * when the contract says it deletes, changes the setup or gives something
+   * out, never when a model may never run it either. What only reads comes
+   * back in a box; what goes wrong always does.
+   */
+  async runPageLine(text, label, { from = this.page?.name || 'Your page', whose = 'of your page' } = {}) {
+    const name = label.replace(/~/g, '').trim();
+    const j = judgeLine(this.terminal.bus.shell, text);
+    if (j.problem) { this.tell(from, `${name}: ${j.problem} - not run.`); return; }
+    if (j.asks) {
+      const said = { deletes: 'takes away, or writes over, what was there', setup: 'changes your setup', shares: 'gives something to others, or out of this page' }[j.effect];
+      if (!this.agent || !await this.agent.confirm(`"${name}" ${whose} runs:\n\n${text}\n\nIt ${said}. Let it?`, `${from} asks`)) return;
+    }
+    await this.send(text, from, { say: j.effect === 'reads' });
+  }
+
+  /** A link to another site (the help's About, a page's https: link): its real address said, then a tab of its own with nothing of ours. */
+  async leaveFor(href) {
+    let host = href;
+    try { host = new URL(href).host; } catch { /* said as it is */ }
+    const ask = this.htmlPage?.shown ? this.htmlPage.ask.bind(this.htmlPage) : (t, title) => this.agent?.confirm(t, title) ?? Promise.resolve(false);
+    if (await ask(`You are leaving WIRE CITY for\n\n${host}\n\n${href}\n\nOpen it in a tab of its own?`, 'A link')) window.open(href, '_blank', 'noopener,noreferrer');
+  }
+
+  /**
+   * A shell of the site's that writes nowhere and asks nothing: what an HTML
+   * page of one's own reads for its lists, every few seconds, without
+   * filling the terminal - the site's commands, its drives, none of the
+   * person's aliases.
+   */
+  readShell() {
+    this.quietShell ??= siteShell(this, { write: () => {}, ask: async () => null });
+    return this.quietShell;
+  }
+
+  /** `info [TOPIC]`: a help page - over an HTML page of one's own, the page steps aside for it. */
+  showInfo(topic) {
+    if (this.htmlPage?.shown) this.htmlPage.peek(true);
+    return this.help.show(topic || 'INDEX');
+  }
+
+  /**
+   * The Pages window (Files > Pages, WIRE CITY > Pages: `window pages`):
+   * the person's pages in D:\PAGES, the one that is on, and the two
+   * examples not written yet - a row each, made as Map Drives is
+   * (tablewin.js). Under the table, what the page in the bar does, as its
+   * check says it. Use puts it on after a Yes box that says the page - an
+   * example is written to D:\PAGES first; Edit opens its file, which then
+   * takes Use again: what is on is what was checked.
+   */
+  makePages() {
+    const row = i => this.pageRows()[i];
+    return new TableWindow(this, {
+      title: 'Pages', base: PAGES_BASE, min: MAP_MIN, tall: true,
+      columns: [
+        { head: 'Page', width: 14, colour: Color.White },
+        { head: 'Name', width: 24, colour: Color.LightCyan },
+        { head: 'State', width: 16, colour: Color.Yellow, drop: 2 },
+        { head: 'Opens', width: 0, colour: Color.White, drop: 1 },
+      ],
+      rows: () => this.pageRows().map(r => [r.label, r.name, r.state, r.opens]),
+      buttons: i => [
+        { key: 'use', label: '~U~se', cmd: Pg.Use, default: true, shown: !!row(i) && !row(i).gone },
+        { key: 'edit', label: '~E~dit', cmd: Pg.Edit, shown: !!row(i) && !row(i).example && !row(i).gone },
+        { key: 'off', label: 'The ~w~hole site', cmd: Pg.Off, shown: !!this.page },
+      ],
+      keys: i => [
+        ...(row(i) && !row(i).gone ? [{ label: '~Enter~ Use', cmd: Pg.Use, key: 'Enter' }] : []),
+        ...(row(i) && !row(i).example && !row(i).gone ? [{ label: '~F4~ Edit', cmd: Pg.Edit, key: 'F4' }] : []),
+      ],
+      words: i => this.pageWords(row(i)),
+      open: () => this.onCommand(Pg.Use),
+    });
+  }
+
+  pageRows() { return this.pagesFound ?? []; }
+
+  /** The rows read again: each page of D:\PAGES checked, the one on, the examples not there yet. */
+  async loadPages() {
+    const shell = this.terminal.bus.shell, paths = shell.paths;
+    // What a page opens: an INI's windows; an HTML page is the whole screen.
+    const opens = p => (!p || p.kind === 'html' || isHtml(p.file ?? '') ? 'the whole screen, HTML'
+      : p.open.map(o => `${o.window}${o.at ? ` ${o.at}` : ''}`).join(', ') || '-');
+    const rows = [];
+    const names = (await paths.list(paths.resolve(PAGES_DIR)).catch(() => []))
+      .filter(e => !e.dir && /\.(INI|HTM)$/i.test(e.name)).map(e => e.name.toUpperCase());
+    for (const n of names) {
+      const file = `${PAGES_DIR}\\${n}`;
+      try {
+        const c = await pageFile(shell, file), on = this.page?.file === file;
+        const n2 = c.problems.length, asks = c.asks.length;
+        rows.push({ file, label: n, name: c.page.name, check: c, on, opens: opens(c.page),
+          state: on ? 'on' : n2 ? `${n2} problem${n2 > 1 ? 's' : ''}` : asks ? `fine, ${asks} ask${asks > 1 ? '' : 's'}` : 'fine' });
+      } catch (e) { rows.push({ file, label: n, name: '', state: 'unreadable', opens: '-', error: e.message }); }
+    }
+    // On, but its file gone from D: (a cleaned browser, a deleted file): what was checked is kept and works.
+    if (this.page && !rows.some(r => r.file === this.page.file)) {
+      rows.unshift({ file: this.page.file, label: this.page.file.split('\\').pop(), name: this.page.name, state: 'on, file gone', gone: true,
+        opens: opens(this.page.kind === 'html' ? { kind: 'html' } : this.page.page) });
+    }
+    for (const [k, text] of Object.entries(EXAMPLES)) {
+      const n = exampleName(k), file = `${PAGES_DIR}\\${n}`;
+      if (names.includes(n)) continue;
+      const check = isHtml(n) ? checkHtmlPage(shell, file, text) : checkPage(shell, file, parsePage(text));
+      rows.push({ example: k, file, label: n, name: check.data.name, state: 'example', opens: opens(isHtml(n) ? { kind: 'html' } : parsePage(text)), check });
+    }
+    this.pagesFound = rows;
+    const t = this.pagesWin;
+    if (t?.isOpen) { if (t.rows().length !== t.table?.rows.length) t.again(); else { t.refreshRows(); t.place(); } }
+  }
+
+  /** Under the table: the page in the bar in words - what it is, what it does, what keeps it off. */
+  pageWords(r) {
+    const always = r && isHtml(r.file)
+      ? 'An HTML page is the whole look your own - Bootstrap or anything - and no code of its own: its buttons are lines of the console, ' +
+        'what deletes, changes your setup or gives something out asks you each time. The WIRE CITY button stays in its corner; ' +
+        '?ui=off in the address is the whole site for one visit.'
+      : 'A page is the site with only its menus, keys and windows, each item a line of the console: what deletes, ' +
+        'changes your setup or gives something out asks you each time. The WIRE CITY menu stays in every page; ' +
+        '?ui=off in the address is the whole site for one visit.';
+    if (!r) return [always];
+    if (r.gone) return [`${r.file} is on, and its file is gone from D: - what was checked when it was put on is kept and works. The whole site takes it off.`, always];
+    if (r.error) return [`${r.file}: ${r.error}`, always];
+    const first = r.example ? `An example to begin from. Use writes it to ${r.file} and puts it on; edit it after, to make it yours.`
+      : r.on ? 'On now. Edited and saved, it takes Use again: what is on is what was checked.'
+        : `Enter puts it on: its check first, then your Yes. F4 edits it - by hand, or your AI does (the guide's PAGES).`;
+    const c = r.check;
+    const bad = c?.problems.length ? `Not put on until mended: ${c.problems.slice(0, 3).join('; ')}${c.problems.length > 3 ? ' ...' : ''}` : '';
+    return [first, c ? pageBrief(c) : '', bad, always].filter(Boolean);
+  }
+
+  /** Use: the row's page on - an example written first; read and checked again now, then the person's Yes. */
+  async pagesUse() {
+    const r = this.pageRows()[this.pagesWin.current];
+    if (!r || r.gone) return;
+    if (r.example) {
+      const a = await this.send(`page --example ${r.example}`, 'Pages');
+      if (a.errors.length) return;
+    }
+    // Again from the file: it may have changed since the table was made.
+    const c = await pageFile(this.terminal.bus.shell, r.file);
+    if (c.problems.length) {
+      await this.loadPages();
+      this.tell('Pages', `${r.file} is not put on - mend it first (F4 edits it):\n\n${c.problems.join('\n')}`);
+      return;
+    }
+    if (!this.agent || !await this.agent.confirm(`Put this page on?\n\n${pageBrief(c)}\n\nThe WIRE CITY menu stays in it; ?ui=off in the address is the whole site for one visit.`, 'Your page')) {
+      await this.loadPages();
+      return;
+    }
+    this.pagesWin.close();
+    await this.send(`page ${r.file} --use --yes`, 'Pages');
+  }
+
+  /** The .ASM in the editor in front - or the one built last - as `build` and `run` alone take it: what F9 and Ctrl+F9 do. */
+  inFront() {
+    const t = this.target();
+    if (!t) return null;
+    const game = this.gameOf(t.dir);
+    return {
+      build: `A:\\${(t.dir.slice(A.length) + t.asm).replace(/\//g, '\\')}`,
+      run: game ? `A:\\${game.slice(A.length).replace(/\//g, '\\')}RUN.BAT` : `A:\\${(t.dir.slice(A.length) + t.asm.replace(/\.ASM$/i, '.COM')).replace(/\//g, '\\')}`,
+    };
+  }
+
   /** Alt+F3 on the terminal: closed its own way, its record kept for the next time. */
   closeActive() {
     if (this.terminal?.owns(this.owl.active())) { this.terminal.close(); return; }
     if (this.screens?.owns(this.owl.active())) { this.screens.closeWindow(this.owl.active()); return; }
     if (this.skymap?.owns(this.owl.active())) { this.skymap.close(); return; }
     if (this.ai?.owns(this.owl.active())) { this.ai.closeWindow(this.owl.active()); return; }
+    if (this.help?.owns(this.owl.active())) { this.help.close(); return; }
     super.closeActive();
   }
 
@@ -1942,6 +2255,8 @@ export class SiteApp extends CourseApp {
     super.poll();
     this.mapDrives?.poll();
     this.catalog?.poll();
+    this.pagesWin?.poll();
+    this.help?.poll();
     this.who?.poll();
     this.ai?.poll();
   }
@@ -1958,7 +2273,7 @@ export class SiteApp extends CourseApp {
       this.send(`lesson ${(l.lecture || l.id).toLowerCase()}`, 'Lessons');
       return true;
     }
-    for (const t of [this.mapDrives, this.catalog, this.who, this.agent, this.ai]) if (t?.handles(cmd)) { t.onCommand(cmd); return true; }
+    for (const t of [this.mapDrives, this.catalog, this.who, this.pagesWin, this.help, this.agent, this.ai]) if (t?.handles(cmd)) { t.onCommand(cmd); return true; }
     switch (cmd) {
       // F9: what is in front, built - as `build`, on the bus. Nothing to build: the lessons.
       case Cm.Build: {
@@ -1987,9 +2302,15 @@ export class SiteApp extends CourseApp {
         return true;
       }
       case Wh.Share: this.send(this.caster.onAir ? 'share --stop' : 'share', 'Who is online'); return true;
+      case Pg.Use: this.track(this.pagesUse()); return true;
+      case Pg.Edit: {
+        const r = this.pageRows()[this.pagesWin.current];
+        if (r?.file && !r.example && !r.gone) { this.pagesWin.close(); this.send(`edit ${r.file}`, 'Pages'); }
+        return true;
+      }
+      case Pg.Off: this.track((async () => { await this.send('page --off', 'Pages'); await this.loadPages(); })()); return true;
       case SCREEN_CLOSE: this.screens.closeWindow(this.owl.active()); return true;
       case MAP_CLOSE: this.skymap.close(); return true;
-      case HELP_CLOSE: if (this.helpWin && this.owl.place(this.helpWin)) this.owl.close(this.helpWin); this.helpWin = 0; return true;
       case MANUAL_CLOSE: if (this.manualWin && this.owl.place(this.manualWin)) this.owl.close(this.manualWin); this.manualWin = 0; return true;
       case Mp.Edit: this.showEdit(); return true;
       case Mp.EditCancel: this.closeEdit(); return true;

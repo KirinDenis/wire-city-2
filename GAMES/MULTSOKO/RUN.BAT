@@ -8,13 +8,16 @@ REM   W A S D  the same, for the left hand
 REM   Z        the whole level / close up
 REM   R R      the level anew       N N, P P   the next, the previous level
 REM   ESC      quit
+REM
+REM The title asks a name. With an IPX card (the site, or DOSBox on ipxnet)
+REM everyone in the room works one warehouse; with none, alone.
 REM ============================================================================
-if not exist SOKOBAN.COM goto missing
-SOKOBAN.COM
+if not exist MULTSOKO.COM goto missing
+MULTSOKO.COM
 goto end
 
 :missing
 echo.
-echo SOKOBAN.COM is not here. Build it:
+echo MULTSOKO.COM is not here. Build it:
 echo     MAKE
 :end

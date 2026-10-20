@@ -1,6 +1,6 @@
 @echo off
 REM ============================================================================
-REM RUNWIN.BAT - play SOKOBAN from Windows: opens DOSBox and starts the game.
+REM RUNWIN.BAT - play MULTSOKO from Windows: opens DOSBox and starts the game.
 REM Inside DOS the equivalent is simply RUN, in this folder.
 REM
 REM   RUNWIN         on the DOSBox machine LOCAL.BAT or dosbox.conf gives
@@ -13,11 +13,11 @@ if "%DOSBOX%"=="" set DOSBOX=dosbox.exe
 set MACHINE=
 if /i "%~1"=="CGA" set MACHINE=-machine cga
 
-if not exist GAMES\SOKOBAN\SOKOBAN.COM goto missing
-echo Starting SOKOBAN
-"%DOSBOX%" -noautoexec %MACHINE% -c "mount c %CD%" -c "c:" -c "cd GAMES\SOKOBAN" -c "SOKOBAN.COM" -c "exit"
+if not exist GAMES\MULTSOKO\MULTSOKO.COM goto missing
+echo Starting MULTSOKO
+"%DOSBOX%" -noautoexec %MACHINE% -c "mount c %CD%" -c "c:" -c "cd GAMES\MULTSOKO" -c "MULTSOKO.COM" -c "exit"
 goto end
 
 :missing
-echo GAMES\SOKOBAN\SOKOBAN.COM is not built. Build it with MAKEWIN.BAT in this folder.
+echo GAMES\MULTSOKO\MULTSOKO.COM is not built. Build it with MAKEWIN.BAT in this folder.
 :end

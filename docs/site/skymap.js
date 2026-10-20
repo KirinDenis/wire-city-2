@@ -428,6 +428,11 @@ export class SkyMap {
       e.clientY >= this.area.top && e.clientY < this.area.top + this.area.h;
     const inside = e => {
       if (!inArea(e)) return false;
+      // In a slot of an HTML page of one's own (htmlpage.js): no hole there - the map is on top where its slot is.
+      if (this.slotted?.()) {
+        const top = document.elementFromPoint(e.clientX, e.clientY);
+        return !!top && (top === this.el || this.el.contains(top));
+      }
       const { cellW, cellH, canvas } = this.owl.screen ?? {};
       if (!canvas) return false;
       const box = canvas.getBoundingClientRect();

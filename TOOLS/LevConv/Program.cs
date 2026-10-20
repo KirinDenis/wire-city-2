@@ -1,7 +1,7 @@
 // ============================================================================
-//  LevConv - Base-Z-47's Sokoban levels into SOKOBAN's LEVELS.INC.
+//  LevConv - Base-Z-47's Sokoban levels into MULTSOKO's LEVELS.INC.
 //
-//      dotnet run --project TOOLS\LevConv -- <levels dir> GAMES\SOKOBAN\LEVELS.INC
+//      dotnet run --project TOOLS\LevConv -- <levels dir> GAMES\MULTSOKO\LEVELS.INC
 //
 //  <levels dir> is BASE-Z47\src\levels of github.com/KirinDenis/
 //  Base-Z-47-Rust-Game: level0.rs, level1.rs ... each a Rust function
@@ -32,7 +32,7 @@ var sb = new StringBuilder();
 sb.Append("; LEVELS.INC - the Sokoban levels of Base-Z-47 (github.com/KirinDenis/\r\n");
 sb.Append(";  Base-Z-47-Rust-Game, BASE-Z47/src/levels/level0..60.rs), each trimmed\r\n");
 sb.Append(";  to its walls. Made by TOOLS\\LevConv (C#):\r\n");
-sb.Append(";    dotnet run --project TOOLS\\LevConv -- <levels dir> GAMES\\SOKOBAN\\LEVELS.INC\r\n");
+sb.Append(";    dotnet run --project TOOLS\\LevConv -- <levels dir> GAMES\\MULTSOKO\\LEVELS.INC\r\n");
 sb.Append(";  DO NOT EDIT BY HAND.  A level: db width, height, then height rows of\r\n");
 sb.Append(";  width bytes: # wall  $ box  . goal  * box on goal  @ man  + man on goal\r\n");
 var names = new List<string>();

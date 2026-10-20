@@ -1,7 +1,7 @@
 ; LEVELS.INC - the Sokoban levels of Base-Z-47 (github.com/KirinDenis/
 ;  Base-Z-47-Rust-Game, BASE-Z47/src/levels/level0..60.rs), each trimmed
 ;  to its walls. Made by TOOLS\LevConv (C#):
-;    dotnet run --project TOOLS\LevConv -- <levels dir> GAMES\SOKOBAN\LEVELS.INC
+;    dotnet run --project TOOLS\LevConv -- <levels dir> GAMES\MULTSOKO\LEVELS.INC
 ;  DO NOT EDIT BY HAND.  A level: db width, height, then height rows of
 ;  width bytes: # wall  $ box  . goal  * box on goal  @ man  + man on goal
 LEV00:	db 20,11

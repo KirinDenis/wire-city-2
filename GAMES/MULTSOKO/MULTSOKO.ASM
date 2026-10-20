@@ -1,18 +1,25 @@
 ; ==================================================================
-;  SOKOBAN.ASM - MULTIPLAY SOKO: crates onto the red marks, in a brick
+;  MULTSOKO.ASM - MULTIPLAY SOKO: crates onto the red marks, in a brick
 ;  warehouse seen from three quarters above, on a CGA screen: 320x200,
 ;  four colours.
-;      MAKE in GAMES\SOKOBAN, MAKEWIN from Windows (the repository)
-;      build A:\MY\SOKOBAN\SOKOBAN.ASM     (the site: FASM, then it runs)
+;      MAKE in GAMES\MULTSOKO, MAKEWIN from Windows (the repository)
+;      build A:\MY\MULTSOKO\MULTSOKO.ASM     (the site: FASM, then it runs)
 ;  ARROWS or W A S D   walk, and push the crate in front of you
 ;  Z      the whole level / close up
-;  The first version was isometric: prettier, but every arrow went
-;  along a diagonal of the screen and had to be turned in the head.
 ;  R R    the level anew      N N, P P   the next, the previous level
 ;  ESC    back to DOS
 ;  A crate onto a goal +10, off one -10; a solved level +50 to every
 ;  man in the warehouse.  The levels are Base-Z-47's (LEVELS.INC), the
-;  pictures are text, one character a pixel (ART.INC).
+;  pictures are text, one character a pixel (ART.INC).  The first
+;  version was isometric: prettier, but every arrow went along a
+;  diagonal of the screen and had to be turned in the head.
+;  ON THE NETWORK everyone in one room works one warehouse (on the
+;  WIRE CITY site: the Games menu, room multsoko; desktop DOSBox: ipxnet).
+;  One machine - the lowest name on the wire - keeps the crates, the
+;  level, the men and the score, and sends the world whole: the others
+;  send it their steps and draw what it sends, so two men never push
+;  one crate two ways.  When it goes quiet for 2 s, the next lowest
+;  carries on from the world it last drew.  No IPX: alone, the same.
 ;  THE ONE FACT: a CGA byte is four pixels, two bits each, and the
 ;  screen is two banks - the even rows at B800:0000, the odd rows
 ;  8 KB higher at B800:2000.
@@ -27,7 +34,9 @@ G_GOAL  = 2
 G_BOX   = 4
 G_FLOOR = 8                     ; inside the walls: flooded from the man
 G_MAN   = 16                    ; a man stands here
+G_SEEN  = 32                    ; FREECELL's mark, cleared after it
 MAXP    = 8                     ; men in the warehouse
+MAXBOX  = 36                    ; crates a level may have: 35 is the most
 NLOOK   = 6                     ; shirt and cap pairs (LOOKS)
 PFTOP   = 8                     ; the playfield: rows 8..167; above it
 PFBOT   = 168                   ;  the level line, under it the players
@@ -35,14 +44,47 @@ SOLVT   = 54                    ; ticks the SOLVED banner stays: 3 s
 PENDT   = 36                    ; ticks a "press again" waits: 2 s
 SPRMAX  = 4096                  ; compiled pictures: 1988 bytes today
 
-; a player
-P_ON    = 0                     ; byte: 1 = in the warehouse
-P_COL   = 1                     ; byte: grid column
-P_ROW   = 2                     ; byte: grid row
-P_LOOK  = 3                     ; byte: 0..NLOOK-1
-P_SCORE = 4                     ; word, signed
-P_NAME  = 6                     ; 8 letters and a zero
-PSIZE   = 16
+; a player: the first PWIRE bytes are what the world packet carries
+P_PID   = 0                     ; word: his name on the wire
+P_COL   = 2                     ; byte: grid column
+P_ROW   = 3                     ; byte: grid row
+P_LOOK  = 4                     ; byte: 0..NLOOK-1
+P_ON    = 5                     ; byte: 1 = in the warehouse
+P_SCORE = 6                     ; word, signed
+P_NAME  = 8                     ; 8 letters, zeros after a short one
+PWIRE   = 16
+P_HEARD = 16                    ; word: the tick he was last heard (the host's)
+PSIZE   = 18
+
+; a packet: +0 its kind, +1 PROTO, then by its kind -
+;  'H' hello, a player's heartbeat:  +2 his name, 8 letters
+;  'M' a step or an order, to the host: +2 what - 0..3 a step (up, right,
+;      down, left), 4 the level anew, 5 the next, 6 the previous
+;  'W' the world, the host's, whole: +2 level, +3 solved (0/1), +4 moves
+;      (word), +6 crates, +8 MAXP players of PWIRE bytes, then the crates'
+;      cells as words (row*32 + column)
+K_KIND  = 0
+K_PROTO = 1
+K_ARG   = 2
+W_LEVEL = 2
+W_SOLVED = 3
+W_MOVES = 4
+W_NBOX  = 6
+W_SLOTS = 8
+W_BOXES = W_SLOTS + MAXP*PWIRE  ; 136
+
+; the network: ENGINE\E_NET.INC, everyone in the room hears everyone
+NETSOCK = 5353h                 ; our socket: a palindrome - its byte order
+                                ;  cannot bite; never OWL FLY's 5757h/5858h
+NETLEN  = W_BOXES + MAXBOX*2    ; every packet the world's size: 208 bytes
+NETRX   = 8                     ; listens: seven others and our own echo
+PROTO   = 1                     ; in every packet: another version is not ours
+BEAT    = 9                     ; ticks between heartbeats: twice a second
+GONE    = 55                    ; ticks unheard: a player has gone (3 s)
+HOSTGONE = 36                   ; ticks with no world: the host has gone (2 s)
+JOINT   = 36                    ; ticks of listening for a warehouse to join
+WIREWT  = 270                   ; ticks of waiting for our address: 15 s
+MAXPEER = 16                    ; names heard lately, to choose the next host
 
 ; a zoom: its steps, its lifts, its compiled pictures
 Z_HX    = 0                     ; a cell's width in px: 8 or 16
@@ -80,14 +122,15 @@ START:  cld                     ; string ops count UP
         mov  ax,4C01h
         int  21h                ; exit(1)
 .mem:   call PREP               ; tables, pictures, the font
+        call NETOPEN            ; the IPX card: CF=1, none - then alone
         mov  ax,0004h           ; mode 4: CGA 320x200, four colours
         int  10h
         call SETPAL
-        call TITLE              ; comes back on Enter (Esc quits)
-        mov  word [level],0
-        call NEWLEV
+        call TITLE              ; your name; back on Enter (Esc quits)
+        call JOIN               ; the room's warehouse, or our own
 MAIN:   mov  ax,1680h           ; give the host our time slice: in a
         int  2Fh                ;  browser a tight loop starves the keys
+        call NETPOLL            ; the others: their steps, or the world
         call KEYS
         call TIMERS
         cmp  byte [dirty],0     ; turn by turn: draw only what changed
@@ -98,7 +141,8 @@ MAIN:   mov  ax,1680h           ; give the host our time slice: in a
         call BLIT
         jmp  MAIN
 
-QUIT:   mov  ax,0003h           ; text mode 3, as DOS lent it
+QUIT:   call NETCLOSE           ; the socket given back, every way out
+        mov  ax,0003h           ; text mode 3, as DOS lent it
         int  10h
         mov  ax,4C00h
         int  21h                ; exit(0)
@@ -187,6 +231,10 @@ PREP:   mov  di,rowtab          ; rowtab[y] = bbuf + y*80
         mov  word [fontp+2],es
         push cs
         pop  es                 ; ES = our segment again
+        mov  di,players         ; nobody in the warehouse yet, and the
+        mov  cx,(MAXP+1)*PSIZE/2 ;  ghost behind them cleared too
+        xor  ax,ax
+        rep  stosw
         ret
 
 ; ------------------------------------------------------------------
@@ -249,6 +297,7 @@ TITLE:  call CLS
         mov  si,TLINES
         call PRLIST
         call VIGNET
+.name:  call NAMELN             ; the name as typed so far
         call WAITV
         call BLIT
 .wait:  mov  ax,1680h
@@ -262,7 +311,174 @@ TITLE:  call CLS
         jne  .ent
         jmp  QUIT
 .ent:   cmp  al,13
-        jne  .wait
+        je   .go
+        cmp  al,8
+        je   .bs
+        call NAMECH             ; a letter more, if it is one
+        jmp  .name
+.bs:    mov  bl,[mylen]
+        or   bl,bl
+        jz   .wait
+        dec  bl                 ; Backspace: the last one off
+        mov  [mylen],bl
+        xor  bh,bh
+        mov  byte [myname+bx],0
+        jmp  .name
+.go:    cmp  byte [mylen],0
+        jne  .ok
+        mov  si,TPLAYER         ; nothing typed: PLAYER
+        mov  di,myname
+        mov  cx,8
+        rep  movsb
+        mov  byte [mylen],6
+.ok:    ret
+
+; NAMELN - "YOUR NAME: " and the name, a cursor, blanks over the rest
+NAMELN: mov  word [trow],168
+        mov  word [tcol],9
+        mov  byte [tclr],3
+        mov  si,TNAMEQ
+        call PRINT
+        mov  byte [tclr],1
+        mov  si,myname
+        call PRINT
+        mov  byte [tclr],3
+        mov  al,'_'
+        call PUTCH              ; where the next letter goes
+        mov  cx,9               ; and blanks over what Backspace took
+.b:     push cx
+        mov  al,' '
+        call PUTCH
+        pop  cx
+        loop .b
+        ret
+
+; NAMECH - character AL into your name: letters (as capitals), digits,
+; '-', eight at most; anything else is not a name's
+NAMECH: cmp  al,'a'
+        jb   .up
+        cmp  al,'z'
+        ja   .no
+        sub  al,20h             ; a..z -> A..Z: 20h apart in ASCII
+.up:    cmp  al,'-'
+        je   .ok
+        cmp  al,'0'
+        jb   .no
+        cmp  al,'9'
+        jbe  .ok
+        cmp  al,'A'
+        jb   .no
+        cmp  al,'Z'
+        ja   .no
+.ok:    mov  bl,[mylen]
+        cmp  bl,8
+        jae  .no                ; eight already
+        xor  bh,bh
+        mov  [myname+bx],al
+        inc  byte [mylen]
+.no:    ret
+
+; ------------------------------------------------------------------
+;  JOIN - into the room's warehouse.  Wait for the wire to name us (in
+;  a browser the address comes seconds after the start), listen JOINT
+;  ticks for a host's world and work in it; nobody there - open our own
+;  and host it.  No IPX, no name in WIREWT ticks, or Enter while we
+;  wait: alone.
+; ------------------------------------------------------------------
+JOIN:   cmp  byte [net_ok],0
+        je   .alone             ; no IPX card here
+        call TICK
+        mov  [jstart],ax
+.addr:  call NETPID             ; AX = our name, 0 until the wire answers
+        or   ax,ax
+        jnz  .named
+        mov  si,TWIRE
+        call JOINMSG            ; the wait shows, and moves
+        call JKEY               ; Enter: no more waiting - alone
+        jc   .alone
+        call TICK
+        sub  ax,[jstart]        ; ticks waited
+        cmp  ax,WIREWT
+        jb   .addr
+        jmp  .alone
+.named: mov  [mypid],ax
+        mov  byte [netmode],3   ; joining: the first world heard is ours
+        call TICK
+        mov  [jstart],ax
+        mov  [hostheard],ax
+.look:  mov  si,TLOOK
+        call JOINMSG
+        call NETPOLL
+        cmp  byte [netmode],2   ; a host answered: we are in
+        je   .done
+        call TICK
+        sub  ax,[jstart]
+        cmp  ax,JOINT
+        jb   .look
+        mov  byte [netmode],1   ; nobody: our own warehouse, we host it
+        mov  ax,[mypid]
+        mov  [hostpid],ax
+        jmp  .fresh
+.alone: mov  byte [netmode],0
+        mov  word [mypid],0
+.fresh: mov  word [level],0
+        call LOADLEV
+        call ADDME              ; our man, at the start
+        mov  byte [netdirty],1
+.done:  mov  byte [dirty],1
+        mov  byte [camnew],1
+        ret
+
+; JOINMSG - line SI on the title, a spinner after it, on the screen
+JOINMSG:push si
+        mov  ax,1680h
+        int  2Fh                ; yield: a wait must not starve the host
+        pop  si
+        mov  dx,180
+        call BANNER
+        call TICK
+        mov  cl,2
+        shr  ax,cl              ; a quarter of a second a step
+        and  ax,3
+        mov  bx,ax
+        mov  al,[SPIN+bx]
+        call PUTCH
+        call WAITV
+        jmp  BLIT
+
+; JKEY - CF=1: Enter was pressed; Esc quits; other keys are dropped
+JKEY:   mov  ah,1
+        int  16h
+        jz   .none
+        mov  ah,0
+        int  16h
+        cmp  al,27
+        jne  .ent
+        jmp  QUIT
+.ent:   cmp  al,13
+        jne  .none
+        stc
+        ret
+.none:  clc
+        ret
+
+; ADDME - our man into the warehouse, with our name
+ADDME:  mov  ax,[mypid]
+        call SLOTOF
+        jc   .full
+        mov  [mep],bx
+        lea  di,[bx+P_NAME]
+        mov  si,myname
+        mov  cx,8
+        rep  movsb
+.full:  ret
+
+; TICK - AX = the BIOS tick, 18.2 a second
+TICK:   push ds
+        xor  ax,ax
+        mov  ds,ax
+        mov  ax,[046Ch]
+        pop  ds
         ret
 
 ; VIGNET - a man, a crate, a goal before a wall: the game in one row
@@ -303,9 +519,14 @@ VIGNET: mov  word [ox],112      ; centres the 6 cells: 96 px wide
         jmp  PUTAT
 
 ; ------------------------------------------------------------------
-;  NEWLEV - level [level] into the grid; your man on its start.
+;  NEWLEV - level [level], and every man in it again: the host's and
+;  the lone player's.  LOADLEV - the level alone, its crates as they
+;  start; a client loads it so, then puts the host's crates on it.
 ; ------------------------------------------------------------------
-NEWLEV: mov  di,gridpad         ; a zero row in front, then the grid
+NEWLEV: call LOADLEV
+        jmp  PLACEALL
+
+LOADLEV:mov  di,gridpad         ; a zero row in front, then the grid
         mov  cx,(NCOL+NCOL*NCOL)/2
         xor  ax,ax
         rep  stosw
@@ -357,10 +578,148 @@ NEWLEV: mov  di,gridpad         ; a zero row in front, then the grid
         jnz  .row
         call FLOOD
         mov  bx,[start]
-        or   byte [bx],G_MAN
-        mov  si,[mep]
-        call SETPOS             ; your man: column and row from BX
+        mov  si,ghost           ; the ghost - a camera with no man - at
+        call SETPOS             ;  the start, for a player not in yet
+        mov  byte [loaded],1
         mov  byte [camnew],1
+        mov  byte [dirty],1
+        ret
+
+; PLACEALL - every man in the warehouse onto the free floor nearest the
+; start, in slot order: the first on the start itself
+PLACEALL:
+        mov  si,players
+.p:     cmp  byte [si+P_ON],0
+        je   .n
+        push si
+        call FREECELL           ; BX -> his cell
+        pop  si
+        jc   .full
+        or   byte [bx],G_MAN
+        call SETPOS
+        jmp  .n
+.full:  mov  byte [si+P_ON],0   ; no floor left for him: out
+.n:     add  si,PSIZE
+        cmp  si,players+MAXP*PSIZE
+        jb   .p
+        mov  byte [netdirty],1
+        ret
+
+; FREECELL - BX -> the free floor cell nearest the start, the floor
+; walked breadth first; CF=1: none.  clobbers AX, CX, DX, SI, DI.
+FREECELL:
+        mov  si,bfsq            ; SI: the queue's head, DI: its tail
+        mov  di,bfsq
+        mov  bx,[start]
+        or   byte [bx],G_SEEN
+        mov  [di],bx
+        add  di,2
+.take:  cmp  si,di
+        jae  .none              ; all the floor walked, none free
+        mov  bx,[si]
+        add  si,2
+        test byte [bx],G_WALL or G_BOX or G_MAN
+        jz   .found
+        mov  dx,-1              ; its neighbours: left,
+        call .near
+        mov  dx,1               ;  right,
+        call .near
+        mov  dx,-NCOL           ;  up,
+        call .near
+        mov  dx,NCOL            ;  down
+        call .near
+        jmp  .take
+.near:  push bx
+        add  bx,dx              ; the neighbour
+        mov  al,[bx]
+        test al,G_FLOOR
+        jz   .skip              ; a wall, or the void
+        test al,G_SEEN
+        jnz  .skip              ; queued already
+        or   byte [bx],G_SEEN
+        mov  [di],bx
+        add  di,2
+.skip:  pop  bx
+        ret
+.found: call .unsee
+        clc
+        ret
+.none:  call .unsee
+        stc
+        ret
+.unsee: push bx
+        mov  bx,grid
+        mov  cx,NCOL*NCOL
+.u:     and  byte [bx],0FFh xor G_SEEN
+        inc  bx
+        loop .u
+        pop  bx
+        ret
+
+; SLOTOF - player AX's slot: BX.  A name not in the warehouse gets the
+; first free slot, the look of its number, the free cell nearest the
+; start, 0 points and the name PLAYER until his hello brings his own.
+; CF=1: eight men are in already.  clobbers AX, CX, DX, SI, DI.
+SLOTOF: mov  bx,players
+.find:  cmp  byte [bx+P_ON],0
+        je   .nf
+        cmp  [bx+P_PID],ax
+        je   .have
+.nf:    add  bx,PSIZE
+        cmp  bx,players+MAXP*PSIZE
+        jb   .find
+        mov  bx,players         ; a newcomer: the first free slot
+        xor  cl,cl              ; its number, for its look
+.free:  cmp  byte [bx+P_ON],0
+        je   .new
+        add  bx,PSIZE
+        inc  cl
+        cmp  bx,players+MAXP*PSIZE
+        jb   .free
+        stc
+        ret
+.new:   mov  [bx+P_PID],ax
+        mov  byte [bx+P_ON],1
+        mov  word [bx+P_SCORE],0
+        mov  al,cl
+        cmp  al,NLOOK
+        jb   .look
+        sub  al,NLOOK           ; slots 6 and 7 wear looks 0 and 1 again
+.look:  mov  [bx+P_LOOK],al
+        lea  di,[bx+P_NAME]
+        mov  si,TPLAYER         ; PLAYER, zeros to 8
+        mov  cx,8
+        rep  movsb
+        call TICK
+        mov  [bx+P_HEARD],ax
+        push bx
+        call FREECELL           ; BX -> his cell
+        mov  si,bx
+        pop  bx
+        jc   .out
+        or   byte [si],G_MAN
+        xchg bx,si              ; SETPOS: SI the player, BX the cell
+        call SETPOS
+        xchg bx,si
+        mov  byte [netdirty],1
+        mov  byte [dirty],1
+.have:  clc
+        ret
+.out:   mov  byte [bx+P_ON],0   ; no free floor: not in after all
+        stc
+        ret
+
+; DROPMAN - player BX gone: his man off the floor, his slot free
+DROPMAN:mov  al,[bx+P_ROW]
+        xor  ah,ah
+        mov  cl,5
+        shl  ax,cl              ; row * 32
+        add  al,[bx+P_COL]      ; + column: no carry, it is < 32
+        add  ax,grid
+        mov  si,ax
+        and  byte [si],0FFh xor G_MAN
+        mov  byte [bx+P_ON],0
+        mov  byte [netdirty],1
         mov  byte [dirty],1
         ret
 
@@ -441,7 +800,9 @@ KEYS:   mov  ah,1
         je   .q3
 .end:   ret
 .dir:   mov  al,[bx+1]          ; 0 up, 1 right, 2 down, 3 left
-        jmp  MOVE
+        cmp  byte [netmode],2
+        jne  MOVE               ; alone or the host: our own step
+        jmp  SENDM              ; a client asks the host for it
 .zoom:  xor  word [zoomp],ZS xor ZB  ; flip between the two sizes
         mov  byte [camnew],1
         mov  byte [dirty],1
@@ -457,7 +818,14 @@ KEYS:   mov  ah,1
         mov  byte [dirty],1
         ret
 .act:   mov  byte [pend],0      ; the second one does it
-        mov  ax,[level]
+        cmp  byte [netmode],2
+        jne  LEVACT             ; alone or the host: ours to do
+        mov  al,bl
+        add  al,3               ; 4 anew, 5 next, 6 previous
+        jmp  SENDM              ; a client: the host's to do
+
+; LEVACT - BL = 1 the level anew, 2 the next, 3 the previous
+LEVACT: mov  ax,[level]
         cmp  bl,1
         je   .go                ; R: this level again
         inc  ax                 ; N: the next...
@@ -478,12 +846,17 @@ KEYS:   mov  ah,1
 ;  behind it is floor with nothing on it.  in: AL = 0 up, 1 right,
 ;  2 down, 3 left (the grid's directions).
 ; ------------------------------------------------------------------
-MOVE:   xor  ah,ah
+MOVE:   mov  si,[mep]
+        cmp  byte [si+P_ON],0
+        je   .no                ; no man of ours in the warehouse yet
+        xor  ah,ah
         shl  ax,1               ; a word per direction
         mov  bx,ax
         mov  dx,[DSTEP+bx]      ; DX = the step in grid bytes
-        mov  si,[mep]
-; STEP - player SI one step of DX grid bytes
+        jmp  STEP
+.no:    ret
+
+; STEP - player SI one step of DX grid bytes (the host's, for anyone)
 STEP:   mov  al,[si+P_ROW]
         xor  ah,ah
         mov  cl,5
@@ -520,6 +893,7 @@ STEP:   mov  al,[si+P_ROW]
         call SETPOS
         inc  word [moves]
         mov  byte [dirty],1
+        mov  byte [netdirty],1  ; the room hears of it at the next tick
         mov  ax,[ngood]
         cmp  ax,[nbox]          ; every crate home?
         jne  .no
@@ -538,12 +912,10 @@ STEP:   mov  al,[si+P_ROW]
 ; ------------------------------------------------------------------
 ;  TIMERS - the BIOS tick: the SOLVED banner's end, a question's end.
 ; ------------------------------------------------------------------
-TIMERS: push ds
-        xor  ax,ax
-        mov  ds,ax
-        mov  ax,[046Ch]         ; the BIOS tick, 18.2 a second
-        pop  ds
+TIMERS: call TICK               ; the BIOS tick, 18.2 a second
         mov  [now],ax
+        cmp  byte [netmode],2
+        je   .pend              ; a client: the host turns the levels
         cmp  byte [solved],0
         je   .pend
         sub  ax,[soltick]       ; ticks since: unsigned, a wrap still
@@ -892,9 +1264,16 @@ HUD:    xor  ax,ax
         call PNUM
         call PLIST
         cmp  byte [solved],0
-        je   .ask
+        je   .in
         mov  si,TSOLV
         mov  dx,80
+        call BANNER
+.in:    cmp  byte [netmode],2
+        jne  .ask
+        cmp  word [mep],ghost   ; a client the host has not let in yet
+        jne  .ask
+        mov  si,TCOMING
+        mov  dx,96
         call BANNER
 .ask:   mov  bl,[pend]
         or   bl,bl
@@ -945,8 +1324,20 @@ PLIST:  mov  word [pidx],players
         mov  byte [tclr],1
         mov  si,[pidx]
         add  si,P_NAME
-        call PRINT
+        call PNAME
         mov  ax,[pcol]
+        add  ax,11              ; a star by the host's name
+        mov  [tcol],ax
+        cmp  byte [netmode],0
+        je   .score             ; alone: no host to mark
+        mov  bx,[pidx]
+        mov  ax,[bx+P_PID]
+        cmp  ax,[hostpid]
+        jne  .score
+        mov  byte [tclr],2
+        mov  al,'*'
+        call PUTCH
+.score: mov  ax,[pcol]
         add  ax,12              ; the score in its own column
         mov  [tcol],ax
         mov  byte [tclr],3
@@ -1000,6 +1391,17 @@ PRINT:  lodsb
         jz   .end
         call PUTCH
         jmp  PRINT
+.end:   ret
+
+; PNAME - a player's name at SI: up to 8 letters, to the first zero
+PNAME:  mov  cx,8
+.c:     lodsb
+        or   al,al
+        jz   .end
+        push cx
+        call PUTCH
+        pop  cx
+        loop .c
 .end:   ret
 
 ; PNUM - AX unsigned, at least CL digits; PSNUM - AX signed
@@ -1165,6 +1567,386 @@ BLIT:   push es
         ret
 
 ; ------------------------------------------------------------------
+;  NETPOLL - once a frame: every packet that came, then the clocks -
+;  players not heard, a host gone quiet, our own heartbeat.
+;  The host takes 'H' and 'M' from anyone: a name it has not got gets a
+;  man.  Everyone takes 'W': a client from its host or a lower name; a
+;  host from a LOWER name only, and then works in that one's warehouse -
+;  two that started alone at once end as one.
+; ------------------------------------------------------------------
+NETPOLL:cmp  byte [netmode],0
+        jne  .rx
+        ret                     ; alone: no wire to read
+.rx:    call NETRECV            ; CF=0: DI -> NETIN, AX = who sent it
+        jc   .clocks
+        cmp  byte [di+K_PROTO],PROTO
+        jne  .rx                ; another version of the game: not ours
+        mov  [sender],ax
+        call PEER               ; heard now: a candidate to host
+        mov  al,[di+K_KIND]
+        cmp  al,'W'
+        je   .world
+        cmp  byte [netmode],1
+        jne  .rx                ; hellos and steps are the host's
+        mov  ax,[sender]
+        push di
+        call SLOTOF             ; BX = his slot; a newcomer gets a man
+        pop  di
+        jc   .rx                ; eight in already: he can only watch
+        call TICK
+        mov  [bx+P_HEARD],ax
+        mov  al,[di+K_KIND]
+        cmp  al,'H'
+        je   .hello
+        cmp  al,'M'
+        jne  .rx
+        mov  al,[di+K_ARG]      ; a step or an order
+        cmp  al,4
+        jb   .step
+        cmp  al,6
+        ja   .rx                ; no such order: dropped
+        sub  al,3               ; 1 anew, 2 next, 3 previous
+        mov  bl,al
+        call LEVACT
+        jmp  .rx
+.step:  cmp  byte [solved],0
+        jne  .rx                ; the banner is up: no more steps
+        xor  ah,ah
+        shl  ax,1               ; a word per direction
+        mov  si,ax
+        mov  dx,[DSTEP+si]
+        mov  si,bx              ; STEP: SI = the player
+        call STEP
+        jmp  .rx
+.hello: lea  si,[di+K_ARG]      ; his name, made printable
+        lea  di,[bx+P_NAME]
+        call COPYNAME
+        mov  byte [netdirty],1
+        jmp  .rx
+.world: mov  ax,[sender]
+        cmp  byte [netmode],1
+        jne  .wc
+        cmp  ax,[mypid]         ; two hosts: the lower name keeps it
+        jae  .rx
+        jmp  .take              ; it is lower: we work in its warehouse
+.wc:    cmp  byte [netmode],3
+        je   .take              ; joining: the first world heard
+        cmp  ax,[hostpid]
+        jbe  .take              ; our host, or a lower name
+        call TICK
+        sub  ax,[hostheard]
+        cmp  ax,HOSTGONE
+        jb   .rx                ; ours still talks: this one will yield
+.take:  mov  byte [netmode],2
+        mov  ax,[sender]
+        mov  [hostpid],ax
+        call TICK
+        mov  [hostheard],ax
+        call WAPPLY
+        jmp  .rx
+.clocks:call TICK
+        mov  [now],ax
+        cmp  byte [netmode],1
+        jne  .client
+        mov  bx,players         ; the host: who has gone quiet?
+.p:     cmp  byte [bx+P_ON],0
+        je   .pn
+        cmp  bx,[mep]
+        je   .pn                ; our own man never does
+        mov  ax,[now]
+        sub  ax,[bx+P_HEARD]
+        cmp  ax,GONE
+        jb   .pn
+        call DROPMAN
+.pn:    add  bx,PSIZE
+        cmp  bx,players+MAXP*PSIZE
+        jb   .p
+        mov  ax,[now]
+        cmp  ax,[lastsend]
+        je   .done              ; one world a tick at most
+        cmp  byte [netdirty],0
+        jne  .sendw             ; it changed: at once
+        sub  ax,[lastbeat]
+        cmp  ax,BEAT
+        jb   .done
+.sendw: jmp  WSEND              ; ...or on the beat, for a newcomer
+.client:cmp  byte [netmode],2
+        jne  .done              ; joining: JOIN keeps the time
+        mov  ax,[now]
+        sub  ax,[lastbeat]
+        cmp  ax,BEAT
+        jb   .quiet
+        call HSEND              ; hello on the beat: we are still here
+.quiet: mov  ax,[now]
+        sub  ax,[hostheard]
+        cmp  ax,HOSTGONE
+        jb   .done
+        jmp  NEXTHOST           ; the host is quiet: is it us now?
+.done:  ret
+
+; PEER - name [sender] heard now: kept with the tick, for NEXTHOST.  A new
+; one takes an empty place, or the place heard from longest ago.
+; keeps DI.
+PEER:   push di
+        call TICK
+        mov  cx,ax              ; CX = now
+        mov  ax,[sender]
+        mov  si,peers
+        xor  di,di              ; the place for a new one...
+        xor  dx,dx              ; ...and how old it is
+.l:     cmp  [si],ax
+        je   .have
+        mov  bx,cx
+        sub  bx,[si+2]          ; this one's age in ticks
+        cmp  word [si],0
+        jne  .age
+        mov  bx,0FFFFh          ; an empty place is the oldest of all
+.age:   cmp  bx,dx
+        jb   .n
+        mov  dx,bx
+        mov  di,si
+.n:     add  si,4
+        cmp  si,peers+MAXPEER*4
+        jb   .l
+        mov  si,di
+        mov  [si],ax
+.have:  mov  [si+2],cx
+        pop  di
+        ret
+
+; NEXTHOST - the host has gone quiet: of the names heard in the last
+; GONE ticks, ours among them, the lowest carries on.  Ours: we keep the
+; warehouse from the world we last drew.  Another's: we wait for it.
+NEXTHOST:
+        mov  dx,[mypid]         ; the lowest so far: ours
+        mov  si,peers
+.l:     mov  ax,[si]
+        or   ax,ax
+        jz   .n                 ; an empty place
+        cmp  ax,[hostpid]
+        je   .n                 ; the one gone quiet
+        mov  cx,[now]
+        sub  cx,[si+2]
+        cmp  cx,GONE
+        jae  .n                 ; not heard lately
+        cmp  ax,dx
+        jae  .n
+        mov  dx,ax
+.n:     add  si,4
+        cmp  si,peers+MAXPEER*4
+        jb   .l
+        cmp  dx,[mypid]
+        jne  .wait
+        mov  byte [netmode],1   ; ours: we host now
+        mov  [hostpid],dx
+        mov  ax,[now]
+        mov  bx,players
+.h:     mov  [bx+P_HEARD],ax    ; everyone heard now: the old host's man
+        add  bx,PSIZE           ;  stays GONE ticks more, then goes
+        cmp  bx,players+MAXP*PSIZE
+        jb   .h
+        cmp  word [mep],ghost
+        jne  .in
+        call ADDME              ; we had no man yet: now we have
+.in:    mov  byte [netdirty],1
+        mov  byte [dirty],1
+.wait:  ret
+
+; WSEND - the world, whole: the level, the men, every crate
+WSEND:  mov  di,pkt
+        mov  byte [di+K_KIND],'W'
+        mov  byte [di+K_PROTO],PROTO
+        mov  al,byte [level]
+        mov  [di+W_LEVEL],al
+        mov  al,[solved]
+        mov  [di+W_SOLVED],al
+        mov  ax,[moves]
+        mov  [di+W_MOVES],ax
+        mov  si,players
+        add  di,W_SLOTS
+.p:     mov  cx,PWIRE
+        rep  movsb              ; a man's wire part
+        add  si,PSIZE-PWIRE     ; past the host's own bookkeeping
+        cmp  si,players+MAXP*PSIZE
+        jb   .p
+        mov  di,pkt+W_BOXES
+        xor  dx,dx              ; crates so far
+        mov  bx,grid
+.c:     test byte [bx],G_BOX
+        jz   .cn
+        cmp  dx,MAXBOX
+        jae  .cn
+        mov  ax,bx
+        sub  ax,grid            ; its cell: row*32 + column
+        stosw
+        inc  dx
+.cn:    inc  bx
+        cmp  bx,grid+NCOL*NCOL
+        jb   .c
+        mov  [pkt+W_NBOX],dl
+        mov  si,pkt
+        call NETSEND
+        mov  ax,[now]
+        mov  [lastsend],ax
+        mov  [lastbeat],ax
+        mov  byte [netdirty],0
+        ret
+
+; HSEND - hello: our name, so the host keeps our man and shows it
+HSEND:  mov  byte [pkt+K_KIND],'H'
+        mov  byte [pkt+K_PROTO],PROTO
+        mov  si,myname
+        mov  di,pkt+K_ARG
+        mov  cx,8
+        rep  movsb
+        mov  si,pkt
+        call NETSEND
+        mov  ax,[now]
+        mov  [lastbeat],ax
+        ret
+
+; SENDM - AL: a step (0..3) or an order (4..6), to the host
+SENDM:  mov  byte [pkt+K_KIND],'M'
+        mov  byte [pkt+K_PROTO],PROTO
+        mov  [pkt+K_ARG],al
+        mov  si,pkt
+        jmp  NETSEND
+
+; ------------------------------------------------------------------
+;  WAPPLY - the host's world (DI -> it) into ours: its level, crates
+;  and men.  Everything off the wire is checked first: a level past the
+;  last drops the packet, a crate or a man off the floor is left out, a
+;  name is made printable - a packet is someone else's word.
+; ------------------------------------------------------------------
+WAPPLY: mov  [wptr],di
+        mov  al,[di+W_LEVEL]
+        xor  ah,ah
+        cmp  ax,NLEVELS
+        jae  .bad               ; no such level: not this game's world
+        cmp  ax,[level]
+        jne  .load
+        cmp  byte [loaded],0
+        jne  .keep
+.load:  mov  [level],ax
+        call LOADLEV            ; its walls, goals and floor
+.keep:  mov  di,[wptr]
+        mov  al,[di+W_SOLVED]
+        and  al,1
+        mov  [solved],al
+        mov  ax,[di+W_MOVES]
+        mov  [moves],ax
+        mov  bx,grid            ; no crates, no men: the packet has them
+.clr:   and  byte [bx],0FFh xor (G_BOX or G_MAN)
+        inc  bx
+        cmp  bx,grid+NCOL*NCOL
+        jb   .clr
+        xor  ax,ax
+        mov  [nbox],ax
+        mov  [ngood],ax
+        mov  cl,[di+W_NBOX]
+        xor  ch,ch
+        cmp  cx,MAXBOX
+        jbe  .cn
+        mov  cx,MAXBOX
+.cn:    lea  si,[di+W_BOXES]
+        jcxz .men
+.c:     lodsw                   ; a crate's cell
+        cmp  ax,NCOL*NCOL
+        jae  .cx                ; off the grid
+        mov  bx,ax
+        add  bx,grid
+        test byte [bx],G_FLOOR
+        jz   .cx                ; not floor
+        test byte [bx],G_BOX
+        jnz  .cx                ; named twice
+        or   byte [bx],G_BOX
+        inc  word [nbox]
+        test byte [bx],G_GOAL
+        jz   .cx
+        inc  word [ngood]
+.cx:    loop .c
+.men:   mov  si,[wptr]
+        add  si,W_SLOTS
+        mov  bx,players
+.m:     mov  di,bx
+        mov  cx,PWIRE
+        rep  movsb              ; his wire part; P_HEARD stays ours
+        push si
+        call CHECKMAN
+        pop  si
+        add  bx,PSIZE
+        cmp  bx,players+MAXP*PSIZE
+        jb   .m
+        mov  word [mep],ghost   ; which one is ours?
+        mov  bx,players
+.f:     cmp  byte [bx+P_ON],0
+        je   .fn
+        mov  ax,[bx+P_PID]
+        cmp  ax,[mypid]
+        jne  .fn
+        mov  [mep],bx
+.fn:    add  bx,PSIZE
+        cmp  bx,players+MAXP*PSIZE
+        jb   .f
+        mov  byte [dirty],1
+.bad:   ret
+
+; CHECKMAN - player BX as the wire gave him: on the floor of this level,
+; on a cell with nothing else, a look we have, a printable name - and his
+; man on the grid; else out.  clobbers AX, CL, SI, DI.
+CHECKMAN:
+        cmp  byte [bx+P_ON],0
+        je   .out
+        mov  byte [bx+P_ON],1
+        mov  al,[bx+P_COL]
+        cmp  al,[lvw]
+        jae  .out
+        mov  al,[bx+P_ROW]
+        cmp  al,[lvh]
+        jae  .out
+        cmp  byte [bx+P_LOOK],NLOOK
+        jb   .lk
+        mov  byte [bx+P_LOOK],0
+.lk:    lea  si,[bx+P_NAME]
+        mov  di,si
+        call COPYNAME           ; in place
+        mov  al,[bx+P_ROW]
+        xor  ah,ah
+        mov  cl,5
+        shl  ax,cl              ; row * 32
+        add  al,[bx+P_COL]      ; + column: no carry, it is < 32
+        add  ax,grid
+        mov  si,ax
+        test byte [si],G_FLOOR
+        jz   .out
+        test byte [si],G_MAN or G_BOX
+        jnz  .out
+        or   byte [si],G_MAN
+        ret
+.out:   mov  byte [bx+P_ON],0
+        ret
+
+; COPYNAME - 8 letters SI -> DI, printable: 32..126 kept, others '?',
+; zeros after the first zero.  SI = DI is allowed.  clobbers AX, CX.
+COPYNAME:
+        mov  cx,8
+.c:     lodsb
+        or   al,al
+        jz   .pad
+        cmp  al,32
+        jb   .q
+        cmp  al,126
+        jbe  .put
+.q:     mov  al,'?'
+.put:   stosb
+        loop .c
+        ret
+.pad:   rep  stosb              ; AL = 0: the rest of the name
+        ret
+
+        include '..\..\ENGINE\E_NET.INC'  ; code and data: never run into
+
+; ------------------------------------------------------------------
 ;  Data
 ; ------------------------------------------------------------------
 MSGMEM  db 'MULTIPLAY SOKO needs a whole 64 KB segment of memory.',13,10,'$'
@@ -1183,9 +1965,15 @@ TLINES  db 7,36,1,'CRATES ONTO THE RED MARKS',0
         db 10,148,1,'NEXT OR PREVIOUS LEVEL',0
         db 2,156,3,'ESC',0
         db 10,156,1,'BACK TO DOS',0
-        db 14,172,3,'PRESS ENTER',0
-        db 8,188,2,'LEVELS FROM BASE-Z-47',0
+        db 8,180,3,'TYPE A NAME, PRESS ENTER',0
+        db 9,192,2,'LEVELS FROM BASE-Z-47',0
         db 0FFh
+TNAMEQ  db 'YOUR NAME: ',0
+TPLAYER db 'PLAYER',0,0         ; a name nobody typed: 8 bytes, zero-padded
+TWIRE   db ' THE WIRE: DIALING - ENTER PLAYS ALONE ',0
+TLOOK   db '     LOOKING FOR THE WAREHOUSE...      ',0
+TCOMING db ' COMING IN... ',0
+SPIN    db '|/-\'
 TLEV    db 'LEVEL ',0
 TSLASH  db '/',0
 TCRATE  db 'CRATES ',0
@@ -1215,12 +2003,24 @@ ZS      dw 8,6, -3,-3,-4,-7
 ZB      dw 16,12, -6,-5,-8,-11
         dw (6+NLOOK) dup 0
 zoomp   dw ZB                   ; close up to begin with
-mep     dw players              ; this machine's man
-players db 1,0,0,0              ; you: here, column, row, look 0
-        dw 0                    ; score
-        db 'YOU',0,0,0,0,0,0    ; name
-        db 1 dup 0              ; to PSIZE
-        db ((MAXP-1)*PSIZE) dup 0 ; the others, when the wire brings them
+mep     dw ghost                ; this machine's man: none until it is in
+netmode db 0                    ; 0 alone, 1 the host, 2 a client, 3 joining
+mypid   dw 0                    ; our name on the wire (0 alone)
+hostpid dw 0                    ; the host's name
+hostheard dw 0                  ; the tick its world last came
+sender  dw 0                    ; who sent the packet in hand
+lastbeat dw 0                   ; the tick of our last heartbeat
+lastsend dw 0FFFFh              ; the tick of the host's last world
+netdirty db 0                   ; 1: the world changed, send it
+loaded  db 0                    ; 1: a level is in the grid
+jstart  dw 0                    ; when JOIN's wait began
+wptr    dw 0                    ; the world packet WAPPLY reads
+mylen   db 0
+myname  db 9 dup 0              ; your name, as typed; a zero after it
+peers   db MAXPEER*4 dup 0      ; names heard: name, tick (words)
+pkt     db NETLEN dup 0         ; the packet we send
+players db (MAXP*PSIZE) dup 0   ; the men in the warehouse...
+ghost   db PSIZE dup 0          ; ...and the camera of a player not in
 level   dw 0
 lvw     db 0
 lvh     db 0
@@ -1271,6 +2071,7 @@ sprbuf  rb SPRMAX
 rowtab  rw 200
 gridpad rb NCOL                 ; a zero row above the grid
 grid    rb NCOL*NCOL
+bfsq    rw NCOL*NCOL            ; FREECELL's queue: every cell at most once
 bbuf    rb 16000                ; the back buffer: 320x200, 4 px a byte
 if $ > 0FE00h                   ; the stack falls from FFFEh: leave it
         err                     ;  512 bytes

@@ -1,10 +1,10 @@
 // ============================================================================
-//  ArtGen - SOKOBAN's CGA pictures, drawn by rule, and a preview of a level
-//  drawn the way SOKOBAN.ASM draws it.
+//  ArtGen - MULTSOKO's CGA pictures, drawn by rule, and a preview of a level
+//  drawn the way MULTSOKO.ASM draws it.
 //
-//      dotnet run --project TOOLS\ArtGen -- GAMES\SOKOBAN\LEVELS.INC 0 PREV ART.INC
+//      dotnet run --project TOOLS\ArtGen -- GAMES\MULTSOKO\LEVELS.INC 0 PREV ART.INC
 //
-//  Writes ART.INC (the art as SOKOBAN.ASM includes it: one character a
+//  Writes ART.INC (the art as MULTSOKO.ASM includes it: one character a
 //  pixel, . see-through, 0 black, 1 green, 2 red, 3 yellow, S and P the
 //  man's shirt and cap) and PREVS.PNG, PREVB.PNG: that level at both cell
 //  sizes, three times enlarged, in CGA palette 0 bright. ART.INC in the
@@ -147,7 +147,7 @@ string[] youS = { "..3333..", "...33..." };
 string[] Man(string[] art, char sh, char pa) => art.Select(r => r.Replace('S', sh).Replace('P', pa)).ToArray();
 
 // where each picture's top row goes against its cell's top row Y - the
-// numbers in SOKOBAN.ASM's zoom records ZS and ZB
+// numbers in MULTSOKO.ASM's zoom records ZS and ZB
 int Lift(bool big, string kind) => kind switch
 {
     "wall" => big ? -6 : -3,
@@ -233,12 +233,12 @@ void Preview(bool big, string path)
 Preview(false, args[2] + "S.PNG");
 Preview(true, args[2] + "B.PNG");
 
-// ---- the art as SOKOBAN.ASM includes it ----
+// ---- the art as MULTSOKO.ASM includes it ----
 var o = new StringBuilder();
 foreach (var line in new[] {
-    "; ART.INC - SOKOBAN's pictures, one character a pixel:",
+    "; ART.INC - MULTSOKO's pictures, one character a pixel:",
     ";  .  see-through     0 black   1 green   2 red   3 yellow",
-    ";  S  the man's shirt, P his cap and trousers (SOKOBAN.ASM LOOKS)",
+    ";  S  the man's shirt, P his cap and trousers (MULTSOKO.ASM LOOKS)",
     ";  Two sizes: ..B cells 16x12 (close up), ..S cells 8x6 (Z: the whole",
     ";  level). First drawn by rule with TOOLS\\ArtGen (C#); edit them freely",
     ";  by hand - keep each row 16 (or 8) characters and each count right." })

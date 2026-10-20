@@ -1,6 +1,6 @@
-; ART.INC - SOKOBAN's pictures, one character a pixel:
+; ART.INC - MULTSOKO's pictures, one character a pixel:
 ;  .  see-through     0 black   1 green   2 red   3 yellow
-;  S  the man's shirt, P his cap and trousers (SOKOBAN.ASM LOOKS)
+;  S  the man's shirt, P his cap and trousers (MULTSOKO.ASM LOOKS)
 ;  Two sizes: ..B cells 16x12 (close up), ..S cells 8x6 (Z: the whole
 ;  level). First drawn by rule with TOOLS\ArtGen (C#); edit them freely
 ;  by hand - keep each row 16 (or 8) characters and each count right.

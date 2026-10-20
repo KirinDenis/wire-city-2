@@ -13,11 +13,14 @@
 // HOME is D:, My files: ~ and a bare cd go there.
 
 import { Shell, tokens, ANSI, RESET } from '../console/shell.js';
-import { CORE_COMMANDS, CORE_GROUPS } from '../console/commands.js';
+import { CORE_COMMANDS, CORE_GROUPS, yes } from '../console/commands.js';
 import { statsOf, sizeText, dateText, LocalFolder } from './drives.js';
 import { doingText, serverUrl } from './net.js';
 import { MANUALS } from './manuals.js';
 import { zip, download } from './zip.js';
+import { parsePage, checkPage, pageBrief, isHtml, exampleName, EXAMPLES, PAGES_DIR, WINDOWS, PLACES } from './page.js';
+import { checkHtmlPage, MARKUP, STYLES } from './htmlpage.js';
+import { HELP, helpTopics } from './help.js';
 
 /** A path's place: the root, /mnt, or a drive and the path inside it ('/' its top). */
 function locate(app, path) {
@@ -263,7 +266,33 @@ function netRoom(ctx, given, dir) {
   return room;
 }
 
-export const SITE_GROUPS = [['drives', 'Drives and the DOS PC'], ['programs', 'Games, programs, lessons'], ['network', 'Who is here']];
+export const SITE_GROUPS = [['drives', 'Drives and the DOS PC'], ['programs', 'Games, programs, lessons'], ['network', 'Who is here'], ['page', 'Your page and its windows']];
+
+/** What `window` does to the windows there are - the Window menu, as lines (site.js arrangeWindows). */
+const WINDOW_OPS = {
+  tile: 'every window side by side', cascade: 'every window one over the other, each title seen',
+  next: 'the next window to the front (F6)', previous: 'the one before (Shift+F6)', zoom: 'the window in front as big as it goes, or back (F5)',
+  minimize: 'the window in front put away into its bar', close: 'the window in front closed (Alt+F3)',
+  list: 'the list of windows, to pick one (Alt+0)', size: 'the window in front moved or sized with the arrows (Ctrl+F5)',
+};
+
+/** A path of the shell's as DOS writes it: /mnt/d/PAGES/X.INI -> D:\PAGES\X.INI. */
+const dosOf = p => { const m = /^\/mnt\/([a-z])(\/.*)?$/.exec(p); return m ? `${m[1].toUpperCase()}:${(m[2] ?? '\\').replace(/\//g, '\\')}`.toUpperCase() : p; };
+
+/** A page's file read and checked - an INI desktop (page.js) or an HTML page (htmlpage.js): { file, path, text, kind, page, lines, problems, asks, data }. */
+export async function pageFile(shell, word) {
+  const path = shell.paths.resolve(word);
+  const text = await shell.paths.read(path);
+  const file = dosOf(path);
+  if (isHtml(file)) return { file, path, text, kind: 'html', ...checkHtmlPage(shell, file, text) };
+  const page = parsePage(text);
+  return { file, path, text, kind: 'ini', page, ...checkPage(shell, file, page) };
+}
+
+/** A page's name without the whole check: [PAGE] Name, or an HTML page's <title>. */
+function pageName(file, text) {
+  return isHtml(file) ? (/<title[^>]*>([^<]*)/i.exec(text)?.[1] ?? '').trim() : parsePage(text).name;
+}
 
 export const SITE_COMMANDS = [
   // ------------------------------------------------------------ who is here
@@ -365,6 +394,36 @@ export const SITE_COMMANDS = [
       app.showSky(room);
       ctx.data({ room });
       ctx.out(`the live map of ${room}${app.presence?.state === 'on' ? '' : ' - not connected to the server: it waits'}`, 'muted');
+      return 0;
+    },
+  },
+  {
+    // What LAN > Monitor draws (OWLOSUI apps/monitors.js), as data: a page of one's own or a model shows it its own way.
+    name: 'net', group: 'network', where: 'here',
+    summary: "the network as it is: this page's line to the server, and the DOS PC's on the relay - its state, bytes and packets each way; --packets: the last ones",
+    usage: 'net [--packets]', options: { packets: 'the last packets, newest first: when, which way, how big, from and to (node:socket)' },
+    effect: 'reads', data: '{ server, state, here, me, relay, relayState, sent, received, packetsOut, packetsIn, lastIn, lastOut }; --packets: [{ at, dir, size, from, to }]',
+    run(ctx) {
+      const app = ctx.app, p = app.presence, n = app.dos.network, tap = app.dos.box.net;
+      tap.tick?.();
+      if (ctx.opts.packets) {
+        const hex = s => (s ?? 0).toString(16).padStart(4, '0');
+        for (const k of tap.packets.slice(-40).reverse()) {
+          const row = { at: new Date(k.at).toTimeString().slice(0, 8), dir: k.dir, size: k.size,
+            from: k.ipx ? `${(k.from ?? '?').slice(-11)}:${hex(k.fromSocket)}` : '', to: k.ipx ? (k.to === 'ff:ff:ff:ff:ff:ff' ? `everyone:${hex(k.toSocket)}` : `${(k.to ?? '?').slice(-11)}:${hex(k.toSocket)}`) : '' };
+          ctx.data(row);
+          ctx.out(`${row.at} ${row.dir.padEnd(4)} ${String(row.size).padStart(6)}  ${row.from.padEnd(18)} ${row.to}`, row.dir === 'out' ? 'warn' : 'info');
+        }
+        if (!tap.packets.length) ctx.out('no packet yet: a networked game, or a program built with --net, puts the DOS PC on the relay', 'muted');
+        return 0;
+      }
+      const t = tap.totals(), last = tap.history.at(-1) ?? { in: 0, out: 0 };
+      const d = { server: serverUrl(), state: p?.state ?? 'off', here: p?.here ?? 0, me: p?.me ?? null, relay: n.url || null, relayState: n.state,
+        sent: t.sent, received: t.received, packetsOut: t.packetsOut, packetsIn: t.packetsIn, lastIn: last.in, lastOut: last.out };
+      ctx.data(d);
+      ctx.out(`server  ${d.server} - ${d.state}${d.me ? `, you are ${d.me}, ${d.here} here` : ''}`);
+      ctx.out(`relay   ${d.relay ?? '(none)'} - ${d.relayState}`);
+      ctx.out(`DOS PC  ${sizeText(d.sent)} out in ${d.packetsOut} packets, ${sizeText(d.received)} in in ${d.packetsIn}; the last second ${d.lastOut} B out, ${d.lastIn} B in`);
       return 0;
     },
   },
@@ -673,6 +732,22 @@ export const SITE_COMMANDS = [
     },
   },
 
+  {
+    // What the Machine monitor and the frame's [3001 cyc] say (site.js watchMachine), as data.
+    name: 'machine', group: 'drives', where: 'here',
+    summary: 'the DOS PC as it is: on or off, what it runs, how fast - cycles a millisecond, in DOSBox\'s own word - and the card it is',
+    usage: 'machine', effect: 'reads', data: '{ running, program, start, cycles, machine, memsize, awake, network }',
+    run(ctx) {
+      const dos = ctx.app.dos, s = dos.settings;
+      const d = { running: !!dos.box.running, program: dos.program?.name ?? null, start: dos.started ?? null, cycles: ctx.app.cycles ?? null,
+        machine: s.machine, memsize: s.memsize, awake: !!dos.box.keepRunning, network: dos.network.state };
+      ctx.data(d);
+      ctx.out(d.running ? `on: ${d.program ?? d.start}, ${d.cycles ?? '?'} cycles a millisecond` : 'off', d.running ? 'good' : 'muted');
+      ctx.out(`${d.machine}, ${d.memsize} MB${d.awake ? ', awake in a background tab' : ''}; network ${d.network}`, 'muted');
+      return 0;
+    },
+  },
+
   // ------------------------------------------------------------ games, programs, lessons
   {
     name: 'play', group: 'programs', summary: 'a game: the machine on, in its folder on C:', usage: 'play GAME [--machine CARD]', where: 'here', complete: 'game',
@@ -704,11 +779,12 @@ export const SITE_COMMANDS = [
     },
   },
   {
-    name: 'run', group: 'programs', summary: 'a program run on the DOS PC, where it is - run C:\\GAMES\\WIRECITY\\CITY.COM; --net puts it on the network', usage: 'run PROGRAM [--net[=ROOM]]', where: 'here', complete: 'path',
+    name: 'run', group: 'programs', summary: 'a program run on the DOS PC, where it is - run C:\\GAMES\\WIRECITY\\CITY.COM; alone, what the editor in front built (Ctrl+F9); --net puts it on the network', usage: 'run [PROGRAM] [--net[=ROOM]]', where: 'here', complete: 'path',
     options: { net: NET_OPTION }, effect: 'runs', data: '{ program, room }',
     async run(ctx) {
-      if (!ctx.args[0]) { ctx.err('which program? run C:\\GAMES\\WIRECITY\\CITY.COM'); return 1; }
-      const f = await fileOn(ctx, ctx.args[0]);
+      const word = ctx.args[0] ?? ctx.app.inFront?.()?.run;
+      if (!word) { ctx.err('which program? run C:\\GAMES\\WIRECITY\\CITY.COM - alone, it runs what the .ASM in the editor in front builds'); return 1; }
+      const f = await fileOn(ctx, word);
       if (!/\.(COM|EXE|BAT)$/i.test(f.name)) { ctx.err(`${f.name}: DOS runs a .COM, an .EXE or a .BAT`); return 1; }
       const room = ctx.opts.net ? netRoom(ctx, ctx.opts.net, f.dir) : null;
       if (ctx.opts.net && !room) return 1;
@@ -730,17 +806,18 @@ export const SITE_COMMANDS = [
   },
   {
     name: 'build', group: 'programs', where: 'here', complete: 'path',
-    summary: "an .ASM assembled with FASM on the DOS PC and run (F9) - a game's by its own MAKE.BAT; FASM's answer here",
-    usage: 'build FILE.ASM [--net[=ROOM]] - build A:\\LESSONS\\L07\\LINE.ASM',
+    summary: "an .ASM assembled with FASM on the DOS PC and run (F9) - a game's by its own MAKE.BAT; alone, the .ASM in the editor in front; FASM's answer here",
+    usage: 'build [FILE.ASM] [--net[=ROOM]] - build A:\\LESSONS\\L07\\LINE.ASM',
     options: { net: NET_OPTION },
     // ok is FASM's verdict when its answer reached this page; null when a game's MAKE.BAT built it.
     effect: 'runs', data: '{ file, ok, text, room }',
     async run(ctx) {
-      if (!ctx.args[0]) { ctx.err('which source? build A:\\EXAMPLES\\TERRA.ASM'); return 1; }
-      const f = await fileOn(ctx, ctx.args[0]);
+      const word = ctx.args[0] ?? ctx.app.inFront?.()?.build;
+      if (!word) { ctx.err('which source? build A:\\EXAMPLES\\TERRA.ASM - alone, it builds the .ASM in the editor in front'); return 1; }
+      const f = await fileOn(ctx, word);
       if (!/\.ASM$/i.test(f.name)) { ctx.err(`${f.name}: FASM assembles an .ASM`); return 1; }
       // From A:, as the course page builds: BUILD.BAT beside the source calls A:\TOOLS\FASM.
-      if (f.drive.letter !== 'A') { ctx.err(`${f.name}: the DOS PC builds on A: - copy it there (cp ${ctx.args[0]} A:\\) and build it there`); return 1; }
+      if (f.drive.letter !== 'A') { ctx.err(`${f.name}: the DOS PC builds on A: - copy it there (cp ${word} A:\\) and build it there`); return 1; }
       const app = ctx.app;
       const room = ctx.opts.net ? netRoom(ctx, ctx.opts.net, f.dir) : null;
       if (ctx.opts.net && !room) return 1;
@@ -828,6 +905,136 @@ export const SITE_COMMANDS = [
       const dos = s => `${s.drive.prefix}${s.dir.replace(/\//g, '\\')}`;
       ctx.data({ left: dos(left), right: dos(right) });
       ctx.out(`Kirin Commander for Web: ${dos(left)} and ${dos(right)}`, 'muted');
+      return 0;
+    },
+  },
+
+  // ------------------------------------------------------------ a page of one's own (page.js)
+  {
+    // The checker is the point (ui-and-security.md): what a page does, in words, before it is on.
+    name: 'page', group: 'page', where: 'here', complete: 'path',
+    summary: "a page of your own: the site's menus, keys and windows as an INI file of yours says - or the whole look, an .HTM of HTML and CSS; page FILE checks it, --use puts it on, --off is the whole site again",
+    usage: 'page [FILE [--use [--yes]] | --off | --example games|code|studio | --parts]',
+    options: {
+      use: 'put it on - a file on D:, your own; after its check and your Yes', yes: 'without asking (a window asked already)',
+      off: 'the whole site again',
+      example: `a page to begin from, written to ${PAGES_DIR}: games (only making games with an AI), code (only writing and building) - INI; studio - a whole site of HTML and CSS`,
+      parts: 'what an HTML page can hold and say - the DOS PC, the live map, buttons, lists - each with an example to build from',
+    },
+    valued: ['example'],
+    effect: 'reads', effects: { use: 'setup', off: 'setup', example: 'writes', parts: 'reads' },
+    data: "[{ file, name, on }] listed; checked or put on: an INI's { file, name, open, menus, keys, asks, problems }, an HTML page's { file, name, kind, styles, parts, runs, lists, removed, asks, problems }; --parts: [{ name, what, example }]",
+    // For a model's Yes box: the page itself, not only "changes your setup".
+    explain: async (c, shell) => {
+      if (!c.opts.use || !c.args[0]) return null;
+      const r = await pageFile(shell, c.args[0]);
+      return `puts a page of its own on - ${r.problems.length ? `refused, ${r.problems.length} problem${r.problems.length > 1 ? 's' : ''}` : pageBrief(r)}`;
+    },
+    async run(ctx) {
+      const app = ctx.app, paths = ctx.shell.paths;
+      if (ctx.opts.parts) {
+        for (const m of MARKUP) { ctx.data(m); ctx.out(m.name, 'heading'); ctx.out(`  ${m.what}`); ctx.out(`  ${m.example}`, 'muted'); }
+        ctx.out(`Stylesheets: ${Object.values(STYLES).map(s => s.name).join(', ')} - exactly from cdn.jsdelivr.net; the rest your own <style>. No script runs in a page. The guide's PAGES says it all.`, 'muted');
+        return 0;
+      }
+      if (ctx.opts.off) {
+        const was = await app.pageOff();
+        ctx.data({ on: false, file: was });
+        ctx.out(was ? `the whole site again - ${was} is off, the file stays where it is` : 'the whole site is on already', 'muted');
+        return 0;
+      }
+      if (ctx.opts.example !== undefined) {
+        const k = String(ctx.opts.example).toLowerCase();
+        if (!EXAMPLES[k]) { ctx.err(`--example ${k}: ${Object.keys(EXAMPLES).join(', ')}`); return 1; }
+        const file = `${PAGES_DIR}\\${exampleName(k)}`, path = paths.resolve(file);
+        if (await paths.read(path).then(() => true, () => false)) { ctx.err(`${file} is there already - page ${file} checks it, edit ${file} changes it`); return 1; }
+        await paths.write(path, EXAMPLES[k]);
+        ctx.data({ file, name: pageName(file, EXAMPLES[k]) });
+        ctx.out(`${file}: written - page ${file} checks it, page ${file} --use puts it on`, 'good');
+        return 0;
+      }
+      if (!ctx.args[0]) {
+        ctx.out(app.page ? `on: ${app.page.file} - "${app.page.name}"` : 'on: the whole site', 'heading');
+        const dir = paths.resolve(PAGES_DIR);
+        const found = (await paths.list(dir).catch(() => [])).filter(e => !e.dir && /\.(INI|HTM)$/i.test(e.name));
+        for (const e of found) {
+          const file = `${PAGES_DIR}\\${e.name.toUpperCase()}`;
+          const name = pageName(file, await paths.read(`${dir}/${e.name}`).catch(() => ''));
+          ctx.data({ file, name, on: app.page?.file === file });
+          ctx.out(`  ${file.padEnd(22)} ${name}${app.page?.file === file ? ' (on)' : ''}`);
+        }
+        if (!found.length) ctx.out(`no page in ${PAGES_DIR} yet: page --example games, code or studio writes one to begin from`, 'muted');
+        ctx.out('page FILE checks one, page FILE --use puts it on, page --off is the whole site again', 'muted');
+        return 0;
+      }
+      const r = await pageFile(ctx.shell, ctx.args[0]);
+      if (!ctx.opts.use) {
+        for (const l of r.lines) ctx.out(l.text, l.tone);
+        ctx.data(r.data);
+        return r.problems.length ? 1 : 0;
+      }
+      // Only one's own: D:, never a drive someone else's link or ZIP brought.
+      if (!r.path.startsWith('/mnt/d/')) { ctx.err(`${r.file}: a page is put on from D:, your own files - copy it there first: cp ${r.file} ${PAGES_DIR}\\`); return 1; }
+      if (r.problems.length) {
+        for (const l of r.lines) ctx.out(l.text, l.tone);
+        ctx.err(`not put on - ${r.problems.length} problem${r.problems.length > 1 ? 's' : ''} to mend first`);
+        return 1;
+      }
+      if (!ctx.opts.yes) {
+        // Said at once, before the question - not gathered as ctx.out's are.
+        for (const l of r.lines) ctx.shell.write(`${ANSI[l.tone] ?? ''}${l.text}${RESET}\r\n`);
+        if (!yes(await ctx.ask('Put this page on? [y/N] '))) { ctx.out('not put on', 'muted'); return 1; }
+      }
+      await app.usePage(r);
+      ctx.data(r.data);
+      ctx.out(`on: ${pageBrief(r)} - WIRE CITY > Whole site takes it off`, 'good');
+      return 0;
+    },
+  },
+  {
+    // The site's help (help.js): pages with links to other pages, to other sites, and run: links to commands.
+    name: 'info', group: 'page', where: 'here', complete: () => Object.keys(HELP).map(k => k.toLowerCase()),
+    summary: 'a page of the site\'s help, with links: to other pages, and to what it tells of, opened at once - info, info network; --list says them',
+    usage: 'info [TOPIC] [--list]',
+    options: { list: 'the pages there are, to open or to link to' },
+    effect: 'shows', effects: { list: 'reads' }, data: '{ topic, title } opened; [{ topic, title }] listed',
+    run(ctx) {
+      if (ctx.opts.list) {
+        for (const t of helpTopics()) { ctx.data(t); ctx.out(`  ${t.topic.toLowerCase().padEnd(9)} ${t.title}`); }
+        return 0;
+      }
+      const topic = (ctx.args[0] ?? 'index').toUpperCase();
+      if (!HELP[topic]) { ctx.err(`${ctx.args[0]}: no such page - info --list says them`); return 1; }
+      ctx.app.showInfo(topic);
+      ctx.data({ topic, title: HELP[topic].title });
+      return 0;
+    },
+  },
+  {
+    name: 'window', group: 'page', where: 'here', complete: () => [...Object.keys(WINDOWS), ...Object.keys(WINDOW_OPS)],
+    summary: `a window of the site opened, where you say: ${PLACES.join(', ')} - or the windows arranged: tile, cascade, next, zoom... (the Window menu)`,
+    usage: `window [NAME [${PLACES.join(' | ')}] | ${Object.keys(WINDOW_OPS).join(' | ')}]`,
+    effect: 'shows', data: '{ window, at } opened; { op } arranged; [{ window, what, placed }] listed',
+    async run(ctx) {
+      const [w, at = null] = ctx.args.map(s => s.toLowerCase());
+      if (!w) {
+        for (const [k, v] of Object.entries(WINDOWS)) {
+          ctx.data({ window: k, what: v.what, placed: v.placed });
+          ctx.out(`  ${k.padEnd(10)} ${v.what}${v.placed ? '' : ' - opens where it always does'}`);
+        }
+        ctx.out(`and: ${Object.entries(WINDOW_OPS).map(([k, v]) => `${k} - ${v}`).join('; ')}`, 'muted');
+        return 0;
+      }
+      if (WINDOW_OPS[w]) {
+        if (!ctx.app.arrangeWindows(w)) { ctx.err(`${w}: no window in front to ${w}`); return 1; }
+        ctx.data({ op: w });
+        return 0;
+      }
+      if (!WINDOWS[w]) { ctx.err(`${w}: no such window - ${Object.keys(WINDOWS).join(', ')}; or ${Object.keys(WINDOW_OPS).join(', ')}`); return 1; }
+      if (at && !PLACES.includes(at)) { ctx.err(`${at}: a place is ${PLACES.join(', ')}`); return 1; }
+      await ctx.app.showWindow(w, at);
+      ctx.data({ window: w, at });
+      ctx.out(`${w}${at ? `, ${at}` : ''}: ${WINDOWS[w].what}`, 'muted');
       return 0;
     },
   },

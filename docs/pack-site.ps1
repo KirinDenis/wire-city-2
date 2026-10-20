@@ -40,7 +40,7 @@ $games = @(
   @{ dir = "TRAINER";  name = "The Flight School"; page = "play.html";    bundle = "field_v\d+\.jsdos";    repo = "GAMES\TRAINER";         exe = "FIELD.COM" },
   @{ dir = "WIRECITY"; name = "WIRE CITY";         page = "play.html";    bundle = "wirecity_v\d+\.jsdos"; repo = "GAMES\WIRECITY";        exe = "CITY.COM" },
   # No page and no bundle of its own: always the repository's build.
-  @{ dir = "SOKOBAN";  name = "MULTIPLAY SOKO";                                                         repo = "GAMES\SOKOBAN";         exe = "SOKOBAN.COM" }
+  @{ dir = "MULTSOKO"; name = "MULTIPLAY SOKO";                                                         repo = "GAMES\MULTSOKO";        exe = "MULTSOKO.COM" }
 )
 
 # What of a game's folder in the repository is the game: the program and

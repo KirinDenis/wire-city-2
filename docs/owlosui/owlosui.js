@@ -128,7 +128,7 @@ const Op = {
   Files: 0x1A, SetFiles: 0x25, TakeFiles: 0x26, MarkedNames: 0x28, SetFilesError: 0x29, AddFiles: 0x5A, Unmark: 0x61,
   Place: 0x62, SetTag: 0x65, SetIndicator: 0x66, Console: 0x67, ConsoleWrite: 0x68,
   Clipboard: 0x69, ClipboardGet: 0x6A, ClipboardPaste: 0x6B, Minimize: 0x6C, TextAppend: 0x6D, GetTextPart: 0x6E, GetTextBytes: 0x6F,
-  Hole: 0x70, Holes: 0x71,
+  Hole: 0x70, Holes: 0x71, Html: 0x72, TakeLink: 0x73,
   Tree: 0x53, TreeChildren: 0x54, TreeExpand: 0x55, TreePath: 0x56,
 };
 
@@ -742,6 +742,17 @@ export class Owlosui {
     const b = data instanceof Uint8Array ? data : new Uint8Array(data);
     return readU16(this.call(Op.Hex, u16(parent), rect(0, 0, 0, 0), b.subarray(0, 65000)), 0);
   }
+  /**
+   * A help page filling its window, from a small HTML: links, headings,
+   * <b>, paragraphs, line breaks, rules, bulleted lists and <pre>. Tab and
+   * Shift+Tab go from link to link, Enter or a click follows one; an
+   * <a href="#name"> it follows itself (to an <a name="name">), any other
+   * link it hands out: takeLink(id). setText(id, html) shows another page
+   * in it.
+   */
+  html(parent, source) { return readU16(this.call(Op.Html, u16(parent), rect(0, 0, 0, 0), str(source)), 0); }
+  /** The link followed in a help page since last asked - '' for none; read once. */
+  takeLink(id) { return readStr(this.call(Op.TakeLink, u16(id)), 0).text; }
   /** What happened in a panel since last asked: kind 1 a name entered, 2 a path typed, 0 nothing. */
   takeFiles(id) {
     const r = this.call(Op.TakeFiles, u16(id));

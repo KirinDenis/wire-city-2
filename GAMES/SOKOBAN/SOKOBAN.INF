@@ -1,7 +1,0 @@
-.title  MULTIPLAY SOKO - crates onto the red marks
-.what   A brick warehouse on a CGA screen, 61 levels
-.tier   GAME
-.main   SOKOBAN.ASM
-.build  FASM SOKOBAN.ASM SOKOBAN.COM
-.run    SOKOBAN.COM
-.engine ENGINE\E_8086.INC
