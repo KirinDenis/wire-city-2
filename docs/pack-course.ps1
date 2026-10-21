@@ -17,7 +17,7 @@
 #       GAMES\OWLFLY\, OWLFLY2\, OWLFLY3\
 #                            SRC\ and INSTALL\ (the data the build does not
 #                            make, and the game as built), MAKE.BAT, RUN.BAT...
-#       GAMES\WIRECITY\, TRAINER\, MULTSOKO\
+#       GAMES\WIRECITY\, TRAINER\, MULTSOKO\, MULTSOK2\
 #                            the same, the game in its own folder; TRAINER\res\
 #                            the models its MAKE.BAT packs with TOOLS\OBJ2DAT
 #   docs\course\course.json  every lesson, its title and notes (its .INF), its
@@ -94,6 +94,8 @@ $picked += Pick "GAMES\TRAINER\SRC" '.' -recurse | Where-Object { $_.Extension -
 $picked += Pick "GAMES\TRAINER\res" '\.(obj|mtl)$'
 $picked += Pick "GAMES\MULTSOKO" $TEXT
 $picked += Pick "GAMES\MULTSOKO" '\.COM$'
+$picked += Pick "GAMES\MULTSOK2" $TEXT
+$picked += Pick "GAMES\MULTSOK2" '\.(COM|DAT)$'
 $picked += Get-Item (Join-Path $root "TOOLS\OBJ2DAT.COM")
 
 # FASM gets -m 4096 on the disk's copies: a line that runs it ON something,

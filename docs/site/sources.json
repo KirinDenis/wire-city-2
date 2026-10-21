@@ -35,6 +35,12 @@
                       "title":  "MULTIPLAY SOKO - crates onto the red marks",
                       "what":  "One brick warehouse for up to eight on the network, mines, 60 levels",
                       "main":  "GAMES/MULTSOKO/MULTSOKO.ASM"
+                  },
+                  {
+                      "dir":  "MULTSOK2",
+                      "title":  "MULTIPLAY SOKO II - crates onto the red marks, in a castle",
+                      "what":  "Sokoban for up to eight on the network: EGA, CGA or Hercules, Sound Blaster, 60 levels",
+                      "main":  "GAMES/MULTSOK2/MULTSOK2.ASM"
                   }
               ],
     "examples":  [

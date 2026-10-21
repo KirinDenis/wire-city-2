@@ -151,6 +151,10 @@ const GAMES = [
     about: 'Crates onto the red marks, in a brick warehouse seen from above, on a CGA screen in four colours - or isometric, turned any of four ways. ' +
       'Everyone who plays it on the site works the same warehouse: up to eight men, a score each, a mine each that stops whoever it catches.',
     keys: 'arrows or W A S D walk and push, Space a mine, Q/E turn, V isometric, Z the whole level, R R anew, N N / P P next or previous' },
+  { key: 'multsoko2', name: 'MULTIPLAY SOKO II', dir: 'MULTSOK2', room: 'multsok2', hint: 'Sokoban in a castle for up to eight: EGA, CGA or Hercules, Sound Blaster, candies, a gate out; multiplayer',
+    about: 'Crates onto the red marks, in a castle seen from above: a black floor with candies on it, walls of big stones overgrown with green, a moat, ' +
+      'a park with oaks, fountains and statues. Every crate home and the gate rises: out through it, and the winner of the level is on the podium.',
+    keys: 'arrows or W A S D walk and push, Space a mine, Q/E turn, V isometric, Z close up, R R anew, N N / P P next or previous' },
 ];
 
 /**
@@ -213,6 +217,7 @@ const ADDRESS_PLAYS = {
   owlfly3: { game: 'owlfly3' }, owlfly3h: { game: 'owlfly3', machine: 'hercules' }, owlfly2: { game: 'owlfly2' },
   owlfly: { game: 'owlfly' }, trainer: { game: 'trainer' }, field: { game: 'trainer' }, wirecity: { game: 'wirecity' },
   multsoko: { game: 'multsoko' }, sokoban: { game: 'multsoko' },
+  multsoko2: { game: 'multsoko2' }, multsok2: { game: 'multsoko2' },
   jet: { example: 'JET' }, terra: { example: 'TERRA' }, relief: { example: 'RELIEF' }, smoke: { example: 'SMOKE' }, avio: { example: 'AVIO' },
 };
 

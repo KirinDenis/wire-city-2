@@ -40,7 +40,10 @@ $games = @(
   @{ dir = "TRAINER";  name = "The Flight School"; page = "play.html";    bundle = "field_v\d+\.jsdos";    repo = "GAMES\TRAINER";         exe = "FIELD.COM" },
   @{ dir = "WIRECITY"; name = "WIRE CITY";         page = "play.html";    bundle = "wirecity_v\d+\.jsdos"; repo = "GAMES\WIRECITY";        exe = "CITY.COM" },
   # No page and no bundle of its own: always the repository's build.
-  @{ dir = "MULTSOKO"; name = "MULTIPLAY SOKO";                                                         repo = "GAMES\MULTSOKO";        exe = "MULTSOKO.COM" }
+  @{ dir = "MULTSOKO"; name = "MULTIPLAY SOKO";                                                         repo = "GAMES\MULTSOKO";        exe = "MULTSOKO.COM" },
+  # pre: a line RUN.BAT says first. MULTIPLAY SOKO II sets the CPU as fast
+  # as it goes - a saved `auto` is 3000 cycles, which its testers met.
+  @{ dir = "MULTSOK2"; name = "MULTIPLAY SOKO II";                                                      repo = "GAMES\MULTSOK2";        exe = "MULTSOK2.COM"; pre = 'config -set "cpu cycles=max"' }
 )
 
 # What of a game's folder in the repository is the game: the program and
@@ -81,7 +84,8 @@ foreach ($g in $games) {
     $from[$g.dir] = $m.Value
   }
   # cd GAMES\<DIR>, RUN - the way the repository runs every game.
-  $bat = "@echo off`r`nREM RUN.BAT - $($g.name). From C:\: cd GAMES\$($g.dir), then RUN.`r`n$($g.exe)`r`n"
+  $pre = $(if ($g.pre) { "$($g.pre)`r`n" } else { "" })
+  $bat = "@echo off`r`nREM RUN.BAT - $($g.name). From C:\: cd GAMES\$($g.dir), then RUN.`r`n$pre$($g.exe)`r`n"
   Put "$dir/RUN.BAT" ([Text.Encoding]::ASCII.GetBytes($bat))
 }
 

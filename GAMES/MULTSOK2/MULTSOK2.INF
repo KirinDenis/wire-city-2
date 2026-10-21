@@ -1,0 +1,7 @@
+.title  MULTIPLAY SOKO II - crates onto the red marks, in a castle
+.what   Sokoban for up to eight on the network: EGA, CGA or Hercules, Sound Blaster, 60 levels
+.tier   GAME
+.main   MULTSOK2.ASM
+.build  FASM ART.ASM ART.DAT, FASM MULTSOK2.ASM MULTSOK2.COM
+.run    MULTSOK2.COM
+.engine ENGINE\E_8086.INC ENGINE\E_NET.INC ENGINE\E_MATH.INC ENGINE\E_TERR.INC

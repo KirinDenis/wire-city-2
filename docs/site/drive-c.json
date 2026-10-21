@@ -1,5 +1,5 @@
 {
-    "made":  "2026-10-21 13:26",
+    "made":  "2026-10-21 21:33",
     "source":  "released",
     "from":  {
                  "OWLFLY3":  "owlfly3_v19.jsdos",
@@ -7,7 +7,8 @@
                  "OWLFLY":  "owlfly_v53.jsdos",
                  "TRAINER":  "field_v32.jsdos",
                  "WIRECITY":  "wirecity_v4.jsdos",
-                 "MULTSOKO":  "GAMES\\MULTSOKO"
+                 "MULTSOKO":  "GAMES\\MULTSOKO",
+                 "MULTSOK2":  "GAMES\\MULTSOK2"
              },
     "files":  [
                   {
@@ -169,6 +170,18 @@
                   {
                       "path":  "GAMES/MULTSOKO/RUN.BAT",
                       "size":  95
+                  },
+                  {
+                      "path":  "GAMES/MULTSOK2/ART.DAT",
+                      "size":  57744
+                  },
+                  {
+                      "path":  "GAMES/MULTSOK2/MULTSOK2.COM",
+                      "size":  47729
+                  },
+                  {
+                      "path":  "GAMES/MULTSOK2/RUN.BAT",
+                      "size":  128
                   }
               ]
 }

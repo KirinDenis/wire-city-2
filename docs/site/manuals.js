@@ -239,6 +239,25 @@ export const MANUALS = {
     ],
   },
 
+  multsoko2: {
+    title: 'MULTIPLAY SOKO II',
+    keys: 'arrows or W A S D walk and push, Space mine, Q/E turn, V isometric, Z close up, R R anew, N N / P P',
+    blocks: [
+      { h: 'THE FIRST SCREEN' },
+      { p: 'It asks three things, in text so that any card shows it: 1, 2 or 3 picks the picture - EGA, sixteen colours; CGA, four; Hercules, black and amber - a card this machine has not got refuses its key; 4 turns the sound on and off (a Sound Blaster at 220h); the letters you type are your name. Enter plays. By default the best card here and the sound on.' },
+      { h: 'KEYS' },
+      { p: 'The arrows, or W A S D, walk; walking into a crate pushes it, if the cell behind it is free. Space lays your mine where you stand. Q and E turn the view a quarter either way, and the arrows turn with it: up is always up the screen. V switches to the isometric view and back; Z shows the level close up, following you, and back to the whole of it. R twice starts the level anew, N twice and P twice go to the next and the previous level - the first press only asks. Esc goes back to DOS.' },
+      { h: 'WHAT THIS IS' },
+      { p: 'Sokoban for up to eight, in a castle: the whole level is always on the screen, the floor black and bare so nothing on it is lost. A crate onto a red mark scores +10, off one -10; every free cell starts with a candy, +1, +2 or +3; now and then a diamond grows out of the floor, +25, for fifteen seconds - and a crate cannot be pushed onto it. When every crate is home the gate in the wall rises and the drawbridge comes down: walk out through it, +50, the first out +75. Fifteen seconds later the gate shuts, and whoever did most in the level stands on the podium. The 60 levels are the ones of Base-Z-47.' },
+      { h: 'MINES' },
+      { p: 'Every man has one. Laid, it ticks five seconds - its seconds are on it - and then the nine cells round it blast: every man on them, whoever laid it, stands still for fifteen, his seconds over his head. The next mine is his a minute after he laid the last. The list shows each man\'s clock: M - he has a mine; M42 - forty-two seconds to the next; Z12 - twelve more seconds standing still.' },
+      { h: 'ON THE NETWORK' },
+      { p: 'Everyone who plays it on the site is in the room multsok2 - not the first game\'s. One machine keeps the castle - the lowest name on the wire: the crates, the candies, the clocks, the men and the scores. The others send it their steps and draw the world it sends back, so two men can never push one crate two ways. A man not heard for 3 seconds leaves the floor; when the host goes quiet for 2, the next lowest carries on from the world it last drew.' },
+      { h: 'WHY IT IS WORTH A LOOK' },
+      { p: 'One picture, three cards. The game draws into a buffer of its own, two pixels to a byte, and each row it sends out only the stretch that changed since the last frame - so the rippling moat and the flickering torches cost a few bytes, not the screen. That stretch becomes four bit planes for the EGA (sixteen colours, our own on a VGA), two-bit pixels in two banks for the CGA (each colour a 2x2 half-tone), or dots for the Hercules (each colour a density). The castle is drawn once a level into a background - stones, growth, park - and the wind and the birds come from the WIRE CITY ring mixer, one Sound Blaster channel, no interrupts.' },
+    ],
+  },
+
   jet: demo('THE HANGAR', 'Up/Down cycle the air force, arrows spin, Space blows it apart',
     'A model viewer: all five aircraft the combat sims fly, each with a spec sheet drawn in the ROM font. Cycle the air force, spin any airframe in your hands, and press Space to blow it apart.',
     'This is where you can actually see what the games only flash past you at 400 knots - and where the depth sort proves itself: after the explosion the painter\'s algorithm keeps ordering every tumbling fragment correctly, with no z-buffer and no floating point. The airframes come through the Blender -> OBJ -> 8086 precompiler, so a new plane is a modelling job, not an assembly job.',
