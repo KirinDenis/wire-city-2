@@ -1,10 +1,10 @@
 OWLOSUI web library, copied from C:\repos\OWLOSUI
 repository  https://github.com/KirinDenis/OWLOSUI
-commit      8e9bb2c292ea6b562add0d6db5c4ad9ec7755377
-state       plus changes not yet committed in lib\ (13 files)
-copied      2026-10-20 11:48
-wasm built  2026-10-20 11:44
-files       30, 3216260 bytes
+commit      95c50ee02141eb6fa54bdaf1c8e27c39507f8710
+state       clean
+copied      2026-10-21 10:08
+wasm built  2026-10-21 10:04
+files       30, 3216400 bytes
 
 Refresh with docs\pull-owlosui.ps1. Do not edit these files here: change
 OWLOSUI, then pull again.

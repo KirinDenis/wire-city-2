@@ -1,5 +1,5 @@
 {
-    "made":  "2026-10-20 10:41",
+    "made":  "2026-10-21 13:26",
     "source":  "released",
     "from":  {
                  "OWLFLY3":  "owlfly3_v19.jsdos",
@@ -164,7 +164,7 @@
                   },
                   {
                       "path":  "GAMES/MULTSOKO/MULTSOKO.COM",
-                      "size":  28985
+                      "size":  35180
                   },
                   {
                       "path":  "GAMES/MULTSOKO/RUN.BAT",

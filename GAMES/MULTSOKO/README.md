@@ -1,14 +1,16 @@
 # MULTIPLAY SOKO
 
-Crates onto the red marks, in a brick warehouse seen from three quarters
-above, on a **CGA** screen: 320x200, four colours, **8086 assembly**, flat
-FASM, one `.COM`. The 61 levels are the ones of
-[Base-Z-47](https://github.com/KirinDenis/Base-Z-47-Rust-Game).
+Crates onto the red marks, in a brick warehouse seen from above - or
+isometric, turned any of four ways - on a **CGA** screen: 320x200, four
+colours, **8086 assembly**, flat FASM, one `.COM`. The 60 levels are the
+ones of [Base-Z-47](https://github.com/KirinDenis/Base-Z-47-Rust-Game).
 
 ```
-Arrows    walk, and push the crate in front of you
-W A S D   the same, for the left hand
-Z         the whole level / close up
+Arrows    walk, and push the crate in front of you (or W A S D)
+Space     lay your mine where you stand
+Q, E      turn the view a quarter, either way; the arrows turn with it
+V         the isometric view, and back
+Z         the whole level / close up (seen from above)
 R R       the level anew (the first R only asks)
 N N, P P  the next, the previous level
 ESC       back to DOS
@@ -16,7 +18,16 @@ ESC       back to DOS
 
 A crate onto a goal scores +10, off one -10; a solved level gives +50 to
 every man in the warehouse. The list under the playfield shows the men,
-their names and their scores; a star marks the host.
+their names, their scores and their clocks; a star marks the host.
+
+## Mines
+
+Every man has one. Laid, it ticks 5 s with its seconds printed on it; then
+the nine cells round it blast, and every man on them - whoever laid it -
+stands still for 15 s, his seconds over his head. The next mine is his
+60 s after he laid the last. In the list: `M` he has a mine, `M42` 42 s
+to the next, `Z12` 12 s more standing still. The host keeps every clock,
+as it keeps the crates; a step from a man standing still is refused.
 
 ## On the network
 
@@ -52,7 +63,10 @@ The network calls are `ENGINE\E_NET.INC`. It was tested with a fake player,
 game in the site's page on a test server: as a client (its man in, its
 steps applied, dropped 3 s after it went quiet) and as the host (the game
 joined its warehouse, its steps went there and back, and it took the
-warehouse over 1.7 s after the host went quiet).
+warehouse over 1.7 s after the host went quiet). Its `X` step lays a mine:
+the world showed it ticking 91 ticks and blasting 5.1 s later, both men on
+its nine cells standing 273 ticks (15 s). The world packet is protocol 2
+(the mines); a version 1 game in the room is ignored, and it ignores us.
 
 ## Build it, run it
 
@@ -83,21 +97,22 @@ pictures can be tried before DOS sees them.
 
 ## How the picture is made
 
-- **Three quarters from above.** Grid rows run across the screen; cell
-  (c, r) has its corner at `x = ox + c*cw`, `y = oy + r*cd`. A wall or a
-  crate shows its top face lifted and its front face under it. Everything is
-  drawn back to front into a back buffer: every floor first, then row by row
-  the walls, crates and men, so a nearer block covers the bottom of the cell
-  behind it.
-- **Why not isometric.** The first version was isometric, and prettier, but
-  there every grid direction is a diagonal of the screen: each arrow had to
-  be turned 45 degrees in the head. Here an arrow goes where it points.
-- **Two sizes.** Cells of 16x12 by default, with the camera following your
-  man; `Z` switches to 8x6, where every level fits on the screen whole.
-- **Low walls.** A wall is half a cell high (6 pixels of 12). Taller, and a
-  wall in front hides most of a corridor. The tops are a dark red checker and
-  the faces red bricks in black mortar, so the light floor, the yellow crates
-  and the men stand out.
+- **Straight down by default.** The players got lost in the isometric
+  version and then in a three-quarter one: seen from above nothing stands
+  in front of anything. A wall is a patch of brickwork, a crate a box with
+  a cross, a cell 16x16 (`Z`: 8x8, where every level fits whole).
+- **One renderer for every view.** The grid is turned first (`Q`, `E`:
+  TURNED), then turned cell (cc, rr) lands at
+  `x = ox + cc*CX + rr*RX`, `y = oy + cc*CY + rr*RY`. Straight down, CX is
+  the cell's width and RY its height; isometric (`V`), CX = 12, CY = 6,
+  RX = -12, RY = 6 - a column on is right and down, a row on left and down.
+  Rows are drawn top to bottom, every floor first, then the walls, mines,
+  crates and men, so in the isometric view a nearer block covers the bottom
+  of the one behind it. The arrows are turned back by the same quarter
+  turns, so up is always up the screen.
+- **Low isometric walls.** Half a tile high (6 pixels of 12): taller, and a
+  wall in front hides most of a corridor. Their tops are a dark red checker,
+  their faces red bricks in black mortar.
 - **CGA in a byte.** Four pixels a byte, two bits each. A picture is
   compiled at start into a mask and an ink byte per four pixels, and drawn as
   `screen = (screen AND mask) OR ink`. The back buffer is linear; the copy
@@ -107,4 +122,5 @@ pictures can be tried before DOS sees them.
   port `3D9h` for a real CGA, and the attribute registers for a VGA, which
   ignores the other two in mode 4.
 - **Text** is the BIOS's own 8x8 font, from `F000:FA6E` on a CGA or wherever
-  an EGA or VGA BIOS says (`INT 10h AX=1130h`).
+  an EGA or VGA BIOS says (`INT 10h AX=1130h`); the counts over mines and men
+  are printed at any byte column, not only on the 8-pixel grid.

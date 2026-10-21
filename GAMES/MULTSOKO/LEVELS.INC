@@ -1,21 +1,9 @@
 ; LEVELS.INC - the Sokoban levels of Base-Z-47 (github.com/KirinDenis/
-;  Base-Z-47-Rust-Game, BASE-Z47/src/levels/level0..60.rs), each trimmed
+;  Base-Z-47-Rust-Game, BASE-Z47/src/levels/level1..60.rs), each trimmed
 ;  to its walls. Made by TOOLS\LevConv (C#):
 ;    dotnet run --project TOOLS\LevConv -- <levels dir> GAMES\MULTSOKO\LEVELS.INC
 ;  DO NOT EDIT BY HAND.  A level: db width, height, then height rows of
 ;  width bytes: # wall  $ box  . goal  * box on goal  @ man  + man on goal
-LEV00:	db 20,11
-	db '    #####           '
-	db '    #   #           '
-	db '    #$  #           '
-	db '  ###  $##          '
-	db '  #  $ $ #          '
-	db '### # ## #    ######'
-	db '#   # ## ######  ..#'
-	db '# $  $           ..#'
-	db '##### ### #@###  ..#'
-	db '    #     ### ######'
-	db '    #######         '
 LEV01:	db 22,11
 	db '    #####             '
 	db '    #   #             '
@@ -1004,12 +992,12 @@ LEV60:	db 26,16
 	db '# $$                   .##'
 	db '#  ##################  ..#'
 	db '####                ######'
-NLEVELS = 61
-LEVTAB:	dw LEV00,LEV01,LEV02,LEV03,LEV04,LEV05,LEV06,LEV07
-	dw LEV08,LEV09,LEV10,LEV11,LEV12,LEV13,LEV14,LEV15
-	dw LEV16,LEV17,LEV18,LEV19,LEV20,LEV21,LEV22,LEV23
-	dw LEV24,LEV25,LEV26,LEV27,LEV28,LEV29,LEV30,LEV31
-	dw LEV32,LEV33,LEV34,LEV35,LEV36,LEV37,LEV38,LEV39
-	dw LEV40,LEV41,LEV42,LEV43,LEV44,LEV45,LEV46,LEV47
-	dw LEV48,LEV49,LEV50,LEV51,LEV52,LEV53,LEV54,LEV55
-	dw LEV56,LEV57,LEV58,LEV59,LEV60
+NLEVELS = 60
+LEVTAB:	dw LEV01,LEV02,LEV03,LEV04,LEV05,LEV06,LEV07,LEV08
+	dw LEV09,LEV10,LEV11,LEV12,LEV13,LEV14,LEV15,LEV16
+	dw LEV17,LEV18,LEV19,LEV20,LEV21,LEV22,LEV23,LEV24
+	dw LEV25,LEV26,LEV27,LEV28,LEV29,LEV30,LEV31,LEV32
+	dw LEV33,LEV34,LEV35,LEV36,LEV37,LEV38,LEV39,LEV40
+	dw LEV41,LEV42,LEV43,LEV44,LEV45,LEV46,LEV47,LEV48
+	dw LEV49,LEV50,LEV51,LEV52,LEV53,LEV54,LEV55,LEV56
+	dw LEV57,LEV58,LEV59,LEV60

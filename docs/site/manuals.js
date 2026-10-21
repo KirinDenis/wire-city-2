@@ -224,16 +224,18 @@ export const MANUALS = {
 
   multsoko: {
     title: 'MULTIPLAY SOKO',
-    keys: 'arrows or W A S D walk and push, Z whole level, R R anew, N N / P P next / previous',
+    keys: 'arrows or W A S D walk and push, Space mine, Q/E turn, V isometric, Z whole level, R R anew, N N / P P',
     blocks: [
       { h: 'KEYS' },
-      { p: 'The arrows, or W A S D, walk; walking into a crate pushes it, if the cell behind it is free. Z shows the whole level or close up. R twice starts the level anew, N twice and P twice go to the next and the previous level - the first press only asks. Esc goes back to DOS.' },
+      { p: 'The arrows, or W A S D, walk; walking into a crate pushes it, if the cell behind it is free. Space lays your mine where you stand. Q and E turn the view a quarter either way, and the arrows turn with it: up is always up the screen. V switches to the isometric view and back; Z shows the whole level or close up. R twice starts the level anew, N twice and P twice go to the next and the previous level - the first press only asks. Esc goes back to DOS.' },
       { h: 'WHAT THIS IS' },
-      { p: 'Sokoban for up to eight: push every crate onto a red mark and the next level comes for everyone. A crate onto a mark scores +10, off one -10, a solved level +50 to every man in the warehouse. Everyone who plays it on the site works the same warehouse; the title asks your name, and the list under the floor shows every man, his name and his score - a star marks the host. Alone in the room, you open the warehouse yourself. The 61 levels are the ones of Base-Z-47.' },
+      { p: 'Sokoban for up to eight: push every crate onto a red mark and the next level comes for everyone. A crate onto a mark scores +10, off one -10, a solved level +50 to every man in the warehouse. Everyone who plays it on the site works the same warehouse; the title asks your name, and the list under the floor shows every man, his name and his score - a star marks the host. Alone in the room, you open the warehouse yourself. The 60 levels are the ones of Base-Z-47.' },
+      { h: 'MINES' },
+      { p: 'Every man has one. Laid, it ticks five seconds - its seconds are on it - and then the nine cells round it blast: every man on them, whoever laid it, stands still for fifteen, his seconds over his head. The next mine is his a minute after he laid the last. The list shows each man\'s clock: M - he has a mine; M42 - forty-two seconds to the next; Z12 - twelve more seconds standing still.' },
       { h: 'ON THE NETWORK' },
       { p: 'One machine keeps the warehouse - the lowest name on the wire: the crates, the level, the men and the scores. The others send it their steps and draw the world it sends back twice a second, so two men can never push one crate two ways. A man not heard for 3 seconds leaves the floor; when the host goes quiet for 2, the next lowest carries on from the world it last drew.' },
       { h: 'WHY IT IS WORTH A LOOK' },
-      { p: 'CGA: four colours, four pixels to a byte, and the even and odd rows in two separate banks. Every picture is text in ART.INC - one character a pixel - compiled at the start into a mask and an ink byte for each four pixels, and drawn back to front into a back buffer that the copy splits into the two banks. Its first version was isometric, and prettier; it went three-quarter because there every arrow walked a diagonal of the screen.' },
+      { p: 'CGA: four colours, four pixels to a byte, and the even and odd rows in two separate banks. Every picture is text in ART.INC - one character a pixel - compiled at the start into a mask and an ink byte for each four pixels, and drawn back to front into a back buffer that the copy splits into the two banks. It began isometric, then went three-quarter, then straight down: the players got lost in the prettier views. The isometric one stayed behind V, and every view turns four ways - the grid is turned before it is drawn, so one renderer draws them all.' },
     ],
   },
 

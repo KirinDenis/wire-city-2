@@ -147,10 +147,10 @@ const GAMES = [
     about: 'Where it started: a night flight over a wireframe city that the program builds rather than stores. One source file, small enough ' +
       'to read in a sitting, with the three ideas everything here is made of: fixed-point 3-D, hidden lines by the painter, a world from a seed.',
     keys: 'arrows steer - the horizon banks with you' },
-  { key: 'multsoko', name: 'MULTIPLAY SOKO', dir: 'MULTSOKO', room: 'multsoko', hint: 'Sokoban on CGA for up to eight: one warehouse, 61 levels, a score each; multiplayer',
-    about: 'Crates onto the red marks, in a brick warehouse seen from three quarters above, on a CGA screen in four colours. ' +
-      'Everyone who plays it on the site works the same warehouse: up to eight men, a score each, the next level for all when the last crate is home.',
-    keys: 'arrows or W A S D walk and push, Z the whole level, R R the level anew, N N / P P the next or previous level' },
+  { key: 'multsoko', name: 'MULTIPLAY SOKO', dir: 'MULTSOKO', room: 'multsoko', hint: 'Sokoban on CGA for up to eight: one warehouse, 60 levels, mines, a score each; multiplayer',
+    about: 'Crates onto the red marks, in a brick warehouse seen from above, on a CGA screen in four colours - or isometric, turned any of four ways. ' +
+      'Everyone who plays it on the site works the same warehouse: up to eight men, a score each, a mine each that stops whoever it catches.',
+    keys: 'arrows or W A S D walk and push, Space a mine, Q/E turn, V isometric, Z the whole level, R R anew, N N / P P next or previous' },
 ];
 
 /**

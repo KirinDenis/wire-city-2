@@ -1,0 +1,7 @@
+.title  The hangar: an aeroplane is a list of points
+.what   A break from the flight, in a small program of its own: OWL FLY III's five aeroplanes on a stand, turning. Each one is two tables and nothing more - vertices, a dw x,y,z each in cells of the squared paper it was drawn on, and faces, four vertex numbers and a colour. Every frame turns every vertex by the spin, places it in front of the lens, averages each face's corners into a depth, bubble-sorts the faces far to near and fills them in that order: the near face hides the far one only because it is written later. W shows the wire and the vertex numbers - the same numbers as the table
+.tier   LESSON
+.main   HANGAR.ASM
+.build  FASM HANGAR.ASM HANGAR.COM
+.run    HANGAR.COM
+.uses   IMUL IDIV SHL SAR XCHG

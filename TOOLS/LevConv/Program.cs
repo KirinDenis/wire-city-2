@@ -6,8 +6,10 @@
 //  <levels dir> is BASE-Z47\src\levels of github.com/KirinDenis/
 //  Base-Z-47-Rust-Game: level0.rs, level1.rs ... each a Rust function
 //  returning a [[char; W]; H] array, one row of quoted characters a line.
-//  It reads level0.rs onward until the first number that is missing
-//  (level61.rs_mod is not a level file and is left out).
+//  It reads level1.rs onward until the first number that is missing
+//  (level61.rs_mod is not a level file and is left out). Not level0.rs:
+//  it is level1.rs again, one column narrower, and the players met the
+//  same level twice at the start.
 //
 //  Each level is trimmed to the box its non-space characters fill and
 //  written as  db width,height  and height rows of width bytes, in the
@@ -30,14 +32,14 @@ if (args.Length != 2)
 var dir = args[0];
 var sb = new StringBuilder();
 sb.Append("; LEVELS.INC - the Sokoban levels of Base-Z-47 (github.com/KirinDenis/\r\n");
-sb.Append(";  Base-Z-47-Rust-Game, BASE-Z47/src/levels/level0..60.rs), each trimmed\r\n");
+sb.Append(";  Base-Z-47-Rust-Game, BASE-Z47/src/levels/level1..60.rs), each trimmed\r\n");
 sb.Append(";  to its walls. Made by TOOLS\\LevConv (C#):\r\n");
 sb.Append(";    dotnet run --project TOOLS\\LevConv -- <levels dir> GAMES\\MULTSOKO\\LEVELS.INC\r\n");
 sb.Append(";  DO NOT EDIT BY HAND.  A level: db width, height, then height rows of\r\n");
 sb.Append(";  width bytes: # wall  $ box  . goal  * box on goal  @ man  + man on goal\r\n");
 var names = new List<string>();
 bool bad = false;
-for (int i = 0; ; i++)
+for (int i = 1; ; i++)                  // from 1: level0.rs repeats level1.rs
 {
     var path = Path.Combine(dir, $"level{i}.rs");
     if (!File.Exists(path)) break;

@@ -5,7 +5,8 @@ REM screen: it wants nothing but DOS and a colour card (CGA, EGA or VGA).
 REM
 REM   Arrows   walk, and push the crate in front of you
 REM   W A S D  the same, for the left hand
-REM   Z        the whole level / close up
+REM   Space    a mine: 5 s, then the 3x3 round it stands still 15 s
+REM   Q, E     turn the view;  V  isometric;  Z  the whole level / close up
 REM   R R      the level anew       N N, P P   the next, the previous level
 REM   ESC      quit
 REM

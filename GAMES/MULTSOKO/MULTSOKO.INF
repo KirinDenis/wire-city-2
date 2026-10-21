@@ -1,5 +1,5 @@
 .title  MULTIPLAY SOKO - crates onto the red marks
-.what   One brick warehouse for up to eight on the network, CGA, 61 levels
+.what   One brick warehouse for up to eight on the network, mines, 60 levels
 .tier   GAME
 .main   MULTSOKO.ASM
 .build  FASM MULTSOKO.ASM MULTSOKO.COM

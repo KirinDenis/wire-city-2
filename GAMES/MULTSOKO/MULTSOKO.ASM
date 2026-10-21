@@ -1,18 +1,21 @@
 ; ==================================================================
 ;  MULTSOKO.ASM - MULTIPLAY SOKO: crates onto the red marks, in a brick
-;  warehouse seen from three quarters above, on a CGA screen: 320x200,
-;  four colours.
+;  warehouse seen straight down, on a CGA screen: 320x200, four colours.
 ;      MAKE in GAMES\MULTSOKO, MAKEWIN from Windows (the repository)
 ;      build A:\MY\MULTSOKO\MULTSOKO.ASM     (the site: FASM, then it runs)
 ;  ARROWS or W A S D   walk, and push the crate in front of you
+;  SPACE  a mine where you stand: it ticks 5 s, then the nine cells round
+;         it blast and every man on them stands still for 15 s.  One mine
+;         a man; the next is his 60 s after he laid this one.
 ;  Z      the whole level / close up
 ;  R R    the level anew      N N, P P   the next, the previous level
 ;  ESC    back to DOS
 ;  A crate onto a goal +10, off one -10; a solved level +50 to every
 ;  man in the warehouse.  The levels are Base-Z-47's (LEVELS.INC), the
-;  pictures are text, one character a pixel (ART.INC).  The first
-;  version was isometric: prettier, but every arrow went along a
-;  diagonal of the screen and had to be turned in the head.
+;  pictures are text, one character a pixel (ART.INC).  It was first
+;  isometric, then three-quarter: prettier, but the players got lost -
+;  seen from above nothing stands in front of anything, and an arrow
+;  goes where it points.
 ;  ON THE NETWORK everyone in one room works one warehouse (on the
 ;  WIRE CITY site: the Games menu, room multsoko; desktop DOSBox: ipxnet).
 ;  One machine - the lowest name on the wire - keeps the crates, the
@@ -42,7 +45,11 @@ PFTOP   = 8                     ; the playfield: rows 8..167; above it
 PFBOT   = 168                   ;  the level line, under it the players
 SOLVT   = 54                    ; ticks the SOLVED banner stays: 3 s
 PENDT   = 36                    ; ticks a "press again" waits: 2 s
-SPRMAX  = 4096                  ; compiled pictures: 1988 bytes today
+SPRMAX  = 5120                  ; compiled pictures: 4712 bytes today
+FUSE    = 91                    ; ticks a mine ticks: 5 s at 18.2 a second
+BLASTT  = 9                     ; ticks the blast shows: half a second
+STUNT   = 273                   ; ticks a man in the blast stands: 15 s
+COOLT   = 1092                  ; ticks from one mine to the next: 60 s
 
 ; a player: the first PWIRE bytes are what the world packet carries
 P_PID   = 0                     ; word: his name on the wire
@@ -52,17 +59,24 @@ P_LOOK  = 4                     ; byte: 0..NLOOK-1
 P_ON    = 5                     ; byte: 1 = in the warehouse
 P_SCORE = 6                     ; word, signed
 P_NAME  = 8                     ; 8 letters, zeros after a short one
-PWIRE   = 16
-P_HEARD = 16                    ; word: the tick he was last heard (the host's)
-PSIZE   = 18
+P_STUN  = 16                    ; word: ticks he still stands still
+P_COOL  = 18                    ; word: ticks to his next mine (0: he has one)
+PWIRE   = 20
+P_HEARD = 20                    ; word: the tick he was last heard (the host's)
+PSIZE   = 22
+
+; a mine: one a man, in the slot of his number
+M_CELL  = 0                     ; word: its cell, row*32 + column; 0FFFFh none
+M_LEFT  = 2                     ; word, signed: ticks to the blast; below 0,
+MSIZE   = 4                     ;  the blast showing, counting up to 0
 
 ; a packet: +0 its kind, +1 PROTO, then by its kind -
 ;  'H' hello, a player's heartbeat:  +2 his name, 8 letters
 ;  'M' a step or an order, to the host: +2 what - 0..3 a step (up, right,
-;      down, left), 4 the level anew, 5 the next, 6 the previous
+;      down, left), 4 the level anew, 5 the next, 6 the previous, 7 a mine
 ;  'W' the world, the host's, whole: +2 level, +3 solved (0/1), +4 moves
-;      (word), +6 crates, +8 MAXP players of PWIRE bytes, then the crates'
-;      cells as words (row*32 + column)
+;      (word), +6 crates, +8 MAXP players of PWIRE bytes, then MAXP mines
+;      of MSIZE, then the crates' cells as words (row*32 + column)
 K_KIND  = 0
 K_PROTO = 1
 K_ARG   = 2
@@ -71,14 +85,16 @@ W_SOLVED = 3
 W_MOVES = 4
 W_NBOX  = 6
 W_SLOTS = 8
-W_BOXES = W_SLOTS + MAXP*PWIRE  ; 136
+W_MINES = W_SLOTS + MAXP*PWIRE  ; 168
+W_BOXES = W_MINES + MAXP*MSIZE  ; 200
 
 ; the network: ENGINE\E_NET.INC, everyone in the room hears everyone
 NETSOCK = 5353h                 ; our socket: a palindrome - its byte order
                                 ;  cannot bite; never OWL FLY's 5757h/5858h
-NETLEN  = W_BOXES + MAXBOX*2    ; every packet the world's size: 208 bytes
+NETLEN  = W_BOXES + MAXBOX*2    ; every packet the world's size: 272 bytes
 NETRX   = 8                     ; listens: seven others and our own echo
-PROTO   = 1                     ; in every packet: another version is not ours
+PROTO   = 2                     ; in every packet: another version is not ours
+                                ;  (2: the mines; 1 had none)
 BEAT    = 9                     ; ticks between heartbeats: twice a second
 GONE    = 55                    ; ticks unheard: a player has gone (3 s)
 HOSTGONE = 36                   ; ticks with no world: the host has gone (2 s)
@@ -86,20 +102,33 @@ JOINT   = 36                    ; ticks of listening for a warehouse to join
 WIREWT  = 270                   ; ticks of waiting for our address: 15 s
 MAXPEER = 16                    ; names heard lately, to choose the next host
 
-; a zoom: its steps, its lifts, its compiled pictures
-Z_HX    = 0                     ; a cell's width in px: 8 or 16
-Z_HY    = 2                     ; a cell's depth in px: 6 or 12
-Z_LWAL  = 4                     ; where each picture's top row goes,
-Z_LBOX  = 6                     ;  counted from the cell's own top row
-Z_LMAN  = 8
-Z_LYOU  = 10
-Z_FLR   = 12                    ; the compiled pictures
-Z_GOL   = 14
-Z_WAL   = 16
-Z_BOX   = 18
-Z_BOG   = 20
-Z_YOU   = 22
-Z_MAN   = 24                    ; NLOOK of them
+; a view: how a cell lands on the screen, its lifts, its pictures.  The
+; grid is turned first (TURNED: Q and E), then cell (cc,rr) of the turned
+; grid has its picture's top left corner at
+;     x = ox + cc*CX + rr*RX,     y = oy + cc*CY + rr*RY
+; straight down: CX = the cell's width, RY its height, CY = RX = 0; the
+; isometric view (V): CX = 12, CY = 6 - a column on is right and down -
+; and RX = -12, RY = 6 - a row on is left and down.
+Z_CX    = 0
+Z_CY    = 2
+Z_RX    = 4
+Z_RY    = 6
+Z_SW    = 8                     ; a tile's width in px: 8, 16 or 24
+Z_SH    = 10                    ; ...and its height: 8, 16 or 12
+Z_LWAL  = 12                    ; where each picture's top row goes,
+Z_LBOX  = 14                    ;  counted from its tile's own top row
+Z_LMAN  = 16
+Z_LYOU  = 18
+Z_LMIN  = 20
+Z_FLR   = 22                    ; the compiled pictures
+Z_GOL   = 24
+Z_WAL   = 26
+Z_BOX   = 28
+Z_BOG   = 30
+Z_YOU   = 32
+Z_MIN   = 34
+Z_BLA   = 36
+Z_MAN   = 38                    ; NLOOK of them
 
 ; SPR - compile one picture and keep where it went
 macro SPR art,dst,wid
@@ -189,13 +218,25 @@ PREP:   mov  di,rowtab          ; rowtab[y] = bbuf + y*80
         SPR  BOXS,ZS+Z_BOX,2
         SPR  BOGS,ZS+Z_BOG,2
         SPR  YOUS,ZS+Z_YOU,2
+        SPR  MINS,ZS+Z_MIN,2
+        SPR  BLAS,ZS+Z_BLA,2
         SPR  FLRB,ZB+Z_FLR,4    ; big: 16 px = 4 bytes a row
         SPR  GOLB,ZB+Z_GOL,4
         SPR  WALB,ZB+Z_WAL,4
         SPR  BOXB,ZB+Z_BOX,4
         SPR  BOGB,ZB+Z_BOG,4
         SPR  YOUB,ZB+Z_YOU,4
-        xor  bx,bx              ; the men, one per look, both sizes
+        SPR  MINB,ZB+Z_MIN,4
+        SPR  BLAB,ZB+Z_BLA,4
+        SPR  FLRI,ZI+Z_FLR,6    ; isometric: 24 px = 6 bytes a row
+        SPR  GOLI,ZI+Z_GOL,6
+        SPR  WALI,ZI+Z_WAL,6
+        SPR  BOXI,ZI+Z_BOX,6
+        SPR  BOGI,ZI+Z_BOG,6
+        SPR  YOUI,ZI+Z_YOU,6
+        SPR  MINI,ZI+Z_MIN,6
+        SPR  BLAI,ZI+Z_BLA,6
+        xor  bx,bx              ; the men, one per look, every view
 .man:   mov  dx,word [LOOKS+bx] ; DL = shirt, DH = cap and trousers
         mov  [ZS+Z_MAN+bx],di
         mov  si,MANS
@@ -206,6 +247,12 @@ PREP:   mov  di,rowtab          ; rowtab[y] = bbuf + y*80
         mov  [ZB+Z_MAN+bx],di
         mov  si,MANB
         mov  cl,4
+        push bx
+        call COMPILE
+        pop  bx
+        mov  [ZI+Z_MAN+bx],di
+        mov  si,MANI
+        mov  cl,6
         push bx
         call COMPILE
         pop  bx
@@ -235,6 +282,16 @@ PREP:   mov  di,rowtab          ; rowtab[y] = bbuf + y*80
         mov  cx,(MAXP+1)*PSIZE/2 ;  ghost behind them cleared too
         xor  ax,ax
         rep  stosw
+        jmp  CLRMINES           ; and no mines
+
+; CLRMINES - every mine gone.  clobbers CX, DI.
+CLRMINES:
+        mov  di,mines
+        mov  cx,MAXP
+.m:     mov  word [di+M_CELL],0FFFFh
+        mov  word [di+M_LEFT],0
+        add  di,MSIZE
+        loop .m
         ret
 
 ; ------------------------------------------------------------------
@@ -507,6 +564,11 @@ VIGNET: mov  word [ox],112      ; centres the 6 cells: 96 px wide
         inc  byte [vc]
         cmp  byte [vc],6
         jb   .wal
+        mov  ax,0101h           ; a mine ticking behind him: column 1
+        mov  bx,[zoomp]
+        mov  si,[bx+Z_MIN]
+        mov  cx,[bx+Z_LMIN]
+        call PUTAT
         mov  ax,0103h           ; the man: column 3, row 1
         mov  bx,[zoomp]
         mov  si,[bx+Z_MAN]
@@ -524,6 +586,12 @@ VIGNET: mov  word [ox],112      ; centres the 6 cells: 96 px wide
 ;  start; a client loads it so, then puts the host's crates on it.
 ; ------------------------------------------------------------------
 NEWLEV: call LOADLEV
+        call CLRMINES           ; the mines stay with the old floor
+        mov  bx,players
+.s:     mov  word [bx+P_STUN],0 ; and nobody starts a level standing still
+        add  bx,PSIZE
+        cmp  bx,players+MAXP*PSIZE
+        jb   .s
         jmp  PLACEALL
 
 LOADLEV:mov  di,gridpad         ; a zero row in front, then the grid
@@ -778,19 +846,29 @@ KEYS:   mov  ah,1
         mov  ah,0
         int  16h                ; AH = scan code, AL = character
         cmp  al,27
-        jne  .live
+        jne  .view
         jmp  QUIT
-.live:  cmp  byte [solved],0
+.view:  mov  bl,al
+        or   bl,20h             ; letters to lower case
+        cmp  bl,'z'             ; the view's keys work at any time
+        je   .zoom
+        cmp  bl,'v'
+        je   .iso
+        cmp  bl,'q'
+        je   .ccw
+        cmp  bl,'e'
+        je   .cw
+        cmp  byte [solved],0
         jne  .end               ; the banner is up: the next level comes
+        cmp  ah,39h             ; Space: a mine
+        je   .mine
         mov  bx,DIRKEYS
         mov  cx,8
 .dk:    cmp  ah,[bx]
         je   .dir
         add  bx,2
         loop .dk
-        or   al,20h             ; letters to lower case
-        cmp  al,'z'
-        je   .zoom
+        or   al,20h
         xor  bx,bx
         cmp  al,'r'
         je   .q1
@@ -799,12 +877,37 @@ KEYS:   mov  ah,1
         cmp  al,'p'
         je   .q3
 .end:   ret
-.dir:   mov  al,[bx+1]          ; 0 up, 1 right, 2 down, 3 left
+.dir:   mov  al,[bx+1]          ; 0 up, 1 right, 2 down, 3 left - as the
+        sub  al,[turn]          ;  screen shows it; minus the turn: as
+        and  al,3               ;  the grid has it (mod 4)
         cmp  byte [netmode],2
         jne  MOVE               ; alone or the host: our own step
         jmp  SENDM              ; a client asks the host for it
-.zoom:  xor  word [zoomp],ZS xor ZB  ; flip between the two sizes
-        mov  byte [camnew],1
+.mine:  cmp  byte [netmode],2
+        je   .mreq
+        mov  si,[mep]
+        cmp  byte [si+P_ON],0
+        je   .end
+        jmp  PLACEMINE
+.mreq:  mov  al,7
+        jmp  SENDM
+.zoom:  cmp  word [zoomp],ZI
+        je   .end               ; isometric: one size
+        xor  word [zoomp],ZS xor ZB  ; flip between the two sizes
+        mov  ax,[zoomp]
+        mov  [topz],ax          ; the size V comes back to
+        jmp  .new
+.iso:   mov  ax,ZI
+        cmp  [zoomp],ax
+        jne  .set
+        mov  ax,[topz]          ; isometric already: straight down again
+.set:   mov  [zoomp],ax
+        jmp  .new
+.ccw:   dec  byte [turn]        ; a quarter turn back
+        jmp  .tn
+.cw:    inc  byte [turn]        ; a quarter turn on
+.tn:    and  byte [turn],3      ; four of them
+.new:   mov  byte [camnew],1
         mov  byte [dirty],1
         ret
 .q3:    inc  bx
@@ -857,7 +960,9 @@ MOVE:   mov  si,[mep]
 .no:    ret
 
 ; STEP - player SI one step of DX grid bytes (the host's, for anyone)
-STEP:   mov  al,[si+P_ROW]
+STEP:   cmp  word [si+P_STUN],0
+        jne  .no                ; standing still after a blast: no step
+        mov  al,[si+P_ROW]
         xor  ah,ah
         mov  cl,5
         shl  ax,cl              ; row * 32
@@ -915,7 +1020,9 @@ STEP:   mov  al,[si+P_ROW]
 TIMERS: call TICK               ; the BIOS tick, 18.2 a second
         mov  [now],ax
         cmp  byte [netmode],2
-        je   .pend              ; a client: the host turns the levels
+        je   .pend              ; a client: the host keeps every clock
+        call TICKER             ; fuses, blasts, men standing still
+        mov  ax,[now]
         cmp  byte [solved],0
         je   .pend
         sub  ax,[soltick]       ; ticks since: unsigned, a wrap still
@@ -939,49 +1046,319 @@ TIMERS: call TICK               ; the BIOS tick, 18.2 a second
 .end:   ret
 
 ; ------------------------------------------------------------------
-;  CAMERA - ox, oy: where grid cell 0,0 lands.  Cell (c,r) has its top
-;  left corner at  x = ox + c*cw,  y = oy + r*cd.  A level that fits
-;  is centred; a bigger one follows your man, who walks the middle
-;  half of the screen freely before it scrolls.
+;  TICKER - the host's clocks (and the lone player's), run on the ticks
+;  since the last frame: each man's standing still and his wait for the
+;  next mine count down to 0; a fuse burns down to its blast; a blast
+;  fades.  While any clock runs, the screen and the world go out again
+;  twice a second, so every count moves on every machine.
 ; ------------------------------------------------------------------
-CAMERA: mov  bx,[zoomp]
-        mov  al,[lvw]
+TICKER: mov  ax,[now]
+        mov  dx,ax
+        sub  dx,[lastt]         ; ticks since the last frame
+        jz   .ret
+        mov  [lastt],ax
+        cmp  dx,36
+        jbe  .d
+        mov  dx,36              ; after a stall: two seconds at most
+.d:     mov  byte [act],0
+        mov  bx,players
+.p:     cmp  byte [bx+P_ON],0
+        je   .pn
+        mov  ax,[bx+P_STUN]
+        call .down
+        mov  [bx+P_STUN],ax
+        mov  ax,[bx+P_COOL]
+        call .down
+        mov  [bx+P_COOL],ax
+.pn:    add  bx,PSIZE
+        cmp  bx,players+MAXP*PSIZE
+        jb   .p
+        mov  si,mines
+.m:     cmp  word [si+M_CELL],0FFFFh
+        je   .mn
+        mov  byte [act],1
+        mov  ax,[si+M_LEFT]
+        or   ax,ax
+        js   .fade
+        sub  ax,dx              ; the fuse burns
+        jg   .burn
+        push dx
+        push si
+        call BLAST              ; it is out: the nine cells
+        pop  si
+        pop  dx
+        mov  word [si+M_LEFT],-BLASTT
+        jmp  .mn
+.burn:  mov  [si+M_LEFT],ax
+        jmp  .mn
+.fade:  add  ax,dx              ; the blast fades
+        js   .fd
+        mov  word [si+M_CELL],0FFFFh  ; gone
+        mov  byte [netdirty],1
+        mov  byte [dirty],1
+        jmp  .mn
+.fd:    mov  [si+M_LEFT],ax
+.mn:    add  si,MSIZE
+        cmp  si,mines+MAXP*MSIZE
+        jb   .m
+        cmp  byte [act],0
+        je   .ret
+        mov  ax,[now]
+        sub  ax,[lastsec]
+        cmp  ax,BEAT            ; twice a second while a clock runs
+        jb   .ret
+        mov  ax,[now]
+        mov  [lastsec],ax
+        mov  byte [dirty],1
+        mov  byte [netdirty],1
+.ret:   ret
+.down:  or   ax,ax
+        jz   .z                 ; not running
+        mov  byte [act],1
+        sub  ax,dx              ; down by the ticks...
+        jnc  .z
+        xor  ax,ax              ; ...to 0, never under
+.z:     ret
+
+; BLAST - mine SI goes off: every man on its nine cells stands still
+; STUNT ticks, whoever laid it.  clobbers AX, BX, CX.
+BLAST:  mov  ax,[si+M_CELL]
+        mov  ch,al
+        and  ch,NCOL-1          ; CH = its column
+        mov  cl,5
+        shr  ax,cl
+        mov  cl,al              ; CL = its row
+        mov  bx,players
+.p:     cmp  byte [bx+P_ON],0
+        je   .n
+        mov  al,[bx+P_COL]
+        sub  al,ch
+        inc  al                 ; -1, 0, +1 away become 0, 1, 2
+        cmp  al,2
+        ja   .n                 ; (and anything further, either way, more)
+        mov  al,[bx+P_ROW]
+        sub  al,cl
+        inc  al
+        cmp  al,2
+        ja   .n
+        mov  word [bx+P_STUN],STUNT   ; caught
+.n:     add  bx,PSIZE
+        cmp  bx,players+MAXP*PSIZE
+        jb   .p
+        mov  byte [netdirty],1
+        mov  byte [dirty],1
+        ret
+
+; PLACEMINE - player SI lays his mine where he stands: if he is not
+; standing still, has a mine (his wait is over) and his last one is gone.
+; Its place is the mines' slot of his number.  clobbers AX, BX, DX, DI.
+PLACEMINE:
+        cmp  word [si+P_STUN],0
+        jne  .no
+        cmp  word [si+P_COOL],0
+        jne  .no
+        mov  ax,si
+        sub  ax,players
+        xor  dx,dx
+        mov  bx,PSIZE
+        div  bx                 ; AX = his slot number  (DX: 0)
+        shl  ax,1
+        shl  ax,1               ; * MSIZE: 4 bytes a mine
+        add  ax,mines
+        mov  di,ax
+        cmp  word [di+M_CELL],0FFFFh
+        jne  .no                ; his last one still burns
+        mov  al,[si+P_ROW]
         xor  ah,ah
-        mul  word [bx+Z_HX]     ; w * cw: the level's width in px
-        mov  [wpx],ax
-        mov  al,[lvh]
+        mov  cl,5
+        shl  ax,cl              ; row * 32
+        add  al,[si+P_COL]      ; + column
+        mov  [di+M_CELL],ax
+        mov  word [di+M_LEFT],FUSE
+        mov  word [si+P_COOL],COOLT   ; the next one in a minute
+        mov  byte [netdirty],1
+        mov  byte [dirty],1
+.no:    ret
+
+; ------------------------------------------------------------------
+;  TURNED - the grid as the view turns it (Q, E): [turn] 0..3 quarter
+;  turns clockwise.  Out: tcols, trows - the turned grid's columns and
+;  rows; tstart - the cell (row*32 + column) at its top left; tdcol,
+;  tdrow - what a column on and a row on add to a cell.  The cell at
+;  turned (cc,rr) is, for turn 0: (cc, rr); 1: (rr, h-1-cc);
+;  2: (w-1-cc, h-1-rr); 3: (w-1-rr, cc) - as (column, row).
+; ------------------------------------------------------------------
+TURNED: mov  al,[lvw]
+        mov  ah,[lvh]
+        mov  bl,[turn]
+        cmp  bl,1
+        je   .t1
+        cmp  bl,2
+        je   .t2
+        cmp  bl,3
+        je   .t3
+        mov  [tcols],al         ; turn 0: as it is
+        mov  [trows],ah
+        mov  word [tstart],0
+        mov  word [tdcol],1
+        mov  word [tdrow],NCOL
+        ret
+.t1:    mov  [tcols],ah         ; a quarter: h columns of w rows
+        mov  [trows],al
+        mov  al,ah
         xor  ah,ah
-        mul  word [bx+Z_HY]     ; h * cd...
-        sub  ax,[bx+Z_LWAL]     ; ...and the back row's walls stand above
+        dec  ax                 ; h-1
+        mov  cl,5
+        shl  ax,cl              ; (h-1)*32: the bottom left cell
+        mov  [tstart],ax
+        mov  word [tdcol],-NCOL ; a column on: a row up
+        mov  word [tdrow],1     ; a row on: a column right
+        ret
+.t2:    mov  [tcols],al         ; a half: upside down
+        mov  [trows],ah
+        mov  bl,al              ; BL = w
+        mov  al,ah
+        xor  ah,ah
+        dec  ax
+        mov  cl,5
+        shl  ax,cl              ; (h-1)*32...
+        add  al,bl
+        dec  ax                 ; ...+ w-1: the bottom right cell
+        mov  [tstart],ax
+        mov  word [tdcol],-1
+        mov  word [tdrow],-NCOL
+        ret
+.t3:    mov  [tcols],ah         ; three quarters
+        mov  [trows],al
+        xor  ah,ah
+        dec  ax                 ; w-1: the top right cell
+        mov  [tstart],ax
+        mov  word [tdcol],NCOL  ; a column on: a row down
+        mov  word [tdrow],-1    ; a row on: a column left
+        ret
+
+; CELLXY - where cell AX (row*32 + column) lands: AX = x, DX = y, before
+; ox and oy are added - the grid turned, then projected.  TURNED first.
+; clobbers BX, CX.
+CELLXY: mov  bl,al
+        and  bl,NCOL-1          ; BL = c
+        mov  cl,5
+        shr  ax,cl
+        mov  bh,al              ; BH = r
+        mov  al,[turn]
+        cmp  al,1
+        je   .t1
+        cmp  al,2
+        je   .t2
+        cmp  al,3
+        je   .t3
+        mov  cl,bl              ; CL = cc, CH = rr
+        mov  ch,bh
+        jmp  .proj
+.t1:    mov  cl,[lvh]
+        dec  cl
+        sub  cl,bh              ; cc = h-1-r
+        mov  ch,bl              ; rr = c
+        jmp  .proj
+.t2:    mov  cl,[lvw]
+        dec  cl
+        sub  cl,bl              ; cc = w-1-c
+        mov  ch,[lvh]
+        dec  ch
+        sub  ch,bh              ; rr = h-1-r
+        jmp  .proj
+.t3:    mov  cl,bh              ; cc = r
+        mov  ch,[lvw]
+        dec  ch
+        sub  ch,bl              ; rr = w-1-c
+.proj:  mov  [tcc],cl
+        mov  [trr],ch
+        mov  bx,[zoomp]
+        mov  al,[tcc]
+        xor  ah,ah
+        imul word [bx+Z_CX]     ; cc*CX  (DX goes)
+        mov  cx,ax
+        mov  al,[trr]
+        xor  ah,ah
+        imul word [bx+Z_RX]
+        add  cx,ax              ; x = cc*CX + rr*RX
+        mov  al,[tcc]
+        xor  ah,ah
+        imul word [bx+Z_CY]
+        mov  [tyy],ax
+        mov  al,[trr]
+        xor  ah,ah
+        imul word [bx+Z_RY]
+        add  ax,[tyy]           ; y = cc*CY + rr*RY
+        mov  dx,ax
+        mov  ax,cx
+        ret
+
+; ------------------------------------------------------------------
+;  CAMERA - ox, oy: where the turned grid's corner lands.  A level that
+;  fits is centred; a bigger one follows your man, who walks the middle
+;  half of the screen freely before it scrolls.  The turned level spans
+;  x from xmin = (trows-1)*RX (left of 0 only in the isometric view) to
+;  (tcols-1)*CX + SW, and y from the walls' lift to (tcols-1)*CY +
+;  (trows-1)*RY + SH.
+; ------------------------------------------------------------------
+CAMERA: call TURNED
+        mov  bx,[zoomp]
+        mov  al,[trows]
+        xor  ah,ah
+        dec  ax
+        imul word [bx+Z_RX]     ; (trows-1)*RX: 0, or the left corner
+        mov  [xmin],ax
+        mov  al,[tcols]
+        xor  ah,ah
+        dec  ax
+        imul word [bx+Z_CX]     ; (tcols-1)*CX
+        add  ax,[bx+Z_SW]       ; + a tile: the right edge
+        sub  ax,[xmin]
+        mov  [wpx],ax           ; the width in px
+        mov  al,[tcols]
+        xor  ah,ah
+        dec  ax
+        imul word [bx+Z_CY]
+        mov  cx,ax
+        mov  al,[trows]
+        xor  ah,ah
+        dec  ax
+        imul word [bx+Z_RY]
+        add  ax,cx
+        add  ax,[bx+Z_SH]       ; the bottom edge
+        sub  ax,[bx+Z_LWAL]     ; and the walls stand above the top
         mov  [hpx],ax
         mov  ax,[bx+Z_LWAL]
         neg  ax
-        mov  [wtop],ax          ; how high those walls rise over row 0
+        mov  [wtop],ax          ; how high above oy they rise
         mov  si,[mep]
-        mov  al,[si+P_COL]
-        xor  ah,ah
-        mul  word [bx+Z_HX]     ; c * cw
-        mov  dx,[bx+Z_HX]
-        shr  dx,1               ; + half a cell: the middle of his
-        add  ax,dx
-        mov  [manx],ax
         mov  al,[si+P_ROW]
         xor  ah,ah
-        mul  word [bx+Z_HY]     ; r * cd
-        mov  [many],ax
+        mov  cl,5
+        shl  ax,cl              ; row * 32
+        add  al,[si+P_COL]      ; + column: his cell
+        call CELLXY             ; AX = x, DX = y of his tile
+        mov  bx,[zoomp]
+        mov  cx,[bx+Z_SW]
+        shr  cx,1               ; + half a tile: his middle
+        add  ax,cx
+        mov  [manx],ax
+        mov  [many],dx
 ; across
         mov  ax,[wpx]
         cmp  ax,320
         ja   .xfol
         mov  ax,320
         sub  ax,[wpx]
-        sar  ax,1               ; the margin either side: ox itself
+        sar  ax,1               ; the margin either side...
+        sub  ax,[xmin]          ; ...and ox = margin - xmin
         jmp  .xset
 .xfol:  mov  ax,[ox]
         cmp  byte [camnew],0
         je   .xkeep
         mov  ax,160
-        sub  ax,[manx]          ; a new level: the man in the middle
+        sub  ax,[manx]          ; a new level or view: the man in the middle
 .xkeep: mov  dx,ax
         add  dx,[manx]          ; DX = his x on the screen
         cmp  dx,80
@@ -992,10 +1369,13 @@ CAMERA: mov  bx,[zoomp]
         jle  .xc
         sub  ax,dx              ; off the right quarter: ox -= x - 240
         add  ax,240
-.xc:    or   ax,ax              ; the left edge stays off the screen:
-        jle  .xc2               ;  ox <= 0
-        xor  ax,ax
-.xc2:   mov  dx,320             ; and the right edge: ox >= 320 - width
+.xc:    mov  dx,[xmin]
+        neg  dx                 ; the left edge stays off the screen:
+        cmp  ax,dx              ;  ox <= -xmin
+        jle  .xc2
+        mov  ax,dx
+.xc2:   mov  dx,320             ; and the right edge:
+        sub  dx,[xmin]          ;  ox >= 320 - (xmin + width)
         sub  dx,[wpx]
         cmp  ax,dx
         jge  .xset
@@ -1043,19 +1423,23 @@ CAMERA: mov  bx,[zoomp]
         ret
 
 ; ------------------------------------------------------------------
-;  RENDER - the warehouse into the back buffer, back to front: first
-;  every floor, then row by row the walls, crates and men - a cell
-;  further down the screen is nearer: it is drawn later, and its walls
-;  and crates, standing up, cover the bottom of the cell behind.
+;  RENDER - the warehouse into the back buffer, the turned grid row by
+;  row, back to front: first every floor, then the walls, mines, crates
+;  and men - a tile further down the screen is nearer, so it is drawn
+;  later, and in the isometric view what stands up covers the bottom of
+;  what is behind.  Seen straight down nothing overlaps at all.  Then
+;  the blasts and the numbers over everything (OVERLAY), then the HUD.
 ; ------------------------------------------------------------------
 RENDER: call CLS
-        call CAMERA
+        call CAMERA             ; (it turns the grid: TURNED)
         mov  byte [pass],0
-.pass:  mov  ax,[ox]            ; row 0 starts at the origin
+.pass:  mov  ax,[ox]            ; the turned row 0 starts at the origin
         mov  [rowx],ax
         mov  ax,[oy]
         mov  [rowy],ax
-        mov  word [cidx],grid
+        mov  ax,[tstart]
+        add  ax,grid
+        mov  [cidx],ax
         mov  byte [crow],0
 .row:   mov  ax,[rowx]
         mov  [curx],ax
@@ -1086,7 +1470,18 @@ RENDER: call CLS
         mov  cx,[bx+Z_LWAL]
         call DRAWAT
         jmp  .next
-.nowal: test al,G_BOX
+.nowal: mov  ax,[cptr]
+        sub  ax,grid
+        call MINEAT             ; a mine ticking here?
+        jc   .nomin
+        mov  bx,[zoomp]
+        mov  si,[bx+Z_MIN]
+        mov  cx,[bx+Z_LMIN]
+        call DRAWAT
+.nomin: mov  bx,[cptr]
+        mov  al,[bx]
+        mov  bx,[zoomp]
+        test al,G_BOX
         jz   .nobox
         mov  si,[bx+Z_BOX]
         test al,G_GOAL
@@ -1099,35 +1494,60 @@ RENDER: call CLS
         jz   .next
         call DRAWMEN
 .next:  mov  bx,[zoomp]
-        mov  ax,[bx+Z_HX]
-        add  [curx],ax          ; a column on: one cell right
-        inc  word [cptr]
+        mov  ax,[bx+Z_CX]
+        add  [curx],ax          ; a column on
+        mov  ax,[bx+Z_CY]
+        add  [cury],ax
+        mov  ax,[tdcol]
+        add  [cptr],ax
         inc  byte [ccol]
         mov  al,[ccol]
-        cmp  al,[lvw]
+        cmp  al,[tcols]
         jb   .cell
-        mov  ax,[bx+Z_HY]
-        add  [rowy],ax          ; a row on: one cell down
-        add  word [cidx],NCOL
+        mov  ax,[bx+Z_RX]
+        add  [rowx],ax          ; a row on
+        mov  ax,[bx+Z_RY]
+        add  [rowy],ax
+        mov  ax,[tdrow]
+        add  [cidx],ax
         inc  byte [crow]
         mov  al,[crow]
-        cmp  al,[lvh]
+        cmp  al,[trows]
         jb   .row
         inc  byte [pass]
         cmp  byte [pass],2
         jb   .pass
+        call OVERLAY
         jmp  HUD
 
-; DRAWMEN - every man standing on cell ccol, crow; the arrow over yours
-DRAWMEN:mov  word [pidx],players
+; MINEAT - a mine ticking on cell AX?  CF=0: yes, SI -> it.  keeps AX.
+MINEAT: mov  si,mines
+.m:     cmp  [si+M_CELL],ax
+        jne  .n
+        cmp  word [si+M_LEFT],0
+        jg   .yes               ; still ticking (below 0: the blast)
+.n:     add  si,MSIZE
+        cmp  si,mines+MAXP*MSIZE
+        jb   .m
+        stc
+        ret
+.yes:   clc
+        ret
+
+; DRAWMEN - every man standing on cell [cptr]; your marker over yours
+DRAWMEN:mov  ax,[cptr]
+        sub  ax,grid
+        mov  [ccell],ax         ; the cell: row*32 + column
+        mov  word [pidx],players
 .p:     mov  bx,[pidx]
         cmp  byte [bx+P_ON],0
         je   .n
-        mov  al,[bx+P_COL]
-        cmp  al,[ccol]
-        jne  .n
         mov  al,[bx+P_ROW]
-        cmp  al,[crow]
+        xor  ah,ah
+        mov  cl,5
+        shl  ax,cl              ; row * 32
+        add  al,[bx+P_COL]      ; + column
+        cmp  ax,[ccell]
         jne  .n
         mov  al,[bx+P_LOOK]
         xor  ah,ah
@@ -1150,20 +1570,163 @@ DRAWMEN:mov  word [pidx],players
         jb   .p
         ret
 
-; PUTAT - a picture on cell AL = column, AH = row of the current zoom.
-; in: SI picture, CX lift.  clobbers everything but BP.
+; ------------------------------------------------------------------
+;  OVERLAY - over the whole warehouse: each blast on its nine cells,
+;  each mine's seconds to go on it, and over every man standing still
+;  his seconds to go - in the small view only the blasts: a digit is as
+;  big as a cell there, and the list under the floor has every count.
+; ------------------------------------------------------------------
+OVERLAY:mov  word [pidx],mines
+.m:     mov  si,[pidx]
+        mov  ax,[si+M_CELL]
+        cmp  ax,0FFFFh
+        je   .mn
+        mov  dx,[si+M_LEFT]
+        or   dx,dx
+        jns  .fuse
+        mov  [ccell],ax         ; a blast: its nine cells
+        mov  word [boff],-NCOL-1 ; from up-left...
+.b:     mov  ax,[ccell]
+        add  ax,[boff]          ; one of the nine
+        cmp  ax,NCOL*NCOL
+        jae  .bn                ; off the grid
+        mov  bx,ax
+        test byte [grid+bx],G_FLOOR or G_WALL
+        jz   .bn                ; the void: nothing to light
+        call CELLXY
+        add  ax,[ox]
+        add  dx,[oy]
+        mov  bx,ax
+        mov  si,[zoomp]
+        mov  si,[si+Z_BLA]
+        call DRAWSPR
+.bn:    inc  word [boff]        ; the next of the nine
+        mov  ax,[boff]
+        and  ax,NCOL-1
+        cmp  ax,2               ; past +1 in the row?
+        jne  .bc
+        add  word [boff],NCOL-3 ; the next row, one left
+.bc:    cmp  word [boff],NCOL+1
+        jle  .b
+        jmp  .mn
+.fuse:  cmp  word [zoomp],ZS
+        je   .mn
+        call CELLXY             ; a ticking mine: its seconds on it
+        mov  bx,[zoomp]
+        add  dx,[bx+Z_LMIN]
+        mov  cx,[bx+Z_SH]
+        sub  cx,8
+        sar  cx,1
+        add  dx,cx              ; the middle of its tile, down
+        add  dx,[oy]
+        mov  cx,[bx+Z_SW]
+        shr  cx,1
+        add  ax,cx              ; and across
+        add  ax,[ox]
+        mov  bx,ax
+        mov  si,[pidx]
+        mov  ax,[si+M_LEFT]
+        call SECS
+        mov  cl,3               ; yellow
+        call OVNUM
+.mn:    add  word [pidx],MSIZE
+        cmp  word [pidx],mines+MAXP*MSIZE
+        jb   .m
+        cmp  word [zoomp],ZS
+        je   .done
+        mov  word [pidx],players ; the men standing still: their seconds
+.p:     mov  si,[pidx]
+        cmp  byte [si+P_ON],0
+        je   .pn
+        cmp  word [si+P_STUN],0
+        je   .pn
+        mov  al,[si+P_ROW]
+        xor  ah,ah
+        mov  cl,5
+        shl  ax,cl
+        add  al,[si+P_COL]
+        call CELLXY
+        mov  bx,[zoomp]
+        add  dx,[bx+Z_LMAN]     ; at the top of his picture
+        add  dx,[oy]
+        mov  cx,[bx+Z_SW]
+        shr  cx,1
+        add  ax,cx
+        add  ax,[ox]
+        mov  bx,ax
+        mov  si,[pidx]
+        mov  ax,[si+P_STUN]
+        call SECS
+        mov  cl,2               ; red
+        call OVNUM
+.pn:    add  word [pidx],PSIZE
+        cmp  word [pidx],players+MAXP*PSIZE
+        jb   .p
+.done:  ret
+
+; SECS - AX ticks as whole seconds, rounded up: (AX + 17) / 18
+; (18.2 a second: 91 ticks are 5).  AX < 4600.  clobbers CL.
+SECS:   add  ax,17
+        mov  cl,18
+        div  cl                 ; AL = seconds, AH = the rest
+        xor  ah,ah
+        ret
+
+; OVNUM - number AX (1..99) on the playfield, centred on x BX (a multiple
+; of 4), its top at y DX, in colour CL; nothing outside the playfield.
+OVNUM:  mov  [tclr],cl
+        mov  [trow],dx
+        cmp  dx,PFTOP
+        jl   .no
+        cmp  dx,PFBOT-8
+        jg   .no
+        mov  cl,10
+        div  cl                 ; AL = tens, AH = ones (AX < 100)
+        push ax
+        mov  ax,bx
+        sub  ax,4
+        sar  ax,1
+        sar  ax,1               ; the byte column of one digit centred
+        mov  [txb],ax
+        pop  ax
+        or   al,al
+        jz   .one
+        dec  word [txb]         ; two digits: half a character left
+        push ax
+        add  al,'0'
+        call PUTCHB
+        pop  ax
+        add  word [txb],2
+.one:   mov  al,ah
+        add  al,'0'
+        jmp  PUTCHB
+.no:    ret
+
+; PUTAT - a picture on cell AL = column, AH = row of the current view,
+; not turned (the title's picture).  in: SI picture, CX lift.
+; clobbers everything but BP.
 PUTAT:  push cx
         push si
-        push ax
+        mov  [tcc],al
+        mov  [trr],ah
         mov  bx,[zoomp]
-        xor  ah,ah              ; the column
-        mul  word [bx+Z_HX]     ; (DX goes too: c and r are on the stack)
+        xor  ah,ah
+        imul word [bx+Z_CX]     ; c*CX  (DX goes)
+        mov  cx,ax
+        mov  al,[trr]
+        xor  ah,ah
+        imul word [bx+Z_RX]
+        add  ax,cx              ; x = c*CX + r*RX
         add  ax,[ox]
         mov  [curx],ax
-        pop  ax
-        mov  al,ah
-        xor  ah,ah              ; the row
-        mul  word [bx+Z_HY]
+        mov  al,[tcc]
+        xor  ah,ah
+        imul word [bx+Z_CY]
+        mov  cx,ax
+        mov  al,[trr]
+        xor  ah,ah
+        imul word [bx+Z_RY]
+        add  ax,cx              ; y = c*CY + r*RY
         add  ax,[oy]
         mov  [cury],ax
         pop  si
@@ -1345,7 +1908,35 @@ PLIST:  mov  word [pidx],players
         mov  ax,[bx+P_SCORE]
         mov  cl,1
         call PSNUM
-        inc  byte [pslot]
+        mov  ax,[pcol]          ; his clocks: Z15 standing still, M42 the
+        add  ax,16              ;  seconds to his next mine, M he has one
+        mov  [tcol],ax
+        mov  bx,[pidx]
+        mov  ax,[bx+P_STUN]
+        or   ax,ax
+        jz   .cool
+        mov  byte [tclr],2
+        mov  al,'Z'
+        call PUTCH
+        mov  bx,[pidx]
+        mov  ax,[bx+P_STUN]
+        jmp  .secs
+.cool:  mov  ax,[bx+P_COOL]
+        or   ax,ax
+        jz   .ready
+        mov  byte [tclr],1
+        mov  al,'M'
+        call PUTCH
+        mov  bx,[pidx]
+        mov  ax,[bx+P_COOL]
+.secs:  call SECS
+        mov  cl,1
+        call PNUM
+        jmp  .slot
+.ready: mov  byte [tclr],3
+        mov  al,'M'
+        call PUTCH
+.slot:  inc  byte [pslot]
 .n:     add  word [pidx],PSIZE
         cmp  word [pidx],players+MAXP*PSIZE
         jb   .p
@@ -1453,15 +2044,26 @@ GETGLY: push si
         pop  si
         ret
 
-; PUTCH - character AL.  clobbers AX, BX, CX, DX, DI; keeps SI.
-PUTCH:  call GETGLY
+; PUTCH - character AL at [tcol], then tcol on one.  PUTCHB - character
+; AL at byte column [txb] (4 px each), nothing if that is off the row.
+; Both at y [trow], in [tclr].  clobber AX, BX, CX, DX, DI; keep SI.
+PUTCH:  push ax
+        mov  ax,[tcol]
+        shl  ax,1               ; two bytes a character
+        mov  [txb],ax
+        pop  ax
+        call PUTCHB
+        inc  word [tcol]
+        ret
+PUTCHB: cmp  word [txb],78
+        jbe  .on                ; unsigned: a negative column is huge too
+        ret
+.on:    call GETGLY
         push si
         mov  bx,[trow]
         shl  bx,1
         mov  di,[rowtab+bx]     ; DI = bbuf + y*80
-        mov  ax,[tcol]
-        shl  ax,1               ; two bytes a character
-        add  di,ax
+        add  di,[txb]
         mov  al,[tclr]
         mov  ah,55h
         mul  ah                 ; colour * 55h: the colour in all 4 pixels
@@ -1485,7 +2087,6 @@ PUTCH:  call GETGLY
         mov  [di+1],al
         add  di,80              ; the next row
         loop .row
-        inc  word [tcol]
         pop  si
         ret
 
@@ -1603,11 +2204,16 @@ NETPOLL:cmp  byte [netmode],0
         mov  al,[di+K_ARG]      ; a step or an order
         cmp  al,4
         jb   .step
+        cmp  al,7
+        je   .mine
         cmp  al,6
         ja   .rx                ; no such order: dropped
         sub  al,3               ; 1 anew, 2 next, 3 previous
         mov  bl,al
         call LEVACT
+        jmp  .rx
+.mine:  mov  si,bx              ; his mine, if he has one
+        call PLACEMINE
         jmp  .rx
 .step:  cmp  byte [solved],0
         jne  .rx                ; the banner is up: no more steps
@@ -1769,6 +2375,9 @@ WSEND:  mov  di,pkt
         add  si,PSIZE-PWIRE     ; past the host's own bookkeeping
         cmp  si,players+MAXP*PSIZE
         jb   .p
+        mov  si,mines           ; the mines, as they are (DI: W_MINES)
+        mov  cx,MAXP*MSIZE
+        rep  movsb
         mov  di,pkt+W_BOXES
         xor  dx,dx              ; crates so far
         mov  bx,grid
@@ -1877,6 +2486,28 @@ WAPPLY: mov  [wptr],di
         add  bx,PSIZE
         cmp  bx,players+MAXP*PSIZE
         jb   .m
+        mov  di,mines           ; the mines (SI: W_MINES), each checked:
+        mov  cx,MAXP            ;  on the floor, its clock in range
+.mi:    lodsw
+        cmp  ax,NCOL*NCOL
+        jae  .mx                ; none, or off the grid
+        mov  bx,ax
+        test byte [grid+bx],G_FLOOR
+        jz   .mx                ; not floor
+        mov  [di+M_CELL],ax
+        lodsw
+        cmp  ax,FUSE
+        jle  .ml
+        mov  ax,FUSE
+.ml:    cmp  ax,-BLASTT
+        jge  .ms
+        mov  ax,-BLASTT
+.ms:    mov  [di+M_LEFT],ax
+        jmp  .mnx
+.mx:    lodsw                   ; its clock, unread
+        mov  word [di+M_CELL],0FFFFh
+.mnx:   add  di,MSIZE
+        loop .mi
         mov  word [mep],ghost   ; which one is ours?
         mov  bx,players
 .f:     cmp  byte [bx+P_ON],0
@@ -1907,7 +2538,13 @@ CHECKMAN:
         cmp  byte [bx+P_LOOK],NLOOK
         jb   .lk
         mov  byte [bx+P_LOOK],0
-.lk:    lea  si,[bx+P_NAME]
+.lk:    cmp  word [bx+P_STUN],STUNT
+        jbe  .st
+        mov  word [bx+P_STUN],STUNT   ; clocks in range
+.st:    cmp  word [bx+P_COOL],COOLT
+        jbe  .cl
+        mov  word [bx+P_COOL],COOLT
+.cl:    lea  si,[bx+P_NAME]
         mov  di,si
         call COPYNAME           ; in place
         mov  al,[bx+P_ROW]
@@ -1953,12 +2590,14 @@ MSGMEM  db 'MULTIPLAY SOKO needs a whole 64 KB segment of memory.',13,10,'$'
 MSGSPR  db 'MULTIPLAY SOKO: the pictures outgrew SPRMAX.',13,10,'$'
 TNAME   db 'MULTIPLAY SOKO',0
 TLINES  db 7,36,1,'CRATES ONTO THE RED MARKS',0
-        db 2,116,3,'ARROWS',0
-        db 10,116,1,'WALK AND PUSH',0
-        db 2,124,3,'W A S D',0
-        db 10,124,1,'THE SAME, LEFT HAND',0
-        db 2,132,3,'Z',0
-        db 10,132,1,'WHOLE LEVEL OR CLOSE UP',0
+        db 2,108,3,'ARROWS',0
+        db 10,108,1,'WALK AND PUSH (OR W A S D)',0
+        db 2,116,3,'SPACE',0
+        db 10,116,1,'MINE: 5 S, 3X3 STAND 15 S',0
+        db 2,124,3,'Q E',0
+        db 10,124,1,'TURN THE VIEW',0
+        db 2,132,3,'V   Z',0
+        db 10,132,1,'ISOMETRIC  WHOLE LEVEL',0
         db 2,140,3,'R R',0
         db 10,140,1,'THE LEVEL ANEW',0
         db 2,148,3,'N N P P',0
@@ -1995,14 +2634,18 @@ LOOKS   db 3,2, 2,1, 1,2, 2,3, 1,3, 3,1
 EXP4:
 rept 16 n:0 { db ((n shr 3) and 1)*0C0h + ((n shr 2) and 1)*30h + ((n shr 1) and 1)*0Ch + (n and 1)*3 }
 DBL4    db 00h,0Fh,0F0h,0FFh    ; 2 bits -> 4 pixels, each one twice
-; the two zooms: cell width, cell depth, then the lifts of wall, crate,
-; man and arrow (rows above the cell's top row, as ART.INC says); then
-; the pictures
-ZS      dw 8,6, -3,-3,-4,-7
-        dw (6+NLOOK) dup 0
-ZB      dw 16,12, -6,-5,-8,-11
-        dw (6+NLOOK) dup 0
-zoomp   dw ZB                   ; close up to begin with
+; the three views: CX, CY, RX, RY (a column on, a row on), the tile's
+; width and height, the lifts of wall, crate, man, marker and mine (rows
+; above the tile's top row, as ART.INC says), then the pictures
+ZS      dw 8,0, 0,8, 8,8, 0,0,0,0,0     ; straight down, the whole level
+        dw (8+NLOOK) dup 0
+ZB      dw 16,0, 0,16, 16,16, 0,0,0,0,0 ; straight down, close up
+        dw (8+NLOOK) dup 0
+ZI      dw 12,6, -12,6, 24,12, -6,-8,-8,-11,-2   ; isometric
+        dw (8+NLOOK) dup 0
+zoomp   dw ZB                   ; straight down, close up, to begin with
+topz    dw ZB                   ; the straight-down size V comes back to
+turn    db 0                    ; quarter turns clockwise, 0..3 (Q, E)
 mep     dw ghost                ; this machine's man: none until it is in
 netmode db 0                    ; 0 alone, 1 the host, 2 a client, 3 joining
 mypid   dw 0                    ; our name on the wire (0 alone)
@@ -2039,6 +2682,22 @@ chg     db 0
 pass    db 0
 ccol    db 0
 crow    db 0
+ccell   dw 0                    ; DRAWMEN's cell; a blast's centre
+boff    dw 0                    ; which of a blast's nine cells
+tcols   db 0                    ; TURNED: the turned grid's columns,
+trows   db 0                    ;  rows,
+tstart  dw 0                    ;  its first cell,
+tdcol   dw 0                    ;  a column on,
+tdrow   dw 0                    ;  a row on
+tcc     db 0                    ; CELLXY, PUTAT: a turned column, row
+trr     db 0
+tyy     dw 0
+xmin    dw 0                    ; the turned level's left edge, from ox
+txb     dw 0                    ; PUTCHB's byte column
+lastt   dw 0                    ; TICKER: the tick it last ran
+lastsec dw 0                    ;  the tick it last redrew for a clock
+act     db 0                    ;  1: a clock runs
+mines   db (MAXP*MSIZE) dup 0   ; a mine a man (CLRMINES: none)
 vc      db 0
 pslot   db 0
 ox      dw 0
