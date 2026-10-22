@@ -151,7 +151,7 @@ const GAMES = [
     about: 'Crates onto the red marks, in a brick warehouse seen from above, on a CGA screen in four colours - or isometric, turned any of four ways. ' +
       'Everyone who plays it on the site works the same warehouse: up to eight men, a score each, a mine each that stops whoever it catches.',
     keys: 'arrows or W A S D walk and push, Space a mine, Q/E turn, V isometric, Z the whole level, R R anew, N N / P P next or previous' },
-  { key: 'multsoko2', name: 'MULTIPLAY SOKO II', dir: 'MULTSOK2', room: 'multsok2', hint: 'Sokoban in a castle for up to eight: EGA, CGA or Hercules, Sound Blaster, candies, a gate out; multiplayer',
+  { key: 'multsoko2', name: 'MULTIPLAY SOKO II', dir: 'MULTSOK2', room: 'multsok2', hint: 'Sokoban in a castle for up to eight: EGA 640 or 320, CGA or Hercules, Sound Blaster, candies, a gate out; multiplayer',
     about: 'Crates onto the red marks, in a castle seen from above: a black floor with candies on it, walls of big stones overgrown with green, a moat, ' +
       'a park with oaks, fountains and statues. Every crate home and the gate rises: out through it, and the winner of the level is on the podium.',
     keys: 'arrows or W A S D walk and push, Space a mine, Q/E turn, V isometric, Z close up, R R anew, N N / P P next or previous' },
@@ -1563,8 +1563,10 @@ export class SiteApp extends CourseApp {
   }
 
   /**
-   * A game: its own sky first, then the machine on, in its folder on C: -
-   * and the first time this browser plays it, its manual beside it.
+   * A game: its own sky first, then the machine on, in its folder on C:,
+   * its window zoomed as F5 zooms it - people do not think of F5 (the pilot,
+   * 2026-10-22: "people won't guess to maximise it") - and the first time
+   * this browser plays it, its manual beside it, where there is room.
    * machine: a card for this run only (owlfly3h.html: Hercules), the
    * settings left as they are.
    */
@@ -1576,7 +1578,10 @@ export class SiteApp extends CourseApp {
     this.exampleKey = null;
     this.track(this.dos.run(g.key)
       .finally(() => { if (machine) this.dos.settings = { ...this.dos.settings, machine: card }; })
-      .then(() => this.firstManual(g.key)));
+      .then(() => {
+        if (this.dos.box.running && !this.dosBig) this.zoomDos();
+        this.firstManual(g.key);
+      }));
   }
 
   /**

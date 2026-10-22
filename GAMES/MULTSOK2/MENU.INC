@@ -1,10 +1,10 @@
 ; ==================================================================
 ;  MENU.INC - the first screen: text mode, so it shows on every card -
-;  which picture, the sound, your name.  1 2 3 pick the card (one this
-;  machine has not got refuses the key), 4 the sound on and off,
+;  which picture, the sound, your name.  1 2 3 4 pick the card (one
+;  this machine has not got refuses the key), 5 the sound on and off,
 ;  letters your name, Enter plays, Esc back to DOS.  By default the
-;  best card here (EGA, "for authenticity") and the sound on, if a
-;  Sound Blaster answered.  Through the BIOS (INT 10h 09h), so a
+;  best card here (EGA 640, recommended - then EGA, "for authenticity")
+;  and the sound on, if a Sound Blaster answered.  Through the BIOS (INT 10h 09h), so a
 ;  Hercules' or an MDA's mono text is as good as a colour one.
 ; ==================================================================
 MENU:   mov  ah,0Fh
@@ -33,13 +33,13 @@ MENU:   mov  ah,0Fh
         je   .bs
         cmp  al,'1'
         jb   .name
-        cmp  al,'4'
+        cmp  al,'5'
         ja   .name
         je   .snd
-        sub  al,'0'             ; 1 2 3: CARD_EGA, CARD_CGA, CARD_HGC
+        sub  al,'0'             ; 1 2 3 4: CARD_EGAW .. CARD_HGC
         mov  bl,al
         xor  bh,bh
-        cmp  byte [capega-1+bx],0
+        cmp  byte [capegaw-1+bx],0
         je   .key               ; not on this machine
         mov  [card],al
         jmp  .draw
@@ -138,9 +138,9 @@ MDRAW:  mov  ax,0600h           ; the screen cleared...
         call MATT
         call MPUTS
         jmp  .fix
-.cards: mov  dh,9               ; the three cards, a line each
-        mov  byte [mcard],CARD_EGA
-        mov  si,MEGA
+.cards: mov  dh,9               ; the four cards, a line each
+        mov  byte [mcard],CARD_EGAW
+        mov  si,MEGAW
 .card:  mov  dl,14
         mov  al,MA_KEY-MATTR
         call MATT
@@ -153,7 +153,7 @@ MDRAW:  mov  ax,0600h           ; the screen cleared...
         mov  bl,[mcard]
         xor  bh,bh
         mov  al,MA_ON-MATTR
-        cmp  byte [capega-1+bx],0
+        cmp  byte [capegaw-1+bx],0
         jne  .has
         mov  al,MA_OFF-MATTR    ; not on this machine: grey
 .has:   call MATT
@@ -170,8 +170,10 @@ MDRAW:  mov  ax,0600h           ; the screen cleared...
         mov  al,[mcard]
         xor  ah,ah
         mov  di,ax
-        cmp  byte [capega-1+di],0
+        cmp  byte [capegaw-1+di],0
         jne  .nx
+        cmp  al,CARD_EGAW       ; (its line is long: grey says it)
+        je   .nx
         mov  si,MNOTHERE
         call MPUTS
 .nx:    pop  si
@@ -179,10 +181,10 @@ MDRAW:  mov  ax,0600h           ; the screen cleared...
         inc  byte [mcard]
         cmp  byte [mcard],CARD_HGC
         jbe  .card
-        mov  dx,0E0Eh           ; the sound
+        mov  dx,0F0Eh           ; the sound
         mov  al,MA_KEY-MATTR
         call MATT
-        mov  al,'4'
+        mov  al,'5'
         call MPUTC
         mov  al,' '
         call MPUTC
@@ -203,7 +205,7 @@ MDRAW:  mov  ax,0600h           ; the screen cleared...
         jne  .sn
         mov  si,MNOSB
 .sn:    call MPUTS
-        mov  dx,1110h           ; the name, a cursor after it
+        mov  dx,1210h           ; the name, a cursor after it
         mov  al,MA_HEAD-MATTR
         call MATT
         mov  si,MNAME
@@ -285,9 +287,10 @@ MMONO   db 07h,07h,0Fh,0Fh,0Fh,0Fh,07h,8Fh,07h
 MLINES  db 4,23,MA_TIT-MATTR,'M U L T I P L A Y   S O K O   I I',0
         db 5,13,MA_TEXT-MATTR,'crates onto the red marks, up to eight in one castle',0
         db 7,14,MA_HEAD-MATTR,'THE PICTURE',0
-        db 13,14,MA_HEAD-MATTR,'THE SOUND',0
-        db 21,10,MA_DIM-MATTR,'1 2 3 the card   4 the sound   letters: your name   Esc: DOS',0
+        db 14,14,MA_HEAD-MATTR,'THE SOUND',0
+        db 21,10,MA_DIM-MATTR,'1-4 the card   5 the sound   letters: your name   Esc: DOS',0
         db 0FFh
+MEGAW   db 'EGA 640    640 x 200, finer - recommended',0
 MEGA    db 'EGA        320 x 200, sixteen colours',0
 MCGA    db 'CGA        320 x 200, four colours',0
 MHGC    db 'HERCULES   720 x 348, black and amber',0

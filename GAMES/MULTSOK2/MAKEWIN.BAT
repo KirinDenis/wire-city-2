@@ -20,16 +20,24 @@ echo Assembling in DOS...
 "%DOSBOX%" -noautoexec -noconsole -c "mount c %CD%" -c "c:" -c "cd GAMES\MULTSOK2" -c "MAKE.BAT EXIT"
 if not exist GAMES\MULTSOK2\MULTSOK2.COM goto failed
 echo.
-echo Built GAMES\MULTSOK2\ART.DAT and GAMES\MULTSOK2\MULTSOK2.COM
+echo Built GAMES\MULTSOK2\ART.DAT, ARTF.DAT, LEVELS.DAT and MULTSOK2.COM
 goto end
 
 :check
 echo Assembling with the Windows FASM for comparison...
 TOOLS\FASM\WIN\FASM.EXE GAMES\MULTSOK2\ART.ASM GAMES\MULTSOK2\ARTW.DAT
 if errorlevel 1 goto failed
+TOOLS\FASM\WIN\FASM.EXE GAMES\MULTSOK2\ARTF.ASM GAMES\MULTSOK2\ARTFW.DAT
+if errorlevel 1 goto failed
+TOOLS\FASM\WIN\FASM.EXE GAMES\MULTSOK2\LEVELS.ASM GAMES\MULTSOK2\LEVELSW.DAT
+if errorlevel 1 goto failed
 TOOLS\FASM\WIN\FASM.EXE GAMES\MULTSOK2\MULTSOK2.ASM GAMES\MULTSOK2\MULTSOK2W.COM
 if errorlevel 1 goto failed
 fc /b GAMES\MULTSOK2\ART.DAT GAMES\MULTSOK2\ARTW.DAT >nul
+if errorlevel 1 goto differ
+fc /b GAMES\MULTSOK2\ARTF.DAT GAMES\MULTSOK2\ARTFW.DAT >nul
+if errorlevel 1 goto differ
+fc /b GAMES\MULTSOK2\LEVELS.DAT GAMES\MULTSOK2\LEVELSW.DAT >nul
 if errorlevel 1 goto differ
 fc /b GAMES\MULTSOK2\MULTSOK2.COM GAMES\MULTSOK2\MULTSOK2W.COM >nul
 if errorlevel 1 goto differ

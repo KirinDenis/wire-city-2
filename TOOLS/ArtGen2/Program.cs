@@ -51,6 +51,18 @@ int[] Look(int l) => looks[l].Select(c => Convert.ToInt32(c.ToString(), 16)).ToA
 string[] Pic(int w, int h, Func<int, int, char> f) =>
     Enumerable.Range(0, h).Select(y => new string(Enumerable.Range(0, w).Select(x => f(x, y)).ToArray())).ToArray();
 string[] Grid(int n, Func<int, int, char> f) => Pic(n, n, f);
+// EGA 640's pictures (ARTF.INC): drawn K times as fine across, at the
+// same height - K 2 there, K 1 here, where a picture comes out exactly as
+// the 320 one always did.  A fine picture's function gets x, its fine
+// column; X(x) is where that column is in the 320 one's (fractional),
+// for circles and shading; Col(x, c) is the one fine column on the 320
+// one's column c, for a line one pixel thin; x / K the 320 column, for
+// what should stay as it was, only doubled.
+int K = 1;
+double X(int x) => (x + 0.5) / K - 0.5;
+bool Col(int x, int c) => x == c * K + K / 2;
+string[] PicK(int w, int h, Func<int, int, char> f) => Pic(w * K, h, f);
+string[] GridK(int n, Func<int, int, char> f) => Pic(n * K, n, f);
 double Dist(double x, double y, double cx, double cy) => Math.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
 string[] Check(string[] s, int w, int h)
 {
@@ -87,30 +99,30 @@ char Foliage(int x, int y, (double cx, double cy, double r)[] lobes)
     double best = 9; int at = -1;
     for (int i = 0; i < lobes.Length; i++)
     {
-        double d = Dist(x + 0.5, y + 0.5, lobes[i].cx, lobes[i].cy) / lobes[i].r;
+        double d = Dist(X(x) + 0.5, y + 0.5, lobes[i].cx, lobes[i].cy) / lobes[i].r;
         if (d < 1 && (at < 0 || lobes[i].cy > lobes[at].cy || d < best)) { if (at < 0 || lobes[i].cy >= lobes[at].cy) { best = d; at = i; } }
     }
     if (at < 0) return '.';
     var (lx, ly, lr) = lobes[at];
-    if (best > 0.86) return '0';
-    return Leaf((x + 0.5 - lx) / lr, (y + 0.5 - ly) / lr, x, y);
+    if (best > 0.86 + (K - 1) * 0.07) return '0';            // (a finer picture: a thinner dark edge)
+    return Leaf((X(x) + 0.5 - lx) / lr, (y + 0.5 - ly) / lr, x, y);
 }
 
 // ---- the playing field: black.  A goal is a red mark ringed in gold ------
-string[] Goal() => Grid(16, (x, y) =>
+string[] Goal() => GridK(16, (x, y) =>
 {
-    double d = Dist(x + 0.5, y + 0.5, 8, 8);
+    double fx = X(x), d = Dist(fx + 0.5, y + 0.5, 8, 8);
     if (d < 1.4) return 'F';
-    if (d < 3.4) return x + y < 15 ? 'C' : '4';
-    if (d < 4.3) return '0';
-    if (d < 5.6) return x + y < 15 ? 'E' : '6';
+    if (d < 3.4) return fx + y < 15 ? 'C' : '4';
+    if (d < 4.3 - (K - 1) * 0.3) return '0';                   // (finer: a thinner dark ring)
+    if (d < 5.6) return fx + y < 15 ? 'E' : '6';
     if (d < 6.2) return '4';
     return '.';
 });
 // a candy, Pac-Man's: a little lit ball - green 1, gold 2, pink 3 points
-string[] Candy(int v) => Grid(16, (x, y) =>
+string[] Candy(int v) => GridK(16, (x, y) =>
 {
-    double r = 1.8 + v * 0.42, nx = (x + 0.5 - 8) / r, ny = (y + 0.5 - 8) / r;
+    double r = 1.8 + v * 0.42, nx = (X(x) + 0.5 - 8) / r, ny = (y + 0.5 - 8) / r;
     if (nx * nx + ny * ny > 1) return '.';
     string ramp = v == 1 ? "FAA22" : v == 2 ? "FEE66" : "FDD55";
     return Shade(nx, ny, ramp);
@@ -120,21 +132,22 @@ string[] Candy(int v) => Grid(16, (x, y) =>
 //      half a stone along; each stone lit on its top and left, shaded on
 //      its bottom and right, its corners rounded off into the dark joints;
 //      the variants move the courses and darken a stone or two ----------
-string[] Stones(int v) => Grid(16, (x, y) =>
+string[] Stones(int v) => GridK(16, (x, y) =>
 {
     int course = y < 5 ? 0 : y < 11 ? 1 : 2;
     int top = course == 0 ? 0 : course == 1 ? 5 : 11, bot = course == 0 ? 4 : course == 1 ? 10 : 15;
     int shift = ((course + v) % 2) * 4 + (v % 3);
-    int bx = (x + shift) % 8, stone = (x + shift) / 8 + course * 3 + v * 7;
+    int S = 8 * K;                                                        // a stone's width, joint and all
+    int bx = (x + shift * K) % S, stone = (x + shift * K) / S + course * 3 + v * 7;
     int sy = y - top, sh = bot - top;
-    if (bx == 7 || y == bot) return '0';                                  // the joints
-    bool corner = (bx == 0 || bx == 6) && (sy == 0 || sy == sh - 1);
+    if (bx == S - 1 || y == bot) return '0';                              // the joints: a pixel thin
+    bool corner = (bx == 0 || bx == S - 2) && (sy == 0 || sy == sh - 1);
     if (corner) return '0';
     bool dark = H2(stone, 5) % 5 == 0;
     char lit = dark ? '7' : 'F', body = dark ? '8' : '7', shade = dark ? '0' : '8';
     if (sy == 0 || bx == 0) return lit;
-    if (sy == sh - 1 || bx == 6) return shade;
-    if (H2(x * 3 + v, y) % 11 == 0) return shade;                         // a pit in the stone
+    if (sy == sh - 1 || bx == S - 2) return shade;
+    if (H2(x * 3 + v, y) % (11 * K) == 0) return shade;                   // a pit in the stone
     return body;
 });
 // growth on a wall's outer side: lime lobes over its edge (rule, any size)
@@ -151,96 +164,98 @@ string[] Growth(int n, int side)
         lobes.Add((cx, cy, rr));
     }
     var arr = lobes.ToArray();
-    return Grid(n, (x, y) =>
+    return GridK(n, (x, y) =>
     {
         char c = Foliage(x, y, arr);
-        if (c != '.' && c != '0' && H2(x + side * 9, y) % 29 == 0) return side % 2 == 0 ? 'D' : 'E';  // a flower
+        if (c != '.' && c != '0' && H2(x + side * 9, y) % (29 * K) == 0) return side % 2 == 0 ? 'D' : 'E';  // a flower
         return c;
     });
 }
 // the gate: a gatehouse of red brick, its arch, and the portcullis - gold
 // bars down, half raised, up
-string[] Gate(int open) => Grid(16, (x, y) =>
+string[] Gate(int open) => GridK(16, (x, y) =>
 {
-    bool hole = (y >= 7 && x >= 3 && x <= 12) || (y < 7 && Dist(x + 0.5, y + 0.5, 8, 7.5) < 5.1 && y >= 3);
+    int xi = x / K;
+    bool hole = (y >= 7 && xi >= 3 && xi <= 12) || (y < 7 && Dist(X(x) + 0.5, y + 0.5, 8, 7.5) < 5.1 && y >= 3);
     if (!hole)
     {
-        int course = y / 3, u = (x + (course % 2) * 2) % 4;
-        if (y % 3 == 2 || u == 3) return '0';
-        return y % 3 == 0 ? 'C' : (x < 3 ? 'C' : '4');
+        int course = y / 3, u = (x + (course % 2) * 2 * K) % (4 * K);
+        if (y % 3 == 2 || u == 4 * K - 1) return '0';                    // the mortar, a pixel thin
+        return y % 3 == 0 ? 'C' : (xi < 3 ? 'C' : '4');
     }
     int bottom = open == 0 ? 15 : open == 1 ? 9 : 4;
-    bool bar = y <= bottom && (x % 2 == 0 || y == 6 || y == 10 || y == bottom);
-    if (bar) return y == bottom && x % 2 == 0 ? 'F' : (x % 2 == 0 ? 'E' : '6');
+    bool rod = x % (2 * K) == 0;                                          // the bars, a pixel thin
+    bool bar = y <= bottom && (rod || y == 6 || y == 10 || y == bottom);
+    if (bar) return y == bottom && rod ? 'F' : (rod ? 'E' : '6');
     if (open == 2 && y >= 12) return '8';
     return '0';
 });
-string[] Bridge(bool across) => Grid(16, (x, y) =>
+string[] Bridge(bool across) => GridK(16, (x, y) =>
 {
-    int a = across ? y : x, b = across ? x : y;
-    if (a <= 1 || a >= 14) return a == 0 || a == 15 ? '0' : '8';
-    if (b % 4 == 3) return '0';
-    if (b % 4 == 0) return 'E';
-    return (a * 5 + b) % 9 == 0 ? '0' : '6';
+    int xi = x / K;
+    int a = across ? y : xi, b = across ? x : y, P = across ? 4 * K : 4;  // b runs along the planks
+    if (a <= 1 || a >= 14) return a == 0 || a == 15 ? (across || Col(x, a) ? '0' : '8') : '8';
+    if (b % P == P - 1) return '0';
+    if (b % P == 0) return 'E';
+    return (a * 5 + b / (across ? K : 1)) % 9 == 0 ? '0' : '6';
 });
 // the moat, four frames: deep water; ripples - short light dashes on every
 // fourth row - that move along two pixels a frame; a glint.  Every
 // pattern repeats in 16, so the cells meet without a seam
-string[] Water(int f) => Grid(16, (x, y) =>
+// the moat, still water at dusk: a few long low swells, one lane of
+// them in eight rows, drifting a pixel a frame; a rare glint.  Frame 4 is
+// a breath of wind passing: the swells a little brighter, no white caps -
+// the pilot asked for calm, a pulse at rest
+string[] Water(int f) => GridK(16, (x, y) =>
 {
-    if (f == 4)                                                // a gust: the water torn up, white caps
-    {
-        int g = (x + y * 3) % 6;
-        if (y % 3 == 0 && g < 3) return g == 1 ? 'F' : 'B';
-        if (y % 3 == 1 && g < 4) return '9';
-        if (H2(x, y + 77) % 5 == 0) return '3';
-        return '1';
-    }
-    int lane = y / 4, u = (x + 16 - 2 * f + lane * 5) % 8;
-    if (y % 4 == 1 && u < 3) return u == 1 ? 'B' : '9';
-    if (y % 4 == 2 && u == 1) return '3';
-    if (((x * 5 + y * 3 + f * 4) & 15) == 0 && y % 4 == 3) return 'B';
+    int lane = y / 8, u = (x + (16 - f + lane * 7) * K) % (16 * K);   // (u in fine columns)
+    bool swell = y % 8 == 3 && u < 6 * K;
+    if (f == 4) return swell ? (u >= 2 * K && u < 4 * K ? 'B' : '9') : (y % 8 == 4 && u < 4 * K ? '3' : '1');
+    if (swell) return u >= 2 * K && u < 2 * K + 1 ? '3' : '9';         // the swell's light: a pixel
+    if (x % K == K / 2 && (((x / K) * 5 + y * 3) & 31) == 7 && f == 0) return 'B';
     return '1';
 });
 string[] Bank(int n, int side)
 {
     int k = Math.Max(1, (n * 3 + 8) / 16);
-    return Grid(n, (x, y) =>
+    bool across = side == 1 || side == 3;                        // the bank runs up and down: its depth is in columns
+    int kk = across ? k * K : k;
+    return GridK(n, (x, y) =>
     {
-        int a = side switch { 0 => y, 1 => n - 1 - x, 2 => n - 1 - y, _ => x };
-        int b = side switch { 0 => x, 1 => y, 2 => x, _ => y };
-        if (a >= k + 1) return '.';
-        if (a == k) return Chk(x, y) ? '0' : '.';
-        return (b * 7 + a * 3) % 5 == 0 ? '8' : (H2(b, a) % 3 == 0 ? '7' : '6');
+        int a = side switch { 0 => y, 1 => n * K - 1 - x, 2 => n - 1 - y, _ => x };
+        int b = side switch { 0 => x / K, 1 => y, 2 => x / K, _ => y };
+        if (a >= kk + 1) return '.';
+        if (a == kk) return Chk(x, y) ? '0' : '.';
+        return (b * 7 + (across ? a / K : a) * 3) % 5 == 0 ? '8' : (H2(side % 2 == 0 ? x : b, a) % 3 == 0 ? '7' : '6');
     });
 }
 // the park's grass: green, blades of lime, a dark speck
-string[] Grass(bool stone) => Grid(16, (x, y) =>
+string[] Grass(bool stone) => GridK(16, (x, y) =>
 {
     int h = H2(x + (stone ? 40 : 0), y);
-    if (stone && Dist(x + 0.5, y + 0.5, 11, 5) < 1.7) return x + y < 16 ? '7' : '8';
+    if (stone && Dist(X(x) + 0.5, y + 0.5, 11, 5) < 1.7) return X(x) + y < 16 ? '7' : '8';
     if (h % 9 == 0) return 'A';
     if (h % 9 == 1 && y < 15 && H2(x, y + 1) % 9 != 0) return 'A';
     if (h % 8 == 2) return '0';
     return '2';
 });
 // a meadow in the sun: lime half-tone through the green
-string[] Meadow() => Grid(16, (x, y) =>
+string[] Meadow() => GridK(16, (x, y) =>
 {
     int h = H2(x + 13, y + 29);
-    if (h % 11 == 1) return 'E';                               // a buttercup
+    if (h % (11 * K) == 1) return 'E';                         // a buttercup
     if (h % 13 == 2) return '0';
     return h % 3 == 0 ? 'A' : '2';
 });
 // the floor of a pine wood: dark, needles and earth
-string[] Forest() => Grid(16, (x, y) =>
+string[] Forest() => GridK(16, (x, y) =>
 {
     int h = H2(x + 51, y + 3);
     if (h % 9 == 0) return '6';
     if (h % 5 == 1) return '2';
     return Chk(x, y) ? '0' : (h % 4 == 0 ? '2' : '0');
 });
-string[] Road() => Grid(16, (x, y) =>
+string[] Road() => GridK(16, (x, y) =>
 {
     int h = H2(x + 90, y + 7);
     if (h % 11 == 0) return '8';
@@ -251,92 +266,99 @@ string[] Road() => Grid(16, (x, y) =>
 
 // ---- the park's things.  They stand on their cell's bottom row ----------
 string[] Shadow(string[] s, double cx, double cy, double rx, double ry) => Pic(s[0].Length, s.Length, (x, y) =>
-    s[y][x] != '.' ? s[y][x] : (Math.Pow((x + 0.5 - cx) / rx, 2) + Math.Pow((y + 0.5 - cy) / ry, 2) < 1 && Chk(x, y) ? '0' : '.'));
-string[] Bush() => Shadow(Grid(16, (x, y) => Foliage(x, y, new[] { (5.5, 9.0, 4.6), (10.5, 8.5, 4.8), (8.0, 6.0, 5.0), (8.0, 11.0, 4.2) })), 9.5, 13.5, 7, 2.5);
-string[] Tree() => Shadow(Pic(16, 24, (x, y) =>
+    s[y][x] != '.' ? s[y][x] : (Math.Pow((X(x) + 0.5 - cx) / rx, 2) + Math.Pow((y + 0.5 - cy) / ry, 2) < 1 && Chk(x, y) ? '0' : '.'));
+string[] Bush() => Shadow(GridK(16, (x, y) => Foliage(x, y, new[] { (5.5, 9.0, 4.6), (10.5, 8.5, 4.8), (8.0, 6.0, 5.0), (8.0, 11.0, 4.2) })), 9.5, 13.5, 7, 2.5);
+// a trunk two pixels wide, lit on its left; finer, three, the light a pixel
+char Trunk(int x, int c) { int t = x - c * K; return t == 0 ? '6' : (t == 2 * K - 1 ? '0' : (K > 1 ? '6' : '0')); }
+bool OnTrunk(int x, int c) => x >= c * K && x < (c + 2) * K;
+string[] Tree() => Shadow(PicK(16, 24, (x, y) =>
 {
-    if (y >= 14 && y <= 21 && x >= 7 && x <= 8) return x == 7 ? '6' : '0';
+    if (y >= 14 && y <= 21 && OnTrunk(x, 7)) return Trunk(x, 7);
     return Foliage(x, y, new[] { (8.0, 6.0, 5.6), (4.8, 9.5, 4.4), (11.2, 9.5, 4.4), (8.0, 11.5, 4.5) });
 }), 10, 22, 6, 2);
-string[] Pine() => Shadow(Pic(16, 32, (x, y) =>
+string[] Pine() => Shadow(PicK(16, 32, (x, y) =>
 {
-    if (y >= 26 && y <= 29 && x >= 7 && x <= 8) return x == 7 ? '6' : '0';
+    if (y >= 26 && y <= 29 && OnTrunk(x, 7)) return Trunk(x, 7);
     foreach (var (top, bot, half) in new[] { (0, 9, 3.5), (6, 17, 5.5), (12, 23, 6.8), (18, 27, 7.8) })
     {
         if (y < top || y > bot) continue;
         double w = half * (y - top + 1) / (bot - top + 1);
-        double dx = x + 0.5 - 8;
+        double dx = X(x) + 0.5 - 8;
         if (Math.Abs(dx) > w) continue;
-        if (Math.Abs(dx) > w - 1 || y == bot) return '0';
+        if (Math.Abs(dx) > w - 1.0 / K || y == bot) return '0';           // its edge: a pixel thin
         return dx < -w * 0.35 ? 'A' : (dx < w * 0.3 ? (Chk(x, y) ? 'A' : '2') : '2');
     }
     return '.';
 }), 10, 30, 6, 2);
 // an oak: two cells wide, two tall - a crown of many lobes, a thick trunk
-string[] Oak() => Shadow(Pic(32, 32, (x, y) =>
+string[] Oak() => Shadow(PicK(32, 32, (x, y) =>
 {
-    if (y >= 21 && y <= 29 && x >= 14 && x <= 18) return x <= 15 ? '6' : (x == 18 ? '0' : (Chk(x, y) ? '6' : '0'));
-    if (y >= 28 && y <= 29 && (x == 13 || x == 19)) return '6';
+    int xi = x / K;
+    if (y >= 21 && y <= 29 && xi >= 14 && xi <= 18) return xi <= 15 ? '6' : (Col(x, 18) || (K == 1 && xi == 18) ? '0' : (Chk(x, y) ? '6' : '0'));
+    if (y >= 28 && y <= 29 && (xi == 13 || xi == 19)) return '6';
     return Foliage(x, y, new[] { (16.0, 8.0, 8.0), (8.0, 12.0, 7.0), (24.0, 12.0, 7.0), (11.0, 18.0, 6.5), (21.0, 18.0, 6.5), (16.0, 15.0, 7.5) });
 }), 19, 29.5, 12, 2.5);
 // a hedge, trimmed square: two cells wide
-string[] Hedge() => Pic(32, 16, (x, y) =>
+string[] Hedge() => PicK(32, 16, (x, y) =>
 {
-    if (x < 1 || x > 30 || y < 3) return '.';
+    int xi = x / K;
+    if (xi < 1 || xi > 30 || y < 3) return '.';
+    if (x < K + K / 2 || x > 30 * K + K / 2) return '.';               // (finer: the sides a pixel in)
     if (y == 15) return Chk(x, y) ? '0' : '.';
-    bool edge = x == 1 || x == 30 || y == 3 || y == 14;
-    if ((x == 2 || x == 29) && y == 3) return '.';
+    bool edge = Col(x, 1) || Col(x, 30) || y == 3 || y == 14;
+    if ((xi == 2 || xi == 29) && y == 3) return '.';
     if (edge) return '0';
     if (y <= 6) return H2(x, y) % 7 == 0 ? '2' : 'A';                    // the top, in the light
     return H2(x, y) % 5 == 0 ? 'A' : (Chk(x, y) ? '2' : (H2(x, y + 3) % 3 == 0 ? '0' : '2'));
 });
 // a flower bed in a stone border: a mound of leaves, big bright blooms
-string[] FlowerBed() => Pic(32, 16, (x, y) =>
+string[] FlowerBed() => PicK(32, 16, (x, y) =>
 {
-    double nx = (x + 0.5 - 16) / 15.5, ny = (y + 0.5 - 9.5) / 6.2, d = nx * nx + ny * ny;
+    double fx = X(x), nx = (fx + 0.5 - 16) / 15.5, ny = (y + 0.5 - 9.5) / 6.2, d = nx * nx + ny * ny;
     if (d > 1) return '.';
-    if (d > 0.8) return ny < 0 ? 'F' : (d > 0.92 ? '0' : '8');
+    if (d > 0.8) return ny < 0 ? 'F' : (d > 0.92 + (K - 1) * 0.03 ? '0' : '8');
     foreach (var (bx, by, c) in new[] { (6, 7, 'C'), (12, 5, 'E'), (19, 6, 'D'), (25, 8, 'C'), (9, 11, 'E'), (16, 10, 'F'), (22, 12, 'E') })
     {
-        double e = Dist(x + 0.5, y + 0.5, bx + 0.5, by + 0.5);
+        double e = Dist(fx + 0.5, y + 0.5, bx + 0.5, by + 0.5);
         if (e < 0.8) return '6';                                               // its heart
         if (e < 1.9) return c;                                                 // its petals
     }
     return Leaf(nx, ny, x, y);                                                 // the leaves
 });
 // a pond: water in a ring of reeds, lily pads, one in flower
-string[] Pond() => Pic(32, 16, (x, y) =>
+string[] Pond() => PicK(32, 16, (x, y) =>
 {
-    double nx = (x + 0.5 - 16) / 15.5, ny = (y + 0.5 - 8.5) / 7, d = nx * nx + ny * ny;
+    double fx = X(x), nx = (fx + 0.5 - 16) / 15.5, ny = (y + 0.5 - 8.5) / 7, d = nx * nx + ny * ny;
     if (d > 1) return '.';
     if (d > 0.74) return (x + y) % 3 == 0 ? 'A' : (Chk(x, y) ? '2' : '0');
     foreach (var (px, py) in new[] { (9.0, 7.0), (21.0, 10.0), (14.0, 11.0) })
-        if (Dist(x + 0.5, (y + 0.5) * 1.6, px, py * 1.6) < 2.4) return (px == 21.0 && Dist(x + 0.5, y + 0.5, px, py) < 0.9) ? 'D' : 'A';
-    if (y % 3 == 1 && (x * 3 + y) % 7 < 2) return '9';
-    if (((x * 5 + y * 3) & 15) == 0) return 'B';
+        if (Dist(fx + 0.5, (y + 0.5) * 1.6, px, py * 1.6) < 2.4) return (px == 21.0 && Dist(fx + 0.5, y + 0.5, px, py) < 0.9) ? 'D' : 'A';
+    if (y % 3 == 1 && (x * 3 + y * K) % (7 * K) < 2) return '9';
+    if (x % K == K / 2 && (((x / K) * 5 + y * 3) & 15) == 0) return 'B';
     return '1';
 });
 // a fountain, two cells wide: a wide basin, a column, a bowl, jets (two frames)
-string[] Fountain(int f) => Shadow(Pic(32, 24, (x, y) =>
+string[] Fountain(int f) => Shadow(PicK(32, 24, (x, y) =>
 {
-    double bx = (x + 0.5 - 16) / 15;
+    int xi = x / K;
+    double fx = X(x), bx = (fx + 0.5 - 16) / 15;
     if (y >= 16 && y <= 22 && Math.Abs(bx) <= 1)
     {
-        if (y == 16) return Math.Abs(bx) > 0.94 ? '7' : ((x + f) % 4 == 0 ? 'B' : '9');
+        if (y == 16) return Math.Abs(bx) > 0.94 ? '7' : ((xi + f) % 4 == 0 && x % K == 0 ? 'B' : '9');
         if (y == 22) return '0';
         return bx < -0.7 ? 'F' : (bx < 0.2 ? '7' : (bx < 0.75 ? '8' : '0'));
     }
     if (y == 15 && Math.Abs(bx) < 0.97) return Math.Abs(bx) > 0.9 ? 'F' : '9';
-    if (y >= 9 && y <= 15 && x >= 15 && x <= 16) return x == 15 ? 'F' : '8';      // the column
-    if (y >= 8 && y <= 9 && x >= 11 && x <= 20) return y == 8 ? (x < 14 ? 'F' : '7') : '8';  // the bowl
+    if (y >= 9 && y <= 15 && xi >= 15 && xi <= 16) return xi == 15 ? 'F' : '8';      // the column
+    if (y >= 8 && y <= 9 && xi >= 11 && xi <= 20) return y == 8 ? (xi < 14 ? 'F' : '7') : '8';  // the bowl
     // the jet up the middle, and its water falling either side: four frames,
     // the drops a row further down each one - it flows
-    if (y <= 7 && x >= 15 && x <= 16 && y >= 1) return (y + 4 - f) % 4 == 0 ? 'F' : 'B';
+    if (y <= 7 && xi >= 15 && xi <= 16 && y >= 1 && (K == 1 || Col(x, 15) || Col(x, 16))) return (y + 4 - f) % 4 == 0 ? 'F' : 'B';
     for (int side = -1; side <= 1; side += 2)
         for (int jet = 0; jet < 2; jet++)
         {
             double t = (y - 1) / (jet == 0 ? 7.0 : 14.0), ax = 16 + side * (1 + (jet == 0 ? 5 : 11) * Math.Sqrt(Math.Max(0, t)));
-            if (y >= 1 && y <= (jet == 0 ? 8 : 15) && Math.Abs(x + 0.5 - ax) < 0.8 && (y - f + jet * 2 + 8) % 4 < 2) return (y - f + 8) % 4 == 0 ? 'F' : 'B';
+            if (y >= 1 && y <= (jet == 0 ? 8 : 15) && Math.Abs(fx + 0.5 - ax) < 0.8 / K + (K - 1) * 0.1 && (y - f + jet * 2 + 8) % 4 < 2) return (y - f + 8) % 4 == 0 ? 'F' : 'B';
         }
     return '.';
 }), 19, 23, 14, 1.5);
@@ -376,18 +398,21 @@ string[] Statue() => Check(new[] {
     "....0.0.0.0.0...",
 }, 16, 32);
 // a lantern on a post, burning
-string[] Lamp() => Pic(16, 24, (x, y) =>
+string[] Lamp() => PicK(16, 24, (x, y) =>
 {
-    if (y >= 9 && y <= 21 && x >= 7 && x <= 8) return x == 7 ? '8' : '0';
-    if (y >= 20 && y <= 21 && x >= 5 && x <= 10) return y == 20 ? '8' : '0';
-    if (y == 2 && x >= 6 && x <= 9) return '0';
-    if (y == 1 && x >= 7 && x <= 8) return '0';
-    if (y >= 3 && y <= 8 && x >= 5 && x <= 10)
+    int xi = x / K;
+    if (y >= 9 && y <= 21 && xi >= 7 && xi <= 8)                 // the post, lit and dark: finer, half as thick
+    { int t = x - (7 * K + K / 2); return t == 0 ? '8' : (t == 1 ? '0' : '.'); }
+    if (y >= 20 && y <= 21 && xi >= 5 && xi <= 10) return y == 20 ? '8' : '0';
+    if (y == 2 && xi >= 6 && xi <= 9) return '0';
+    if (y == 1 && xi >= 7 && xi <= 8) return '0';
+    if (y >= 3 && y <= 8 && xi >= 5 && xi <= 10)
     {
-        if (x == 5 || x == 10 || y == 8) return '0';
-        return Dist(x + 0.5, y + 0.5, 7.5, 5.5) < 1.5 ? 'F' : 'E';
+        if (Col(x, 5) || Col(x, 10) || y == 8) return '0';
+        if (x < 5 * K + K / 2 || x > 10 * K + K / 2) return '.';
+        return Dist(X(x) + 0.5, y + 0.5, 7.5, 5.5) < 1.5 ? 'F' : 'E';
     }
-    if (y >= 22 && Math.Abs(x + 0.5 - 9) < 5 && Chk(x, y)) return '0';
+    if (y >= 22 && Math.Abs(X(x) + 0.5 - 9) < 5 && Chk(x, y)) return '0';
     return '.';
 });
 // a well: a ring of stones, its dark water, two posts and a red roof
@@ -413,50 +438,163 @@ string[] Well() => Pic(16, 24, (x, y) =>
     if (y == 23 && x >= 3 && x <= 14 && Chk(x, y)) return '0';
     return '.';
 });
-string[] Boulder() => Grid(16, (x, y) =>
+// a birch: a slim white trunk with its black marks, an airy light crown
+string[] Birch() => Shadow(PicK(16, 32, (x, y) =>
+{
+    if (y >= 12 && y <= 29 && OnTrunk(x, 7))                     // white, its black marks: finer, thin ones
+        return (y * 3 + x / K) % 7 == 0 && (K == 1 || x % K == 1) ? '0' : (x - 7 * K < K ? 'F' : '7');
+    var c = Foliage(x, y, new[] { (8.0, 5.0, 4.8), (5.0, 10.0, 3.8), (11.0, 9.5, 3.8), (8.0, 14.0, 3.6) });
+    if (c != '.' && c != '0' && H2(x + 9, y) % 5 == 0) return '.';   // light through it
+    return c == '2' && Chk(x, y) ? 'A' : c;
+}), 10, 30, 5, 2);
+// a tree in blossom: its crown white and pink over the leaves
+string[] Blossom() => Shadow(PicK(16, 24, (x, y) =>
+{
+    if (y >= 14 && y <= 21 && OnTrunk(x, 7)) return Trunk(x, 7);
+    var c = Foliage(x, y, new[] { (8.0, 6.0, 5.6), (4.8, 9.5, 4.4), (11.2, 9.5, 4.4), (8.0, 11.5, 4.5) });
+    if (c == '.' || c == '0') return c;
+    int h = H2(x + 21, y + 4);
+    if (c == 'A' || (c == '2' && h % 3 == 0)) return h % 4 == 0 ? 'F' : 'D';   // the blossom
+    return c;
+}), 10, 22, 6, 2);
+// a willow by the water: a dome, and its strands hanging to the ground
+string[] Willow() => Shadow(PicK(32, 32, (x, y) =>
+{
+    int xi = x / K;
+    if (y >= 18 && y <= 29 && xi >= 15 && xi <= 17) return xi == 15 ? '6' : '0';
+    double dx = X(x) + 0.5 - 16, top = 3 + dx * dx / 40;       // the dome's edge
+    if (y < top) return '.';
+    if (y < 11) return Leaf(dx / 14, (y - 7) / 6.0, x, y);
+    int strand = (x + 1) % 3, len = 22 + H2(x, 7) % 7;         // the strands, each its own length: finer, twice as many
+    if (Math.Abs(dx) > 14.5 || y > len) return '.';
+    if (strand == 0) return '.';
+    return strand == 1 ? (y % 4 == 0 ? '2' : 'A') : (Chk(x, y) ? '2' : '0');
+}), 19, 30, 13, 2);
+// a doe grazing, side on
+string[] Deer() => Check(new[] {
+    "................",
+    "................",
+    "................",
+    "................",
+    ".........00.....",
+    "..00000000060...",
+    ".066E6666E660...",
+    "0F6666666666000.",
+    "006666666660.660",
+    ".0666666660..0E0",
+    "..0660..0660..0.",
+    "..060....060....",
+    "..060....060....",
+    "..060....060....",
+    "..00......00....",
+    "...0.0.0.0.0.0..",
+}, 16, 16);
+// a rabbit sitting up, its ears listening
+string[] Rabbit() => Check(new[] {
+    "................",
+    "................",
+    "................",
+    "................",
+    ".......0..0.....",
+    "......070070....",
+    "......070070....",
+    "......077770....",
+    ".....0707770....",
+    ".....0777780....",
+    "....077777780...",
+    "...0F7777778000.",
+    "...0F777777880..",
+    "....0777777880..",
+    ".....00000000...",
+    "......0.0.0.0...",
+}, 16, 16);
+// red caps with white spots, in the grass
+string[] Mushrooms() => GridK(16, (x, y) =>
+{
+    double fx = X(x);
+    foreach (var (cx, cy, r) in new[] { (5.0, 9.0, 3.2), (11.0, 11.0, 2.6), (8.5, 13.0, 1.8) })
+    {
+        double nx = (fx + 0.5 - cx) / r, ny = (y + 0.5 - cy) / (r * 0.7);
+        if (ny <= 0 && nx * nx + ny * ny < 1) return H2(x, y + 3) % 4 == 0 ? 'F' : (nx < -0.3 ? 'C' : '4');
+        if (ny > 0 && ny < 2.2 && Math.Abs(fx + 0.5 - cx) < r * 0.35) return ny > 1.9 ? '0' : 'F';   // the stem
+    }
+    if (y >= 14 && H2(x, y) % 3 == 0) return 'A';
+    return '.';
+});
+// an old stump, its rings, moss on it
+string[] Stump() => GridK(16, (x, y) =>
+{
+    double fx = X(x), nx = (fx + 0.5 - 8) / 6, ny = (y + 0.5 - 8) / 2.6;
+    if (nx * nx + ny * ny < 1)                                   // its top, the rings
+    {
+        double d = Math.Sqrt(nx * nx + ny * ny);
+        return ((int)(d * 4 * K)) % 2 == 0 ? 'E' : '6';          //  (finer: twice as many)
+    }
+    if (y > 8 && y <= 13 && Math.Abs(fx + 0.5 - 8) < 6.3)       // its side
+        return fx < 5 - 0.25 * (K - 1) ? '6' : (H2(x, y) % 4 == 0 ? 'A' : (fx > 11 + 0.25 * (K - 1) ? '0' : '6'));
+    if (y == 14 && Math.Abs(fx + 0.5 - 8) < 7.5) return x % (3 * K) == 0 ? '0' : 'A';   // roots in the grass
+    return '.';
+});
+string[] Boulder() => GridK(16, (x, y) =>
 {
     foreach (var (cx, cy, rx, ry) in new[] { (9.5, 10.5, 5.5, 4.5), (5.0, 11.5, 3.8, 3.2) })
     {
-        double nx = (x + 0.5 - cx) / rx, ny = (y + 0.5 - cy) / ry, d = nx * nx + ny * ny;
-        if (d < 1) return d > 0.8 ? '0' : Shade(nx, ny, "F7788");
+        double nx = (X(x) + 0.5 - cx) / rx, ny = (y + 0.5 - cy) / ry, d = nx * nx + ny * ny;
+        if (d < 1) return d > 0.8 + (K - 1) * 0.07 ? '0' : Shade(nx, ny, "F7788");
     }
     if (y >= 13 && H2(x, y) % 3 == 0) return 'A';
     return '.';
 });
 string[] Flowers()
 {
-    var s = Grid(16, (x, y) => '.');
-    void Put(int x, int y, char c) { if (x >= 0 && x < 16 && y >= 0 && y < 16) { var a = s[y].ToCharArray(); a[x] = c; s[y] = new string(a); } }
+    var s = GridK(16, (x, y) => '.');
+    void Put(int x, int y, char c) { if (x >= 0 && x < 16 * K && y >= 0 && y < 16) { var a = s[y].ToCharArray(); a[x] = c; s[y] = new string(a); } }
     foreach (var (fx, fy, c) in new[] { (3, 4, 'C'), (10, 3, 'D'), (13, 10, 'E'), (5, 11, 'F'), (10, 13, 'C'), (7, 7, 'E') })
     {
-        Put(fx, fy + 2, 'A'); Put(fx, fy + 3, '2');
-        Put(fx - 1, fy, c); Put(fx + 1, fy, c); Put(fx, fy - 1, c); Put(fx, fy + 1, c); Put(fx, fy, 'E');
+        // a stalk, petals round a heart: finer, the stalk a pixel, the petals
+        // round, the heart a pixel
+        int c0 = fx * K + K / 2;
+        Put(c0, fy + 2, 'A'); Put(c0, fy + 3, '2');
+        for (int q = 1; q <= K; q++) { Put(c0 - q, fy, c); Put(c0 + q, fy, c); }
+        Put(c0, fy - 1, c); Put(c0, fy + 1, c);
+        if (K > 1) { Put(c0 - 1, fy - 1, c); Put(c0 + 1, fy - 1, c); Put(c0 - 1, fy + 1, c); Put(c0 + 1, fy + 1, c); }
+        Put(c0, fy, 'E');
     }
     return s;
 }
-// a round tower of grey stone, its window, its crenels, a red cone of a
-// roof and a gold pennant: 32 rows, a cell's 16 of them over the cell above
-string[] Tower() => Pic(16, 32, (x, y) =>
+// a round tower of grey stone, its window, and a fairy-tale spire: tall,
+// slender, slate blue lit on its left, a gold ball at its tip and a red
+// pennant on the wind.  (The first roofs were red cones - at 8 px they
+// dithered into brown swirls; the pilot: not romantic.)  32 rows, a cell's
+// 16 of them over the cell above
+string[] Tower() => PicK(16, 32, (x, y) =>
 {
-    if (x == 8 && y <= 4) return '0';
-    if (y <= 2 && x >= 9 && x <= 12 && x - 9 <= (y == 1 ? 3 : 1)) return 'E';
-    if (y >= 3 && y <= 13)
+    int xi = x / K;
+    double fx = X(x);
+    if (y <= 1 && fx >= 9 - 0.25 * (K - 1) && fx <= 13 && fx - 9 <= (y == 0 ? 4 : 2)) return y == 0 ? 'C' : '4';   // the pennant
+    if (y <= 2 && Col(x, 8)) return y == 2 ? 'E' : '0';         // its staff, the gold ball: a pixel thin
+    if (y == 3 && (xi == 7 || xi == 8)) return 'E';
+    if (y >= 4 && y <= 15)
     {
-        double w = 1 + (y - 3) * 6.5 / 10;
-        double dx = x + 0.5 - 8;
+        double w = 0.6 + (y - 4) * 6.0 / 11;                   // the spire widens slowly
+        double dx = fx + 0.5 - 8;
         if (Math.Abs(dx) > w) return '.';
-        if (Math.Abs(dx) > w - 0.9 || y == 13) return '0';
+        if (Math.Abs(dx) > w - 0.8 / K || y == 15) return '0';  // its edge: a pixel thin
         double u = dx / w;
-        return u < -0.5 ? 'C' : (u < 0.1 ? (Chk(x, y) ? 'C' : '4') : (u < 0.6 ? '4' : (Chk(x, y) ? '4' : '0')));
+        bool course = (y - 4) % 3 == 2;                        // rows of slates
+        if (u < -0.55) return course ? '9' : 'B';              // the light on its left
+        if (u < 0.15) return course ? '1' : '9';
+        return course ? '0' : (Chk(x, y) ? '1' : '9');
     }
-    if (y >= 14 && y <= 31 && x >= 2 && x <= 13)
+    if (y >= 16 && y <= 31 && xi >= 2 && xi <= 13)
     {
-        if (y == 14 || y == 15) return (x % 3 == 2 && y == 14) ? '.' : (x == 2 || x == 13 ? '0' : (x < 6 ? 'F' : '7'));
-        if (x == 2 || x == 13 || y == 31) return '0';
-        if (y >= 18 && y <= 22 && x >= 7 && x <= 8) return y == 18 ? '8' : '0';
-        int course = (y - 16) / 3;
-        if ((y - 16) % 3 == 2 || ((x + course * 2) % 5 == 0)) return '8';
-        double u = (x - 2) / 11.0;
+        if (x < 2 * K + K / 2 || x > 13 * K + K / 2) return '.';   // (finer: its walls a pixel in)
+        if (Col(x, 2) || Col(x, 13) || y == 31) return '0';
+        if (y == 16) return '0';
+        if (y >= 19 && y <= 23 && xi >= 7 && xi <= 8) return y == 19 ? '8' : (y == 21 && xi == 7 ? 'E' : '0');   // a lit window
+        int course = (y - 17) / 3;
+        if ((y - 17) % 3 == 2 || ((x + course * 2 * K) % (5 * K) == 0)) return '8';   // the mortar: a pixel thin
+        double u = (fx - 2) / 11.0;
         return u < 0.25 ? 'F' : (u < 0.6 ? '7' : (u < 0.85 ? (Chk(x, y) ? '7' : '8') : '8'));
     }
     return '.';
@@ -467,31 +605,33 @@ string[] Tower() => Pic(16, 32, (x, y) =>
 // on the black floor nothing of it may be black - a gold rim lit on its
 // top and left, brown on its bottom and right, iron at the corners, planks
 // with dark red seams.  Home, it is the same in the greens.
-string[] CrateN(int n, bool home) => Grid(n, (x, y) =>
+string[] CrateN(int n, bool home) => GridK(n, (x, y) =>
 {
     char lit = home ? 'A' : 'E', wood = home ? '2' : '6', seam = home ? '0' : '4', dark = home ? '2' : '6';
+    int N = n * K;                                             // its fine columns
     int c = n >= 10 ? 3 : 2;                                   // the iron corners
-    bool corner = (x < c || x >= n - c) && (y < c || y >= n - c);
+    bool corner = (x < c * K || x >= N - c * K) && (y < c || y >= n - c);
     if (corner)
     {
-        if (c == 3 && (x == 1 || x == n - 2) && (y == 1 || y == n - 2)) return '8';   // a rivet
+        if (c == 3 && (Col(x, 1) || Col(x, n - 2)) && (y == 1 || y == n - 2)) return '8';   // a rivet
         return (x == 0 || y == 0) ? 'F' : '7';
     }
-    if (x == 0 || y == 0) return lit;                          // the rim, in the light
-    if (x == n - 1 || y == n - 1) return dark;                 //  ...and turned from it
+    if (x == 0 || y == 0) return lit;                          // the rim, in the light: a pixel
+    if (x == N - 1 || y == n - 1) return dark;                 //  ...and turned from it
     int b = n >= 12 ? 2 : 1;                                   // the frame inside it
-    if (x <= b || y <= b || x >= n - 1 - b || y >= n - 1 - b) return y <= b ? lit : wood;
+    if (x <= b * K || y <= b || x >= N - 1 - b * K || y >= n - 1 - b) return y <= b ? lit : wood;
     int pitch = Math.Max(2, n / 5);                            // the planks
     if ((y - b - 1) % pitch == pitch - 1) return seam;
-    return H2(x * 7 + (home ? 3 : 0), y / pitch) % 5 == 0 ? lit : wood;
+    return H2(x * 7 + (home ? 3 : 0), y / pitch) % (5 * K) == 0 ? lit : wood;
 });
 // a candy's glint: a little white star over it, now and then
-string[] Sparkle() => Grid(16, (x, y) =>
+string[] Sparkle() => GridK(16, (x, y) =>
 {
-    int dx = x - 11, dy = y - 4;
-    if (dx == 0 && dy == 0) return 'F';
-    if ((dx == 0 && Math.Abs(dy) <= 3) || (dy == 0 && Math.Abs(dx) <= 3)) return Math.Abs(dx) + Math.Abs(dy) <= 1 ? 'F' : 'B';
-    if (Math.Abs(dx) == 1 && Math.Abs(dy) == 1) return 'B';
+    bool col = Col(x, 11);                                      // its upright: a pixel thin
+    double dx = X(x) - 11; int dy = y - 4;
+    if (col && dy == 0) return 'F';
+    if ((col && Math.Abs(dy) <= 3) || (dy == 0 && Math.Abs(dx) <= 3)) return (col ? Math.Abs(dy) : Math.Abs(dx)) <= 1 ? 'F' : 'B';
+    if ((Col(x, 10) || Col(x, 12)) && Math.Abs(dy) == 1) return 'B';
     return '.';
 });
 string[] Man() => Check(new[] {
@@ -514,70 +654,77 @@ string[] Man() => Check(new[] {
 }, 16, 16);
 string[] You() => Grid(16, (x, y) =>
     (x < 4 || x > 11) && (y < 4 || y > 11) && (x == 0 || x == 15 || y == 0 || y == 15) ? 'E' : '.');
-string[] Mine() => Grid(16, (x, y) =>
+string[] Mine() => GridK(16, (x, y) =>
 {
-    if (x == 9 && y == 0) return 'F';
-    if (x == 10 && y == 1) return 'E';
-    if (x == 8 && y == 1) return 'C';
-    if ((x == 9 && y == 2) || (x == 8 && y == 3)) return '6';
-    double nx = (x + 0.5 - 8) / 5.6, ny = (y + 0.5 - 9.5) / 5.6, d = nx * nx + ny * ny;
+    int xi = x / K;
+    if (xi == 9 && y == 0) return 'F';                         // the fuse's spark
+    if (xi == 10 && y == 1) return 'E';
+    if (xi == 8 && y == 1) return 'C';
+    if (((xi == 9 && y == 2) || (xi == 8 && y == 3)) && (K == 1 || x % K == 1)) return '6';   // the fuse: thin
+    double nx = (X(x) + 0.5 - 8) / 5.6, ny = (y + 0.5 - 9.5) / 5.6, d = nx * nx + ny * ny;
     if (d > 1) return '.';
-    if (d > 0.8) return '7';
+    if (d > 0.8 + (K - 1) * 0.07) return '7';
     return Shade(nx, ny, "F7880");
 });
-string[] Blast() => Grid(16, (x, y) =>
+string[] Blast() => GridK(16, (x, y) =>
 {
-    double dx = x + 0.5 - 8, dy = y + 0.5 - 8, d = Math.Sqrt(dx * dx + dy * dy);
+    double dx = X(x) + 0.5 - 8, dy = y + 0.5 - 8, d = Math.Sqrt(dx * dx + dy * dy);
     double ray = Math.Abs(Math.Sin(Math.Atan2(dy, dx) * 4)) * 1.6;
     if (d < 2.5) return 'F';
     if (d < 4.2 + ray * 0.5) return 'E';
     if (d < 6 + ray) return Chk(x, y) ? 'C' : 'E';
     if (d < 7.2 + ray) return Chk(x, y) ? '4' : 'C';
-    if (d < 8 && (x * 3 + y * 5) % 4 == 0) return '8';
+    if (d < 8 && (x * 3 + y * 5) % (4 * K) == 0) return '8';
     return '.';
 });
-string[] Gem(double size, bool star) => Grid(16, (x, y) =>
+string[] Gem(double size, bool star) => GridK(16, (x, y) =>
 {
-    double cx = 8, cy = 8.5, dx = (x + 0.5 - cx) / size, dy = (y + 0.5 - cy) / size;
-    if (star && ((x == 12 && y <= 4) || (y == 2 && x >= 10 && x <= 14))) return x == 12 && y == 2 ? 'F' : 'B';
-    if (star && ((x == 3 && y >= 11 && y <= 13) || (y == 12 && x >= 2 && x <= 4))) return 'F';
+    double fx = X(x), cx = 8, cy = 8.5, dx = (fx + 0.5 - cx) / size, dy = (y + 0.5 - cy) / size;
+    if (star && ((Col(x, 12) && y <= 4) || (y == 2 && fx >= 10 && fx <= 14))) return Col(x, 12) && y == 2 ? 'F' : 'B';
+    if (star && ((Col(x, 3) && y >= 11 && y <= 13) || (y == 12 && fx >= 2 && fx <= 4))) return 'F';
     double rim = Math.Abs(dx) / 6 + (dy < -1.5 ? -dy / 4 : Math.Max(0, dy) / 6.5);
     if (dy < -4.5 || rim > 1) return '.';
-    if (rim > 0.82) return '1';
+    if (rim > 0.82 + (K - 1) * 0.06) return '1';                // its rim: finer, thinner
     if (dy < -1.5) return dx < 0 ? 'F' : 'B';
     if (dy < -0.5) return '9';
     return dx < -1 ? 'B' : dx < 1.5 ? '3' : '9';
 });
-string[] Torch(int f) => Grid(16, (x, y) =>
+// a torch on the wall: TR0 bare - its stick and iron cup; the flame over
+// it is the game's own, drawn every frame (SCENE.INC FLAME: the pilot,
+// "the torches do not burn, they blink" - two pictures had swapped on
+// the beat).  TR1 alight, still: the title's, the previews'
+string[] Torch(int f) => GridK(16, (x, y) =>
 {
-    if (y >= 8 && y <= 13 && x >= 7 && x <= 8) return y == 8 ? '8' : (x == 7 ? '6' : '0');
-    double fx = 7.5 + (f == 0 ? -0.5 : 0.5);
-    double d = Math.Abs(x + 0.5 - fx) + Math.Abs(y + 0.5 - 5) * 0.5;
-    if (y == 1 && Math.Abs(x + 0.5 - fx) < 1) return 'F';
+    int xi = x / K;
+    if (y >= 8 && y <= 13 && xi >= 7 && xi <= 8) return y == 8 ? '8' : (xi == 7 ? '6' : '0');
+    if (f == 0) return '.';
+    double fx = 7.5 + (f == 0 ? -0.5 : 0.5), px = X(x);
+    double d = Math.Abs(px + 0.5 - fx) + Math.Abs(y + 0.5 - 5) * 0.5;
+    if (y == 1 && Math.Abs(px + 0.5 - fx) < 1.0 / K) return 'F';  // the flame's tip: finer, a pixel
     if (d < 1.2) return 'F';
     if (d < 2.2) return 'E';
     if (d < 3.2 && y < 8) return 'C';
     return '.';
 });
-// a crow: black, its wings edged in grey so it shows on the park, a gold
-// beak - sitting, wings up, wings down
+// an owl, the dusk's bird (OWLOS's, too): round, brown, a pale breast, big
+// gold eyes, ear tufts - sitting on the wall; then flying, wings up, down
 string[] Bird(int f) => f switch
 {
     0 => Check(new[] {
-        "................", "................", "................", "................",
-        "........000.....", ".......00F0EE...", ".......00000E...", "......0000000...",
-        ".....008800000..", "....0088877000..", "...00888770000..", "..0.00000000....",
-        "......000000....", "......0...0.....", ".....EE...EE....", "................" }, 16, 16),
+        "................", "...0........0...", "...60......06...", "...6600000066...",
+        "...6666666666...", "..066EE66EE660..", "..06E0E66E0E60..", "..066EE66EE660..",
+        "..06666EE66660..", "..0667777776600.", "..067F7F7F7760..", "..0677777777600.",
+        "...06F7F7F760...", "....06777760....", ".....E0..0E.....", "....EEE..EEE...." }, 16, 16),
     1 => Check(new[] {
-        "................", "0..............0", "80............08", "780..........087",
-        ".780........087.", "..7800....0087..", "...880000008....", "....00F00E00....",
-        ".....000000EE...", "......0000......", ".......00.......", "................",
+        "0..............0", "60............06", "760..........067", "6760...00...0676",
+        ".6766.0660.6676.", "..6676E66E6766..", "...0666EE6660...", "....06777760....",
+        ".....067760.....", "......0770......", ".......00.......", "................",
         "................", "................", "................", "................" }, 16, 16),
     _ => Check(new[] {
         "................", "................", "................", "................",
-        "................", "......0000......", ".....00F00EE....", "....00000000....",
-        "...0880000880...", "..088700007880..", ".08870....07880.", "0870........0780",
-        "870..........078", "70............07", "................", "................" }, 16, 16),
+        ".......00.......", "......0660......", ".....06EE60.....", "....0667766600..",
+        "..0666777766660.", ".066760770676660", "067660.00.066766", "6760........0676",
+        "760..........067", "60............06", "................", "................" }, 16, 16),
 };
 
 // ---- the kinds, in the directory's order: MULTSOK2.ASM's K_ numbers.
@@ -599,7 +746,8 @@ var kinds = new (string name, char how, Func<int, string[]> art)[] {
     ("BSH", 'm', n => Bush()), ("TRE", 'm', n => Tree()), ("PIN", 'm', n => Pine()), ("OAK", 'm', n => Oak()),
     ("HED", 'm', n => Hedge()), ("FLB", 'm', n => FlowerBed()), ("PND", 'm', n => Pond()), ("FLW", 'm', n => Flowers()),
     ("FN0", 'm', n => Fountain(0)), ("FN1", 'm', n => Fountain(1)), ("FN2", 'm', n => Fountain(2)), ("FN3", 'm', n => Fountain(3)), ("STA", 'm', n => Statue()), ("ROK", 'a', n => Boulder()),
-    ("LMP", 'm', n => Lamp()), ("WEL", 'm', n => Well()),
+    ("LMP", 'm', n => Lamp()), ("WEL", 'm', n => Well()), ("BIR", 'm', n => Birch()), ("BLO", 'm', n => Blossom()),
+    ("WIL", 'm', n => Willow()), ("DEE", 'm', n => Deer()), ("RAB", 'm', n => Rabbit()), ("MUS", 'm', n => Mushrooms()), ("STU", 'm', n => Stump()),
     ("TWR", 'm', n => Tower()), ("TR0", 'm', n => Torch(0)), ("TR1", 'm', n => Torch(1)),
     ("BD0", 'm', n => Bird(0)), ("BD1", 'm', n => Bird(1)), ("BD2", 'm', n => Bird(2)),
 };
@@ -643,6 +791,27 @@ foreach (var (name, how, f) in kinds)
     if (m != null && (m[0].Length % 16 != 0 || m.Length % 8 != 0)) throw new Exception($"{name}: {m[0].Length}x{m.Length} - widths of 16 or 32, heights of 8s");
     foreach (var n in sizes) art[(name, n)] = how == 'r' ? f(n) : Down(m!, n, how);
 }
+// ---- EGA 640's (ARTF.INC): the same kinds drawn twice as fine across (K
+//      2), brought down the same way - all but those drawn by hand, pixel
+//      by pixel, which the game doubles.  Each exactly twice as wide as its
+//      320 one, as high: the game places it by the 320 one's columns
+string[] handDrawn = { "MAN", "YOU", "STA", "DEE", "RAB", "WEL", "BD0", "BD1", "BD2" };
+var artF = new Dictionary<(string, int), string[]>();
+K = 2;
+foreach (var (name, how, f) in kinds)
+{
+    if (handDrawn.Contains(name)) continue;
+    var m = how == 'r' ? null : f(16);
+    foreach (var n in sizes)
+    {
+        var p = how == 'r' ? f(n) : Down(m!, n, how);
+        var q = art[(name, n)];
+        if (p[0].Length != q[0].Length * 2 || p.Length != q.Length)
+            throw new Exception($"{name} at {n}: the fine one {p[0].Length}x{p.Length}, not twice {q[0].Length}x{q.Length}");
+        artF[(name, n)] = p;
+    }
+}
+K = 1;
 
 // ---- the isometric tiles: 24x12 diamonds, the pictures laid on them -------
 const int T = 12;
@@ -836,29 +1005,38 @@ string Ground(int c, int r, int h) { int l = Land(c, r); return l < 64 ? "GRS" :
 (string kind, int w) Decor(int c, int r)
 {
     int l = Land(c, r), h = Hash(c + 7, r + 3);
-    if (l < 64) return h < 22 ? ("PND", 2) : h < 40 ? ("BSH", 1) : h < 60 ? ("FLW", 1) : ("", 0);
-    if (l < 136) return h < 6 ? ("FN0", 2) : h < 12 ? ("STA", 1) : h < 18 ? ("LMP", 1) : h < 22 ? ("WEL", 1) : h < 34 ? ("FLB", 2) :
-        h < 44 ? ("HED", 2) : h < 66 ? ("FLW", 1) : h < 80 ? ("BSH", 1) : h < 84 ? ("ROK", 1) : ("", 0);
-    if (l < 196) return h < 30 ? ("OAK", 2) : h < 80 ? ("TRE", 1) : h < 100 ? ("BSH", 1) : h < 106 ? ("ROK", 1) : ("", 0);
-    return h < 90 ? ("PIN", 1) : h < 105 ? ("ROK", 1) : h < 115 ? ("TRE", 1) : ("", 0);
+    if (l < 64) return h < 18 ? ("PND", 2) : h < 30 ? ("WIL", 2) : h < 44 ? ("BSH", 1) : h < 58 ? ("FLW", 1) :
+        h < 64 ? ("MUS", 1) : h < 70 ? ("RAB", 1) : ("", 0);
+    if (l < 136) return h < 6 ? ("FN0", 2) : h < 11 ? ("STA", 1) : h < 16 ? ("LMP", 1) : h < 20 ? ("WEL", 1) : h < 30 ? ("FLB", 2) :
+        h < 38 ? ("HED", 2) : h < 50 ? ("BLO", 1) : h < 66 ? ("FLW", 1) : h < 76 ? ("BSH", 1) : h < 80 ? ("RAB", 1) :
+        h < 84 ? ("DEE", 1) : h < 87 ? ("ROK", 1) : ("", 0);
+    if (l < 196) return h < 24 ? ("OAK", 2) : h < 52 ? ("TRE", 1) : h < 72 ? ("BIR", 1) : h < 86 ? ("BSH", 1) : h < 94 ? ("DEE", 1) :
+        h < 100 ? ("MUS", 1) : h < 106 ? ("STU", 1) : h < 110 ? ("ROK", 1) : ("", 0);
+    return h < 80 ? ("PIN", 1) : h < 92 ? ("BIR", 1) : h < 102 ? ("ROK", 1) : h < 110 ? ("STU", 1) : h < 116 ? ("MUS", 1) :
+        h < 120 ? ("DEE", 1) : ("", 0);
 }
 
 // ---- a level drawn as MULTSOK2.ASM draws it, n px a cell -------------------
-int[] Scene(int n, int SW, int SH, int oy, int ph, int frame)
+// kx 2: EGA 640's - the image 2*SW across, a fine picture (artF) where
+// there is one, the 320 one doubled where there is not; positions stay
+// the game's 320 columns
+int[] Scene(int n, int SW, int SH, int oy, int ph, int frame, int kx = 1)
 {
-    var img = new int[SW * SH];
+    var img = new int[SW * kx * SH];
     Array.Fill(img, 0);
     void Draw(string kind, int X, int Y, int look = 0)
     {
-        var spr = art[(kind, n)]; var lk = Look(look);
-        int h = spr.Length, w = spr[0].Length, Y0 = Y + n - h;
+        bool fine = kx > 1 && artF.ContainsKey((kind, n));
+        var spr = fine ? artF[(kind, n)] : art[(kind, n)]; var lk = Look(look);
+        int h = spr.Length, w = spr[0].Length, Y0 = Y + n - h, rep = fine ? 1 : kx;
         for (int y = 0; y < h; y++) for (int x = 0; x < w; x++)
-            {
-                char ch = spr[y][x]; if (ch == '.') continue;
-                int px = X + x, py = Y0 + y;
-                if (px < 0 || py < oy || px >= SW || py >= SH) continue;
-                img[py * SW + px] = ch switch { 'S' => lk[0], 's' => lk[1], 'P' => lk[2], 'p' => lk[3], _ => Convert.ToInt32(ch.ToString(), 16) };
-            }
+                for (int q = 0; q < rep; q++)
+                {
+                    char ch = spr[y][x]; if (ch == '.') continue;
+                    int px = X * kx + x * rep + q, py = Y0 + y;
+                    if (px < 0 || py < oy || px >= SW * kx || py >= SH) continue;
+                    img[py * SW * kx + px] = ch switch { 'S' => lk[0], 's' => lk[1], 'P' => lk[2], 'p' => lk[3], _ => Convert.ToInt32(ch.ToString(), 16) };
+                }
     }
     int ox = ((SW - W * n) / 2) & ~1, oyy = oy + (SH - oy - Hh * n) / 2;
     int c0 = -(ox + n - 1) / n, c1 = (SW - ox) / n, r0 = -(oyy - oy + n - 1) / n, r1 = (SH - oyy) / n + 2;
@@ -888,7 +1066,7 @@ int[] Scene(int n, int SW, int SH, int oy, int ph, int frame)
                     else
                     {
                         if (Corner(c, r) && h % 3 != 0) Draw("TWR", X, Y);
-                        else if (h > 236 && (IsFloor(c, r + 1) || IsFloor(c + 1, r) || IsFloor(c - 1, r))) Draw("TR" + (frame & 1), X, Y);
+                        else if (h > 236 && (IsFloor(c, r + 1) || IsFloor(c + 1, r) || IsFloor(c - 1, r))) Draw("TR1", X, Y);            // (the game draws its flame alive)
                     }
                     continue;
                 }
@@ -938,7 +1116,8 @@ int[] Scene(int n, int SW, int SH, int oy, int ph, int frame)
     for (int py = oy; py < SH; py++) for (int px = 0; px < SW; px++)
         {
             int t = Math.Max(TX(px), TY(py)), b = bayer[(py & 3) * 4 + (px & 3)];
-            if (t > 98 + b * 150 / 16) img[py * SW + px] = dim16[img[py * SW + px]];
+            if (t > 98 + b * 150 / 16)
+                for (int q = 0; q < kx; q++) img[py * SW * kx + px * kx + q] = dim16[img[py * SW * kx + px * kx + q]];
         }
     for (int r = 0; r < Hh; r++) for (int c = 0; c < W; c++)
         {
@@ -1000,6 +1179,11 @@ void Cards(int[] img, string path)
 }
 foreach (var n in new[] { 16, 10, 8 })
     Cards(Scene(n, 320, 200, 8, 2, 0), $"{args[2]}{n}");
+foreach (var n in new[] { 16, 10 })                 // EGA 640: 640x200 shown 960x600, as a 4:3 screen shows it
+{
+    var wimg = Scene(n, 320, 200, 8, 2, 0, 2);
+    Png(960, 600, (x, y) => pal[wimg[(y / 3) * 640 + x * 2 / 3]], $"{args[2]}{n}W.PNG");
+}
 {
     var f1 = Scene(16, 320, 200, 8, 2, 1);          // the next frame: the ripples on, the torches flicker
     Png(960, 600, (x, y) => pal[f1[(y / 3) * 320 + x / 3]], $"{args[2]}16F1.PNG");
@@ -1065,5 +1249,49 @@ foreach (var n in sizes) foreach (var (name, _, _) in kinds) Emit($"{name}_{n}",
 foreach (var (name, s) in iso) Emit($"{name}_I", s);
 Emit("IFLR_I", isoFloor);
 File.WriteAllText(Path.Combine(args[3], "ART.INC"), o.ToString(), Encoding.ASCII);
+
+// ---- ARTF.INC: EGA 640's fine pictures, packed - four bits a pixel, and
+//      a bit a pixel for what is see-through - so the lot fits a 64K file
+var fo = new StringBuilder();
+void FL(string s) => fo.Append(s).Append("\r\n");
+FL("; ARTF.INC - MULTIPLAY SOKO II's pictures for EGA 640, for ARTF.ASM: made by");
+FL(";  TOOLS\\ArtGen2 (C#) with ART.INC - edit the generator, not this file.");
+FL(";  The same kinds drawn twice as fine across (K 2), all but those drawn by");
+FL(";  hand (the game doubles those).  ARTFDIR: a word per picture as ARTDIR,");
+FL(";  0 none.  A picture: db width, height, 1 if it has see-through pixels;");
+FL(";  then each row - if it has, its see-through pixels as bits, (width+7)/8");
+FL(";  bytes, the left one bit 7 - and its colours, two pixels a byte, the left");
+FL(";  in the high nibble (0 where see-through).");
+FL("\tdb 'SOKOARTF'                   ; what this file is: the game checks it");
+FL("\tdw NKIND, NSIZE");
+fo.Append("ARTFDIR:");
+int f0 = 0;
+foreach (var n in sizes) foreach (var (name, _, _) in kinds) fo.Append((f0++ % 8 == 0 ? "\r\n\tdw " : ",") + (artF.ContainsKey((name, n)) ? $"F{name}_{n}" : "0"));
+foreach (var _ in kinds) fo.Append((f0++ % 8 == 0 ? "\r\n\tdw " : ",") + "0");   // the isometric ones: doubled
+fo.Append("\r\n\tdw 0\r\n");
+int fbytes = 12 + (sizes.Length + 1) * kinds.Length * 2 + 2;
+foreach (var n in sizes) foreach (var (name, _, _) in kinds)
+    {
+        if (!artF.TryGetValue((name, n), out var p)) continue;
+        bool masked = p.Any(r => r.Contains('.'));
+        var b = new List<int> { p[0].Length, p.Length, masked ? 1 : 0 };
+        foreach (var r in p)
+        {
+            if (masked) for (int i = 0; i < r.Length; i += 8)
+                {
+                    int m = 0;
+                    for (int j = 0; j < 8 && i + j < r.Length; j++) if (r[i + j] == '.') m |= 0x80 >> j;
+                    b.Add(m);
+                }
+            for (int i = 0; i < r.Length; i += 2)
+                b.Add(((r[i] == '.' ? 0 : Convert.ToInt32(r[i].ToString(), 16)) << 4) | (r[i + 1] == '.' ? 0 : Convert.ToInt32(r[i + 1].ToString(), 16)));
+        }
+        fo.Append($"F{name}_{n}:\r\n");
+        for (int i = 0; i < b.Count; i += 20) FL("\tdb " + string.Join(",", b.Skip(i).Take(20)));
+        fbytes += b.Count;
+    }
+if (fbytes > 65535) throw new Exception($"ARTF.DAT would be {fbytes} bytes: more than the 64K the game reads it into");
+File.WriteAllText(Path.Combine(args[3], "ARTF.INC"), fo.ToString(), Encoding.ASCII);
+Console.WriteLine($"ARTF.INC: {artF.Count} fine pictures, ARTF.DAT about {fbytes} bytes");
 Console.WriteLine($"level {want} {W}x{Hh}, gate ({gate.c},{gate.r}) out ({gate.dc},{gate.dr}); previews {args[2]}*.PNG; ART.INC {new FileInfo(Path.Combine(args[3], "ART.INC")).Length} bytes");
 return 0;

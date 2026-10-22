@@ -1,6 +1,6 @@
 ; KINDS.INC - MULTIPLAY SOKO II's picture numbers: made by TOOLS\ArtGen2
 ;  (C#) with ART.INC; edit the generator, not this file.
-NKIND = 63
+NKIND = 70
 NSIZE = 5
 K_GOL = 0
 K_CA1 = 1
@@ -59,10 +59,17 @@ K_STA = 53
 K_ROK = 54
 K_LMP = 55
 K_WEL = 56
-K_TWR = 57
-K_TR0 = 58
-K_TR1 = 59
-K_BD0 = 60
-K_BD1 = 61
-K_BD2 = 62
+K_BIR = 57
+K_BLO = 58
+K_WIL = 59
+K_DEE = 60
+K_RAB = 61
+K_MUS = 62
+K_STU = 63
+K_TWR = 64
+K_TR0 = 65
+K_TR1 = 66
+K_BD0 = 67
+K_BD1 = 68
+K_BD2 = 69
 K_IFLR = NKIND                  ; the isometric floor: in the isometric set only

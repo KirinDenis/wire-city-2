@@ -2,10 +2,10 @@
 ;  SOUND.INC - MULTIPLAY SOKO II's Sound Blaster, the WIRE CITY ring
 ;  mixer (EXAMPLES\RING.ASM, ENGINE\E_SND.INC): a 32K ring of 8-bit
 ;  samples loops forever through auto-init DMA on channel 1, 11025 a
-;  second, no interrupts.  The ring's bed is the wind - its clean copy
-;  in the segment's top half, which HEAL puts back behind the playing
-;  position; an effect is ADDED into the ring a little ahead of it, so
-;  effects sum like a real mixer and wipe themselves out once played.
+;  second, no interrupts.  The ring's bed is the wind - made afresh by
+;  HEAL behind the playing position, so it never loops and it wipes out
+;  what was played; an effect is ADDED into the ring a little ahead of
+;  the position, so effects sum like a real mixer.
 ;  Effects are made on the spot from a list of tones (SFXTAB): a
 ;  square, a soft triangle, noise, a random walk (a rumble), a buzz.
 ;  Birds sing now and then on their own (BIRDS, from the timer).
@@ -137,47 +137,113 @@ SFXRAW: xor  al,al
         ret
 
 ; ------------------------------------------------------------------
-;  GENBED - the wind: noise through a soft filter, swelling and dying
-;  in one gust the length of the ring (so the loop has no seam
-;  in its loudness); the clean copy beside it.
+;  GENBED - the ring filled with the wind, before it starts playing
 ; ------------------------------------------------------------------
 GENBED: push es
+        push bp
         mov  es,[rseg]
         xor  di,di
-        xor  si,si              ; SI = the filter's state
-.g:     call RND
+        mov  si,[wstate]
+        mov  bp,[wseed]
+.g:     call WIND
+        stosb
+        cmp  di,SNDN
+        jb   .g
+        mov  [wstate],si
+        mov  [wseed],bp
+        pop  bp
+        pop  es
+        ret
+
+; WIND - one sample of the shore: its own noise through a soft filter -
+; the waves' wash, SI, at [wvol] 64ths - and through it once more, darker
+; - the breeze, [ws2], at [hvol] 64ths, steady under it.  BP = the
+; noise's seed; SI and BP carried on.  Out AL.  clobbers DX.
+WIND:   mov  ax,25173
+        mul  bp                 ; (DX goes)
+        add  ax,13849
+        mov  bp,ax              ; the wind's own noise, not the game's RND
         mov  al,ah
         cbw                     ; -128..127
         sub  ax,si
         sar  ax,1
         sar  ax,1
-        sar  ax,1               ; (noise - state) / 8: a one-pole low pass
-        add  si,ax
-        mov  ax,di
-        shl  ax,1               ; the gust: up over half the ring, down
-        jns  .up                ;  over the other half (0..7FFFh)
-        not  ax
-.up:    mov  cl,12
-        shr  ax,cl              ; 0..7
-        add  ax,3               ; 3..10: the wind never quite stops
-        imul si                 ; state * loudness  (DX goes)
-        mov  cl,5
-        sar  ax,cl
+        sar  ax,1               ; (noise - wash) / 8: a one-pole low pass
+        add  si,ax              ;  (SI stays in -128..127: AL is it)
+        mov  ax,si
+        sub  ax,[cs:ws2]
+        sar  ax,1
+        sar  ax,1
+        sar  ax,1               ; (wash - breeze) / 8: low-passed again
+        add  [cs:ws2],ax
+        mov  ax,si
+        imul byte [cs:wvol]     ; the wash at the wave's height
+        mov  dx,ax
+        mov  al,byte [cs:ws2]
+        imul byte [cs:hvol]     ; the breeze under it
+        add  ax,dx
+        shl  ax,1
+        shl  ax,1
+        mov  al,ah              ; * 4 / 256: in 64ths
         add  al,128             ; around the midline
-        stosb
-        cmp  di,SNDN
-        jb   .g
-        push ds
-        push es
-        pop  ds
-        xor  si,si              ; the clean copy: ring 0..7FFF -> 8000..FFFF
-        mov  cx,SNDN/2
-        rep  movsw
-        pop  ds
-        pop  es
         ret
 
-; HEAL - behind the playing position, the ring back to the clean wind
+; WAVES - the waves on the shore, [wvol] 0..15: one rolls in, its wash
+; rising for 2 to 3 s, draws back for 3 to 5, and the shore is still for
+; 2 to 6 s; each with a height of its own, never on a beat.  The pilot,
+; after a steady wind: "like white noise - a calm breeze is wanted, with
+; waves coming in" (before it, a swell every 10 s: "too many waves").
+WAVES:  mov  ax,[now]
+        sub  ax,[wst]           ; ticks into this part of the wave
+        cmp  ax,[wlen]
+        jb   .h
+        mov  ax,[now]           ; the next part
+        mov  [wst],ax
+        call RND
+        mov  al,ah
+        inc  byte [wph]
+        cmp  byte [wph],3
+        jb   .p
+        mov  byte [wph],0
+.p:     cmp  byte [wph],1
+        je   .rise
+        ja   .fall
+        and  ax,63
+        add  ax,36              ; still: 2 to 5.5 s
+        jmp  .len
+.rise:  push ax
+        and  al,7
+        add  al,8
+        mov  [wpeak],al         ; this one's height: 8..15 (at most 6 dB
+                                ;  over the breeze)
+        pop  ax
+        mov  cl,3
+        shr  al,cl
+        and  ax,15
+        add  ax,36              ; rolling in: 2 to 2.8 s
+        jmp  .len
+.fall:  and  ax,31
+        add  ax,55              ; drawing back: 3 to 4.7 s
+.len:   mov  [wlen],ax
+        xor  ax,ax
+.h:     cmp  byte [wph],0       ; AX = ticks into it
+        jne  .w
+        mov  byte [wvol],0      ; still
+        ret
+.w:     cmp  byte [wph],1
+        je   .up
+        neg  ax
+        add  ax,[wlen]          ; drawing back: what is left of it
+.up:    mov  dl,[wpeak]
+        xor  dh,dh
+        mul  dx                 ; height * ticks  (DX goes)
+        div  word [wlen]        ;  / its length
+        mov  [wvol],al
+        ret
+
+; HEAL - behind the playing position, the ring made the shore again: new
+; noise, never the same three seconds twice (a loop of noise is heard as
+; a beat), the breeze steady and the waves in it (WAVES).
 HEAL:   cmp  byte [sndon],0
         je   .hr
         call SFXRAW             ; BX = the position
@@ -191,23 +257,27 @@ HEAL:   cmp  byte [sndon],0
         jbe  .h1
         mov  cx,4096
 .h1:    jcxz .hr
+        push cx
+        call WAVES              ; the wave's height now
+        pop  cx
         mov  di,[sbrst]
         mov  ax,di
         add  ax,cx
         and  ax,SNDN-1
         mov  [sbrst],ax
-        push ds
         push es
-        mov  ax,[rseg]
-        mov  ds,ax
-        mov  es,ax
-.hc:    mov  si,di
-        add  si,SNDN            ; the clean copy is the top half
-        movsb
+        push bp
+        mov  es,[rseg]
+        mov  si,[wstate]
+        mov  bp,[wseed]
+.hc:    call WIND
+        stosb
         and  di,SNDN-1
         loop .hc
+        mov  [wstate],si
+        mov  [wseed],bp
+        pop  bp
         pop  es
-        pop  ds
 .hr:    ret
 
 ; ------------------------------------------------------------------
@@ -384,8 +454,8 @@ RND:    mov  ax,[rseed]
         mov  [rseed],ax
         ret
 
-; BIRDS - now and then a bird sings, somewhere in the park: every 3 to
-; 10 s one of three songs.  From TIMERS; nothing when the sound is off.
+; BIRDS - now and then a bird sings, far off in the park: every 10 to
+; 24 s one of three songs.  From TIMERS; nothing when the sound is off.
 BIRDS:  cmp  byte [sndon],0
         je   .no
         mov  ax,[now]
@@ -394,8 +464,7 @@ BIRDS:  cmp  byte [sndon],0
         call RND
         mov  al,ah
         xor  ah,ah
-        and  al,127
-        add  ax,55              ; 3..10 s to the next
+        add  ax,180             ; 10..24 s to the next: a bird far off
         add  ax,[now]
         mov  [birdnext],ax
         call RND
@@ -424,6 +493,9 @@ macro TONE w,rw,len,f0,f1,a0,a1
   end if
         db a0,a1
 }
+; The pilot's ear: calm, after work - so the effects are soft triangle
+; tones (wave 5) more than squares, low, long, never loud; the blast is a
+; muffled roll, the gate's chain far off, the winner's a lullaby.
 SF_PUSH  = 0
 SF_HOME  = 1
 SF_OFF   = 2
@@ -436,74 +508,86 @@ SF_GATE  = 8
 SF_THUD  = 9
 SF_OUT   = 10
 SF_WIN   = 11
-SF_CAW   = 12
+SF_HOOT  = 12
 SF_CANDY = 13
 SF_SONG1 = 14                   ; three of them
+SF_CATCH = 17
 SFXTAB  dw FXPUSH,FXHOME,FXOFF,FXLAY,FXTICK,FXBOOM,FXGEMUP,FXGEMGET
-        dw FXGATE,FXTHUD,FXOUT,FXWIN,FXCAW,FXCANDY,FXSONG1,FXSONG2,FXSONG3
-FXPUSH: TONE 3,0,900,0,0,40,0           ; the crate scrapes the stone
-        TONE 1,1,500,70,55,30,0         ;  under it a low knock
+        dw FXGATE,FXTHUD,FXOUT,FXWIN,FXHOOT,FXCANDY,FXSONG1,FXSONG2,FXSONG3
+        dw FXCATCH
+FXPUSH: TONE 3,0,1200,0,0,20,0          ; the crate slides on the stone
+        TONE 5,1,700,90,70,18,0         ;  a soft knock under it
         db 0FFh
-FXHOME: TONE 1,0,900,1047,1047,40,25    ; home: two notes up, C and G
-        TONE 1,0,1800,1568,1568,40,0
+FXHOME: TONE 5,0,1500,784,784,26,18     ; home: G, then C above it
+        TONE 5,0,3600,1047,1047,26,0
         db 0FFh
-FXOFF:  TONE 1,0,900,784,784,35,20      ; off a mark: down, G to C
-        TONE 1,0,1500,523,523,35,0
+FXOFF:  TONE 5,0,1500,659,659,22,14     ; off a mark: E down to C
+        TONE 5,0,3000,523,523,22,0
         db 0FFh
-FXLAY:  TONE 1,0,350,300,200,45,0       ; a mine down: a clack
-        TONE 2,0,300,0,0,30,0
+FXLAY:  TONE 5,0,700,220,180,24,0       ; a mine down: a low wooden knock
+        TONE 2,0,300,0,0,10,0
         db 0FFh
-FXTICK: TONE 1,0,160,1800,1800,30,0     ; its second
+FXTICK: TONE 5,0,350,880,880,12,0       ; its seconds, a clock's
         db 0FFh
-FXBOOM: TONE 3,0,9000,0,0,110,0         ; the blast
-        TONE 1,1,3000,60,45,60,0
+FXBOOM: TONE 3,0,10000,0,0,55,0         ; the blast, heard from a field away
+        TONE 5,1,6000,55,40,36,0
         db 0FFh
-FXGEMUP:TONE 5,0,2600,700,2400,10,40    ; a diamond grows out of the floor
-        TONE 5,0,1200,2400,2400,40,0
+FXGEMUP:TONE 5,0,4500,600,1800,4,22     ; a diamond grows out of the floor
+        TONE 5,0,3000,1800,1800,22,0
         db 0FFh
-FXGEMGET:TONE 1,0,700,1047,1047,45,35   ; taken: C E G C
-        TONE 1,0,700,1319,1319,45,35
-        TONE 1,0,700,1568,1568,45,35
-        TONE 1,0,2400,2093,2093,45,0
+FXGEMGET:TONE 5,0,1200,1047,1047,26,20  ; taken: C E G C, a music box
+        TONE 5,0,1200,1319,1319,26,20
+        TONE 5,0,1200,1568,1568,26,20
+        TONE 5,0,4500,2093,2093,26,0
         db 0FFh
-FXGATE: rept 9 {
-        TONE 2,0,260,0,0,55,10          ; the portcullis's chain, link by link
-        TONE 0,0,330,0,0,0,0 }
-        TONE 1,1,5300,80,58,22,8        ;  under it the winch groans
+FXGATE: rept 7 {
+        TONE 2,0,280,0,0,22,4           ; the portcullis's chain, slowly
+        TONE 0,0,700,0,0,0,0 }
+        TONE 5,1,6800,90,72,14,6        ;  under it the winch hums
         db 0FFh
-FXTHUD: TONE 3,0,4000,0,0,100,0         ; the drawbridge lands
-        TONE 1,1,3000,55,45,70,0
+FXTHUD: TONE 3,0,5000,0,0,45,0          ; the drawbridge settles
+        TONE 5,1,4500,60,48,36,0
         db 0FFh
-FXOUT:  TONE 1,0,900,784,784,45,35      ; a man out through the gate
-        TONE 1,0,2000,1047,1047,45,0
+FXOUT:  TONE 5,0,1600,659,659,26,18     ; a man out through the gate
+        TONE 5,0,4000,880,880,26,0
         db 0FFh
-FXWIN:  TONE 1,0,1300,784,784,50,45     ; the winner: a fanfare
-        TONE 1,0,1300,1047,1047,50,45
-        TONE 1,0,1300,1319,1319,50,45
-        TONE 1,0,2600,1568,1568,50,45
-        TONE 1,0,1300,1319,1319,50,45
-        TONE 1,0,6500,1568,1568,50,0
-        TONE 5,1,7800,392,392,30,25     ;  and a soft bass under it
-        TONE 5,0,6500,523,523,30,0
-        db 0FFh
-FXCAW:  TONE 4,0,2400,520,380,70,10     ; a crow on the wall: kraa...
-        TONE 0,0,900,0,0,0,0
-        TONE 4,0,2600,500,360,65,0      ; ...kraa
-        db 0FFh
-FXCANDY:TONE 1,0,260,1200,1700,30,0     ; a candy eaten
-        db 0FFh
-FXSONG1:TONE 5,0,500,1900,2900,10,28    ; a songbird: two whistles up and a fall
+FXWIN:  TONE 5,0,2600,659,659,30,26     ; the winner: a lullaby - E, E,
+        TONE 0,0,300,0,0,0,0            ;  G held; the C below under it
+        TONE 5,0,2600,659,659,30,26
         TONE 0,0,300,0,0,0,0
-        TONE 5,0,500,2000,3000,10,28
-        TONE 0,0,400,0,0,0,0
-        TONE 5,0,1000,2900,1800,26,0
+        TONE 5,0,7000,784,784,30,22
+        TONE 5,0,9500,523,523,22,0
+        TONE 5,1,17000,262,262,16,10    ;  the low C, held under all of it
+        TONE 5,0,6000,262,262,10,0
         db 0FFh
-FXSONG2:rept 5 {
-        TONE 5,0,260,2600,2200,24,14    ; a trill
-        TONE 0,0,120,0,0,0,0 }
-        TONE 5,0,700,2200,2900,22,0
+FXHOOT: TONE 5,0,2600,400,380,6,24      ; the owl on the wall: hoo...
+        TONE 5,0,2000,380,350,24,0
+        TONE 0,0,2400,0,0,0,0
+        TONE 5,0,1200,400,390,18,0      ;  ...hoo-hoo
+        TONE 0,0,500,0,0,0,0
+        TONE 5,0,2600,390,345,20,0
         db 0FFh
-FXSONG3:TONE 5,0,1400,1500,1500,8,20    ; a long note, a cuckoo's two
-        TONE 0,0,700,0,0,0,0
-        TONE 5,0,1700,1250,1250,20,0
+FXCANDY:TONE 5,0,600,1400,1800,14,0     ; a candy eaten: a soft pop
+        db 0FFh
+FXSONG1:TONE 5,0,700,1900,2700,6,16     ; a songbird far off: two whistles up
+        TONE 0,0,500,0,0,0,0            ;  and a fall
+        TONE 5,0,700,2000,2800,6,16
+        TONE 0,0,600,0,0,0,0
+        TONE 5,0,1400,2700,1800,15,0
+        db 0FFh
+FXSONG2:rept 4 {
+        TONE 5,0,400,2400,2100,14,8     ; a slow trill
+        TONE 0,0,250,0,0,0,0 }
+        TONE 5,0,1000,2100,2600,12,0
+        db 0FFh
+FXSONG3:TONE 5,0,2000,1500,1500,4,14    ; a long note, a cuckoo's two
+        TONE 0,0,1200,0,0,0,0
+        TONE 5,0,2400,1250,1250,14,0
+        db 0FFh
+FXCATCH:rept 4 {
+        TONE 2,0,220,0,0,16,2           ; the owl caught: its wings beat,
+        TONE 0,0,330,0,0,0,0 }
+        TONE 5,0,1800,420,520,24,0      ;  a startled hoo, up -
+        TONE 5,0,1400,1319,1319,22,16   ;  and it is yours: E, A
+        TONE 5,0,4000,1760,1760,22,0
         db 0FFh

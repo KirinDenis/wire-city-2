@@ -1,8 +1,13 @@
 ; ==================================================================
-;  VIDEO.INC - MULTIPLAY SOKO II's three cards.  The game draws into its
-;  own buffer (DRAW.INC: 320x200, two pixels a byte); BLIT finds, row
-;  by row, the stretch that differs from what the card already shows
-;  (a copy in pseg) and converts only that stretch:
+;  VIDEO.INC - MULTIPLAY SOKO II's cards.  The game draws into its own
+;  buffer (DRAW.INC: two pixels a byte); BLIT finds, row by row, the
+;  stretch that differs from what the card already shows (a copy in
+;  pseg) and converts only that stretch:
+;    EGA 640  mode 0Eh, 640x200, sixteen colours: the buffer twice as
+;         wide, 320 bytes a row, every one of the game's 320 columns a
+;         byte - two pixels, the pictures drawn at double width.  No copy
+;         of the card (no room): a checksum a row, and a row that changed
+;         goes out whole (BLITW).  The pilot: "EGA 640, a little finer".
 ;    EGA  mode 0Dh, 320x200, sixteen colours in four planes: a plane
 ;         byte is 8 pixels, one bit of each; the tables give every
 ;         plane's bits for two pixels at once (FASM computes them).  On
@@ -17,9 +22,10 @@
 ;  Detection asks the BIOS (VGA: INT 10h 1A00h; EGA: 12h/10h), then the
 ;  equipment word, then watches the Hercules' retrace bit move.
 ; ==================================================================
-CARD_EGA = 1
-CARD_CGA = 2
-CARD_HGC = 3
+CARD_EGAW = 1                   ; the menu's order, and its keys
+CARD_EGA = 2
+CARD_CGA = 3
+CARD_HGC = 4
 
 ; ------------------------------------------------------------------
 ;  DETECT - capega, capcga, caphgc: what this machine can show; isvga:
@@ -69,8 +75,14 @@ DETECT: mov  ax,1A00h
         loop .watch
         jmp  .pick
 .herc:  mov  byte [caphgc],1
-.pick:  mov  al,CARD_EGA        ; the best this machine has: EGA, the
-        cmp  byte [capega],0    ;  pilot's choice "for authenticity"
+.pick:  mov  al,[capega]        ; an EGA does 640x200 too - if the memory
+        and  al,[widemem]       ;  holds its buffers (START)
+        mov  [capegaw],al
+        mov  al,CARD_EGAW       ; the best this machine has: EGA 640, then
+        cmp  byte [capegaw],0   ;  EGA, the pilot's choice "for
+        jne  .set               ;  authenticity"
+        mov  al,CARD_EGA
+        cmp  byte [capega],0
         jne  .set
         mov  al,CARD_CGA
         cmp  byte [capcga],0
@@ -93,7 +105,10 @@ VSET:   mov  byte [vfull],1
         cmp  al,CARD_HGC
         je   .herc
         mov  ax,000Dh           ; EGA 320x200, sixteen colours
-        int  10h
+        cmp  byte [wide],0
+        je   .ega
+        mov  al,0Eh             ;  or 640x200
+.ega:   int  10h
         cmp  byte [isvga],0
         je   .egaok             ; a real EGA: its own sixteen
         mov  si,artpal          ; a VGA: ours, through the DAC registers
@@ -305,7 +320,9 @@ MKTABS: cmp  byte [card],CARD_HGC
 ;  copy; that stretch is copied there and converted.  vfull: every row
 ;  whole (after a mode change).
 ; ------------------------------------------------------------------
-BLIT:   push es
+BLIT:   cmp  byte [wide],0
+        jne  BLITW
+        push es
         mov  word [by],0
 .row:   mov  ax,[by]
         mov  cx,160
@@ -360,8 +377,46 @@ BLIT:   push es
         pop  es
         ret
 
+; BLITW - EGA 640's: no copy of the card to compare with (no room for a
+; third 64K buffer), so a checksum a row - its 160 words added, turned a
+; bit between each, so a pixel moved changes it too - and a row whose
+; sum is not the one sent last goes out whole.
+BLITW:  push es                  ; (the converter leaves ES on the card:
+        mov  word [by],0        ;  every caller's ES is DS again after -
+.row:   mov  ax,[by]            ;  without it a level change cleared the card,
+                                ;  not the grid: the pilot's broken castle)
+        mul  word [rowb]        ; (DX goes)
+        mov  [boff],ax
+        push ds
+        mov  si,ax
+        mov  ds,[gseg]
+        mov  cx,160
+        xor  dx,dx
+.s:     lodsw
+        add  dx,ax
+        rol  dx,1
+        loop .s
+        pop  ds
+        mov  bx,[by]
+        shl  bx,1
+        cmp  byte [vfull],0
+        jne  .out
+        cmp  dx,[rsum+bx]
+        je   .next              ; as it was
+.out:   mov  [rsum+bx],dx
+        mov  word [w0],0
+        mov  word [w1],159
+        call [vconv]
+.next:  inc  word [by]
+        cmp  word [by],200
+        jb   .row
+        mov  byte [vfull],0
+        pop  es
+        ret
+
 ; EGACONV - row [by], words [w0]..[w1] to the four planes.  A plane byte
-; is 8 pixels = 2 words = 4 buffer bytes: four lookups, OR-ed.
+; is 8 pixels = 2 words = 4 buffer bytes: four lookups, OR-ed.  [vstride]
+; plane bytes a row on the card: 40, or EGA 640's 80.
 EGACONV:mov  ax,[w0]
         shr  ax,1
         mov  [g0],ax            ; the first plane byte
@@ -371,8 +426,7 @@ EGACONV:mov  ax,[w0]
         inc  cx
         mov  [gn],cx            ; how many
         mov  ax,[by]
-        mov  cx,40
-        mul  cx
+        mul  word [vstride]     ; (DX goes)
         add  ax,[g0]
         mov  [gdst],ax          ; where on the card
         mov  ax,[g0]

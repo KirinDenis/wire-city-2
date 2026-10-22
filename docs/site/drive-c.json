@@ -1,5 +1,5 @@
 {
-    "made":  "2026-10-21 21:33",
+    "made":  "2026-10-22 11:14",
     "source":  "released",
     "from":  {
                  "OWLFLY3":  "owlfly3_v19.jsdos",
@@ -173,11 +173,19 @@
                   },
                   {
                       "path":  "GAMES/MULTSOK2/ART.DAT",
-                      "size":  57744
+                      "size":  64798
+                  },
+                  {
+                      "path":  "GAMES/MULTSOK2/ARTF.DAT",
+                      "size":  60778
+                  },
+                  {
+                      "path":  "GAMES/MULTSOK2/LEVELS.DAT",
+                      "size":  17838
                   },
                   {
                       "path":  "GAMES/MULTSOK2/MULTSOK2.COM",
-                      "size":  47729
+                      "size":  34788
                   },
                   {
                       "path":  "GAMES/MULTSOK2/RUN.BAT",

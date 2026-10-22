@@ -1,10 +1,13 @@
 ; ==================================================================
 ;  DRAW.INC - MULTSOKO's back buffer and what goes into it.
 ;  The buffer: 320x200, TWO PIXELS A BYTE - the left one in the high
-;  nibble - 160 bytes a row, in gseg at [tbase]: 0 the frame that goes
-;  out to the card, BGOFF the background it is copied from (the walls,
-;  the park, the water: drawn once a level, not every frame).  Every x
-;  a picture is drawn at is even, so a picture is whole bytes.
+;  nibble - 160 bytes a row, in [tseg] at [tbase]: gseg's 0 the frame
+;  that goes out to the card, [bgseg]'s [bgoff] the background it is
+;  copied from (the walls, the park, the water: drawn once a level, not
+;  every frame).  Every x a picture is drawn at is even, so a picture is
+;  whole bytes.  EGA 640 ([wide]): 640x200, 320 bytes a row ([rowb]) -
+;  the game still counts 320 columns, and every column is a BYTE, two
+;  pixels: a picture is twice as wide, a dot a byte.
 ;  Pictures are compiled into sseg: db rows, db bytes a row, then a
 ;  (mask, ink) pair a byte, drawn as  buf = (buf AND mask) OR ink.
 ;  Text: OWL FLY's own 4x6 letters for the counts, the BIOS's 8x8 for
@@ -92,7 +95,145 @@ SOLIDC: lodsb
         jnz  .row
         ret
 
+; COMPILEW - EGA 640's: the raw picture as it is, twice as wide - every
+; pixel a byte, both its halves the colour (db rows, db bytes a row,
+; +80h solid; then (mask, ink) pairs, or the ink alone when solid)
+COMPILEW:
+        push si
+        lodsw                   ; width, height
+        mul  ah                 ; every pixel  (AX = w*h)
+        mov  cx,ax
+.scan:  lodsb
+        cmp  al,'.'
+        je   .holed
+        loop .scan
+        pop  si
+        jmp  .solid
+.holed: pop  si
+        lodsb
+        mov  dl,al              ; DL = width: a byte a pixel out
+        lodsb
+        mov  ch,al
+        stosb                   ; rows
+        mov  al,dl
+        stosb                   ; bytes a row
+.row:   mov  dh,dl
+.pix:   lodsb
+        call PIXC
+        mov  bl,0FFh            ; see-through: the whole byte kept
+        mov  bh,0
+        jc   .put
+        mov  bl,0
+        mov  ah,11h
+        mul  ah                 ; colour * 11h: both nibbles   (AH goes)
+        mov  bh,al
+.put:   mov  al,bl
+        stosb
+        mov  al,bh
+        stosb
+        dec  dh
+        jnz  .pix
+        dec  ch
+        jnz  .row
+        ret
+.solid: lodsb
+        mov  dl,al
+        lodsb
+        mov  ch,al
+        stosb
+        mov  al,dl
+        or   al,80h             ; the mark: no masks follow
+        stosb
+.srow:  mov  dh,dl
+.spix:  lodsb
+        call PIXC
+        mov  ah,11h
+        mul  ah                 ; colour * 11h: both nibbles
+        stosb
+        dec  dh
+        jnz  .spix
+        dec  ch
+        jnz  .srow
+        ret
+
+; COMPILEF - an ARTF.DAT picture (EGA 640's fine ones), DS:SI, into
+; ES:DI: db width, height, 1 if masks follow; each row its see-through
+; pixels as bits (if masks), then its colours two a byte - to the same
+; compiled form as COMPILE's.  SI and DI end past both.  clobbers AX, BX,
+; CX, DX, BP.
+COMPILEF:
+        lodsb
+        mov  dl,al              ; DL = width, fine pixels
+        lodsb
+        mov  ch,al              ; CH = rows
+        lodsb
+        mov  bl,al              ; BL = 1: masks follow
+        mov  al,ch
+        stosb                   ; rows
+        mov  al,dl
+        shr  al,1               ; bytes a row: two pixels each
+        mov  dh,al
+        or   bl,bl
+        jnz  .m
+        or   al,80h             ; none see-through: solid
+.m:     stosb
+.row:   or   bl,bl
+        jz   .solid
+        push cx                 ; the row's see-through bits, kept
+        push di
+        push es
+        mov  cl,dl
+        add  cl,7
+        shr  cl,1
+        shr  cl,1
+        shr  cl,1               ; (width + 7) / 8 bytes
+        xor  ch,ch
+        push cs
+        pop  es
+        mov  di,fmask
+        rep  movsb
+        pop  es
+        pop  di
+        pop  cx
+        mov  bh,dh              ; BH = bytes to go
+        mov  bp,fmask
+        mov  ah,[cs:bp]         ; the first eight pixels' bits
+        inc  bp
+        mov  cl,4               ; colour bytes left on them
+.b:     lodsb                   ; two pixels' colours
+        mov  [cs:fcol],al
+        xor  al,al
+        shl  ah,1
+        jnc  .l
+        mov  al,0F0h            ; the left one see-through
+.l:     shl  ah,1
+        jnc  .r
+        or   al,0Fh             ; the right one
+.r:     stosb                   ; the mask...
+        not  al
+        and  al,[cs:fcol]
+        stosb                   ; ...and the ink, none where it is see-through
+        dec  cl
+        jnz  .nb
+        mov  ah,[cs:bp]         ; the next eight pixels' bits
+        inc  bp
+        mov  cl,4
+.nb:    dec  bh
+        jnz  .b
+        dec  ch
+        jnz  .row
+        ret
+.solid: push cx
+        mov  cl,dh
+        xor  ch,ch
+        rep  movsb              ; the colours are the ink
+        pop  cx
+        dec  ch
+        jnz  .row
+        ret
+
 ; COMPILE2 - the same, every pixel doubled both ways: the winner's man
+; (at EGA 640 twice as wide again: two bytes a pixel)
 COMPILE2:
         lodsb
         mov  dl,al              ; DL = width: bytes a row out, doubled
@@ -101,7 +242,10 @@ COMPILE2:
         shl  al,1
         stosb                   ; rows out: twice as many
         mov  al,dl
-        stosb
+        cmp  byte [cs:wide],0
+        je   .bw
+        shl  al,1
+.bw:    stosb
 .row:   mov  dh,2               ; each row twice
 .twice: push si
         mov  cl,dl
@@ -118,7 +262,13 @@ COMPILE2:
         stosb
         mov  al,bh
         stosb
-        dec  cl
+        cmp  byte [cs:wide],0
+        je   .p1
+        mov  al,bl              ; EGA 640: the pixel's second byte
+        stosb
+        mov  al,bh
+        stosb
+.p1:    dec  cl
         jnz  .pix
         dec  dh
         jz   .next
@@ -170,14 +320,18 @@ PIXC:   cmp  al,'.'
 DRAWSPR:push bp
         push ds
         push es
-        mov  es,[cs:gseg]
-        mov  ds,[cs:sseg]       ; from here on: our own data through cs:
+        mov  es,[cs:tseg]
+        mov  ds,[cs:picseg]     ; from here on: our own data through cs:
+        push word [cs:sseg]     ; (the picture's segment, its entry's; sseg
+        pop  word [cs:picseg]   ;  again for the next one)
         lodsb
         xor  ah,ah
         mov  cx,ax              ; CX = rows
         lodsb
+        cmp  byte [cs:wide],0
+        jne  .w                 ; EGA 640: a column is a byte
         sar  bx,1               ; x/2: the byte column, signed
-        test al,80h
+.w:     test al,80h
         jnz  .solid
         mov  bp,ax              ; BP = bytes a row
 .row:   cmp  dx,[cs:clipt]
@@ -186,14 +340,14 @@ DRAWSPR:push bp
         jge  .done              ; rows only go down: nothing more shows
         mov  di,dx
         shl  di,1               ; a word per row
-        mov  di,[cs:rowtab+di]  ; DI = y*160
+        mov  di,[cs:rowtab+di]  ; DI = y * the row's bytes
         add  di,[cs:tbase]      ; + which buffer
         add  di,bx              ; + the byte column
         push cx
         push bx
         mov  cx,bp
 .byte:  lodsw                   ; AL = mask, AH = ink
-        cmp  bx,160             ; unsigned: a negative column is huge
+        cmp  bx,[cs:rowb]       ; unsigned: a negative column is huge
         jae  .off
         and  [es:di],al
         or   [es:di],ah
@@ -229,12 +383,12 @@ DRAWSPR:push bp
         jl   .sclip
         mov  ax,bx
         add  ax,cx
-        cmp  ax,160
+        cmp  ax,[cs:rowb]
         ja   .sclip
         rep  movsb              ; all on the screen: the plain copy
         jmp  .snext
 .sclip: lodsb                   ; over an edge: byte by byte
-        cmp  bx,160
+        cmp  bx,[cs:rowb]
         jae  .soff
         mov  [es:di],al
 .soff:  inc  di
@@ -255,17 +409,33 @@ DRAWSPR:push bp
 ;  COPYBG   - the background's playfield rows into the frame
 ;  PSET     - pixel x BX, y DX, colour AL into [tbase]; keeps everything
 ; ------------------------------------------------------------------
+; TOFRAME - draw into the frame (gseg at 0); TOBACK - into the
+; background ([bgseg] at [bgoff]).  keep everything.
+TOFRAME:push ax
+        mov  ax,[gseg]
+        mov  [tseg],ax
+        mov  word [tbase],0
+        pop  ax
+        ret
+TOBACK: push ax
+        mov  ax,[bgseg]
+        mov  [tseg],ax
+        mov  ax,[bgoff]
+        mov  [tbase],ax
+        pop  ax
+        ret
+
 FILLROWS:
         push es
-        mov  es,[gseg]
+        mov  es,[tseg]
         sub  dx,ax              ; rows
         push dx
-        mov  cx,160
-        mul  cx                 ; AX = y*160  (DX goes)
+        mul  word [rowb]        ; AX = y * the row's bytes  (DX goes)
         mov  di,ax
         add  di,[tbase]
         pop  ax
-        mov  cx,80
+        mov  cx,[rowb]
+        shr  cx,1
         mul  cx                 ; words to fill  (DX goes)
         mov  cx,ax
         mov  al,bl
@@ -277,10 +447,12 @@ FILLROWS:
         ret
 
 FILLBOX:push es
-        mov  es,[gseg]
+        mov  es,[tseg]
         mov  ah,11h
         mul  ah
         mov  ah,al              ; AL = AH = the colour, both nibbles
+        cmp  byte [wide],0
+        jne  .row               ; EGA 640: a column a byte already
         sar  bx,1               ; byte column
         shr  cx,1               ; bytes wide
 .row:   or   si,si
@@ -293,7 +465,7 @@ FILLBOX:push es
         add  di,[tbase]
         push bx
         push cx
-.b:     cmp  bx,160
+.b:     cmp  bx,[rowb]
         jae  .bn
         mov  [es:di+bx],al
 .bn:    inc  bx
@@ -308,12 +480,17 @@ FILLBOX:push es
 
 COPYBG: push ds
         push es
-        mov  ax,[gseg]
-        mov  ds,ax
-        mov  es,ax
-        mov  si,BGOFF+PFTOP*160
-        mov  di,PFTOP*160
-        mov  cx,(PFBOT-PFTOP)*80
+        mov  es,[gseg]
+        mov  ax,PFTOP
+        mul  word [rowb]        ; the playfield's first byte  (DX goes)
+        mov  di,ax
+        mov  si,ax
+        add  si,[bgoff]
+        mov  ax,PFBOT-PFTOP
+        mul  word [rowb]
+        shr  ax,1
+        mov  cx,ax              ; its words
+        mov  ds,[bgseg]
         rep  movsw
         pop  es
         pop  ds
@@ -327,19 +504,61 @@ PSET:   cmp  bx,320
         push cx
         push di
         push es
-        mov  es,[cs:gseg]
+        mov  es,[cs:tseg]
+        mov  di,dx
+        shl  di,1
+        mov  di,[cs:rowtab+di]
+        add  di,[cs:tbase]
+        and  al,0Fh
+        cmp  byte [cs:wide],0
+        je   .n
+        add  di,bx              ; EGA 640: the column's byte, both halves
+        mov  ah,11h
+        mul  ah
+        mov  [es:di],al
+        jmp  .x
+.n:     mov  cx,bx
+        shr  cx,1
+        add  di,cx              ; the byte
+        test bl,1
+        jnz  .odd
+        mov  cl,4
+        shl  al,cl              ; an even x: the high nibble
+        and  byte [es:di],0Fh
+        jmp  .put
+.odd:   and  byte [es:di],0F0h
+.put:   or   [es:di],al
+.x:     pop  es
+        pop  di
+        pop  cx
+        pop  ax
+.no:    ret
+
+; PSETF - a pixel at fine column BX - 0..639 at EGA 640, its half-columns;
+; else the 320 column, as PSET - y DX, colour AL; keeps everything
+PSETF:  cmp  byte [cs:wide],0
+        je   PSET
+        cmp  bx,640
+        jae  .no                ; unsigned: off either side
+        cmp  dx,200
+        jae  .no
+        push ax
+        push cx
+        push di
+        push es
+        mov  es,[cs:tseg]
         mov  di,dx
         shl  di,1
         mov  di,[cs:rowtab+di]
         add  di,[cs:tbase]
         mov  cx,bx
         shr  cx,1
-        add  di,cx              ; the byte
+        add  di,cx              ; the byte: two of them
         and  al,0Fh
         test bl,1
         jnz  .odd
         mov  cl,4
-        shl  al,cl              ; an even x: the high nibble
+        shl  al,cl              ; the left: the high nibble
         and  byte [es:di],0Fh
         jmp  .put
 .odd:   and  byte [es:di],0F0h
@@ -354,13 +573,17 @@ PSET:   cmp  bx,320
 ; winner, the warehouse stays where it was, in the evening
 DIM:    push ds
         push es
+        mov  ax,PFTOP
+        mul  word [rowb]        ; (DX goes)
+        mov  si,ax
+        mov  di,si
+        mov  ax,PFBOT-PFTOP
+        mul  word [rowb]
+        mov  cx,ax
+        mov  bx,dimtab
         mov  ax,[gseg]
         mov  ds,ax
         mov  es,ax
-        mov  si,PFTOP*160
-        mov  di,si
-        mov  cx,(PFBOT-PFTOP)*160
-        mov  bx,dimtab
 .d:     lodsb
         xlat byte [cs:bx]
         stosb

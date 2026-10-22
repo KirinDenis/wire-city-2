@@ -1,7 +1,8 @@
 @echo off
 REM ============================================================================
 REM MAKE.BAT - assemble MULTIPLAY SOKO II, from inside DOS: its pictures
-REM (ART.ASM -> ART.DAT), then the game (MULTSOK2.ASM -> MULTSOK2.COM).
+REM (ART.ASM -> ART.DAT, and EGA 640's ARTF.ASM -> ARTF.DAT), its levels
+REM (LEVELS.ASM -> LEVELS.DAT), then the game (MULTSOK2.ASM -> MULTSOK2.COM).
 REM
 REM   cd GAMES\MULTSOK2
 REM   MAKE
@@ -20,13 +21,23 @@ if exist ART.DAT del ART.DAT
 ..\..\TOOLS\CWSDPMI\CWSDPMI.EXE
 ..\..\TOOLS\FASM\FASM.EXE ART.ASM ART.DAT
 if not exist ART.DAT goto failed
+echo Assembling ARTF.ASM ...
+if exist ARTF.DAT del ARTF.DAT
+..\..\TOOLS\CWSDPMI\CWSDPMI.EXE
+..\..\TOOLS\FASM\FASM.EXE ARTF.ASM ARTF.DAT
+if not exist ARTF.DAT goto failed
+echo Assembling LEVELS.ASM ...
+if exist LEVELS.DAT del LEVELS.DAT
+..\..\TOOLS\CWSDPMI\CWSDPMI.EXE
+..\..\TOOLS\FASM\FASM.EXE LEVELS.ASM LEVELS.DAT
+if not exist LEVELS.DAT goto failed
 echo Assembling MULTSOK2.ASM ...
 if exist MULTSOK2.COM del MULTSOK2.COM
 ..\..\TOOLS\CWSDPMI\CWSDPMI.EXE
 ..\..\TOOLS\FASM\FASM.EXE MULTSOK2.ASM MULTSOK2.COM
 if not exist MULTSOK2.COM goto failed
 echo.
-echo Built ART.DAT and MULTSOK2.COM.  Type RUN to play it.
+echo Built ART.DAT, ARTF.DAT, LEVELS.DAT and MULTSOK2.COM.  Type RUN to play it.
 goto end
 
 :nofasm

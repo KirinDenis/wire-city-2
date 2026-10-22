@@ -8,7 +8,7 @@
 ;  moves or plays is drawn every frame over a copy of it (FRAME): the
 ;  water's ripples, the torches, the towers (they rise over the water),
 ;  the fountains, the gate and its bridge, then the candies, diamond,
-;  mines, crates and men, the blasts and the counts, the crow, the HUD.
+;  mines, crates and men, the blasts and the counts, the owl, the HUD.
 ;  Grid cells are (c, r) - column, row; the turned grid's are (cc, rr),
 ;  as the screen shows them (TURNED, UNTURN).
 ; ==================================================================
@@ -20,7 +20,9 @@ CL_YARD  = 4                    ; shut in by the walls: grass, nothing on it
 CL_ROAD  = 5                    ; from the gate's bridge to the edge
 CLW     = 64                    ; the claims: a byte a screen cell
 CLH     = 40
-MAXWATER = 300
+MAXWATER = 600                  ; the water's cells, 6 bytes each, listed
+WATERS  = 8000h                 ;  in the ring's segment, over the sound,
+PARKAT  = 9000h                 ;  and the last place for pictures (LAYOUT)
 MAXTORCH = 32
 MAXTOWER = 32
 MAXFOUNT = 16
@@ -54,18 +56,18 @@ VIEWSET:call TURNED
         call SETSZ
 .done:  mov  byte [camnew],1
         mov  byte [bgok],0
-        mov  byte [bst],0       ; the crow flies off when the view changes
+        mov  byte [bst],0       ; the owl flies off when the view changes
         mov  byte [dirty],1
         ret
 
 SETSZ:  mov  [vsz],si
         mov  ax,si
-        mov  cx,NKIND*2
-        mul  cx                 ; a row of NKIND words a size  (DX goes)
+        mov  cx,NKIND*4
+        mul  cx                 ; a row of NKIND entries a size  (DX goes)
         add  ax,spt
         mov  [sptrow],ax
         mov  ax,si
-        mov  cx,NLOOK*2
+        mov  cx,NLOOK*4
         mul  cx
         add  ax,mant
         mov  [mantrow],ax
@@ -390,13 +392,16 @@ HASH:   push bx
 DRAWK:  push bx
         mov  bx,ax
         shl  bx,1
+        shl  bx,1               ; 4 bytes an entry:
         add  bx,[sptrow]
-        mov  si,[bx]
+        mov  si,[bx]            ;  where it is,
+        push word [bx+2]
+        pop  word [picseg]      ;  in which segment
         pop  bx
 DRAWP:  or   si,si
         jz   .none
         push ds
-        mov  ds,[sseg]
+        mov  ds,[picseg]
         mov  ax,[si]            ; AL = rows, AH = bytes a row
         pop  ds
         and  ah,7Fh             ; (+80h: a solid picture)
@@ -407,7 +412,10 @@ DRAWP:  or   si,si
         add  ax,[cell]
         add  dx,ax              ; y + cell - rows
         jmp  DRAWSPR
-.iso:   cmp  ah,12
+.iso:   cmp  byte [wide],0      ; a tile is 24 wide: 12 bytes, at EGA
+        je   .i12               ;  640 twice as many
+        shr  ah,1
+.i12:   cmp  ah,12
         jne  .stand
         xor  ah,ah
         neg  ax
@@ -420,14 +428,16 @@ DRAWP:  or   si,si
         add  ax,8
         add  dx,ax              ; its feet at y + 8
         jmp  DRAWSPR
-.none:  ret
+.none:  push word [sseg]        ; (DRAWSPR puts it back after a picture)
+        pop  word [picseg]
+        ret
 
 ; ------------------------------------------------------------------
 ;  BUILDBG - the background for the view as it is (straight down only):
 ;  every screen cell, top row first, two passes - the ground, then what
 ;  stands on it, so a thing further down covers what is behind it.
 ; ------------------------------------------------------------------
-BUILDBG:mov  word [tbase],BGOFF
+BUILDBG:call TOBACK            ; into the background
         mov  ax,PFTOP
         mov  dx,PFBOT
         xor  bl,bl
@@ -439,6 +449,10 @@ BUILDBG:mov  word [tbase],BGOFF
         mov  [ntorch],ax
         mov  [ntower],ax
         mov  [nfount],ax
+        mov  [nlife],ax
+        mov  [nbut],al
+        mov  [nfly],al
+        mov  [nduck],al
         mov  [gatevis],al
         mov  [bridvis],al
         mov  bx,[cell]          ; the screen's cells, a few past its edges
@@ -490,7 +504,7 @@ BUILDBG:mov  word [tbase],BGOFF
         mov  cx,PFTOP
         mov  dx,PFBOT
         call DUSK
-        mov  word [tbase],0
+        call TOFRAME
         mov  ax,[ox]
         mov  [bgox],ax
         mov  ax,[oy]
@@ -607,13 +621,16 @@ DUSK:   cmp  cx,PFTOP           ; the box, kept on the playfield
 .c3:    cmp  bx,320
         jle  .c4
         mov  bx,320
-.c4:    and  ax,0FFFEh
+.c4:    cmp  bx,ax              ; nothing of it on the screen (the owl off
+        jg   .c5                ;  its left edge: a negative right side,
+        ret                     ;  huge unsigned - it had dimmed far past
+.c5:    and  ax,0FFFEh          ;  the row: the pilot's "interference")
         mov  [dkx0],ax
         mov  [dkx1],bx
         mov  [dky],cx
         mov  [dky1],dx
         push es
-        mov  es,[gseg]
+        mov  es,[tseg]
 .row:   mov  ax,[dky]
         cmp  ax,[dky1]
         jge  .done
@@ -625,8 +642,10 @@ DUSK:   cmp  cx,PFTOP           ; the box, kept on the playfield
         mov  di,[rowtab+di]
         add  di,[tbase]
         mov  bx,[dkx0]
+        cmp  byte [wide],0
+        jne  .wb                ; EGA 640: a column a byte
         shr  bx,1
-        add  di,bx              ; the row's first byte
+.wb:    add  di,bx              ; the row's first byte
         and  ax,3
         shl  ax,1
         shl  ax,1
@@ -650,7 +669,17 @@ DUSK:   cmp  cx,PFTOP           ; the box, kept on the playfield
 .put:   or   cl,cl
         jz   .pn
         mov  al,[es:di]
-        mov  bx,DIM16
+        cmp  byte [wide],0
+        je   .nar
+        mov  bx,dimtab          ; EGA 640: the column's byte, both halves
+.dw:    xlatb                   ;  a step darker, CL times
+        dec  cl
+        jnz  .dw
+        mov  [es:di],al
+        inc  di
+        inc  si
+        jmp  .px
+.nar:   mov  bx,DIM16
         test si,1
         jnz  .odd
         mov  ah,al              ; the left pixel: the high nibble
@@ -678,9 +707,11 @@ DUSK:   cmp  cx,PFTOP           ; the box, kept on the playfield
         jnz  .d2
         or   al,ah
 .st:    mov  [es:di],al
-.pn:    test si,1
+.pn:    cmp  byte [wide],0
+        jne  .pw
+        test si,1
         jz   .pe
-        inc  di                 ; past the right pixel: the next byte
+.pw:    inc  di                 ; past the right pixel: the next byte
 .pe:    inc  si
         jmp  .px
 .next:  inc  word [dky]
@@ -778,24 +809,28 @@ GROUND: cmp  al,CL_FLOOR
 .wn:    inc  byte [bside]
         cmp  byte [bside],4
         jb   .ws
-        mov  bx,[nwater]        ; the water is drawn every frame: listed
-        cmp  bx,MAXWATER
+        mov  bx,[nwater]        ; the water is drawn every frame: listed,
+        cmp  bx,MAXWATER        ;  in the ring's segment, over the sound
         jae  .wx
         mov  ax,6
         mul  bx                 ; (DX goes)
         mov  bx,ax
+        push es
+        mov  es,[rseg]
         mov  ax,[bx0]
-        mov  word [water+bx],ax
+        mov  [es:WATERS+bx],ax
         mov  ax,[by0]
-        mov  word [water+bx+2],ax
+        mov  [es:WATERS+bx+2],ax
         mov  cx,[bc]            ; its own phase of the ripples: the wind
         mov  dx,[br]            ;  is not a grid
         call HASH
         mov  ah,al
         and  ah,3
         mov  al,[bbank]
-        mov  word [water+bx+4],ax  ; AL the banks, AH the phase
+        mov  [es:WATERS+bx+4],ax  ; AL the banks, AH the phase
+        pop  es
         inc  word [nwater]
+        call LIFEDUCK           ; now and then a duck on it
 .wx:    mov  ax,K_MO0           ; and frame 0 into the background
         call .put
         mov  al,[bbank]
@@ -986,14 +1021,15 @@ STAND:  cmp  al,CL_WALL
         mov  [dwide],ah
         mov  bl,byte [vsz]      ; how many cells tall at this size
         xor  bh,bh
-        mov  ax,NKIND*2
+        mov  ax,NKIND*4
         mul  bx
         mov  bl,[dkind]
         shl  bx,1
+        shl  bx,1
         add  bx,ax
-        mov  si,[spt+bx]
+        mov  si,[spt+bx]        ; its entry: where, which segment
         push ds
-        mov  ds,[sseg]
+        mov  ds,[spt+bx+2]
         mov  al,[si]            ; its rows
         pop  ds
         xor  ah,ah
@@ -1089,11 +1125,234 @@ STAND:  cmp  al,CL_WALL
         mov  ax,[dy0]
         mov  [si+bx+2],ax
         inc  word [nfount]
-.draw:  mov  al,[dkind]
+.draw:  call LIFEPARK           ; a butterfly over it, or a firefly
+        mov  al,[dkind]
         xor  ah,ah
         mov  bx,[dx0]
         mov  dx,[dy0]
         jmp  DRAWK
+
+; ------------------------------------------------------------------
+;  The park's life, listed as the background is made and drawn every
+;  frame (LIFE): butterflies over flower beds, flowers and blossom;
+;  fireflies by the trees of the wood, out in the dusk; ducks on the
+;  moat.  A pixel or three each, slow, each at its own moments - the
+;  pilot: "the bushes and trees behind the castle, life - make it more
+;  interesting".
+; ------------------------------------------------------------------
+MAXBUT  = 5
+MAXFLY  = 10
+MAXDUCK = 3
+MAXLIFE = MAXBUT + MAXFLY + MAXDUCK
+; LIFEPARK - for the park thing STAND just placed ([dkind] at dx0, dy0)
+LIFEPARK:
+        mov  cx,[bc]
+        add  cx,5
+        mov  dx,[br]
+        add  dx,13
+        call HASH               ; AL: the lot
+        mov  ah,al
+        mov  al,[dkind]
+        cmp  al,K_FLW
+        je   .but
+        cmp  al,K_FLB
+        je   .but
+        cmp  al,K_BLO
+        je   .but
+        cmp  al,K_OAK
+        je   .fly
+        cmp  al,K_TRE
+        je   .fly
+        cmp  al,K_PIN
+        je   .fly
+        cmp  al,K_BIR
+        je   .fly
+.r:     ret
+.but:   test ah,1               ; every other flower
+        jz   .r
+        cmp  byte [nbut],MAXBUT
+        jae  .r
+        inc  byte [nbut]
+        mov  cl,0
+        mov  dx,[dy0]           ; over its top
+        jmp  .add
+.fly:   test ah,3               ; a tree in four
+        jnz  .r
+        cmp  byte [nfly],MAXFLY
+        jae  .r
+        inc  byte [nfly]
+        mov  cl,1
+        mov  dx,[cell]
+        shr  dx,1
+        add  dx,[dy0]           ; by its middle
+.add:   mov  bx,[cell]
+        shr  bx,1
+        add  bx,[dx0]
+        jmp  LIFEADD
+
+; LIFEDUCK - now and then a duck on the water cell just listed
+LIFEDUCK:
+        cmp  byte [nduck],MAXDUCK
+        jae  .r
+        mov  cx,[bc]
+        add  cx,11
+        mov  dx,[br]
+        add  dx,2
+        call HASH
+        and  al,31
+        jnz  .r                 ; a cell of the moat in 32
+        inc  byte [nduck]
+        mov  cl,2
+        mov  bx,[cell]
+        shr  bx,1
+        mov  dx,bx
+        add  bx,[bx0]
+        add  dx,[by0]
+        jmp  LIFEADD
+.r:     ret
+
+; LIFEADD - a creature of kind CL (0 butterfly, 1 firefly, 2 duck) at
+; home BX, DX; its phase from where it is
+LIFEADD:mov  di,[nlife]
+        cmp  di,MAXLIFE
+        jae  .r
+        inc  word [nlife]
+        push dx
+        mov  ax,6
+        mul  di                 ; (DX goes)
+        mov  di,ax
+        pop  dx
+        mov  word [life+di],bx
+        mov  word [life+di+2],dx
+        mov  ax,dx
+        add  ax,dx
+        add  ax,dx
+        add  ax,bx              ; x + 3y: its own phase
+        mov  ch,al
+        mov  word [life+di+4],cx ; kind, phase
+.r:     ret
+
+; LIFE - each frame: a butterfly flutters round its flower, wings open
+; and shut; a firefly drifts round its tree and glows half a second, on
+; a period of its own (2.6 to 4.3 s); a duck drifts on the moat
+LIFE:   mov  cx,[nlife]
+        jcxz .r
+        mov  si,life
+.l:     push cx
+        push si
+        mov  ax,[si]
+        mov  [cfx],ax
+        mov  ax,[si+2]
+        mov  [cfy],ax
+        mov  al,[si+5]
+        xor  ah,ah
+        mov  [cph],ax           ; its phase
+        mov  al,[si+4]          ; its kind
+        cmp  al,1
+        je   .fly
+        ja   .duck
+        mov  ax,[now]           ; a butterfly
+        shr  ax,1
+        add  ax,[cph]
+        call .wx
+        add  [cfx],ax           ; round its flower...
+        mov  ax,[now]
+        shr  ax,1
+        mov  bx,ax
+        shr  bx,1
+        add  ax,bx              ;  ...up and down half as fast again
+        add  ax,[cph]
+        add  ax,5
+        call .wx
+        sar  ax,1
+        add  [cfy],ax
+        mov  bx,[cph]
+        and  bx,3
+        mov  al,[BUTC+bx]       ; white, yellow, pink, pale blue
+        mov  bx,[cfx]
+        mov  dx,[cfy]
+        mov  cx,[now]
+        shr  cx,1
+        add  cx,[cph]
+        test cl,1
+        jz   .shut
+        dec  bx                 ; wings open
+        call PSET
+        add  bx,2
+        call PSET
+        jmp  .n
+.shut:  call PSET               ; wings shut, up
+        dec  dx
+        call PSET
+        jmp  .n
+.fly:   mov  bx,[cph]           ; a firefly: its own period, 24..39
+        and  bx,15              ;  frames
+        add  bx,24
+        mov  ax,[now]
+        shr  ax,1
+        add  ax,[cph]
+        xor  dx,dx
+        div  bx                 ; DX = frames into its period
+        cmp  dx,6
+        jae  .n                 ; dark, most of the time
+        mov  [cglow],dl
+        mov  ax,[now]
+        mov  cl,3
+        shr  ax,cl              ; drifting slowly
+        add  ax,[cph]
+        call .wx
+        add  [cfx],ax
+        mov  ax,[now]
+        mov  cl,3
+        shr  ax,cl
+        add  ax,[cph]
+        add  ax,4
+        call .wx
+        add  [cfy],ax
+        mov  al,14              ; its glow...
+        cmp  byte [cglow],0
+        je   .dim
+        cmp  byte [cglow],5
+        jne  .g
+.dim:   mov  al,10              ; ...lime as it comes and goes
+.g:     mov  bx,[cfx]
+        mov  dx,[cfy]
+        call PSET
+        jmp  .n
+.duck:  mov  ax,[now]           ; a duck: a step every 16 ticks
+        mov  cl,4
+        shr  ax,cl
+        add  ax,[cph]
+        call .wx
+        sar  ax,1               ; and not far
+        add  [cfx],ax
+        mov  bx,[cfx]
+        mov  dx,[cfy]
+        mov  al,15
+        call PSET               ; its white body
+        inc  bx
+        call PSET
+        inc  bx
+        dec  dx
+        mov  al,2               ; its green head
+        call PSET
+.n:     pop  si
+        pop  cx
+        add  si,6
+        loop .l
+.r:     ret
+; .wx - AX = WANDER[AX AND 15] * cell / 16: a soft swing for the cell's
+; size.  clobbers BX, CL, DX.
+.wx:    and  ax,15
+        mov  bx,ax
+        mov  al,[WANDER+bx]
+        cbw
+        imul word [cell]        ; (DX goes)
+        mov  cl,4
+        sar  ax,cl
+        ret
+WANDER  db 0,3,5,6,7,6,5,3,0,-3,-5,-6,-7,-6,-5,-3
+BUTC    db 15,14,13,11
 
 ; CORNER - CF=1: (bc, br) is an outer corner of the walls - two walls
 ; beside it, one across and one up or down, and the outside beyond the
@@ -1207,7 +1466,8 @@ CLIX:   sub  ax,[cc0]
 ; ------------------------------------------------------------------
 ;  RENDER - the frame, as the view has it; then out to the card
 ; ------------------------------------------------------------------
-RENDER: mov  word [tbase],0
+RENDER: call TOFRAME
+        call STUCK              ; a crate that cannot go home?
         cmp  byte [view],2
         jne  .flat
         call FRAMEISO
@@ -1236,19 +1496,22 @@ RENDER: mov  word [tbase],0
 ; FRAMEFL - straight down: what moves and plays, over the background
 FRAMEFL:mov  word [clipt],PFTOP
         mov  word [clipb],PFBOT
-        mov  ax,[now]           ; a gust of wind: a band 48 px wide that
-        shl  ax,1               ;  sweeps the screen left to right, 73 px
-        shl  ax,1               ;  a second, every 7 s
-        and  ax,511
-        sub  ax,96
+        mov  ax,[now]           ; a breath of wind: a band 48 px wide that
+        and  ax,1023            ;  drifts across the water left to right,
+        sub  ax,96              ;  18 px a second, once a minute
         mov  [gustx],ax
-        mov  si,water           ; the water: each cell its own phase of the
+        mov  si,WATERS          ; the water: each cell its own phase of the
         mov  cx,[nwater]        ;  ripples, torn white under the gust
         jcxz .gate
 .w:     push cx
         push si
-        mov  bx,[si]
-        mov  dx,[si+2]
+        push es
+        mov  es,[rseg]          ; (its list is in the ring's segment)
+        mov  bx,[es:si]
+        mov  dx,[es:si+2]
+        mov  ax,[es:si+4]
+        pop  es
+        mov  [wbank],ax         ; AL the banks, AH the phase
         mov  [bx0],bx
         mov  [by0],dx
         mov  ax,K_MO4
@@ -1262,13 +1525,11 @@ FRAMEFL:mov  word [clipt],PFTOP
         jl   .wk
 .calm:  mov  al,[anim]
         shr  al,1
-        add  al,[si+5]          ; its phase
+        add  al,byte [wbank+1]  ; its phase
         and  ax,3
         add  ax,K_MO0
 .wk:    call DRAWK
-        pop  si
-        push si
-        mov  al,[si+4]
+        mov  al,byte [wbank]
         call BANKS
         pop  si
         pop  cx
@@ -1301,18 +1562,25 @@ FRAMEFL:mov  word [clipt],PFTOP
 .bk:    mov  bx,[bridx]
         mov  dx,[bridy]
         call DRAWK
-.torch: mov  si,torches         ; the torches flicker, each its own way
+.torch: mov  si,torches         ; the torches burn, each its own way
         mov  cx,[ntorch]
         jcxz .tow
 .t:     push cx
         push si
         mov  bx,[si]
         mov  dx,[si+2]
-        mov  al,[anim]
-        add  al,cl
-        and  ax,1
-        add  ax,K_TR0
+        push bx
+        push dx
+        mov  ax,K_TR0           ; the torch...
         call DRAWK
+        pop  dx
+        pop  bx
+        mov  al,bl              ; ...and its flame, at a place of its own
+        shr  al,1               ;  in the tables, from where it is:
+        add  al,dl              ;  x/2 + 3y
+        add  al,dl
+        add  al,dl
+        call FLAME
         pop  si
         pop  cx
         add  si,4
@@ -1359,9 +1627,126 @@ FRAMEFL:mov  word [clipt],PFTOP
         pop  cx
         add  si,4
         loop .f
-.things:call THINGS
+.things:call LIFE               ; the park's butterflies, fireflies, ducks
+        call THINGS
         call OVERLAY
         jmp  DRAWBIRD
+
+; ------------------------------------------------------------------
+;  FLAME - a torch's flame, burning: rows of fire from its cup up, each a
+;  little narrower - white at the heart, yellow, red at its edges - its
+;  height and its lean from tables, each torch at its own place in them,
+;  a step a frame.  The pilot: "the torches do not burn, they blink" -
+;  two pictures had swapped on the beat.  In: BX, DX the torch's cell
+;  (top left), AL its place in the tables.  At EGA 640 in its own
+;  half-columns (PSETF): finer.
+; ------------------------------------------------------------------
+FLAME:  mov  [fph],al
+        mov  ax,[cell]
+        shr  ax,1
+        add  bx,ax              ; the cell's middle across,
+        add  dx,ax              ;  and down: the cup
+        mov  [fly0],dx
+        cmp  byte [wide],0
+        je   .k
+        shl  bx,1               ; (EGA 640: fine columns)
+.k:     mov  [flx0],bx
+        mov  ax,[fstep]
+        add  al,[fph]
+        and  ax,15
+        mov  bx,ax
+        mov  al,[FLH+bx]        ; its height now, 16ths of the cell
+        mul  byte [cell]
+        mov  cl,4
+        shr  ax,cl              ; in pixels
+        or   ax,ax
+        jz   .r
+        mov  [flh],ax
+        mov  ax,[fstep]
+        shr  ax,1               ; its lean, half as quick
+        add  al,[fph]
+        add  al,5
+        and  ax,15
+        mov  bx,ax
+        mov  al,[FLS+bx]        ; -2..2 pixels at its tip, at 16
+        cbw
+        imul word [cell]        ; (DX goes)
+        mov  cl,4
+        sar  ax,cl
+        cmp  byte [wide],0
+        je   .l
+        shl  ax,1
+.l:     mov  [fls],ax
+        xor  si,si              ; SI: the row, from the cup up
+.row:   cmp  si,[flh]
+        jae  .r
+        mov  ax,si
+        mov  cl,4
+        shl  ax,cl
+        xor  dx,dx
+        div  word [flh]         ; how far up it is, 16ths
+        mov  [flv],ax
+        mov  bx,ax
+        mov  al,[FLW+bx]        ; its half-width there, 32nds of the cell
+        mul  byte [cell]
+        mov  cl,5
+        shr  ax,cl
+        cmp  byte [wide],0
+        je   .w
+        shl  ax,1
+.w:     mov  [flw],ax
+        mov  ax,[fls]
+        imul si                 ; leaning more the higher  (DX goes)
+        idiv word [flh]
+        add  ax,[flx0]
+        mov  [flc],ax           ; the row's middle
+        mov  cx,[flw]
+        neg  cx                 ; CX: from its left edge...
+.px:    cmp  cx,[flw]
+        jg   .nr                ; ...to its right
+        mov  ax,cx
+        or   ax,ax
+        jns  .a
+        neg  ax
+.a:     mov  bx,ax
+        shl  ax,1
+        add  ax,bx              ; 3 * how far from the middle
+        mov  bx,[flw]
+        mov  dl,14              ; a thread of a flame: yellow, red at its
+        or   bx,bx              ;  tip
+        jnz  .wd
+        cmp  word [flv],12
+        jb   .put
+        mov  dl,12
+        jmp  .put
+.wd:    mov  dl,15              ; its heart white,
+        cmp  ax,bx
+        jae  .y
+        cmp  word [flv],8
+        jb   .put
+        mov  dl,14              ;  yellow higher up;
+        jmp  .put
+.y:     mov  dl,14              ; then yellow,
+        shl  bx,1
+        cmp  ax,bx
+        jb   .put
+        mov  dl,12              ; red at its edges
+.put:   mov  al,dl
+        mov  bx,[flc]
+        add  bx,cx
+        mov  dx,[fly0]
+        sub  dx,si
+        call PSETF
+        inc  cx
+        jmp  .px
+.nr:    inc  si
+        jmp  .row
+.r:     ret
+; its tables: the height a frame (16ths of the cell), the lean (pixels at
+; 16), the half-width going up it (32nds of the cell)
+FLH     db 7,7,8,7,6,7,8,8,7,6,6,7,8,7,7,6
+FLS     db 0,1,1,2,1,0,-1,-1,0,1,0,-1,-2,-1,0,0
+FLW     db 3,4,4,4,4,3,3,3,2,2,2,2,1,1,1,0
 
 ; FRAMEISO - isometric: no background - the level's cells every frame,
 ; on grass, back to front: first the floor and the water, then the
@@ -1514,20 +1899,7 @@ THING:  mov  bx,[cptr]
         call CANDYV             ; AX = 0, 1, 2: its worth less one
         add  ax,K_CA1
         call CURK
-        mov  ax,[cptr]          ; and now and then a glint on it, each
-        sub  ax,grid            ;  candy at its own moments
-        mov  bx,37
-        mul  bx                 ; (DX goes)
-        mov  bl,[anim]
-        xor  bh,bh
-        add  ax,bx
-        add  ax,bx
-        add  ax,bx              ; + anim*3
-        and  ax,31
-        cmp  ax,3
-        jae  .gem
-        mov  ax,K_CSP
-        call CURK
+        call GLINT              ; and now and then a glint, its own moments
 .gem:   mov  ax,[cptr]
         sub  ax,grid
         cmp  ax,[gemcell]
@@ -1536,12 +1908,14 @@ THING:  mov  bx,[cptr]
         cmp  word [gemclk],GEMLIFE-GEMGROW
         ja   .gk
         mov  al,[anim]          ; then sparkling now and then
-        and  ax,3
-        cmp  ax,3
+        and  ax,7
+        cmp  ax,7
         mov  ax,K_DI1
         jne  .gk
         mov  ax,K_DI2
 .gk:    call CURK
+        mov  si,RINGG           ; the light plays round it too, wider
+        call SHIMMER
 .mine:  mov  ax,[cptr]
         sub  ax,grid
         call MINEAT
@@ -1557,11 +1931,132 @@ THING:  mov  bx,[cptr]
         jz   .bk
         mov  ax,K_BOG           ; home: green
 .bk:    call CURK
+        mov  ax,[cptr]
+        sub  ax,grid
+        cmp  ax,[stuckc]
+        jne  .r
+        test byte [anim],1      ; the one that cannot go home: a red cross
+        jz   .r                 ;  on it, at the pulse
+        mov  bx,[cell]
+        shr  bx,1
+        add  bx,[curx]
+        sub  bx,2
+        and  bx,0FFFEh
+        mov  [tx],bx
+        mov  dx,[cell]
+        shr  dx,1
+        add  dx,[cury]
+        sub  dx,3
+        mov  [ty],dx
+        mov  byte [tclr],12
+        mov  byte [tshad],1
+        mov  al,'X'
+        call PUTC4
+        mov  byte [tshad],0
         ret
 .men:   test al,G_MAN
         jz   .r
         jmp  DRAWMEN
 .r:     ret
+
+; GLINT - a candy's glint, on cell [cptr]: dark most of the time, and
+; then for 8 ticks a spot of light at a place of its ring - blue, pale,
+; white, pale, blue - every fourth time a white star instead.  Each
+; candy keeps a time of its own: a period from its cell, 80..207 ticks
+; (4 to 11 s), never a multiple of the beat, and a new place on its ring
+; every time.  The pilot: "every crystal moves on one timer - there is no
+; mystery in it" - they had all stepped round their rings at once.
+GLINT:  cmp  word [vsz],5       ; straight down only
+        je   .r
+        mov  ax,[cptr]
+        sub  ax,grid
+        push ax                 ; the cell
+        mov  bx,40503
+        mul  bx                 ; a word scattered from the cell (DX goes)
+        mov  bx,ax
+        mov  al,ah
+        and  ax,127
+        add  ax,80              ; its period: 80..207 ticks
+        mov  cx,ax
+        mov  ax,[now]
+        add  ax,bx              ; its own moment in the period
+        xor  dx,dx
+        div  cx                 ; AX = which glint, DX = ticks into it
+        pop  bx                 ; BX = the cell
+        cmp  dx,8
+        jae  .r                 ; dark
+        test al,3
+        jnz  .spot
+        cmp  dl,2               ; every fourth glint a star, in its middle
+        jb   .spot
+        cmp  dl,6
+        jae  .spot
+        mov  ax,K_CSP
+        jmp  CURK
+.spot:  mov  cl,al
+        shl  al,1
+        shl  al,1
+        add  al,cl              ; which glint * 5
+        add  al,bl              ;  + the cell: a new place every time
+        cmp  dl,4
+        jb   .p
+        inc  al                 ; the light slides on, half way
+.p:     and  ax,7
+        mov  si,ax
+        shl  si,1
+        add  si,ax              ; 3 bytes a place
+        add  si,RINGC
+        mov  bx,dx
+        mov  ch,[GLCOL+bx]      ; how bright, so far into it
+        jmp  SPOT
+.r:     ret
+GLCOL   db 9,11,15,15,15,11,11,9
+
+; SHIMMER - a spot of light going round the diamond on cell [cptr]: ring
+; SI (8 places, db x, y in 16ths of a cell, colour), a place each half
+; beat.  Straight down only.
+SHIMMER:cmp  word [vsz],5
+        je   SPOT.r
+        mov  ax,[cptr]
+        sub  ax,grid
+        mov  bx,ax
+        mov  cl,3
+        shr  bx,cl
+        add  ax,bx              ; a phase from the cell
+        add  al,[anim]
+        and  ax,7
+        mov  bx,ax
+        shl  bx,1
+        add  bx,ax              ; 3 bytes a place
+        add  si,bx
+        mov  ch,[si+2]          ; its colour
+; SPOT - the spot of light at ring place SI over the current cell, in
+; colour CH: a pixel, two at the big sizes
+SPOT:   mov  al,[si]            ; x in 16ths
+        xor  ah,ah
+        mul  word [cell]        ; (DX goes)
+        mov  cl,4
+        shr  ax,cl
+        add  ax,[curx]
+        mov  bx,ax
+        mov  al,[si+1]          ; y in 16ths
+        xor  ah,ah
+        mul  word [cell]
+        mov  cl,4
+        shr  ax,cl
+        add  ax,[cury]
+        mov  dx,ax
+        mov  al,ch
+        call PSET
+        cmp  word [cell],12
+        jb   .r
+        inc  bx                 ; two pixels at the big sizes
+        call PSET
+.r:     ret
+; the rings: a candy's, close; the diamond's, wider.  White at the top,
+; where the light falls, pale cyan at the sides, blue under
+RINGC   db 6,8,11, 6,6,11, 8,5,15, 9,6,15, 10,8,11, 9,10,9, 8,10,9, 6,10,9
+RINGG   db 4,9,11, 5,6,15, 8,4,15, 11,6,15, 12,9,11, 10,12,9, 8,13,9, 6,12,9
 
 ; CANDYV - AX = a candy's worth less one (0..2) for cell AX
 CANDYV: mov  cx,ax
@@ -1614,9 +2109,12 @@ DRAWMEN:mov  ax,[cptr]
         mov  al,[bx+P_LOOK]
         xor  ah,ah
         shl  ax,1
+        shl  ax,1
         mov  bx,ax
         add  bx,[mantrow]
         mov  si,[bx]            ; his picture, his colours
+        push word [bx+2]
+        pop  word [picseg]
         mov  bx,[curx]
         mov  dx,[cury]
         call DRAWP
@@ -1728,7 +2226,126 @@ OVERLAY:mov  word [pidx],mines
 .pn:    add  word [pidx],PSIZE
         cmp  word [pidx],players+MAXP*PSIZE
         jb   .p
-.done:  ret
+.done:  jmp  POPS
+
+; ------------------------------------------------------------------
+;  POPS - a man's points rising over his head: when his score moves by
+;  5 or more (a crate home, the diamond, the owl - a candy's 1..3 is too
+;  small to tell), "+10" in gold or "-10" in red, rising a pixel every
+;  three ticks for two seconds.  Every machine shows everyone's: each
+;  keeps the scores it drew last.  The pilot: "I put a crate home - no
+;  points" - they were there, but only in the list under the floor.
+; ------------------------------------------------------------------
+POPT    = 36                    ; ticks a number shows
+PO_PID  = 0                     ; word: who is in the slot
+PO_SC   = 2                     ; word: his score, the last frame
+PO_V    = 4                     ; word: the number showing, 0 none
+PO_T    = 6                     ; word: the tick it began
+PO_ON   = 8                     ; byte: the slot was taken, the last frame
+POSIZE  = 10
+POPS:   mov  word [pidx],players
+        mov  word [popp],pops
+.p:     mov  si,[pidx]
+        mov  di,[popp]
+        cmp  byte [si+P_ON],0
+        jne  .on
+        mov  byte [di+PO_ON],0  ; nobody in the slot
+        jmp  .n
+.on:    mov  ax,[si+P_SCORE]
+        mov  dx,[si+P_PID]
+        cmp  byte [di+PO_ON],0
+        je   .new
+        cmp  dx,[di+PO_PID]
+        je   .diff
+.new:   mov  byte [di+PO_ON],1  ; a man new to the slot: his score as it
+        mov  [di+PO_PID],dx     ;  is, nothing to show
+        mov  [di+PO_SC],ax
+        mov  word [di+PO_V],0
+        jmp  .n
+.diff:  mov  dx,ax
+        sub  dx,[di+PO_SC]      ; DX = how it moved since the last frame
+        jz   .show
+        mov  [di+PO_SC],ax
+        mov  ax,dx
+        or   ax,ax
+        jns  .abs
+        neg  ax
+.abs:   cmp  ax,5
+        jb   .show              ; a candy: too small to tell
+        mov  [di+PO_V],dx
+        mov  ax,[now]
+        mov  [di+PO_T],ax
+.show:  cmp  word [di+PO_V],0
+        je   .n
+        mov  ax,[now]
+        sub  ax,[di+PO_T]       ; ticks since it began
+        cmp  ax,POPT
+        jb   .draw
+        mov  word [di+PO_V],0   ; shown long enough
+        jmp  .n
+.draw:  cmp  byte [si+P_OUT],0
+        jne  .n                 ; out of the castle: the winner's screen tells
+        mov  [prise],ax
+        mov  al,[si+P_ROW]
+        xor  ah,ah
+        mov  cl,5
+        shl  ax,cl
+        add  al,[si+P_COL]
+        call CELLXY
+        add  ax,[ox]
+        add  dx,[oy]
+        mov  bx,[vsw]
+        shr  bx,1
+        add  bx,ax              ; his middle across
+        sub  dx,8               ; over his head
+        cmp  word [vsz],5
+        jne  .h
+        sub  dx,10              ; isometric: over a standing man
+.h:     mov  ax,[prise]
+        mov  cl,3
+        div  cl                 ; AL = a pixel every three ticks
+        xor  ah,ah
+        sub  dx,ax              ; rising
+        mov  di,[popp]
+        mov  ax,[di+PO_V]
+        call POPNUM
+.n:     add  word [pidx],PSIZE
+        add  word [popp],POSIZE
+        cmp  word [pidx],players+MAXP*PSIZE
+        jb   .p
+        ret
+
+; POPNUM - signed AX as "+N" or "-N", centred on x BX, its top at y DX
+; (never over the line above the floor), with a shadow
+POPNUM: cmp  dx,PFTOP+1
+        jge  .y
+        mov  dx,PFTOP+1
+.y:     mov  [ty],dx
+        mov  byte [tclr],14     ; a gain: gold
+        mov  cl,'+'
+        or   ax,ax
+        jns  .s
+        neg  ax
+        mov  byte [tclr],12     ; a loss: red
+        mov  cl,'-'
+.s:     sub  bx,4               ; the sign and a digit: 8 wide
+        cmp  ax,10
+        jb   .w
+        sub  bx,2               ; two digits: 12
+        cmp  ax,100
+        jb   .w
+        sub  bx,2               ; three: 16
+.w:     and  bx,0FFFEh
+        mov  [tx],bx
+        mov  byte [tshad],1
+        push ax
+        mov  al,cl
+        call PUTC4
+        pop  ax
+        mov  cl,1
+        call PNUM4
+        mov  byte [tshad],0
+        ret
 
 ; SECS - AX ticks as whole seconds, rounded up: (AX + 17) / 18
 SECS:   add  ax,17
@@ -1966,7 +2583,10 @@ BANNERS:mov  bl,[pend]
         add  ax,'00'
         mov  [di],ax            ; two digits
         jmp  TOPLINE
-.in:    cmp  byte [netmode],2
+.in:    mov  si,TSTUCK          ; a crate for good where it cannot go home:
+        cmp  word [stuckc],0FFFFh ;  the ways out
+        jne  TOPLINE
+        cmp  byte [netmode],2
         jne  .end
         cmp  word [mep],ghost   ; a client the host has not let in yet
         jne  .end
@@ -1999,13 +2619,16 @@ TOPLINE:push si
 
 ; ------------------------------------------------------------------
 ;  WINNER - after every level: the warehouse in the evening, the man
-;  who did most in it jumping on a red podium, his name, what he got,
-;  confetti; the others' takings under him
+;  who did most in it rising and settling on a red podium, slow as a
+;  breath, his name, what he got, petals drifting down; the others'
+;  takings under him
 ; ------------------------------------------------------------------
 WINNER: call DIM
         mov  ax,[now]
-        mov  [wtick],ax
-        mov  cx,40              ; confetti, falling, each its own way
+        shr  ax,1
+        shr  ax,1
+        mov  [wtick],ax         ; a quarter of the clock: they drift
+        mov  cx,40              ; petals, drifting, each its own way
 .c:     push cx
         mov  ax,cx
         mov  bx,41
@@ -2022,9 +2645,9 @@ WINNER: call DIM
         mov  bx,dx              ; BX = x
         and  bx,0FFFEh
         mov  ax,cx
-        and  ax,3
+        and  ax,1
         inc  ax
-        mul  word [wtick]       ; falling 1..4 px a tick
+        mul  word [wtick]       ; drifting 1 or 2 px every 4 ticks
         mov  si,cx
         mov  dx,23
         push ax
@@ -2094,6 +2717,8 @@ WINNER: call DIM
         mov  al,[bx+P_LOOK]
         call MKBIG              ; his big picture, in his colours
         mov  si,[bigat]
+        push word [bigseg]
+        pop  word [picseg]
         mov  bl,[anim]          ; he jumps
         and  bx,7
         mov  al,[BOUNCE+bx]
@@ -2185,7 +2810,7 @@ MKBIG:  cmp  al,[biglook]
         mov  bp,LOOKS
         add  bp,ax              ; his four colours
         push es
-        mov  es,[sseg]
+        mov  es,[bigseg]
         mov  di,[bigat]
         mov  si,rawman
         call COMPILE2
@@ -2193,15 +2818,15 @@ MKBIG:  cmp  al,[biglook]
 .r:     ret
 
 ; ------------------------------------------------------------------
-;  The crow: now and then one flies in, sits on a wall, caws, flies
-;  off.  This machine's alone (nobody else needs to see the same one).
-;  BIRDTICK from TIMERS; DRAWBIRD in the frame.
+;  The owl: the host's - owlcell, owlclk, in the world it sends - on a
+;  wall beside the floor for a quarter of a minute, half a minute or so
+;  apart; walk into its wall and it is yours, +10 (STEP, CATCH).  Its
+;  flight in and off is each machine's own, from the edge of the screen:
+;  BIRDTICK from TIMERS, DRAWBIRD in the frame.
 ; ------------------------------------------------------------------
 BIRDTICK:
         cmp  byte [view],2
         je   .r                 ; straight down only
-        cmp  byte [phase],3
-        je   .r
         mov  ax,[now]
         mov  dx,ax
         sub  dx,[bwhen]
@@ -2213,53 +2838,9 @@ BIRDTICK:
         mov  al,[bst]
         or   al,al
         jnz  .fly
-        mov  ax,[now]           ; none: is it time?
-        sub  ax,[bnext]
-        js   .r
-        call RND
-        mov  al,ah
-        xor  ah,ah
-        shl  ax,1
-        shl  ax,1
-        add  ax,400             ; the next one 22..78 s after this
-        add  ax,[now]
-        mov  [bnext],ax
-        mov  byte [btries],24   ; a wall to sit on, on the screen
-.try:   call RND
-        mov  al,ah
-        xor  ah,ah
-        mov  bl,[lvw]
-        div  bl
-        mov  cl,ah              ; a column
-        call RND
-        mov  al,ah
-        xor  ah,ah
-        mov  bl,[lvh]
-        div  bl                 ; AH = a row
-        mov  al,ah
-        xor  ah,ah
-        push cx
-        mov  cl,5
-        shl  ax,cl
-        pop  cx
-        add  al,cl
-        mov  bx,ax
-        test byte [grid+bx],G_WALL
-        jz   .again
-        cmp  bx,[gatecell]
-        je   .again
-        mov  ax,bx
-        call CELLXY
-        add  ax,[ox]
-        add  dx,[oy]
-        cmp  ax,0
-        jl   .again
-        cmp  ax,320-16
-        jg   .again
-        cmp  dx,PFTOP+8
-        jl   .again
-        mov  [btx],ax
-        mov  [bty],dx
+        cmp  word [owlcell],0FFFFh ; none here: one in the world?
+        je   .r
+        call .where
         mov  word [bx_],-16     ; in from the left or the right
         test word [now],1
         jz   .side
@@ -2268,69 +2849,70 @@ BIRDTICK:
         mov  byte [bst],1
         mov  byte [dirty],1
         ret
-.again: dec  byte [btries]
-        jnz  .try
-        ret
-.fly:   cmp  al,2
+.fly:   cmp  al,3
+        je   .off
+        cmp  word [owlcell],0FFFFh
+        je   .leave             ; caught, or its time is up
+        call .where             ; (the view may have turned since)
+        cmp  byte [bst],2
         je   .sit
-        call .move              ; flying in, or out
+        call .move              ; flying in
         jnc  .r
-        cmp  byte [bst],3
-        je   .gone
         mov  byte [bst],2       ; landed
-        call RND
-        mov  al,ah
-        and  ax,63
-        add  ax,80              ; sits 4..8 s
-        mov  [bclk],ax
-        shr  ax,1
-        mov  [bcaw],ax          ; and caws again half way
-        mov  al,SF_CAW
-        call SFX
-        ret
-.gone:  mov  byte [bst],0
-        mov  byte [dirty],1
-        ret
-.sit:   mov  ax,[bdt]
-        sub  [bclk],ax
-        jg   .s1
-        mov  byte [bst],3       ; off again, the other way
-        mov  ax,[bx_]
+        mov  byte [bcaw],0
+        mov  al,SF_HOOT
+        jmp  SFX
+.sit:   mov  ax,[btx]           ; sitting where its wall is now
+        mov  [bx_],ax
+        mov  ax,[bty]
+        mov  [by_],ax
+        cmp  byte [bcaw],0
+        jne  .r
+        cmp  word [owlclk],140  ; once more, near its going
+        jg   .r
+        mov  byte [bcaw],1
+        mov  al,SF_HOOT
+        jmp  SFX
+.leave: mov  byte [bst],3       ; off, the nearer way
         mov  word [btx],-24
-        cmp  ax,160
+        cmp  word [bx_],160
         jl   .s0
         mov  word [btx],330
 .s0:    mov  word [bty],PFTOP-24
         mov  byte [dirty],1
         ret
-.s1:    mov  ax,[bclk]
-        cmp  ax,[bcaw]
-        jg   .r
-        mov  word [bcaw],-1     ; once
-        mov  al,SF_CAW
-        call SFX
+.off:   call .move
+        jnc  .r
+        mov  byte [bst],0       ; gone
+        mov  byte [dirty],1
 .r:     ret
-; .move - toward btx, bty: 3 px a tick across, 2 down; CF=1 there
+; .where - its wall on the screen: btx, bty
+.where: mov  ax,[owlcell]
+        call CELLXY
+        add  ax,[ox]
+        add  dx,[oy]
+        mov  [btx],ax
+        mov  [bty],dx
+        ret
+; .move - toward btx, bty: 2 px a tick each way at most; CF=1 there
 .move:  mov  byte [dirty],1
-        mov  ax,[bdt]
-        mov  cx,ax
-        shl  cx,1
-        add  cx,ax              ; 3 a tick
+        mov  cx,[bdt]           ; an owl's calm flight: 36 px a second,
+        shl  cx,1               ;  in from the edge in 3 to 5 s
         mov  ax,[btx]
         sub  ax,[bx_]
         call .step
         add  [bx_],ax
-        mov  bx,ax
         mov  cx,[bdt]
-        shl  cx,1               ; 2 a tick
+        shl  cx,1
         mov  ax,[bty]
         sub  ax,[by_]
         call .step
         add  [by_],ax
-        or   ax,bx
-        jnz  .on
-        mov  ax,[btx]
+        mov  ax,[btx]           ; there only when both are
         cmp  ax,[bx_]
+        jne  .on
+        mov  ax,[bty]
+        cmp  ax,[by_]
         jne  .on
         stc
         ret
@@ -2378,7 +2960,7 @@ DRAWBIRD:
 ;  TITLE - the name, a piece of the castle, the keys; the wire's news
 ;  comes under it (JOINMSG)
 ; ------------------------------------------------------------------
-TITLE:  mov  word [tbase],0
+TITLE:  call TOFRAME
         mov  word [clipt],0
         mov  word [clipb],200
         xor  ax,ax
@@ -2410,8 +2992,11 @@ TITLE:  mov  word [tbase],0
         push si
         xor  ah,ah
         shl  ax,1
+        shl  ax,1
         mov  si,ax
         add  si,[mantrow]
+        push word [si+2]
+        pop  word [picseg]
         mov  si,[si]
         call DRAWP
         pop  si
@@ -2480,11 +3065,15 @@ SDIR    db 0,-1, 1,0, 0,1, -1,0          ; turn 0
 ; the park: up to this scatter, this kind, this many cells wide
 ; the four parts of the park, by the land's height (LAND): wet ground,
 ; the garden, the wood, the pines
-ZWET    db 22,K_PND,2, 40,K_BSH,1, 60,K_FLW,1, 0FFh
-ZGARDEN db 6,K_FN0,2, 12,K_STA,1, 18,K_LMP,1, 22,K_WEL,1, 34,K_FLB,2
-        db 44,K_HED,2, 66,K_FLW,1, 80,K_BSH,1, 84,K_ROK,1, 0FFh
-ZWOOD   db 30,K_OAK,2, 80,K_TRE,1, 100,K_BSH,1, 106,K_ROK,1, 0FFh
-ZPINE   db 90,K_PIN,1, 105,K_ROK,1, 115,K_TRE,1, 0FFh
+ZWET    db 18,K_PND,2, 30,K_WIL,2, 44,K_BSH,1, 58,K_FLW,1, 64,K_MUS,1
+        db 70,K_RAB,1, 0FFh
+ZGARDEN db 6,K_FN0,2, 11,K_STA,1, 16,K_LMP,1, 20,K_WEL,1, 30,K_FLB,2
+        db 38,K_HED,2, 50,K_BLO,1, 66,K_FLW,1, 76,K_BSH,1, 80,K_RAB,1
+        db 84,K_DEE,1, 87,K_ROK,1, 0FFh
+ZWOOD   db 24,K_OAK,2, 52,K_TRE,1, 72,K_BIR,1, 86,K_BSH,1, 94,K_DEE,1
+        db 100,K_MUS,1, 106,K_STU,1, 110,K_ROK,1, 0FFh
+ZPINE   db 80,K_PIN,1, 92,K_BIR,1, 102,K_ROK,1, 110,K_STU,1, 116,K_MUS,1
+        db 120,K_DEE,1, 0FFh
 ; DUSK's ordered dither: a 4x4 Bayer matrix, the order the pixels darken
 BAYER   db 0,8,2,10, 12,4,14,6, 3,11,1,9, 15,7,13,5
 WINCLR  db 14,15,14,12
@@ -2507,7 +3096,7 @@ TVIG    db 0,5,K_GRS, 1,5,K_GRS, 2,5,K_GRS, 3,5,K_GRS, 4,5,K_GRS, 5,5,K_GRS
         db 13,7,K_FGN, 14,7,K_FGN, 15,7,K_FGN, 16,7,K_FGN, 17,7,K_FGN, 18,7,K_FGN
         db 19,7,K_FGN
         db 1,5,K_OAK, 4,5,K_PIN, 6,5,K_BSH, 12,5,K_FN0, 15,5,K_STA, 17,5,K_TRE
-        db 3,7,K_TWR, 16,7,K_TWR, 7,7,K_TR0, 11,7,K_TR1
+        db 3,7,K_TWR, 16,7,K_TWR, 7,7,K_TR1, 11,7,K_TR1
         db 2,8,K_CA1, 4,8,K_BOX, 6,8,K_CA2, 7,8,K_MAN,0, 9,8,K_MAN,1, 11,8,K_CA3
         db 13,8,K_GOL, 13,8,K_BOG, 15,8,K_CA1, 17,8,K_DI2
         db 0,9,K_WA2, 1,9,K_WA1, 2,9,K_WA4, 3,9,K_WA3, 4,9,K_WA2, 5,9,K_WA1
