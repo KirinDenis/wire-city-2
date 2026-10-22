@@ -1,7 +1,7 @@
 {
     "game":  "OWL NIGHT",
     "base":  "https://raw.githubusercontent.com/KirinDenis/owlnight-disk/main/",
-    "made":  "2026-10-22 20:12",
+    "made":  "2026-10-22 20:27",
     "files":  [
                   {
                       "into":  "ENGINE/STORY.COM",

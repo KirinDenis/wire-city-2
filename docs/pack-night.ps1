@@ -94,6 +94,12 @@ files from here.
 "@
 [IO.File]::WriteAllText((Join-Path $out "README.md"), $readme.Replace("`r`n", "`n"), (New-Object Text.UTF8Encoding($false)))
 
+# Git must not touch a byte of these. The first push went up from a Windows
+# clone with core.autocrlf on, git took the INI files for text and stored
+# them with LF, and raw served 630 bytes where the manifest said 648: the
+# page refused the disk. Every file here is DOS's as it is, CR LF included.
+[IO.File]::WriteAllText((Join-Path $out ".gitattributes"), "# nothing on this disk is text to git: DOS files, CR LF and all, byte for byte`n* -text`n", (New-Object Text.UTF8Encoding($false)))
+
 $manifest = [ordered]@{
   game = "OWL NIGHT"; base = $Base; made = (Get-Date).ToString("yyyy-MM-dd HH:mm")
   files = $files

@@ -3,7 +3,6 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex, nofollow">
 <title>OWL NIGHT - the lab, in DOS</title>
 <link rel="stylesheet" href="jsdos/js-dos.css">
 <style>
@@ -137,8 +136,10 @@
      built.</p>
 
   <p class="quiet">Part of <a href="https://github.com/KirinDenis/wire-city-2"
-     style="color:var(--acc2)">wire-city-2</a>. This page is not linked from
-     anywhere and is not indexed.</p>
+     style="color:var(--acc2)">wire-city-2</a>: the engine, the desk and the
+     converter are in <code>LAB/OWLFLY4</code>; the story's files are the
+     repository <a href="https://github.com/KirinDenis/owlnight-disk"
+     style="color:var(--acc2)">owlnight-disk</a>.</p>
 </main>
 
 <script src="jsdos/js-dos.js"></script>
@@ -246,34 +247,41 @@
     show();
     const out = new Array(files.length);
     let next = 0;
+    // One failure stops the other two workers too, or they keep writing
+    // their progress over the message that says what went wrong.
+    const stop = new AbortController();
     async function worker() {
-      while (next < files.length) {
+      while (next < files.length && !stop.signal.aborted) {
         const i = next++;
         const f = files[i];
         const url = manifest.base + f.into;
         let r = cache ? await cache.match(url) : null;
         if (!r) {
-          r = await fetch(url, { mode: "cors" });
+          r = await fetch(url, { mode: "cors", signal: stop.signal });
           if (!r.ok) throw new Error(f.into + ": HTTP " + r.status);
           if (cache) { try { await cache.put(url, r.clone()); } catch (e) { /* no room: play on, uncached */ } }
         }
         const bytes = new Uint8Array(await r.arrayBuffer());
         if (bytes.length !== f.bytes) throw new Error(f.into + ": " + bytes.length + " bytes, the manifest says " + f.bytes);
         out[i] = { path: "C/" + f.into, contents: bytes };
-        done += f.bytes; show();
+        if (!stop.signal.aborted) { done += f.bytes; show(); }
       }
     }
-    await Promise.all([worker(), worker(), worker()]);
+    try { await Promise.all([worker(), worker(), worker()]); }
+    catch (e) { stop.abort(); throw e; }
     bar.style.display = "none";
     return out;
   }
 
+  let running = false;                 // one edition at a time: a second click is ignored
   async function start(screen) {
     if (!manifest) { say("the manifest has not arrived yet"); return; }
+    if (running) return;
+    running = true;
     byId("choice").hidden = true;
     let files;
     try { files = await fetchEdition(screen); }
-    catch (e) { say("could not fetch the story: " + e.message); byId("choice").hidden = false; return; }
+    catch (e) { say("could not fetch the story: " + e.message + " - press a screen to try again"); byId("choice").hidden = false; running = false; return; }
     say("all of it is here: " + files.length + " files - starting the machine");
     Dos(byId("dos"), {
       dosboxConf: conf(screen),

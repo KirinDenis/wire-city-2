@@ -142,6 +142,11 @@ raw link above when you need more than they pasted. Then:
 - **OWL FLY III** - the air war grown on: sorties from a runway, a panel
   where every switch changes how the game plays, an anti-aircraft vehicle
   the player can crew.
+- **OWL NIGHT** - the lab: a story of scenes played by a 15 KB DOS
+  engine from plain INI files - full-motion video at 640x400 in a codec
+  of its own, 16-bit sound that keeps the clock, a room where things are
+  taken by mouse, a question that branches the story. Unfinished, and
+  playable at every stage; its clips live in a repository of their own.
 - They are meant to be played in order: one idea growing up inside the same
   constraints, on the same 8086, every byte readable. The course shows how
   they were made, routine by routine - its lessons read the games' own code
