@@ -42,6 +42,7 @@ import { PAGE_KEPT, PAGES_DIR, EXAMPLES, parsePage, checkPage, judgeLine, pageBr
 import { HtmlPage, checkHtmlPage } from './htmlpage.js';
 import { Help } from './help.js';
 import { DosBox } from '../owlosui/dosbox/dosbox.js';
+import { Loading } from './loading.js';
 
 // Before anything can remove a file: every removal from this browser's
 // storage into a journal that outlives a reload (drives.js says why).
@@ -236,6 +237,7 @@ const CGA = [
 export class SiteApp extends CourseApp {
   constructor(owl) {
     super(owl);
+    this.loading = new Loading(owl);    // the box with the bar while the site gets ready (start)
     this.cycles = null;
     this.extraGates = [];       // DriveGates over folders on this computer: outside the storage the library's gates watch
     // Every folder DOS shares - A: too, which the course keeps already: here
@@ -1117,7 +1119,8 @@ export class SiteApp extends CourseApp {
     const lost = first ? new Set() : await this.lostFromC(files, was);
     let put = 0;
     await S.hush(async () => {
-      for (const f of files) {
+      for (const [i, f] of files.entries()) {
+        this.loading.part(i, files.length);
         const at = `${C_FOLDER}${f.path}`;
         const have = await S.readBytes(at).catch(() => null);
         const mine = was.files[f.path];
@@ -1192,34 +1195,68 @@ export class SiteApp extends CourseApp {
    */
   async start() {
     if (await leaveIsolation()) return;      // YouTube in a lesson's window, in Firefox too: as the course page
-    this.course = await (await fetch(new URL('../course/course.json', import.meta.url))).json();
-    this.sources = await (await fetch(new URL('sources.json', import.meta.url))).json();
-    log.info('site', `${this.course.lessons.length} lessons, ${this.sources.games.length + this.sources.examples.length} sources`);
-    await this.findGames();
-    // Not from the constructor: the table's change repaints the screen, and
-    // OWLOSUI cannot paint before the page's program is made.
-    await this.restoreDrives();
-    this.ready = true;
-    await this.waitForScreen();
-    this.buildMenus();
-    // The course disk onto A: behind the games: the Sources menu, the
-    // commanders and the console find it there without opening a lesson.
-    this.track(this.installDisk({ quiet: true }));
-    // Who is here: this page's connection, an animal (net.js).
-    this.startNet();
-    // A page of the person's own, if one is on (page.js) - its menus now, its windows below.
-    const paged = this.restorePage();
-    // The front door: the lesson the address names (?l=7, as on the course
-    // page - a lesson opened here writes it), else the games.
-    // ?play=owlfly2: a game or a demo the address names - the old pages send
-    // here - in front, with no catalog over it; one it does not know, the catalog.
-    // With a page on, its own windows instead of the games.
-    const asked = lessonFromAddress(this.course.lessons);
-    const wanted = asked ? null : new URLSearchParams(location.search).get('play');
-    if (asked) await this.track(this.openLesson(asked));
-    else if (wanted) await this.track(this.playFromAddress(wanted));
-    else if (paged) await this.track(this.openPageWindows());
-    else this.showCatalog();
+    // The box with the bar (loading.js), from the moment the screen can paint
+    // until what the address asks for is there; it closes itself.
+    const loading = this.loading;
+    loading.begin(this.waitForScreen(), this.dos.box);
+    try {
+      loading.stage("The site's lists: the lessons, the games, their files", 0, 4);
+      this.course = await (await fetch(new URL('../course/course.json', import.meta.url))).json();
+      this.sources = await (await fetch(new URL('sources.json', import.meta.url))).json();
+      log.info('site', `${this.course.lessons.length} lessons, ${this.sources.games.length + this.sources.examples.length} sources`);
+      // The front door: the lesson the address names (?l=7, as on the course
+      // page - a lesson opened here writes it), else the games.
+      // ?play=owlfly2: a game or a demo the address names - the old pages send
+      // here - in front, with no catalog over it; one it does not know, the catalog.
+      // With a page on, its own windows instead of the games. A lesson, a game
+      // or a demo has work still to do after drive C:, and the bar keeps room for it.
+      const asked = lessonFromAddress(this.course.lessons);
+      const wanted = asked ? null : new URLSearchParams(location.search).get('play');
+      const far = asked || wanted ? 45 : 96;
+      loading.stage("Drive C: - the games' files into this browser", 4, far);
+      await this.findGames();
+      // Not from the constructor: the table's change repaints the screen, and
+      // OWLOSUI cannot paint before the page's program is made.
+      await this.restoreDrives();
+      this.ready = true;
+      await this.waitForScreen();
+      this.buildMenus();
+      // The course disk onto A: behind the games: the Sources menu, the
+      // commanders and the console find it there without opening a lesson.
+      // A first visit's DOS PC and lesson wait for it - the DOS PC's drives are
+      // put together from A: too - so the bar has a stage for it, up to its end.
+      // But a game the address names comes first (the pilot, 2026-10-22): the
+      // disk once its machine is on - the box over - or the game waits for 3 MB
+      // and 458 files it never reads. That DOS PC's A: is then without them -
+      // the disk is written hushed, not pushed to a running machine - and the
+      // next switch-on has them all.
+      const fresh = !!this.course.disk && (await this.browser.read(`${A}COURSE.VER`).catch(() => '')).trim() !== this.course.disk.version;
+      const gameFirst = !!ADDRESS_PLAYS[wanted?.toLowerCase()]?.game;
+      const disk = this.track(gameFirst ? loading.done.then(() => this.installDisk({ quiet: true })) : this.installDisk({ quiet: true }));
+      const waits = fresh && !gameFirst;
+      const then = (text, door = waits ? 75 : far) => {
+        if (!waits) { loading.stage(text, door, 100, { creep: true }); return; }
+        loading.stage(`The course disk onto drive A: - ${this.course.disk.files} files, once, the first time`, far, door, { creep: true });
+        disk.then(() => loading.stage(text, door, 100, { creep: true }));
+      };
+      // Who is here: this page's connection, an animal (net.js).
+      this.startNet();
+      // A page of the person's own, if one is on (page.js) - its menus now, its windows below.
+      const paged = this.restorePage();
+      if (asked) {
+        then('The lesson: its source, its build, its video');
+        await this.track(this.openLesson(asked));
+      } else if (wanted) {
+        then('The DOS PC switching on: its drives put together, then DOSBox');
+        // Sent to the DOS PC: the box goes when the machine is on (machine, in frameByStart's run).
+        if (!await this.track(this.playFromAddress(wanted))) loading.end();
+      } else if (paged) await this.track(this.openPageWindows());
+      else this.showCatalog();
+      if (!wanted) loading.end();
+    } catch (e) {
+      loading.end();
+      throw e;
+    }
     // Files of the site's that vanished from C: and were put back (lostFromC): said, over all of it.
     if (this.cLost) {
       this.tell('Drive C:', `${this.cLost.count} of the site's files had vanished from this browser's storage - their folders still there, `
@@ -1436,7 +1473,10 @@ export class SiteApp extends CourseApp {
       if (dos.win && styleOf(dos.starts[start] ? start : 'prompt', opts.program) !== style) { owl.close(dos.win); dos.win = 0; }
       // A page that put the DOS PC somewhere (window dos right): a window opened anew goes there.
       if (!opts.rect && this.dosPlace && !(dos.win && owl.place(dos.win))) opts = { ...opts, rect: this.dosPlace };
-      return run(start, opts);
+      // Its window is open now, in front: the start's box goes back over it until the machine is on.
+      const on = run(start, opts);
+      this.loading.machine(on);
+      return on;
     };
   }
 
@@ -1672,22 +1712,24 @@ export class SiteApp extends CourseApp {
    * owlfly2.html sends here with ?play=owlfly2, play.html?g=jet with
    * ?play=jet. A game starts on C: by `play`; an example of A:\EXAMPLES is
    * built by FASM on the DOS PC and run, by `build` - as F9 would. Both go
-   * by the bus, so the terminal shows what the address did.
+   * by the bus, so the terminal shows what the address did. True when the
+   * DOS PC is on its way; false when the catalog came instead.
    */
   async playFromAddress(key) {
     const k = key.toLowerCase();
     const p = ADDRESS_PLAYS[k] ?? (/^[a-z0-9_]{1,8}$/.test(k) ? { example: k.toUpperCase() } : null);
     if (p?.game) {
       this.send(`play ${p.game}${p.machine ? ` --machine ${p.machine}` : ''}`, 'the address');
-      return;
+      return true;
     }
     if (p?.example) {
       await this.installDisk({ quiet: true });
       const there = await this.browser.readBytes(`${A}EXAMPLES/${p.example}.ASM`).then(() => true, () => false);
-      if (there) { this.send(`build A:\\EXAMPLES\\${p.example}.ASM`, 'the address'); return; }
+      if (there) { this.send(`build A:\\EXAMPLES\\${p.example}.ASM`, 'the address'); return true; }
     }
     this.showCatalog();
     this.tell('WIRE CITY', `The address asks for "${key}", and there is no game or demo of that name here. The catalog has them all.`);
+    return false;
   }
 
   /** The games, for the console's play. */
@@ -1910,6 +1952,9 @@ export class SiteApp extends CourseApp {
 
   /** What tells and asks while an HTML page is shown: its own boxes over it - the desktop's would be under it, unseen. */
   tell(title, text) {
+    // Something said while the site gets ready - a start gone wrong, often -
+    // is not left under a bar still creeping toward what will not come.
+    this.loading?.end();
     if (this.htmlPage?.shown) { this.htmlPage.tell(title, text); return; }
     super.tell(title, text);
   }

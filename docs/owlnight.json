@@ -1,572 +1,490 @@
 {
     "game":  "OWL NIGHT",
-    "tag":  "night-v1",
-    "base":  "https://github.com/KirinDenis/wire-city-2/releases/download/night-v1/",
-    "made":  "2026-10-09 12:27",
+    "base":  "https://raw.githubusercontent.com/KirinDenis/owlnight-disk/main/",
+    "made":  "2026-10-22 20:12",
     "files":  [
                   {
                       "into":  "ENGINE/STORY.COM",
-                      "asset":  "STORY.COM",
                       "bytes":  14936,
                       "sha256":  "88cac0537dae806fc22b9fad90c6b0ad462d2b4f35fa52d20b1124ba451d3c90",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/END_FLY/320/CLIP.OWV",
-                      "asset":  "END_FLY--320--CLIP.OWV",
                       "bytes":  6753922,
                       "sha256":  "d559ccaa2bc87a110360ccb86c8245f724d59b7da4604b6bfa813dc6b7cdce6e",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/END_FLY/CLIP.OWV",
-                      "asset":  "END_FLY--CLIP.OWV",
                       "bytes":  23913132,
                       "sha256":  "fdace1fff8f05192a7190851d11daf014e01f5f891969068b8bd523ab225f236",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/END_FLY/SCENE.INI",
-                      "asset":  "END_FLY--SCENE.INI",
                       "bytes":  648,
                       "sha256":  "5a93b20ac007b0f24d610ff93e79d336a6f151c7b6c18f0c3245bd0c5c047cf1",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/END_STAY/320/CLIP.OWV",
-                      "asset":  "END_STAY--320--CLIP.OWV",
                       "bytes":  5308950,
                       "sha256":  "f6d655500a8d7461054f6b20134df8bf9e01b2e2d9eb074dbe8896ec7c453ab6",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/END_STAY/CLIP.OWV",
-                      "asset":  "END_STAY--CLIP.OWV",
                       "bytes":  19740238,
                       "sha256":  "e8fa951e340f6108714dcc4e2ade209039bf3be14261be9638d44dfe23185377",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/END_STAY/SCENE.INI",
-                      "asset":  "END_STAY--SCENE.INI",
                       "bytes":  774,
                       "sha256":  "4f4b50ed55014dcb65e16475c72349ede4205874e797c7011a6153d98e2ff97c",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/END_YOU/320/CLIP.OWV",
-                      "asset":  "END_YOU--320--CLIP.OWV",
                       "bytes":  5308950,
                       "sha256":  "f6d655500a8d7461054f6b20134df8bf9e01b2e2d9eb074dbe8896ec7c453ab6",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/END_YOU/CLIP.OWV",
-                      "asset":  "END_YOU--CLIP.OWV",
                       "bytes":  19740238,
                       "sha256":  "e8fa951e340f6108714dcc4e2ade209039bf3be14261be9638d44dfe23185377",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/END_YOU/SCENE.INI",
-                      "asset":  "END_YOU--SCENE.INI",
                       "bytes":  663,
                       "sha256":  "ae0af973150374a6258bd42b484118b94dc4a63ff3fdf34860d51fc3766e4b38",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/320/CLIP.OWV",
-                      "asset":  "S01--320--CLIP.OWV",
                       "bytes":  2762610,
                       "sha256":  "41989895192eeb394a2ff822eacae812a2f6f9e6600ef6912cca34cff052826b",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/320/CLIP2.OWV",
-                      "asset":  "S01--320--CLIP2.OWV",
                       "bytes":  3848633,
                       "sha256":  "1ce022c815026bf6b5e4a623ec288952b45376c9697e8b33ef8b6f188e4b1a97",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/320/PICKUP/ASHTRAY.SLT",
-                      "asset":  "S01--320--PICKUP--ASHTRAY.SLT",
                       "bytes":  760,
                       "sha256":  "08d662bf758b43a835b732573b07aa4bea42551fb09a2c12efb1ffae55b3ecb9",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/320/PICKUP/ASHTRAY.SPR",
-                      "asset":  "S01--320--PICKUP--ASHTRAY.SPR",
                       "bytes":  1626,
                       "sha256":  "e11eadbb58079e649f3a5b80220f90acdd344e190899b4e475d1ffc038762812",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/320/PICKUP/BG.OWV",
-                      "asset":  "S01--320--PICKUP--BG.OWV",
                       "bytes":  59943,
                       "sha256":  "b871e7267431096e92bc510e2b02eb6f9219e747d610b90b309ed2e24b708274",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/320/PICKUP/CASSETTE.SLT",
-                      "asset":  "S01--320--PICKUP--CASSETTE.SLT",
                       "bytes":  736,
                       "sha256":  "11e26dcd06c3cc3fba2c8d1db41f6d9dc51fdb4d88897190b76c05c926df9d9a",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/320/PICKUP/CASSETTE.SPR",
-                      "asset":  "S01--320--PICKUP--CASSETTE.SPR",
                       "bytes":  1752,
                       "sha256":  "95161b57728aa8a3673c91ae65271f4f2bdcb25222e8772c428b992bf5ca6e78",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/320/PICKUP/KEYS.SLT",
-                      "asset":  "S01--320--PICKUP--KEYS.SLT",
                       "bytes":  520,
                       "sha256":  "cdf632263dbf44d9e71d79e9531a06e2dd40db5d58195f644e1b9bf0ee60152a",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/320/PICKUP/KEYS.SPR",
-                      "asset":  "S01--320--PICKUP--KEYS.SPR",
                       "bytes":  458,
                       "sha256":  "6721ef3ed5582cccadf29b5e11751ea1c9218ec8fed1d5a39b6d28804c38c65c",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/320/PICKUP/NEONOWLF.SLT",
-                      "asset":  "S01--320--PICKUP--NEONOWLF.SLT",
                       "bytes":  448,
                       "sha256":  "eaf84919cc44b9da9f2aeac686a3bab71d1a8061a6edb9e1500d8b1ea5381045",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/320/PICKUP/NEONOWLF.SPR",
-                      "asset":  "S01--320--PICKUP--NEONOWLF.SPR",
                       "bytes":  1108,
                       "sha256":  "8c9c10e26132df2f8abe27c94014bb8ee20b9b2aaec104b9ee178f303618123e",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/CLIP.OWV",
-                      "asset":  "S01--CLIP.OWV",
                       "bytes":  7572796,
                       "sha256":  "7ac7792f48497fb089ee6fd283a13327760f39f464896ace5088b773a15197c2",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/CLIP2.OWV",
-                      "asset":  "S01--CLIP2.OWV",
                       "bytes":  12368454,
                       "sha256":  "05b835e7d0d5e7a9b6aa40961fc8e4d7a0b59b0b65bebb538e5b09213515d5b3",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/CLIP3.OWV",
-                      "asset":  "S01--CLIP3.OWV",
                       "bytes":  71907919,
                       "sha256":  "c1ace289fedefa1f3553de67e5b2754a82e786f0cc89eb8d54493af018288f2d",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/MUSIC.PCM",
-                      "asset":  "S01--MUSIC.PCM",
                       "bytes":  6887956,
                       "sha256":  "4af5fc71af70215d28c94b17d6755635e7aa8b761f97360a80e5fee170aff5bb",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/PICKUP/ASHTRAY.SLT",
-                      "asset":  "S01--PICKUP--ASHTRAY.SLT",
                       "bytes":  3040,
                       "sha256":  "f58e8a78ab04ad58d0b2bc30345a3f30e72b6143a96635d8adffd4223d84d0c5",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/PICKUP/ASHTRAY.SPR",
-                      "asset":  "S01--PICKUP--ASHTRAY.SPR",
                       "bytes":  6386,
                       "sha256":  "76c7806a3441c1bc6dcaf8c4274bab6791dad90db093add0a828ec6ba8fd1131",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/PICKUP/BG.OWV",
-                      "asset":  "S01--PICKUP--BG.OWV",
                       "bytes":  237119,
                       "sha256":  "2fb0bfacbc3d164c02e89dc0b4d38ce80d1cbdcfa589838a963197fc23968ad6",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/PICKUP/CASSETTE.SLT",
-                      "asset":  "S01--PICKUP--CASSETTE.SLT",
                       "bytes":  2824,
                       "sha256":  "3fc91f8479800739d3df6b27d904768492406ed48c231f8609877a4f3b450721",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/PICKUP/CASSETTE.SPR",
-                      "asset":  "S01--PICKUP--CASSETTE.SPR",
                       "bytes":  6848,
                       "sha256":  "2d1fd3fc86294a63104c759a9c4d8b7bbbf803a405195edf9337b17289724e1a",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/PICKUP/KEYS.SLT",
-                      "asset":  "S01--PICKUP--KEYS.SLT",
                       "bytes":  1960,
                       "sha256":  "985874217faec5787bfe58862aebcb5d5e05891d7daa03f66447817794f679d3",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/PICKUP/KEYS.SPR",
-                      "asset":  "S01--PICKUP--KEYS.SPR",
                       "bytes":  1716,
                       "sha256":  "2391bed2a854a4cdc6834ad09139ca726b986ee3bd6266d30f985a182042f7bf",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/PICKUP/NEONOWLF.SLT",
-                      "asset":  "S01--PICKUP--NEONOWLF.SLT",
                       "bytes":  1696,
                       "sha256":  "914fafcce953a0c2a8d6cbab452f5828acd340e89508b29587d95ee4988dd233",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/PICKUP/NEONOWLF.SPR",
-                      "asset":  "S01--PICKUP--NEONOWLF.SPR",
                       "bytes":  4462,
                       "sha256":  "fcd0ee1df5e6e797769448d946d5219180e338eaa0a675c46b9b0192f1b4c959",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S01/SCENE.INI",
-                      "asset":  "S01--SCENE.INI",
                       "bytes":  1392,
                       "sha256":  "38508b2db7bc669c2b31ffd851c01e5fdc84d5178e82ec45103fcbb8906e85f8",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/S010/320/CLIP.OWV",
-                      "asset":  "S010--320--CLIP.OWV",
                       "bytes":  20086952,
                       "sha256":  "93f78dcf3058995dc12c19ca4e0075675673889e903eb3297b334a5e4e329636",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S010/CLIP.OWV",
-                      "asset":  "S010--CLIP.OWV",
                       "bytes":  71907919,
                       "sha256":  "c1ace289fedefa1f3553de67e5b2754a82e786f0cc89eb8d54493af018288f2d",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S010/SCENE.INI",
-                      "asset":  "S010--SCENE.INI",
                       "bytes":  507,
                       "sha256":  "df271c4e2016c358145c4fc0975874798fa02aad45873d29c25f7092e9f1fbab",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/S012/320/CLIP.OWV",
-                      "asset":  "S012--320--CLIP.OWV",
                       "bytes":  7855026,
                       "sha256":  "5aab7fcb63b22a57b8c466577de33aaff301591895b1d5fceadaaffc9192d6da",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S012/CLIP.OWV",
-                      "asset":  "S012--CLIP.OWV",
                       "bytes":  25562962,
                       "sha256":  "47ca214f3ca76e735c4cdf6c6192449883412c9d7c8eb3355eaa6d777b82af14",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S012/SCENE.INI",
-                      "asset":  "S012--SCENE.INI",
                       "bytes":  536,
                       "sha256":  "aa82f346d7f518cbb8bb6312eaf61964eabb8a9286d17431ceb4d2005eb68bd7",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/S02/320/CLIP2.OWV",
-                      "asset":  "S02--320--CLIP2.OWV",
                       "bytes":  5290179,
                       "sha256":  "f1d4ba4dd490d2eb4ec92d13c04edc58400a38acd8f6b124adc76bc4e3330dac",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S02/320/CLIP3.OWV",
-                      "asset":  "S02--320--CLIP3.OWV",
                       "bytes":  1426199,
                       "sha256":  "2f5f5ad3d3e63d187258d09c6c8f1895d50542cc46d01270c8f8c96d3a2be0cb",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S02/CLIP2.OWV",
-                      "asset":  "S02--CLIP2.OWV",
                       "bytes":  17061412,
                       "sha256":  "4de9af052677b5e99d3a2a40f23caf4f59f976e6c3c334f3eb8ee4aa70a58707",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S02/CLIP3.OWV",
-                      "asset":  "S02--CLIP3.OWV",
                       "bytes":  5280938,
                       "sha256":  "ad474dccfa4cf71b4c0da887b36c31da77c5e93048dfaeaf9c5461050ac183c9",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S02/SCENE.INI",
-                      "asset":  "S02--SCENE.INI",
                       "bytes":  756,
                       "sha256":  "eed2a8da8cfad235449407decc3d2e299c86157b74862490aebb8044477d5f3e",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/S02_NO/320/CLIP.OWV",
-                      "asset":  "S02_NO--320--CLIP.OWV",
                       "bytes":  3108890,
                       "sha256":  "8f0e70413b1b088ce3dd4960a2307536808ba1fe234fec84b3f5979a0a16f174",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S02_NO/CLIP.OWV",
-                      "asset":  "S02_NO--CLIP.OWV",
                       "bytes":  11103255,
                       "sha256":  "1077960889470a676ebb3990d08dbc24d95b1353d31fa4197f746d863165c511",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S02_NO/SCENE.INI",
-                      "asset":  "S02_NO--SCENE.INI",
                       "bytes":  475,
                       "sha256":  "1e90c2f74397cc98cdca39b33c7f6567454846f04cca50d1583c3469086c92ff",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/S03/320/CLIP.OWV",
-                      "asset":  "S03--320--CLIP.OWV",
                       "bytes":  6394993,
                       "sha256":  "fc3f42e5cd07c6fa72af7bf72d9bcfbd2943cdba52197aa097602dc4b5503bfb",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S03/320/CLIP2.OWV",
-                      "asset":  "S03--320--CLIP2.OWV",
                       "bytes":  9105043,
                       "sha256":  "e90da319a1d862b3f9fd449e5663f866787581bc3098ffa2d3b1daa1a33bf543",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S03/CLIP.OWV",
-                      "asset":  "S03--CLIP.OWV",
                       "bytes":  20165174,
                       "sha256":  "bbe71577a2d287e5973e8907b015d5c8e7e36d191300ad31f45dfacc86111afc",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S03/CLIP2.OWV",
-                      "asset":  "S03--CLIP2.OWV",
                       "bytes":  29478907,
                       "sha256":  "33dceed0125bfb6835f59a1aebc7194b6e553e25527e2fe6711d51536958b89b",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S03/SCENE.INI",
-                      "asset":  "S03--SCENE.INI",
                       "bytes":  803,
                       "sha256":  "0babe6567363268e80c606ce89638a08c22aecf202fb006c8680d7780627b2f6",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/S04/320/CLIP.OWV",
-                      "asset":  "S04--320--CLIP.OWV",
                       "bytes":  2456528,
                       "sha256":  "5ca5fb6dcf609db0eac2fda230ddbf91f54d34c3a91e61dd82529a6c6c91b7f3",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S04/320/CLIP2.OWV",
-                      "asset":  "S04--320--CLIP2.OWV",
                       "bytes":  2909229,
                       "sha256":  "783e2d7f76f7181649c9b5db57fc5596d9dbd0f0da98b8d9f260e2dc9a971caa",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S04/320/PICKUP/BG.OWV",
-                      "asset":  "S04--320--PICKUP--BG.OWV",
                       "bytes":  64483,
                       "sha256":  "ea200167d7207edbd188de8690d720bdc05c2a5726d3a07015072341da144fd5",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S04/320/PICKUP/FUELHOSE.SLT",
-                      "asset":  "S04--320--PICKUP--FUELHOSE.SLT",
                       "bytes":  136,
                       "sha256":  "2693f5b743505f69ad0ba42915c7606143d9fab9b1f2f6da31c63358874b0098",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S04/320/PICKUP/FUELHOSE.SPR",
-                      "asset":  "S04--320--PICKUP--FUELHOSE.SPR",
                       "bytes":  1512,
                       "sha256":  "e56f04a6c9882a80e0be349b3249dd70e727f50030a8d9637accb2866a6b11a1",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S04/CLIP.OWV",
-                      "asset":  "S04--CLIP.OWV",
                       "bytes":  7498501,
                       "sha256":  "cec4338e23f43b7bff4acc463972de83f423fdb6b3d5ef8afc0b1d6e0f7c12ee",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S04/CLIP2.OWV",
-                      "asset":  "S04--CLIP2.OWV",
                       "bytes":  8613495,
                       "sha256":  "134b45b4c1ba1b8ba052fca5dfc6a7198b9067e3525475095ac289b33ad3ba34",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S04/PICKUP/BG.OWV",
-                      "asset":  "S04--PICKUP--BG.OWV",
                       "bytes":  253885,
                       "sha256":  "5750c9b9fbe61b1fc9b7275d5399a4110944c1e886795ee105716a805ba6039f",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S04/PICKUP/FUELHOSE.SLT",
-                      "asset":  "S04--PICKUP--FUELHOSE.SLT",
                       "bytes":  448,
                       "sha256":  "d8a4cc8879a3933d9505905c6d5f9269c648f09ef5e7c06cfbfb0c75894c0da0",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S04/PICKUP/FUELHOSE.SPR",
-                      "asset":  "S04--PICKUP--FUELHOSE.SPR",
                       "bytes":  5966,
                       "sha256":  "61e47157983244b09d23ae97eda3eefe381715517090b3401efd346a6cd611a0",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S04/SCENE.INI",
-                      "asset":  "S04--SCENE.INI",
                       "bytes":  1163,
                       "sha256":  "e0d10a91a428b614a65a45ffc2adcd1c3f400e8c18fbd1106ece82ba8a1a4e7b",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/S05/320/CLIP.OWV",
-                      "asset":  "S05--320--CLIP.OWV",
                       "bytes":  17160246,
                       "sha256":  "64a9c0b38ac5a4ee964e6b7cb330c892dd02f7445fd776034428e515bacb0b51",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S05/CLIP.OWV",
-                      "asset":  "S05--CLIP.OWV",
                       "bytes":  55765922,
                       "sha256":  "2731a0f03151075bebee6eb2f5bb41e825155312e76d983ed0fb905cd29c03c3",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S05/MUSIC.PCM",
-                      "asset":  "S05--MUSIC.PCM",
                       "bytes":  2883778,
                       "sha256":  "9f6b04426ccb606f0092c92b17b974e6bd58c6e5a96c698643543ea2cd7a9940",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/S05/SCENE.INI",
-                      "asset":  "S05--SCENE.INI",
                       "bytes":  799,
                       "sha256":  "8ddbc08cb2bbb22bc1e1a5c45f833c5a7dada63d200f4b3452821251a7418f5b",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/S06/320/CLIP.OWV",
-                      "asset":  "S06--320--CLIP.OWV",
                       "bytes":  14789353,
                       "sha256":  "1847d32d5f5dab2caccc973978488437c3bd3530650b90ed726a82bfb7d8c675",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S06/CLIP.OWV",
-                      "asset":  "S06--CLIP.OWV",
                       "bytes":  47785291,
                       "sha256":  "6539a8d071172ad9a0762eee8fa6658aa0ece45659253a85b53a993a5c9c6e98",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S06/SCENE.INI",
-                      "asset":  "S06--SCENE.INI",
                       "bytes":  872,
                       "sha256":  "3264094568ed3cb87c158da3ab35b4a537514d9296fe06ba8baf3c8a6693fc63",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/S07/SCENE.INI",
-                      "asset":  "S07--SCENE.INI",
                       "bytes":  763,
                       "sha256":  "f63b9831b03be82a3496a375af62a4ee97ca2c5050ec42a3df3795d42f465710",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/S08/SCENE.INI",
-                      "asset":  "S08--SCENE.INI",
                       "bytes":  805,
                       "sha256":  "8a5277f0b3d08a7db6477f17e1ea7d1bf9739a5f3cd5ea3e3e12ac1b161341aa",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/S15_s12_yes/320/CLIP.OWV",
-                      "asset":  "S15_s12_yes--320--CLIP.OWV",
                       "bytes":  3855112,
                       "sha256":  "d490eb7d9361d48faa26e41053c7bef9e6834fc5a021d55cbebc2d652ccf2e90",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S15_s12_yes/CLIP.OWV",
-                      "asset":  "S15_s12_yes--CLIP.OWV",
                       "bytes":  12283653,
                       "sha256":  "ae4ef39a358bcb513dec0031ff498a67a67fefa90e26b6de3fc349501e0fa4e9",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S15_s12_yes/SCENE.INI",
-                      "asset":  "S15_s12_yes--SCENE.INI",
                       "bytes":  482,
                       "sha256":  "651a47903c5ba8b89dcae1d552031fa2af8d5ffcfdb200324a26a871b2eac288",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/S16_s12_no/320/CLIP.OWV",
-                      "asset":  "S16_s12_no--320--CLIP.OWV",
                       "bytes":  3407048,
                       "sha256":  "9cad3344c121b71951fae7947f819b14c4c4877c9d62b51a0b8556e8c77d3b4c",
                       "edition":  "320"
                   },
                   {
                       "into":  "STORY/NIGHT/S16_s12_no/CLIP.OWV",
-                      "asset":  "S16_s12_no--CLIP.OWV",
                       "bytes":  10462103,
                       "sha256":  "65fba176db5694ea66609230fd9aeb650863818ac742c46cd473a330b617177d",
                       "edition":  "640"
                   },
                   {
                       "into":  "STORY/NIGHT/S16_s12_no/SCENE.INI",
-                      "asset":  "S16_s12_no--SCENE.INI",
                       "bytes":  518,
                       "sha256":  "ae2be792b6d5a725e444f12d9eb44370134aca75a6f60c6061a2845d6ff6ae1d",
                       "edition":  "shared"
                   },
                   {
                       "into":  "STORY/NIGHT/STORY.INI",
-                      "asset":  "STORY.INI",
                       "bytes":  583,
                       "sha256":  "b54853cd9ffcf47a471ad53ef408e339a6a0aeed475ec3efb187b0040b0dd04a",
                       "edition":  "shared"

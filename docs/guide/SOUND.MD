@@ -112,6 +112,23 @@ SPKOFF: in   al,61h
   cut over 6 ms (an abrupt end is a click louder than the sound) and
   measures the peak on what ships.
 - A loop bed made at run time: cross-fade its seam over 512 samples.
+- A bed that never repeats: instead of healing from a pristine copy, make
+  the bed afresh behind the beam, a sample at a time from its own noise
+  generator (A:\GAMES\MULTSOK2\SOUND.INC HEAL, WIND). A 3-second loop of
+  noise is heard as a beat - "waves"; steady unfiltered noise as "white
+  noise". The calm shore it became: the noise through a one-pole low pass
+  (`s += (n - s) / 8`) is a wave's wash, through it once more a darker
+  breeze, steady under it; now and then a wave rolls in - its wash rising
+  2 to 3 s, falling back 3 to 5, still 2 to 6, each its own height, at
+  most 6 dB over the breeze, never on a beat (WAVES). Measure it from a
+  dump of the ring: the RMS of every 2048 samples is the loudness, the
+  energy of the first difference over twice the variance its brightness.
+- Effects as lists of tones made on the spot (SOUND.INC TONE: a wave -
+  square, triangle, noise, a random walk - its length, its pitch and its
+  loudness at start and end): no recordings, a few bytes each. Soft
+  triangle tones, low and long, for a calm game. In a networked game no
+  sound is sent: each machine plays what changed in the world it draws
+  [TILES].
 - Loudness with range: 92 - (Manhattan distance / 64); under 14, not
   played; the rest cut onto the four steps. Alarms play a step down,
   because they repeat.

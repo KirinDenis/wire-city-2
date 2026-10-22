@@ -211,7 +211,7 @@
     byId("mb320").textContent = MB(size("320"));
     byId("pick640").disabled = false;
     byId("pick320").disabled = false;
-    document.querySelector(".sub").textContent += "  ·  " + manifest.tag + " · " + manifest.made;
+    document.querySelector(".sub").textContent += "  ·  disk of " + manifest.made;
   }
   loadManifest().catch((e) => say("no manifest (" + e.message + ") - nothing to play"));
 
@@ -239,7 +239,7 @@
     const total = files.reduce((n, f) => n + f.bytes, 0);
     let done = 0;
     let cache = null;
-    try { cache = await caches.open("owlnight-" + manifest.tag); } catch (e) { cache = null; }
+    try { cache = await caches.open("owlnight-" + manifest.made); } catch (e) { cache = null; }
     const bar = byId("bar"); bar.style.display = "block";
     const fill = bar.firstElementChild;
     const show = () => { fill.style.width = Math.round(done * 100 / Math.max(1, total)) + "%"; say("fetching the night: " + MB(done) + " of " + MB(total)); };
@@ -250,15 +250,15 @@
       while (next < files.length) {
         const i = next++;
         const f = files[i];
-        const url = manifest.base + f.asset;
+        const url = manifest.base + f.into;
         let r = cache ? await cache.match(url) : null;
         if (!r) {
           r = await fetch(url, { mode: "cors" });
-          if (!r.ok) throw new Error(f.asset + ": HTTP " + r.status);
+          if (!r.ok) throw new Error(f.into + ": HTTP " + r.status);
           if (cache) { try { await cache.put(url, r.clone()); } catch (e) { /* no room: play on, uncached */ } }
         }
         const bytes = new Uint8Array(await r.arrayBuffer());
-        if (bytes.length !== f.bytes) throw new Error(f.asset + ": " + bytes.length + " bytes, the manifest says " + f.bytes);
+        if (bytes.length !== f.bytes) throw new Error(f.into + ": " + bytes.length + " bytes, the manifest says " + f.bytes);
         out[i] = { path: "C/" + f.into, contents: bytes };
         done += f.bytes; show();
       }

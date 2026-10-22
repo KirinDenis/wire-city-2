@@ -1,87 +1,66 @@
-# pack-night.ps1 - stage OWL NIGHT for a GitHub RELEASE, not for a bundle.
+# pack-night.ps1 - stage OWL NIGHT as a DISK: a folder tree for a repository
+# of its own, which the game's page fetches file by file.
 #
-#   powershell -File docs\pack-night.ps1               tag night-v1
-#   powershell -File docs\pack-night.ps1 -Tag night-v2
+#   powershell -File docs\pack-night.ps1
+#   powershell -File docs\pack-night.ps1 -Base https://kirindenis.github.io/owlnight-disk/
 #
-# The story's products are hundreds of megabytes and GitHub Pages refuses a
-# file over 100 MB, which is why the game used to be a .jsdos bundle that
-# never fitted. A release is the other half of GitHub: assets of up to
-# 2 GB each, outside the repository's history, served with CORS - so the
-# page can fetch them one file at a time and hand them to the emulator
-# BEFORE it boots (js-dos's initFs; the same way OWLOSUI's DOS PC builds its
-# C:). Nothing big is committed any more.
+# The story's products are hundreds of megabytes and this repository stays
+# thin, so they live in a SEPARATE repository - owlnight-disk - as plain
+# files in the same tree the DOS engine reads: ENGINE\STORY.COM and
+# STORY\NIGHT\<scene>\... GitHub serves such files with CORS from
+# raw.githubusercontent.com (measured 2026-10-09; a GitHub RELEASE does
+# not, and that is why this is a repository and not a release), each under
+# 100 MB - the biggest clip is 69 MB; a longer one is cut at a six-second
+# keyframe group. The page (docs\owlvid.html) reads docs\owlnight.json,
+# fetches one edition's files from `base` and hands them to js-dos before
+# it boots. Nothing big is committed here.
 #
-# What this script does, and does NOT do:
-#   - copies every file the game needs into docs\owlnight\release\ (ignored
-#     by git) under a FLAT name, because release assets have no folders:
-#     STORY\NIGHT\S01\320\CLIP.OWV becomes S01--320--CLIP.OWV;
-#   - writes docs\owlnight.json - the manifest the page reads: where each
-#     asset goes on C:, its size, its hash, and which edition it belongs to
-#     (640, 320, or shared). This file IS committed; it is a few KB;
-#   - writes docs\owlnight\upload.cmd: the gh commands that create the
-#     release if it is missing and upload every asset whose hash differs
-#     from the manifest that was committed last time. It does not run them.
-#     Uploading is publishing, and publishing is the pilot's hand.
+# What this script does:
+#   - copies every file the game needs into docs\owlnight\disk\ (ignored by
+#     git here) in the DOS tree, nothing else: no frames\, no .INF, .LOG,
+#     SCENARIO.JSON;
+#   - writes docs\owlnight.json - the manifest: each file's path (the same
+#     on the disk and on C:), size, sha256 and edition (640, 320, shared).
+#     COMMITTED, a few KB; the page reads it from this site.
 #
-# Test before uploading: serve docs\ and open
-#     owlvid.html?base=owlnight/release/
-# - the page then fetches the staged files from this folder instead of the
-# release, and plays exactly what the release will.
+# Then (by hand, see the instruction in Skill\POINTTASK.md): robocopy /MIR
+# the disk folder into the clone of owlnight-disk, commit, push.
 #
-# WHERE THE FILES LIVE IS A PARAMETER, and here is why. Measured 2026-10-09
-# with curl and an Origin header: a GitHub release download answers with NO
-# Access-Control-Allow-Origin on either hop (github.com's 302, then the
-# Azure blob behind release-assets.githubusercontent.com). A browser will
-# not let the page read such a response, so the release can hold the files
-# and people can download them, but the PAGE cannot fetch them from there.
-# -Base names a host that does send the header: a folder on our own server
-# behind one Caddy block (header Access-Control-Allow-Origin "*"), or the
-# Google Drive API. Without -Base the manifest points at the release, which
-# is right for the DOS player and wrong for the page - and the script says
-# so.
+# Test before pushing: serve docs\ and open  owlvid.html?base=owlnight/disk/
+# - the page then fetches from the staged folder on this site.
 param(
-  [string]$Tag = "night-v1",
-  [string]$Repo = "",
-  [string]$Base = ""
+  [string]$Base = "",
+  [string]$DiskRepo = "owlnight-disk"
 )
 $ErrorActionPreference = "Stop"
 $root  = Split-Path -Parent $PSScriptRoot
 $story = Join-Path $root "LAB\OWLFLY4\STORY\NIGHT"
 $engine = Join-Path $root "LAB\OWLFLY4\ENGINE\STORY.COM"
-$out   = Join-Path $root "docs\owlnight\release"
+$out   = Join-Path $root "docs\owlnight\disk"
 $manifestPath = Join-Path $root "docs\owlnight.json"
-$uploadPath   = Join-Path $root "docs\owlnight\upload.cmd"
 
-if ($Repo -eq "") {
+if ($Base -eq "") {
   $url = (git -C $root remote get-url origin).Trim()
-  if ($url -match "github\.com[:/]([^/]+/[^/.]+)") { $Repo = $Matches[1] } else { throw "cannot read the GitHub repository from the origin URL: $url" }
+  if ($url -match "github\.com[:/]([^/]+)/") { $owner = $Matches[1] } else { throw "cannot read the GitHub owner from the origin URL: $url" }
+  $Base = "https://raw.githubusercontent.com/$owner/$DiskRepo/main/"
 }
+$Base = $Base.TrimEnd('/') + "/"
 if (-not (Test-Path $engine)) { throw "STORY.COM is not built: $engine (LAB\OWLFLY4\ENGINE\MAKEWIN.BAT)" }
 
-# ---- what was UPLOADED last time: upload.cmd copies the manifest it worked
-# from to uploaded.json when it finishes, and only hashes that differ from
-# that are uploaded next time. No uploaded.json: everything goes.
-$uploadedPath = Join-Path $root "docs\owlnight\uploaded.json"
-$old = @{}
-if (Test-Path $uploadedPath) {
-  $prev = Get-Content $uploadedPath -Raw | ConvertFrom-Json
-  if ($prev.tag -eq $Tag) { foreach ($f in $prev.files) { $old[$f.asset] = $f.sha256 } }
-}
-
+if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 New-Item -ItemType Directory -Force $out | Out-Null
-Get-ChildItem $out -File | Remove-Item -Force
 
 $sha = [Security.Cryptography.SHA256]::Create()
 function Hash($path) { $s = [IO.File]::OpenRead($path); try { ([BitConverter]::ToString($sha.ComputeHash($s)) -replace '-', '').ToLower() } finally { $s.Dispose() } }
 
 $files = @()
 function Add($abs, $into, $edition) {
-  $asset = ($into -replace '^STORY/NIGHT/', '') -replace '/', '--'
-  if ($into -eq "ENGINE/STORY.COM") { $asset = "STORY.COM" }
-  Copy-Item $abs (Join-Path $out $asset) -Force
+  $dest = Join-Path $out ($into -replace '/', '\')
+  New-Item -ItemType Directory -Force (Split-Path $dest -Parent) | Out-Null
+  Copy-Item $abs $dest -Force
   # an object, not a hashtable: Group-Object and ConvertTo-Json read properties
   $script:files += [pscustomobject][ordered]@{
-    into = $into; asset = $asset; bytes = (Get-Item $abs).Length; sha256 = (Hash $abs); edition = $edition
+    into = $into; bytes = (Get-Item $abs).Length; sha256 = (Hash $abs); edition = $edition
   }
 }
 
@@ -93,49 +72,37 @@ foreach ($f in Get-ChildItem $story -Recurse -File | Where-Object { $exts -conta
   Add $f.FullName "STORY/NIGHT/$rel" $edition
 }
 
-# a release asset name: letters, digits, dot, dash, underscore - nothing else survives
-foreach ($f in $files) { if ($f.asset -notmatch '^[A-Za-z0-9._-]+$') { throw "asset name GitHub would rewrite: $($f.asset)" } }
-$dup = $files | Group-Object asset | Where-Object { $_.Count -gt 1 }
-if ($dup) { throw "two files map to one asset name: $($dup[0].Name)" }
+# a path GitHub and DOS both take as it is: letters, digits, dot, dash, underscore, slashes
+foreach ($f in $files) { if ($f.into -notmatch '^[A-Za-z0-9._/-]+$') { throw "a path with a character a URL would rewrite: $($f.into)" } }
+$big = $files | Where-Object { $_.bytes -gt 100MB }
+if ($big) { throw "GitHub refuses a file over 100 MB: $($big[0].into) ($([int]($big[0].bytes / 1MB)) MB) - cut the clip at a keyframe group" }
 
-$release = "https://github.com/$Repo/releases/download/$Tag/"
-# $fetchBase, not $base: PowerShell variable names are case-insensitive, and $base = ... overwrote the parameter
-$fetchBase = if ($Base -ne "") { $Base.TrimEnd('/') + "/" } else { $release }
+# a README for the disk repository, so a visitor knows what it is
+$readme = @"
+# OWL NIGHT - the disk
+
+The files of OWL NIGHT, a DOS story played by the engine in
+[wire-city-2](https://github.com/KirinDenis/wire-city-2) (LAB/OWLFLY4):
+``ENGINE/STORY.COM`` and ``STORY/NIGHT/`` - every scene's INI, its clips and
+rooms at 640x400 (beside the INI) and at 320x200 (in each scene's ``320/``),
+and the music. Made by ``docs/pack-night.ps1`` there, from the recipes in
+``LAB/OWLFLY4/STORY/NIGHT``; this repository holds products only.
+
+To play in DOS: put this tree on a disk, ``cd ENGINE``, ``STORY``. In the
+browser: https://kirindenis.github.io/wire-city-2/owlvid.html fetches these
+files from here.
+"@
+[IO.File]::WriteAllText((Join-Path $out "README.md"), $readme.Replace("`r`n", "`n"), (New-Object Text.UTF8Encoding($false)))
+
 $manifest = [ordered]@{
-  game = "OWL NIGHT"; tag = $Tag; base = $fetchBase; made = (Get-Date).ToString("yyyy-MM-dd HH:mm")
+  game = "OWL NIGHT"; base = $Base; made = (Get-Date).ToString("yyyy-MM-dd HH:mm")
   files = $files
 }
 [IO.File]::WriteAllText($manifestPath, (($manifest | ConvertTo-Json -Depth 4) -replace "`r?`n", "`n") + "`n", (New-Object Text.UTF8Encoding($false)))
 
-# ---- the upload script: only what changed since the committed manifest ----
-$changed = $files | Where-Object { $old[$_.asset] -ne $_.sha256 }
-$lines = @(
-  "@echo off",
-  "REM upload.cmd - written by docs\pack-night.ps1. Uploads OWL NIGHT's assets to the",
-  "REM GitHub release $Tag of $Repo. Needs the GitHub CLI signed in:",
-  "REM     winget install GitHub.cli      then      gh auth login",
-  "REM Only the $($changed.Count) file(s) whose hash changed since the last upload (uploaded.json)",
-  "REM are sent (--clobber replaces them in place). Run it from anywhere.",
-  "where gh >nul 2>nul || (echo gh is not installed: winget install GitHub.cli & exit /b 1)",
-  "cd /d `"$out`"",
-  "gh release view $Tag --repo $Repo >nul 2>nul || gh release create $Tag --repo $Repo --title `"OWL NIGHT $Tag`" --notes `"The story's clips, rooms and music, fetched by docs/owlvid.html. Made by docs/pack-night.ps1.`" || exit /b 1"
-)
-foreach ($f in $changed) { $lines += "gh release upload $Tag `"$($f.asset)`" --repo $Repo --clobber || exit /b 1" }
-$lines += "copy /y `"$manifestPath`" `"$uploadedPath`" >nul"
-$lines += "echo done: $($changed.Count) file(s) uploaded to $release"
-if ($Base -ne "") { $lines += "echo the page fetches from $fetchBase - copy the same files there (the release is for people, the host is for the page)" }
-[IO.File]::WriteAllText($uploadPath, (($lines -join "`r`n") + "`r`n"), [Text.Encoding]::ASCII)
-
 $by = $files | Group-Object edition
 Write-Host "staged $($files.Count) files in $out"
 foreach ($g in $by) { Write-Host ("  {0,-7} {1,3} files {2,8:F1} MB" -f $g.Name, $g.Count, (($g.Group | Measure-Object bytes -Sum).Sum / 1MB)) }
-Write-Host "manifest  $manifestPath  (commit this)"
-Write-Host "upload    $uploadPath  ($($changed.Count) changed - run it, then commit the manifest and the page)"
-Write-Host "test      serve docs\ and open owlvid.html?base=owlnight/release/"
-if ($Base -eq "") {
-  Write-Host ""
-  Write-Host "WARNING   the manifest points at the GitHub release, and a browser cannot read"
-  Write-Host "          release assets cross-origin (no Access-Control-Allow-Origin, measured"
-  Write-Host "          2026-10-09). Run again with -Base https://<a host with CORS>/owlnight/$Tag/"
-  Write-Host "          before the page goes live; the release is still right for downloads."
-}
+Write-Host "manifest  $manifestPath  (commit this; base = $Base)"
+Write-Host "disk      robocopy `"$out`" <clone of $DiskRepo> /MIR /XD .git   then commit and push there"
+Write-Host "test      serve docs\ and open owlvid.html?base=owlnight/disk/"

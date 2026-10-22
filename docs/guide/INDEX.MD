@@ -1,7 +1,8 @@
 # INDEX - the WIRE CITY guide to making DOS games
 
 What the work on the WIRE CITY games found out - the flight sims OWL FLY
-I, II and III, the course's lessons, the demos - put down for whoever
+I, II and III, the castle Sokoban MULTIPLAY SOKO II, the course's
+lessons, the demos - put down for whoever
 makes the next DOS game here: a model working in a visitor's page, or a
 person. 8086 assembly, flat FASM, DOSBox in a browser.
 
@@ -62,6 +63,16 @@ A:\LESSONS\Lnn\, A:\GAMES\..\SRC\, A:\EXAMPLES\).
   collisions, landing, scale and overflow.
 - GAMEPLAY - the design rules the games play by: consequences, controls
   that matter, AI, damage, the HUD, rounds and teams.
+- TILES - a grid game, MULTIPLAY SOKO II's way: the grid's bits, the
+  whole level on the screen, points a player feels, prizes, undo and "the
+  level can't be won", phases, one machine keeping the world.
+- SCENE - a calm living 2D picture round a playing field: a clean floor,
+  layers, a park grown by Diamond-Square, dusk by the golden section, one
+  heartbeat clock, nothing in step, nothing blinking; drawn once, sent by
+  the stretch.
+- ART - pictures drawn by rule in sixteen colours at every size: light
+  from the top left, shading and leaves and stones as formulas, bringing
+  pictures down, FASM computing a picture, CGA and Hercules, double width.
 - MULTI - a multiplayer game on the site, step by step: `build --net`,
   A:\ENGINE\E_NET.INC, the packet, testing with two windows, a shared
   world.

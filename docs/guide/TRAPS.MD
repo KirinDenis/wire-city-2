@@ -88,6 +88,14 @@ in brackets has the detail.
   CS in one place; new pages on top [MEMORY].
 - Sound crackles at one spot -> the DMA buffer crosses a 64K physical page
   -> 64K-align its segment, or take twice the room and a straight half.
+- A .COM grows by kilobytes from one new variable -> an initialised `dw 0`
+  written after the `rb`/`rw` buffers makes FASM store every buffer
+  before it -> initialised data first, every reserved buffer after it;
+  `rw 1` for a word nobody needs zeroed.
+- "The pictures outgrew their room" -> one 64K segment of compiled
+  pictures, then two at double width -> fill segments in turn and keep
+  each picture's segment beside its offset (MULTSOK2 LOADART, PLACE); a
+  64K .COM's room is code - move data (levels, art) into files.
 
 ## Video and drawing
 
@@ -123,6 +131,14 @@ in brackets has the detail.
   stash the face before the first pass, restore it for the second.
 - A target answers where the beam is not -> two drawers with opposite
   axis signs (north up, north down) -> one sign convention per frame.
+- Garbage on the screen as something leaves the left edge -> a box half
+  off the screen clamped on its left but not its right: the right side
+  negative, compared unsigned, huge - the loop ran far past its row ->
+  after clamping both sides, return if nothing is left (MULTSOK2 DUSK).
+- On one card only, a level change shows two levels glued together and
+  packets are garbage -> that card's converter left ES on video memory and
+  every later STOSB/STOSW (the grid's clear, the packet) went to the
+  screen -> push ES before the blit, pop it after (MULTSOK2 BLITW).
 
 ## Input
 
