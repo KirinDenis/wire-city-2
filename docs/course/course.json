@@ -2,9 +2,9 @@
     "playlist":  "PLYAv8-EdgIF8",
     "disk":  {
                  "url":  "disk.zip",
-                 "version":  "C1039D9A9D65",
-                 "files":  437,
-                 "bytes":  10271311
+                 "version":  "151562F0A61E",
+                 "files":  458,
+                 "bytes":  11084411
              },
     "lessons":  [
                     {
@@ -370,14 +370,14 @@
                     {
                         "id":  "L30",
                         "folder":  "L30",
-                        "lecture":  "",
+                        "lecture":  "1E",
                         "title":  "The hangar: an aeroplane is a list of points",
                         "about":  "A break from the flight, in a small program of its own: OWL FLY III\u0027s five aeroplanes on a stand, turning. Each one is two tables and nothing more - vertices, a dw x,y,z each in cells of the squared paper it was drawn on, and faces, four vertex numbers and a colour. Every frame turns every vertex by the spin, places it in front of the lens, averages each face\u0027s corners into a depth, bubble-sorts the faces far to near and fills them in that order: the near face hides the far one only because it is written later. W shows the wire and the vertex numbers - the same numbers as the table",
                         "main":  "HANGAR.ASM",
                         "buildable":  true,
                         "size":  43434,
-                        "video":  null,
-                        "length":  null
+                        "video":  "aLovLUCeb2g",
+                        "length":  "6:08"
                     }
                 ]
 }
