@@ -755,7 +755,9 @@ export const SITE_COMMANDS = [
     valued: ['machine'], effect: 'runs', data: '{ game, dir, machine }',
     run(ctx) {
       const w = (ctx.args.join(' ') || '').toLowerCase();
-      const g = ctx.app.games.find(x => x.key === w || x.name.toLowerCase() === w || x.dir.toLowerCase() === w);
+      // (x.dir ?? ''): a disk game has no folder on C:, and the first version
+      // threw on it for every game listed after it - both Sokobans
+      const g = ctx.app.games.find(x => x.key === w || x.name.toLowerCase() === w || (x.dir ?? '').toLowerCase() === w);
       if (!g) { ctx.err(`which game? ${ctx.app.games.map(x => x.key).join(', ')}`); return 1; }
       const machine = ctx.opts.machine ? String(ctx.opts.machine).toLowerCase() : null;
       if (machine && !MACHINES.includes(machine)) { ctx.err(`--machine ${machine}: one of ${MACHINES.join(', ')}`); return 1; }
