@@ -148,6 +148,17 @@ const GAMES = [
     about: 'Where it started: a night flight over a wireframe city that the program builds rather than stores. One source file, small enough ' +
       'to read in a sitting, with the three ideas everything here is made of: fixed-point 3-D, hidden lines by the painter, a world from a seed.',
     keys: 'arrows steer - the horizon banks with you' },
+  // A game that comes as a DISK, not a folder on C:: its clips are hundreds
+  // of megabytes in a repository of their own (owlnight-disk), listed by
+  // ../owlnight.json. Play fetches them once into a folder of this browser,
+  // mounts that folder on a free letter for the run, and starts the engine
+  // there - playDisk(). Nothing of it is on C:, so the DOS starts leave it
+  // out. The 320x200 edition: a drive may hold 256 MB, the 640x400 one is 466.
+  { key: 'owlnight', name: 'OWL NIGHT', disk: { manifest: '../owlnight.json', folder: '/OWL NIGHT/', edition: '320', run: ['cd \\ENGINE', 'STORY ..\\STORY\\NIGHT /320'] },
+    hint: 'The lab: a story of scenes - video with sound, a room to touch, a question. Fetched once, 126 MB',
+    about: 'A story of scenes played by a 15 KB DOS engine from plain INI files: full-motion video at 640x400 in a codec of its own, 16-bit sound that keeps the clock, ' +
+      'a room where things are taken by mouse, a question that sends the story one way or another. A lab, unfinished: it says on the screen what is still missing.',
+    keys: 'the room: click a thing, or arrows and Enter; a clip: Space skips it; a question: 1-9; Q quits' },
   { key: 'multsoko', name: 'MULTIPLAY SOKO', dir: 'MULTSOKO', room: 'multsoko', hint: 'Sokoban on CGA for up to eight: one warehouse, 60 levels, mines, a score each; multiplayer',
     about: 'Crates onto the red marks, in a brick warehouse seen from above, on a CGA screen in four colours - or isometric, turned any of four ways. ' +
       'Everyone who plays it on the site works the same warehouse: up to eight men, a score each, a mine each that stops whoever it catches.',
@@ -629,6 +640,7 @@ export class SiteApp extends CourseApp {
         { head: 'On C:', width: 19, colour: Color.White, drop: 3 },
       ],
       rows: () => GAMES.map(g => {
+        if (g.disk) return [g.name, g.hint, 'one', 'fetched once', 'a drive for the run'];
         const s = this.gameStats?.get(g.key);
         return [g.name, g.hint, g.room ? 'network too' : 'one', s ? sizeText(s.bytes) : '...', `C:\\GAMES\\${g.dir}`];
       }),
@@ -853,6 +865,7 @@ export class SiteApp extends CourseApp {
     this.track((async () => {
       this.gameStats ??= new Map();
       for (const g of GAMES) {
+        if (g.disk) continue;                                   // nothing of it on C:
         try { this.gameStats.set(g.key, await statsOf(this.drives[2], `/GAMES/${g.dir}/`)); } catch { /* not on C: yet */ }
         this.catalog.refreshRows();
       }
@@ -865,6 +878,10 @@ export class SiteApp extends CourseApp {
     if (!g) return;
     if (cmd === Gm.Manual) { this.send(`manual ${g.key}`, 'Games'); return; }
     this.catalog.close();
+    if (g.disk && cmd !== Gm.Play) {
+      this.tell(g.name, 'It comes as a disk of its own, nothing of it is on C: or A:. Its engine, desk and converter are LAB/OWLFLY4 in the wire-city-2 repository; its clips and rooms are the repository owlnight-disk.');
+      return;
+    }
     if (cmd === Gm.Play) this.send(`play ${g.key}`, 'Games');
     else if (cmd === Gm.Source) {
       const s = this.sources?.games.find(x => x.dir === g.dir);
@@ -1066,7 +1083,7 @@ export class SiteApp extends CourseApp {
     this.baseLines = {
       prompt: '',
       commander: o.starts.commander.line,
-      ...Object.fromEntries(GAMES.map(g => [g.key, `C:\ncd \\GAMES\\${g.dir}\ncall RUN.BAT\ncd \\\ncall C:\\COMMANDR.BAT`])),
+      ...Object.fromEntries(GAMES.filter(g => !g.disk).map(g => [g.key, `C:\ncd \\GAMES\\${g.dir}\ncall RUN.BAT\ncd \\\ncall C:\\COMMANDR.BAT`])),
     };
     return {
       ...o,
@@ -1079,7 +1096,7 @@ export class SiteApp extends CourseApp {
       starts: {
         prompt: { name: 'the DOS prompt', line: '' },
         commander: { ...o.starts.commander, label: '~K~irin Commander for DOS', frame: 'blue' },
-        ...Object.fromEntries(GAMES.map(g => [g.key, { name: g.name, hint: g.hint, network: !!g.room, frame: 'black', line: this.baseLines[g.key] }])),
+        ...Object.fromEntries(GAMES.filter(g => !g.disk).map(g => [g.key, { name: g.name, hint: g.hint, network: !!g.room, frame: 'black', line: this.baseLines[g.key] }])),
       },
     };
   }
@@ -1611,6 +1628,7 @@ export class SiteApp extends CourseApp {
    * settings left as they are.
    */
   play(g, { machine = null } = {}) {
+    if (g.disk) { this.track(this.playDisk(g)); return; }
     if (!this.ready) { this.tell(g.name, 'Drive C: is still being put together - a moment, and again.'); return; }
     if (g.room) this.dos.settings = { ...this.dos.settings, room: g.room };
     const card = this.dos.settings.machine;
@@ -1622,6 +1640,79 @@ export class SiteApp extends CourseApp {
         if (this.dos.box.running && !this.dosBig) this.zoomDos();
         this.firstManual(g.key);
       }));
+  }
+
+  /**
+   * A game that comes as a DISK (OWL NIGHT): its files are fetched once,
+   * from the repository its manifest names, into a folder of this browser;
+   * the folder is mounted on the first free letter for THIS RUN ONLY -
+   * every file of every drive goes into the machine at switch-on, and 126
+   * MB on every start of every other game would be felt - and the engine is
+   * started on it. When the machine stops the letter is given back; the
+   * files stay, so the next time there is nothing to fetch.
+   */
+  async playDisk(g) {
+    if (!this.ready) { this.tell(g.name, 'Drive C: is still being put together - a moment, and again.'); return; }
+    let letter = this.freeLetter();
+    if (!letter) { this.tell(g.name, 'No drive letter is free for it (E: to Z:).'); return; }
+    try { await this.fetchDisk(g); }
+    catch (e) { this.tell(g.name, `Could not fetch it: ${e.message}`); return; }
+    letter = this.freeLetter();           // the person may have mapped one meanwhile
+    const d = await this.addDrive({ letter, kind: 'folder', folder: g.disk.folder, title: g.name }, { keep: false });
+    this.afterTable();
+    const off = this.dos.box.on(what => { if (what === 'stopped') { off(); this.removeDrive(d).catch(() => {}); } });
+    this.exampleKey = null;
+    await this.dos.runLines(g.name, [`${letter}:`, ...g.disk.run, 'C:', 'cd \\', 'call C:\\COMMANDR.BAT'], { grab: true });
+    if (this.dos.box.running && !this.dosBig) this.zoomDos();
+    this.firstManual(g.key);
+  }
+
+  /**
+   * The disk's files into this browser: the manifest (../owlnight.json -
+   * where each file goes, its size, its edition), then only the files that
+   * are not already there at their size, three at a time, a line in the
+   * terminal every tenth of the way. One failure stops the rest.
+   */
+  async fetchDisk(g) {
+    const r = await fetch(new URL(g.disk.manifest, import.meta.url), { cache: 'no-cache' });
+    if (!r.ok) throw new Error(`the manifest: HTTP ${r.status}`);
+    const m = await r.json();
+    const files = m.files.filter(f => f.edition === g.disk.edition || f.edition === 'shared');
+    const listed = new Map();                                   // folder -> name -> size, listed once
+    const sizeThere = async f => {
+      const cut = f.into.lastIndexOf('/') + 1;
+      const dir = g.disk.folder + f.into.slice(0, cut);
+      if (!listed.has(dir)) {
+        try { listed.set(dir, new Map((await this.browser.list(dir)).map(e => [e.name, e.size]))); } catch { listed.set(dir, new Map()); }
+      }
+      return listed.get(dir).get(f.into.slice(cut));
+    };
+    const missing = [];
+    for (const f of files) if (await sizeThere(f) !== f.bytes) missing.push(f);
+    if (missing.length === 0) return;
+    const total = missing.reduce((n, f) => n + f.bytes, 0);
+    let done = 0, shown = -1, next = 0;
+    const show = () => {
+      const tenth = Math.floor(done * 10 / Math.max(1, total));
+      if (tenth === shown) return;
+      shown = tenth;
+      this.netEvent(`${g.name}: ${Math.round(done / 1048576)} of ${Math.round(total / 1048576)} MB fetched${done >= total ? ' - all here' : ''}`);
+    };
+    show();
+    const stop = new AbortController();
+    const worker = async () => {
+      while (next < missing.length && !stop.signal.aborted) {
+        const f = missing[next++];
+        const x = await fetch(m.base + f.into, { mode: 'cors', signal: stop.signal });
+        if (!x.ok) throw new Error(`${f.into}: HTTP ${x.status}`);
+        const bytes = new Uint8Array(await x.arrayBuffer());
+        if (bytes.length !== f.bytes) throw new Error(`${f.into}: ${bytes.length} bytes, the manifest says ${f.bytes}`);
+        await this.browser.write(g.disk.folder + f.into, bytes);
+        if (!stop.signal.aborted) { done += f.bytes; show(); }
+      }
+    };
+    try { await Promise.all([worker(), worker(), worker()]); }
+    catch (e) { stop.abort(); throw e; }
   }
 
   /**

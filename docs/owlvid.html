@@ -294,6 +294,17 @@
         if (name !== "ci-ready") return;
         window.owlci = ci;
         say("");
+        // js-dos reads document.hidden when the machine is made and starts
+        // it PAUSED if the tab is not in front - and the fetch before this
+        // takes minutes, so a visitor who went to another tab meanwhile
+        // comes back to a black screen that never moves. Seen in the test
+        // pane: booted, the engine's log at "playing", no frame for half a
+        // minute; one ci.resume() and it ran. So: resume now, and again
+        // whenever the tab comes back or the visitor touches the page.
+        const wake = () => { try { ci.resume(); } catch (e) { /* not pausable yet */ } };
+        setTimeout(wake, 100);
+        document.addEventListener("visibilitychange", () => { if (!document.hidden) wake(); });
+        ["pointerdown", "keydown"].forEach((e) => window.addEventListener(e, wake, { capture: true }));
       },
       pathPrefix: "jsdos/emulators/",
       theme: "dark",

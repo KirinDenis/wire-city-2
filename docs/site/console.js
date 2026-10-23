@@ -760,6 +760,7 @@ export const SITE_COMMANDS = [
       const machine = ctx.opts.machine ? String(ctx.opts.machine).toLowerCase() : null;
       if (machine && !MACHINES.includes(machine)) { ctx.err(`--machine ${machine}: one of ${MACHINES.join(', ')}`); return 1; }
       ctx.app.play(g, { machine });
+      if (g.disk) { ctx.data({ game: g.key, disk: g.disk.folder, edition: g.disk.edition }); ctx.out(`${g.name}: its disk fetched once into this browser (${g.disk.folder}), mounted for this run, the engine started on it`, 'muted'); return 0; }
       ctx.data({ game: g.key, dir: `C:\\GAMES\\${g.dir}`, machine });
       ctx.out(`${g.name}: C:\\GAMES\\${g.dir}, RUN${machine ? `, on ${machine} this once` : ''}`, 'muted');
     },
