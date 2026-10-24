@@ -1,0 +1,6 @@
+PASS HUDBAR: 5 of 10 green, 2 yellow, 1 red, a little shows
+PASS HUDBAR: over full clamps, a full of 0 is empty, no fault
+PASS HUDBLINK 55 of 73, tick 65535 safe; HUDWARN only when lit
+PASS HUDPOP: rises a pixel every 3 ticks, gone at 29, red loss
+PASS HUDPOPADD: nine in eight slots, the oldest gives way
+DHUD: all checks PASS

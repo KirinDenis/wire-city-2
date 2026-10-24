@@ -1,0 +1,39 @@
+; TREE 16x24 - a round leafy tree on a two-pixel trunk, with its shadow
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Tree() 274, Trunk() 272; example
+;       GAMES\MULTSOK2\ART.INC TRE_16
+;
+; WHAT: the wood's tree (land 136..195). 24 rows: it stands on its cell's
+; bottom row and its crown rises 8 over the cell above.
+; COLOURS: leaves FOLIAGE.TXT; the trunk '6' lit (its left column), '0'
+; shade (its right); the '0' dithered shadow.
+; THE RULE: trunk at x 7..8, y 14..21: x = 7 '6', x = 8 '0'. The crown:
+; FOLIAGE.TXT over the lobes (8, 6, 5.6), (4.8, 9.5, 4.4), (11.2, 9.5,
+; 4.4), (8, 11.5, 4.5). The shadow: ellipse (10, 22), radii 6 and 2.
+; BLOSSOM.TXT is the same tree in flower.
+; ANIMATION: none; a firefly lives by one tree in four (R_LIFE.ASM).
+TREE16:   db 16,24
+          db '.......00.......'
+          db '.....0AAA20.....'
+          db '....0AAAA2A0....'
+          db '...0AAAAAA2A0...'
+          db '...AAAAAA2A22...'
+          db '..00000A200000..'
+          db '..2AAAA00AAAA2..'
+          db '.0AAAA0000AA2A0.'
+          db '.AAAA0A2A202A22.'
+          db '0AAA0AA22A202220'
+          db '.AA2AAA2A222222.'
+          db '.02A2A2A2222220.'
+          db '..A2A2A2222020..'
+          db '...00A2222000...'
+          db '.....026000.....'
+          db '......0600......'
+          db '.......60.......'
+          db '.......60.......'
+          db '.......60.......'
+          db '.......60.......'
+          db '......060.0.0...'
+          db '.....0.600.0.0.0'
+          db '....0.0.0.0.0.0.'
+          db '.......0.0.0.0..'

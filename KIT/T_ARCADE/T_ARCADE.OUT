@@ -1,0 +1,9 @@
+PASS T_ARCADE Enter on the title card started a game
+PASS T_ARCADE Space fired bullets from the pool
+PASS T_ARCADE the enemies moved (drift + 8.8 fall)
+PASS T_ARCADE SPR_HIT found bullets on enemies
+PASS T_ARCADE the score went up by the hits
+PASS T_ARCADE the lives ran out: GAME OVER card, best score kept
+PASS T_ARCADE sound effects were asked for
+  sound went to the PC speaker
+  final score 10

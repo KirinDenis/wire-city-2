@@ -1,0 +1,72 @@
+; GEM 16x16 x3 - the diamond prize: growing small, whole, whole with a star
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Gem() 680; GAMES\MULTSOK2\SCENE.INC SHIMMER
+;       2018; examples ART.INC DI0_16 (small), DI1_16, DI2_16 (star)
+;
+; WHAT: a rare prize that comes and goes: it grows out of the floor for a
+; second (small, then whole), lies 15 s, a light going round it.
+; COLOURS: 'F' its lit top-left facet, 'B' pale cyan facets, '9' blue, '3'
+; teal middle, '1' its rim (dark blue, not black: it lies on the floor);
+; the star 'F' / 'B'.
+; THE RULE, size s (0.55 small, 1 whole), centre (8, 8.5):
+;   dx = (x + 0.5 - 8) / s, dy = (y + 0.5 - 8.5) / s
+;   rim = |dx| / 6 + (dy < -1.5 ? -dy / 4 : max(0, dy) / 6.5)
+;   dy < -4.5 or rim > 1 -> '.';  rim > 0.82 -> '1'
+;   dy < -1.5 (the crown) -> dx < 0 ? 'F' : 'B';  dy < -0.5 -> '9'
+;   else dx < -1 'B', dx < 1.5 '3', else '9'
+;   star: column 12 rows 0..4 and row 2 columns 10..14 ('F' at (12, 2),
+;   else 'B'); a small one at column 3 rows 11..13, row 12 columns 2..4 'F'.
+; ANIMATION: DI0 then DI1 as it grows; then DI1 with a spot of light going
+; round it, a place each half beat (R_WATER.ASM SHIMMER, ring RINGG); DI2
+; now and then.
+GEM16S:   db 16,16
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '......1FB1......'
+          db '.....BB3399.....'
+          db '......B339......'
+          db '.......33.......'
+          db '.......11.......'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+GEM16:    db 16,16
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '......1111......'
+          db '.....1FFBB1.....'
+          db '..199999999991..'
+          db '..1BBBB3399991..'
+          db '...1BBB339991...'
+          db '....1BB33991....'
+          db '.....1B3391.....'
+          db '......1331......'
+          db '.......11.......'
+          db '................'
+          db '................'
+GEM16X:   db 16,16
+          db '............B...'
+          db '............B...'
+          db '..........BBFBB.'
+          db '............B...'
+          db '............B...'
+          db '......1111......'
+          db '.....1FFBB1.....'
+          db '..199999999991..'
+          db '..1BBBB3399991..'
+          db '...1BBB339991...'
+          db '....1BB33991....'
+          db '...F.1B3391.....'
+          db '..FFF.1331......'
+          db '...F...11.......'
+          db '................'
+          db '................'

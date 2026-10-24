@@ -1,0 +1,28 @@
+; MEADOW 16x16 - a garden lawn in the sun: lime half-tone through green, buttercups
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Meadow() 243; example GAMES\MULTSOK2\ART.INC
+;       GRL_16
+;
+; WHAT: the garden zone's ground (land 64..135, SCATTER.TXT). SOLID,
+; seamless. Brighter than GRASS: the garden is in the light.
+; COLOURS: 'A' lime, '2' green, 'E' a buttercup, '0' a speck.
+; THE RULE, h = hash(x + 13, y + 29):
+;   h mod 11 = 1 -> 'E';  h mod 13 = 2 -> '0';  h mod 3 = 0 -> 'A';  else '2'
+; ANIMATION: none.
+MEADOW16: db 16,16
+          db '2AAE2E0A2E2AE22A'
+          db 'A222AAAA222AAEAE'
+          db '2A2A222222EEA2AE'
+          db '222A2E2E2AAE22A2'
+          db 'A2A20222AAAE2EA2'
+          db 'AAAA222222EA2AA0'
+          db '2022A2AAAA0222AE'
+          db '22A2A2A020022A2A'
+          db '222EE2A2222AAAA2'
+          db '2220222AAAE22A22'
+          db '22A222AAEE20A2A2'
+          db '02E2AA2AAA222E22'
+          db '22A2A020222A22A2'
+          db '22222E22A2A0222A'
+          db 'E022AA0A22AA2E0A'
+          db '2202222A22AA22A2'

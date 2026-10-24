@@ -1,0 +1,60 @@
+; TOWER 16x32 - a round stone tower, a lit window, a slender slate-blue spire, a red pennant
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Tower() 570; example GAMES\MULTSOK2\ART.INC
+;       TWR_16
+;
+; WHAT: stands on the outer corners of the walls (two in three of them, by
+; a hash). 32 rows: the bottom 16 on its cell, the spire over the cell
+; above. Romantic, not cartoon: the first roofs were red cones - at 8 px
+; they dithered into "brown swirls"; slender spires replaced them.
+; COLOURS: tower 'F' lit left, '7' stone, '8' shade and mortar, '0' edges;
+; the window '0' with an 'E' gold light, '8' its sill; spire 'B' lit left,
+; '9' slate, '1' shade, '0' edge and slate courses; 'E' gold ball, '0'
+; staff, 'C'/'4' the pennant.
+; THE RULE:
+;   y 0..1, 9 <= x <= 13, x - 9 <= (y = 0 ? 4 : 2): the pennant 'C' / '4'
+;   y <= 2, x = 8: the staff '0', at y = 2 the gold ball 'E'; y = 3, x 7..8 'E'
+;   y 4..15 the spire: w = 0.6 + (y - 4) * 6 / 11 (half-width); dx = x+0.5-8
+;     |dx| > w -> '.';  |dx| > w - 0.8 or y = 15 -> '0' (edge a pixel thin)
+;     u = dx / w; course = (y - 4) mod 3 = 2 (rows of slates)
+;     u < -0.55 -> course ? '9' : 'B'   (the light on its left)
+;     u <  0.15 -> course ? '1' : '9'
+;     else      -> course ? '0' : checker '1' / '9'
+;   y 16..31, x 2..13 the tower: x = 2, x = 13, y = 16, y = 31 -> '0'
+;     the window y 19..23, x 7..8: y = 19 '8', (21, x 7) 'E', else '0'
+;     mortar: (y - 17) mod 3 = 2 or (x + ((y - 17)/3)*2) mod 5 = 0 -> '8'
+;     u = (x - 2) / 11: < 0.25 'F', < 0.6 '7', < 0.85 checker '7'/'8', '8'
+; ANIMATION: none; a lit window could flicker by R_FLAME's height table.
+TOWER16:  db 16,32
+          db '........0CCCCC..'
+          db '........0444....'
+          db '........E.......'
+          db '.......EE.......'
+          db '.......00.......'
+          db '.......00.......'
+          db '......0100......'
+          db '......0990......'
+          db '.....099190.....'
+          db '.....911000.....'
+          db '....0B999910....'
+          db '....BB999191....'
+          db '...0911110000...'
+          db '..0BB999919190..'
+          db '..0BB999991910..'
+          db '.00000000000000.'
+          db '..000000000000..'
+          db '..0FF877778780..'
+          db '..0FF877788880..'
+          db '..088888888880..'
+          db '..08F770087880..'
+          db '..08F77E078780..'
+          db '..088880088880..'
+          db '..0FF780078880..'
+          db '..0FF787787880..'
+          db '..088888888880..'
+          db '..0F8777787880..'
+          db '..0F8777788780..'
+          db '..088888888880..'
+          db '..0FF778778780..'
+          db '..0FF778787880..'
+          db '..000000000000..'

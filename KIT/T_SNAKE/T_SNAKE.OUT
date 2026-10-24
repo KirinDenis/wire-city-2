@@ -1,0 +1,5 @@
+PASS T_SNAKE the pilot ate food (a free cell found by MTH_RANGE)
+PASS T_SNAKE the ring-buffer body grew by one a food
+PASS T_SNAKE the speed went up with the food
+PASS T_SNAKE it crashed: GAME OVER, the best score kept
+  length at the end 7

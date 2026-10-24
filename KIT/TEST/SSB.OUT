@@ -1,0 +1,13 @@
+SSB - K_SB.INC, the Sound Blaster ring
+  a Sound Blaster at 0220h  IRQ 7  DMA 1  ring at segment 1193
+PASS S1 the ring crosses no 64K page
+  every effect mixed once, ticks: 6
+PASS S2 every effect mixed into the ring and returned
+  a second of SB_HEAL, calls: 16166  (the DMA position moved)
+PASS S3 a second of SB_FX and SB_HEAL, no hang
+PASS S4 SB_HEAL keeps every register
+PASS S5 SB_DONE twice: silent, the 64K back with DOS
+PASS S6 no sound chosen: SB_INIT CF=1, every call returns
+PASS S7 no card at 280h: SB_INIT CF=1, no memory, calls return
+PASS S8 BLASTER=a240 i10 d3: port 240h, IRQ 10, DMA 3
+SSB done

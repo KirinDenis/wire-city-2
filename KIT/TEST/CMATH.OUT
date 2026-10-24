@@ -1,0 +1,60 @@
+PASS MTH_RND after seed 1 = 39022  got -26514
+PASS MTH_SEED leaves an odd seed  got 1
+PASS MTH_RANGE 7 x1000: never >= 7  got 0
+PASS MTH_RANGE 7: both 0 and 6 come up  got 257
+PASS MTH_RANGE 0 = 0 (no divide)  got 0
+PASS MTH_RANGE 1 = 0  got 0
+PASS MTH_SIN 0 = 0  got 0
+PASS MTH_SIN 64 = 256  got 256
+PASS MTH_SIN 128 = 0  got 0
+PASS MTH_SIN 192 = -256  got -256
+PASS MTH_SIN 32 = 181  got 181
+PASS MTH_SIN 160 = -181  got -181
+PASS MTH_SIN 320 wraps = 256  got 256
+PASS MTH_COS 0 = 256  got 256
+PASS MTH_COS 128 = -256  got -256
+PASS MTH_ATAN2 north = 0  got 0
+PASS MTH_ATAN2 east = 64  got 64
+PASS MTH_ATAN2 south = 128  got 128
+PASS MTH_ATAN2 west = 192  got 192
+PASS MTH_ATAN2 north-east = 32  got 32
+PASS MTH_ATAN2 (-30000,-30000) = 160 (big legs)  got 160
+PASS MTH_ATAN2 (3000,-4000) = 102 (true 101.8)  got 102
+PASS MTH_ATAN2 (0,0) = 0  got 0
+PASS MTH_DIST (300,-400) = 512 (true 500)  got 512
+PASS MTH_LERP 100..200 at 128 = 150  got 150
+PASS MTH_LERP -100..100 at 256 = 100  got 100
+PASS MTH_LERP at 0 = a  got -100
+PASS MTH_CLAMP 5 in 0..3 = 3  got 3
+PASS MTH_CLAMP -5 in 0..3 = 0  got 0
+PASS MTH_ABS -7 = 7  got 7
+PASS MTH_SGN -9 = -1  got -1
+PASS MTH_SGN 0 = 0  got 0
+PASS MTH_SGN 5 = 1  got 1
+PASS MTH_HASH the same cell twice = the same  got 0
+PASS MTH_HASH is 0..255 (AH = 0)  got 0
+PASS MTH_HASH the next cell differs  got 1
+PASS MTH_SQRT 0 = 0  got 0
+PASS MTH_SQRT 15 = 3  got 3
+PASS MTH_SQRT 16 = 4  got 4
+PASS MTH_SQRT 10000 = 100  got 100
+PASS MTH_SQRT 65535 = 255  got 255
+PASS MTH_MULDIV 100*200/50 = 400  got 400
+PASS MTH_MULDIV 100*200/50 CF = 0  got 0
+PASS MTH_MULDIV -300*200/7 = -8571  got -8571
+PASS MTH_MULDIV 30000*30000/1 overflow CF = 1  got -1
+PASS MTH_MULDIV /0 CF = 1  got -1
+PASS MTH_MULDIV -32768/-1 overflow CF = 1  got -1
+PASS MTH_MULDIV -32768*1/1 = -32768  got -32768
+PASS MTH_MULDIV 30000*30000/30000 = 30000  got 30000
+PASS MTH_RND keeps registers  got 0
+PASS MTH_RANGE keeps registers  got 0
+PASS MTH_SIN keeps registers  got 0
+PASS MTH_COS keeps registers  got 0
+PASS MTH_ATAN2 keeps registers  got 0
+PASS MTH_DIST keeps registers  got 0
+PASS MTH_LERP keeps registers  got 0
+PASS MTH_HASH keeps registers  got 0
+PASS MTH_SQRT keeps registers  got 0
+PASS MTH_MULDIV keeps registers  got 0
+ALL PASS

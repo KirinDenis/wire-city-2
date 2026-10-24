@@ -1,0 +1,7 @@
+PASS NWORLD apply: clock clamped, off-grid and twice left out, names printable
+PASS NWORLD apply: a bad phase drops it whole; a huge count clamped
+PASS NWORLD host intake: hello listed; take checked; bad item, version ignored
+PASS NWORLD send builds the whole world; read back the same
+PASS NWORLD who: hosts merge to the lower; a talking host kept; a quiet one replaced
+PASS NWORLD hand-over: host quiet, the next lowest heard carries on - then us
+NWORLD ALL PASS

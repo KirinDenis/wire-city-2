@@ -1,0 +1,123 @@
+; FONTS - which letters for what at 320x200, the outline rule, colours, sizes, calls
+; ----------------------------------------------------------------------------
+; from: LESSONS\L26\LETTERS.ASM TXT46O (the ring), GAMES\OWLFLY3\SRC\UI.INC
+;       UBIG (x3 blocks), GAMES\MULTSOK2\DRAW.INC PRINT4/PRINT8 (the shadow,
+;       the 4x6 set to ASCII 95), LESSONS\L30\HANGAR.ASM DIGITS (numbers
+;       ringed over the picture); the blocks are KIT\LIB\K_FONT.INC (FNT_*)
+;
+; WHY: a game in the plain BIOS 8x8, white, no outline, looks like a
+; program that forgot to draw its letters. The games and lessons here
+; never ship that: their titles are big and ringed, their HUD is the
+; 4x6 letters in a dark ring, their numbers are ringed too. Every look
+; below is ONE call of FNT_LOOK and ONE call that draws.
+;
+; THE OUTLINE RULE: light letters, a DARK RING ONE PIXEL ALL ROUND (all
+; eight neighbours, not just a shadow). Then the text reads on sky, on
+; snow, on the sun, on its own colour - on everything a moving picture
+; can put behind it. The ring is black (0) or the darkest colour the
+; picture has; the ink is white (15) or yellow (14). A shadow alone is not
+; enough over a busy picture (see FFONT's "1 New game"); ring AND shadow
+; is the title look. Two-pixel rings (fnt_rw 2) for x3 and x4 letters,
+; one pixel for x1 and x2.
+;
+; WHICH FONT FOR WHAT
+;   what               look (mov al,..; call FNT_LOOK)   size at 320x200
+;   the game's name    FNT_LTITLE  8x8 x4 smooth prop,   32 px high, ~9
+;                      gold ramp, ring 2 + shadow 3       letters across
+;   a big word, loud   FNT_LFIRE   8x16 x2 smooth prop,  32 px, ~20 letters
+;                      fire ramp, ring 2 + shadow
+;   subtitle, banner   FNT_LSUB    8x8 x2 smooth prop,   16 px, ~18 letters
+;                      white, ringed
+;   GAME OVER, LEVEL 3 FNT_LBIG    4x6 x3 blocks (UBIG), 15 px, 26 letters
+;                      yellow, ring + shadow
+;   menus, long text   FNT_LMENU   8x16, white, shadow   16 px, 40 a line
+;                      (over a busy picture: fnt_style FNT_RING)
+;   a line of text     FNT_LBODY   8x8, light grey,      8 px, 40 a line
+;                      shadowed (ring it over pictures)
+;   HUD words, labels  FNT_HUD     4x6 ringed, fast -    5 px (7 with the
+;                      (or FNT_LHUD + FNT_PUT)            ring), 80 a line
+;   score, time, ammo  FNT_LSCORE  bold digits 6x7,      7 px, 45 a line
+;                      yellow, ringed (x2 for a clock)
+;
+; COLOURS (the DEFAULT mode-13h palette, no DAC change):
+;   ink 15 white, 14 yellow, 12 light red (danger), 10 light green (good),
+;   11 light cyan; ring 0 black; shadow 0, or 8 dark grey on a dark picture.
+;   Ramps ready in K_FONT, top to bottom, [fnt_gtab] + [fnt_gn]:
+;     fnt_gold  92 68 44 44 43 43 42 6     pale yellow, gold, orange, brown
+;     fnt_fire  15 44 43 42 41 40 40 112   white-hot, yellow, red, dark red
+;     fnt_ice   15 100 76 52 53 54 55 32   white, cyan, blue
+;     fnt_steel 31 31 30 29 27 26 24 22    white to grey (chrome digits)
+;     fnt_lime  94 70 46 47 48 48 120 120  pale, green, dark green
+;   Your own ramp: db the colours top to bottom, any length 1..255; it is
+;   stretched over the letters' height whatever the scale. A ramp is for
+;   letters 16 px high or more - at 8 px it is stripes.
+;
+; SIZES: the 8x8 at x4 is 32x32 a cell (proportional: an I 4 columns +1,
+; times 4); x4 is the largest; the maps are 2.4 KB once. FNT_WIDTH,
+; FNT_HEIGHT measure; FNT_CENTER and FNT_RIGHT place. Smooth (fnt_smooth
+; 1) at x2/x3/x4 fills the stair-steps of diagonals (Scale2x/Scale3x):
+; ALWAYS smooth the 8x8 when it is scaled; keep the 4x6 square (UBIG).
+;
+; SPEED: FNT_HUD is bit masks, cheap - every frame. FNT_PUT builds a byte
+; map per letter (scaled, ringed): fine for a score line every frame,
+; slow for a whole screen of x4 letters on a real 8086 - draw a title once
+; into the background, or at most a few words a frame.
+;
+; THE CALLS (ES = the back buffer, 320 bytes a row; x, y the top-left):
+;       mov  al,FNT_LTITLE
+;       call FNT_LOOK
+;       mov  si,sName           ; db 'Owl Run',0
+;       mov  bx,160             ; centred on x 160
+;       mov  dx,20
+;       call FNT_CENTER
+;
+;       mov  byte [fnt_col],15  ; HUD words, every frame
+;       mov  byte [fnt_rc],0
+;       mov  si,sAlt            ; db 'ALT',0
+;       mov  bx,4
+;       mov  dx,5
+;       call FNT_HUD            ; BX = past it
+;
+;       mov  al,FNT_LSCORE      ; the score: 5 digits, zero-padded
+;       call FNT_LOOK
+;       mov  ax,[score]
+;       mov  cl,5
+;       mov  bx,28
+;       mov  dx,3               ; 2 above the 4x6 label: their feet level
+;       call FNT_NUMZ
+;
+;       mov  al,FNT_LSUB        ; anything changed after the look
+;       call FNT_LOOK
+;       mov  byte [fnt_col],14
+;       mov  word [fnt_gtab],fnt_ice
+;       mov  byte [fnt_gn],FNT_ICEN
+;
+; A WHOLE TITLE SCREEN AND SCORE LINE: KIT\REC\R_TITLE.ASM (TTLCARD,
+; TTLRUN, TTLHUD). K_TEXT.INC (TXT_*) stays for plain text and DOS
+; output; both can be in one program. Every KIT\T_* template uses them:
+; copy one and the letters come with it.
+;
+; EGA, CGA, HERCULES (K_D4's four-bits-a-pixel frame, sent by K_CARD):
+;       call D4_INIT            ; AX = [crd_buf], BL = [crd_wide]
+;       call FNT_OND4           ; K_FONT draws there now, not into ES
+;   ...every font, scale, ring, shadow and look as above, colours 0..15
+;   (PALETTE.TXT). FNT_LTITLE's gold and FNT_LFIRE's fire turn into
+;   fnt_gold4 / fnt_fire4 by themselves; fnt_ice4 fnt_steel4 fnt_lime4 for
+;   the rest. FNT_TO4 for a buffer of your own (DL = 1: EGA 640's fine
+;   pixels, x 0..639); FNT_TO13 back to ES. KIT\T_GRID does all of it.
+; A DAC OF YOUR OWN (a game that sets 1..14, or cycles colours): give the
+; letters inks and a ramp it leaves alone - T_FX's fx_gold, T_FLY's
+; fly_gold (R_TITLE: ttl_ramp, ttl_rampn, ttl_keyc, ttl_hotc).
+;
+; THE FONTS THIS DISK HAS, and what the kit made of them:
+;   ROM 8x8 (INT 10h 1130h BH 3/4, F000:FA6E) - every lesson's TXTROM,
+;     MULTSOK2 PRINT8, OWLFLY4 DRAWTXT (doubled at 640): FNT_F8, smoothed
+;   VGA 8x16 (BH 6) - nowhere yet: FNT_F16, the menus' font
+;   OWL FLY 4x6 (CITY.DAT resource 1 = FONT46 = VFONT = HFONT, 41 glyphs;
+;     MULTSOK2 FONT4 the full ASCII 32..95) - FNT_F4 and FNT_HUD
+;   L26 TXT46O ring of bit masks - FNT_HUD, and FNT_RINGM on byte maps
+;   L30 DIG46 / HANGAR DIGITS - the 4x6 digits drawn 4 times black then
+;     once in ink: the lazy ring (4-neighbour); FNT_FDIG is new, bold
+;   OWLFLY3 UBIG - the 4x6 at x3 in blocks: FNT_LBIG
+;   The infographic decks (LESSONS\*\INFOGR.PAS) use the BGI DefaultFont,
+;     which IS the ROM 8x8 - no separate bitmap to take

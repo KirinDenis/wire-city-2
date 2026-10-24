@@ -1,0 +1,29 @@
+; BUSH 16x16 - a round bush of four leafy lobes, with its shadow
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Bush() 270; example GAMES\MULTSOK2\ART.INC
+;       BSH_16 (FOLIAGE.TXT computes a near twin of it in FASM)
+;
+; WHAT: the commonest thing of the park, every zone but the pines. One cell.
+; COLOURS: FOLIAGE.TXT's ('A' lit, '2' shade, '0' edge), the dithered
+; '0' shadow down-right of it.
+; THE RULE: FOLIAGE.TXT over the lobes (cx, cy, r) = (5.5, 9, 4.6),
+; (10.5, 8.5, 4.8), (8, 6, 5), (8, 11, 4.2); SHADOW.TXT's ellipse at
+; (9.5, 13.5), radii 7 and 2.5.
+; ANIMATION: none; a butterfly may live over flowers, not bushes.
+BUSH16:   db 16,16
+          db '................'
+          db '......0000......'
+          db '....00AAA200....'
+          db '....0AAAAA20....'
+          db '...0A0AA0AAA0...'
+          db '...02AA0AAAA20..'
+          db '..2AAAA2AAA2A20.'
+          db '.0AAAA0AA02A222.'
+          db '.0AAAAA2A2A2222.'
+          db '.0AA0AA22A20220.'
+          db '.0A2AAA2A222200.'
+          db '..2A2A2A222200..'
+          db '...002A222200.0.'
+          db '...0.A222200.0.0'
+          db '....0.02200.0.0.'
+          db '.....0.0.0.0.0..'

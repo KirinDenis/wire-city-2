@@ -1,0 +1,63 @@
+; STONES 16x16 - a castle wall: big grey stones in three courses, lit on top and left
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Stones() 135; examples GAMES\MULTSOK2\ART.INC
+;       WA1_16, WA2_16 (ArtGen2's exact output)
+;
+; WHAT: a wall cell, SOLID (no '.'), seamless: courses repeat in 16 down,
+; stones 8 wide across. Four variants (v = 0..3) by a hash of the cell keep
+; a long wall from looking printed.
+; COLOURS: '7' the stone, 'F' its lit top row and left column, '8' its
+; shaded bottom row and right column, '0' the joints. A dark stone (one in
+; five): '7' lit, '8' body, '0' shade. Lime growth on the outer side is
+; GROWTH.TXT drawn over it.
+; THE RULE for pixel (x, y), variant v:
+;   course = 0 for y 0..4, 1 for y 5..10, 2 for y 11..15
+;   top, bot = 0,4 | 5,10 | 11,15          (the course's rows)
+;   shift = ((course + v) mod 2) * 4 + (v mod 3)   (every other course half
+;                                                   a stone along)
+;   bx = (x + shift) mod 8                 (where in its stone)
+;   stone = (x + shift) / 8 + course * 3 + v * 7   (which stone)
+;   sy = y - top, sh = bot - top
+;   bx = 7 or y = bot                      -> '0' the joint, a pixel thin
+;   (bx = 0 or bx = 6) and (sy = 0 or sy = sh-1)  -> '0' a rounded corner
+;   dark = hash(stone, 5) mod 5 = 0        (SCATTER.TXT's hash will do)
+;   sy = 0 or bx = 0                       -> lit   ('F', a dark one '7')
+;   sy = sh-1 or bx = 6                    -> shade ('8', a dark one '0')
+;   hash(x*3 + v, y) mod 11 = 0            -> shade (a pit in the stone)
+;   else                                   -> body  ('7', a dark one '8')
+; ANIMATION: none. Torches on a wall beside the floor: TORCH.TXT.
+; SMALLER: by majority (RULES.TXT).
+WALL16:   db 16,16
+          db '0FFFFF0007777700'
+          db 'F777778078888800'
+          db 'F877778078880800'
+          db '0888880000000000'
+          db '0000000000000000'
+          db 'FF000FFFFF000FFF'
+          db '7780F7777780F778'
+          db '7780F7787780F777'
+          db '7780F7777780F777'
+          db '8800088888000888'
+          db '0000000000000000'
+          db '0FFFFF0007777700'
+          db 'F777878070888800'
+          db 'F777778078888800'
+          db '0888880000000000'
+          db '0000000000000000'
+WALL16B:  db 16,16
+          db '7000FFFFF0007777'
+          db '800F787778078888'
+          db '800F777778078888'
+          db '0000888880000000'
+          db '0000000000000000'
+          db 'FFFFF000FFFFF000'
+          db '7777780F7778780F'
+          db '7777780F7777780F'
+          db '7777780F7778780F'
+          db '8888800088888000'
+          db '0000000000000000'
+          db 'F000FFFFF000FFFF'
+          db '780F7777780F7787'
+          db '780F8877780F7777'
+          db '8000888880008888'
+          db '0000000000000000'

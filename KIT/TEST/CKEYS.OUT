@@ -1,0 +1,30 @@
+PASS KEY_ON vector 9 = our handler (called twice)  got 0
+PASS KEY_REMOTE: Space held  got 1
+PASS KEY_TAP Space: latched  got 1
+PASS KEY_TAP Space again: consumed  got 0
+PASS KEY_REMOTE: Space let go after its frames  got 0
+PASS Enter up again  got 0
+PASS KEY_TAP Enter: the tap between frames kept  got 1
+SKIP INT 9 handler via the 8042 D2h: this emulator does not do it
+PASS KEY_NEW = A, newly down  got 30
+PASS KEY_NEW again = 0 (still held, not new)  got 0
+PASS KEY_NEW after the release = 0  got 0
+PASS KEY_ANY = Q, the lowest latched  got 16
+PASS KEY_ANY clears every latch (D gone too)  got 0
+PASS KEY_PEEK hooked: AH = Z, AL = 0  got 11264
+PASS KEY_PEEK leaves it  got 1
+PASS KEY_WAIT hooked: AH = Z  got 11264
+PASS KEY_FLUSH clears the latches  got 0
+PASS KEY_HELD masks bit 7  got 1
+PASS KEY_HELD keeps registers  got 0
+PASS KEY_TAP keeps registers  got 0
+PASS KEY_REMOTE keeps registers  got 0
+PASS KEY_FLUSH keeps registers  got 0
+PASS KEY_ON keeps registers  got 0
+PASS KEY_OFF keeps registers  got 0
+PASS KEY_OFF vector 9 = the BIOS again  got 0
+PASS KEY_OFF emptied the BIOS buffer  got 0
+PASS KEY_PEEK BIOS: AX = 2D78h (X, x)  got 11640
+PASS KEY_WAIT BIOS: AX = 2D78h  got 11640
+PASS KEY_PEEK BIOS: empty after the wait  got 0
+ALL PASS

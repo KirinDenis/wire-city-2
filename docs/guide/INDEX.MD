@@ -43,6 +43,9 @@ A:\LESSONS\Lnn\, A:\GAMES\..\SRC\, A:\EXAMPLES\).
 
 ## The topics
 
+- KIT - start here when making a game: A:\KIT, proven blocks to include
+  and recipes to copy, a catalog of all of them, templates of whole small
+  games. Glue, don't write from nothing.
 - TRAPS - what cost hours, as symptom -> cause -> fix. Read it first.
 - FASM - the syntax, the 8086 set, what each instruction clobbers, the
   error messages and what they mean, building.

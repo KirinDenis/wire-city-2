@@ -1,0 +1,49 @@
+; BRIDGE 16x16 - a drawbridge of planks over the moat, two ways
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Bridge() 193; examples GAMES\MULTSOK2\ART.INC
+;       BRV_16 (the way runs up and down), BRH_16 (the way runs across)
+;
+; WHAT: lies on the water cell in front of the gate once the gate is up.
+; SOLID. Draw the one whose planks lie ACROSS the way.
+; COLOURS: '6' wood, 'E' the lit edge of each plank, '0' the gap between
+; planks and a knot, '8' the rails at the sides, '0' their outer edge.
+; THE RULE, across = the way runs left-right:
+;   a = across ? y : x      (across the bridge)    b = the other (along)
+;   a <= 1 or a >= 14 -> the rails: a = 0 or 15 -> '0', else '8'
+;   b mod 4 = 3 -> '0'       b mod 4 = 0 -> 'E'
+;   (a*5 + b) mod 9 = 0 -> '0' (a knot)      else '6'
+; ANIMATION: none (it appears when the gate is up).
+BRIDG16V: db 16,16
+          db '08EEEEEEEEEEEE80'
+          db '0866666066666680'
+          db '0866606666666680'
+          db '0800000000000080'
+          db '08EEEEEEEEEEEE80'
+          db '0866666606666680'
+          db '0866660666666680'
+          db '0800000000000080'
+          db '08EEEEEEEEEEEE80'
+          db '0866666660666680'
+          db '0866666066666680'
+          db '0800000000000080'
+          db '08EEEEEEEEEEEE80'
+          db '0866666666066680'
+          db '0866666606666680'
+          db '0800000000000080'
+BRIDG16H: db 16,16
+          db '0000000000000000'
+          db '8888888888888888'
+          db 'E660E660E660E660'
+          db 'E660E660E660E660'
+          db 'E660E660E660E660'
+          db 'E600E660E660E660'
+          db 'E660E600E660E660'
+          db 'E060E660E600E660'
+          db 'E660E060E660E600'
+          db 'E660E660E060E660'
+          db 'E660E660E660E060'
+          db 'E660E660E660E660'
+          db 'E660E660E660E660'
+          db 'E660E660E660E660'
+          db '8888888888888888'
+          db '0000000000000000'

@@ -1,0 +1,7 @@
+PASS R_MAIN KEY_OFF: INT 9 is the vector found at the start
+PASS R_MAIN SPK_STOP: the speaker gate (port 61h bits 0,1) is shut
+PASS R_MAIN VGA_OFF: the screen is in text mode 3
+PASS R_MAIN SB_DONE: the card is closed (sb_ok 0)
+PASS R_MAIN NETCLOSE: the socket is closed (net_ok 0)
+PASS R_MAIN VGA_OFF: the back buffer was given back
+PASS R_MAIN the loop ran its ticks before the way out

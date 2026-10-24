@@ -1,0 +1,32 @@
+; BOULDER 16x16 - two grey stones lying together, lit from the top left
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Boulder() 538; example GAMES\MULTSOK2\ART.INC
+;       ROK_16
+;
+; WHAT: rocks in the garden, the wood, the pines. Round and shaded: reduce
+; it by AVERAGE (RULES.TXT).
+; COLOURS: SHADE.TXT's ramp "F7788" ('F' highlight, '7' lit and mid, '8'
+; shade and dark), '0' the edge, 'A' grass blades at its foot.
+; THE RULE: two ellipses (cx, cy, rx, ry) = (9.5, 10.5, 5.5, 4.5) and
+; (5, 11.5, 3.8, 3.2), the first that holds the pixel:
+;   nx = (x + 0.5 - cx) / rx, ny = (y + 0.5 - cy) / ry, d = nx^2 + ny^2
+;   d < 1: d > 0.8 -> '0', else SHADE.TXT's ramp at (nx, ny)
+;   y >= 13 and hash(x, y) mod 3 = 0 -> 'A';  else '.'
+; ANIMATION: none.
+BOULDR16: db 16,16
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '.......00700....'
+          db '.....077F77770..'
+          db '....07FF777777..'
+          db '..0707777777780.'
+          db '.07707777778880.'
+          db '.07707777788880.'
+          db '.0777777788888..'
+          db '..078077888880..'
+          db '...A00.00800..A.'
+          db 'AA..AA.AAAAA....'

@@ -1,0 +1,65 @@
+; CRATE 16x16 (and 8x8) - a crate on a black floor: gold rim lit top-left, iron corners, planks
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs CrateN() 608; examples GAMES\MULTSOK2\ART.INC
+;       BOX_16, BOG_16 (home, in greens), BOX_8 (drawn by the rule at 8)
+;
+; WHAT: the thing a player pushes. SOLID. On the black floor NOTHING of it
+; is black: black-edged crates "looked like arrows". Home on its mark, the
+; same in greens.
+; COLOURS (out / home): lit rim 'E' / 'A', wood '6' / '2', seams '4' / '0',
+; dark side '6' / '2'; iron corners 'F' on their lit edge, '7', rivets '8'.
+; THE RULE, drawn at EVERY size n (so the rim survives 6 px):
+;   c = n >= 10 ? 3 : 2                       (the iron corners)
+;   corner = (x < c or x >= n-c) and (y < c or y >= n-c):
+;     c = 3 and x in {1, n-2} and y in {1, n-2} -> '8' (a rivet, 10 and over)
+;     x = 0 or y = 0 -> 'F', else '7'
+;   x = 0 or y = 0 -> lit;  x = n-1 or y = n-1 -> dark   (the rim, a pixel)
+;   b = n >= 12 ? 2 : 1                       (the frame inside the rim)
+;   x <= b or y <= b or x >= n-1-b or y >= n-1-b -> y <= b ? lit : wood
+;   pitch = max(2, n/5);  (y - b - 1) mod pitch = pitch-1 -> seam
+;   hash(x*7 (+3 home), y / pitch) mod 5 = 0 -> lit (a grain)
+;   else wood
+; ANIMATION: none; a push moves it a cell (or slide it 4 px a frame).
+CRATE16:  db 16,16
+          db 'FFFEEEEEEEEEEFFF'
+          db 'F87EEEEEEEEEE787'
+          db 'F77EEEEEEEEEE777'
+          db 'E66E6E6666666666'
+          db 'E66E6E6666666666'
+          db 'E664444444444666'
+          db 'E66666666E666666'
+          db 'E66666666E666666'
+          db 'E664444444444666'
+          db 'E666666666EE6666'
+          db 'E666666666EE6666'
+          db 'E664444444444666'
+          db 'E66E666666E66666'
+          db 'F776666666666777'
+          db 'F876666666666787'
+          db 'F776666666666777'
+CRATE16H: db 16,16
+          db 'FFFAAAAAAAAAAFFF'
+          db 'F87AAAAAAAAAA787'
+          db 'F77AAAAAAAAAA777'
+          db 'A22222222A22A222'
+          db 'A22222222A22A222'
+          db 'A220000000000222'
+          db 'A2222A22A222A222'
+          db 'A2222A22A222A222'
+          db 'A220000000000222'
+          db 'A2222A22222A2222'
+          db 'A2222A22222A2222'
+          db 'A220000000000222'
+          db 'A2222A2222A2A222'
+          db 'F772222222222777'
+          db 'F872222222222787'
+          db 'F772222222222777'
+CRATE8:   db 8,8
+          db 'FFEEEEFF'
+          db 'F7EEEE77'
+          db 'E6EE6E66'
+          db 'E6444466'
+          db 'E6666666'
+          db 'E6444466'
+          db 'F7666677'
+          db 'F7666677'

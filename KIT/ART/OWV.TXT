@@ -1,0 +1,128 @@
+; OWV - video and compressed pictures for mode 13h: the format in plain words, how to make one
+; ----------------------------------------------------------------------------
+; from: LAB\OWLFLY4\VIDEO\FORMAT.md (the format's own description - two
+;       mistakes in it, marked below), TOOLS\Vid2Owv\Program.cs (the encoder
+;       that writes the real files), LAB\OWLFLY4\VIDEO\OWV.INC (the 386
+;       player). The kit's 8086 decoder: KIT\LIB\K_OWV.INC. Test files:
+;       TOOLS\Img2Owv. Every line here is a comment: the file can be included.
+;
+; WHAT IT IS FOR
+;   A cutscene, a title clip, or a background picture packed small. OWV is
+;   built to be UNPACKED FAST, not to pack well: every step is a copy, a
+;   fill or a skip - no multiplies per pixel, no tables, no divides.
+;   A 320x200 picture is 64000 bytes raw; a drawn one is a few KB as OWV;
+;   a slow pan over a still costs about thirty bytes a frame.
+;
+; THE FILE
+;   a header of 800 bytes, then chunks one after another in play order,
+;   the last one END. No index: a clip plays from the start to the end.
+;   Numbers are little-endian (low byte first).
+;
+; THE HEADER (800 bytes)
+;   +0   4 bytes   'OWV1'
+;   +4   word      width   - 320 for the kit (OWL FLY 4's own clips: 640)
+;   +6   word      height  - 200 for the kit (400)
+;   +8   byte      frames a second (12 is usual; never 0)
+;   +9   byte      flags: bit 0 = there is sound, bit 1 = the sound is
+;                  signed 16-bit (else unsigned 8-bit)
+;   +10  word      how many video frames
+;   +12  word      the sound's rate in Hz, 0 if none
+;   +14  word      0
+;   +16  dword     the largest chunk in the file, in bytes. FORMAT.md puts
+;                  a WORD at +14 and an index offset at +16; Vid2Owv
+;                  writes the dword here and 0 at +20. Nothing reads it.
+;   +20  12 bytes  0
+;   +32  768 bytes the palette: 256 entries x R,G,B, each 0..63 - what the
+;                  VGA DAC takes, ready to OUT to port 3C9h
+;
+; A CHUNK
+;   +0  byte   its type     +1 byte 0     +2 dword  the payload's length
+;   +6  the payload (the 6 head bytes are not counted in the length)
+;   types: 01 KEY   02 DELTA   03 AUDIO   04 PALETTE   FF END (no payload)
+;   Any other type: a player steps over it by its length.
+;   Sound comes BEFORE the picture it belongs with.
+;
+; THE RLE (a KEY frame, and RLE blocks inside a DELTA)
+;   Bytes are colour numbers (palette indices). A LEAD byte n, then:
+;     n = 00..7F   the next n+1 bytes are copied as they are (1..128)
+;     n = 80..FF   the next ONE byte is repeated n-127 times (80h = once,
+;                  FFh = 128 times). FORMAT.md says "257-n" - wrong: the
+;                  encoder writes 7Fh + run and the player subtracts 7Fh.
+;   The unpacker is told how many bytes to MAKE and stops there.
+;   example: 82 07  02 01 02 03  81 09   ->   7 7 7  1 2 3  9 9
+;   It packs anything: K_OWV's OWV_UNRLE unpacks any RLE sprite or screen.
+;
+; KEY (01) - a whole frame: 64000 bytes (320x200) of RLE, row by row.
+;   A keyframe every few seconds and at every cut of the scene.
+;
+; DELTA (02) - a frame as changes to the one before:
+;   +0 signed byte dx, +1 signed byte dy - the GLOBAL SHIFT: first the
+;      whole previous frame is moved by (dx,dy) pixels; what scrolls in
+;      from outside is colour 0. A pan over a still is then already right.
+;   +2 block opcodes, for 8x8 blocks in raster order (40 x 25 = 1000 at
+;      320x200: left to right, then the next row of blocks):
+;      00..7F        skip n+1 blocks (1..128): right as they are
+;      80 c          FILL: the whole block is colour c
+;      81 + 64       LITERAL: the block's 64 bytes, row by row
+;      82 cx cy      COPY: the block from the PREVIOUS frame (before the
+;                    shift), cx,cy signed pixels away from this block's
+;                    place; always inside the frame
+;      83 lo hi +L   RLE: a word L (the coded length - FORMAT.md forgets
+;                    this word), then L bytes of RLE that make 64 bytes.
+;                    The next opcode is L bytes on: trust L, not the RLE.
+;      FF            the frame's end: every block left is a skip
+;
+; PALETTE (04) - first entry (byte), count-1 (byte), then count x R,G,B.
+;   Fades and colour cycling with no pixel touched.
+;
+; AUDIO (03) - PCM, mono, the header's rate: 8-bit unsigned or 16-bit
+;   signed (flags bit 1). Chunks are not all the same length: 22050 Hz at
+;   12 fps alternates 1837 and 1838 samples so the clock never drifts.
+;   K_OWV hands them to your OWV_AUDIO routine if you define one; else it
+;   steps over them and the BIOS tick is the clock.
+;
+; MAKING A FILE
+;   From footage (needs ffmpeg on PATH): TOOLS\Vid2Owv with a manifest,
+;   a text file of KEY = value lines. For the kit's 320x200:
+;       SOURCE    = clip.mp4
+;       OUTPUT    = INTRO.OWV          (8.3 for DOS)
+;       WIDTH     = 320
+;       HEIGHT    = 200
+;       FPS       = 12
+;       KEYEVERY  = 48                 (a keyframe every 4 s at 12 fps)
+;       AUDIO     = 0                  (no sound; or 11025 / 22050 Hz)
+;       AUDIOBITS = 8                  (8 or 16; 16 needs a SB16 player)
+;       FIT       = crop               (or pad, stretch)
+;       DITHER    = bayer:bayer_scale=3   (ORDERED dither only: an unchanged
+;                                      pixel must stay the same index, or no
+;                                      block is ever skipped)
+;       TOLERANCE = 0                  (0 exact; 2 lets grain through as skips)
+;       COPY      = on
+;       SEARCH    = 24                 (the global shift search, pixels)
+;     dotnet run --project TOOLS\Vid2Owv -c Release -- INTRO.INF
+;   From pictures (no ffmpeg): TOOLS\Img2Owv packs 8-bit (256-colour,
+;   uncompressed) 320x200 BMP files, one a frame, the first one's palette:
+;     dotnet run --project TOOLS\Img2Owv -c Release -- ROOM.OWV ROOM.BMP
+;     dotnet run --project TOOLS\Img2Owv -c Release -- LEVELS.OWV /key 0 L1.BMP L2.BMP
+;     dotnet run --project TOOLS\Img2Owv -c Release -- /test KIT\TEST
+;   (the last writes VTEST.OWV, VTEST.SUM and the broken VBAD*.OWV the
+;   kit's tests use). Img2Owv decodes every file again before it says OK.
+;
+; LIMITS ON THE 8086 (K_OWV.INC)
+;   - 320x200 only; OWV_OPEN refuses anything else (CF, AL = 3).
+;   - Memory: 192 KB from DOS - two 64000-byte frames and a 64 KB chunk
+;     buffer (OWV_ALLOC). A .COM leaves that free on a 640 KB machine.
+;   - A chunk is read whole into one segment: over 65535 bytes is refused
+;     (CF, AL = 4). A KEY is at most 64500 bytes; a DELTA could pass 64K
+;     only if almost every block were coded RLE at 63 bytes - Img2Owv
+;     sends such a frame as a KEY instead; Vid2Owv does not check.
+;   - Speed: a DELTA frame moves the whole previous frame (64000 bytes)
+;     before its blocks, and OWV_SHOW moves 64000 more to A000h. In the
+;     kit's test DOSBox (0.74-3, its default cycles) the test clip decodes
+;     and shows at about 200 frames a second; on a real 4.77 MHz 8086 the
+;     two moves alone are about a fifth of a second (an estimate, not
+;     measured) - a few frames a second there; a 286 is several times
+;     faster. On slow machines play at a low fps, or show stills.
+;   - Time is the BIOS tick (18.2 a second): a frame is due on the tick
+;     its number says, so 12 fps shows frames 1 or 2 ticks apart.
+;   - Sound needs a player of your own (OWV_AUDIO); the kit plays silent.

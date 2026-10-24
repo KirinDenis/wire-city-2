@@ -1,0 +1,7 @@
+.title  Lunar Lander (Sonnet, kit)
+.what   Sonnet built it on KIT\T_ARCADE with kit blocks. The pilot: the best gameplay and physics of the landers.
+.tier   EXAMPLE
+.main   LANDB.ASM
+.build  FASM LANDB.ASM LANDB.COM
+.run    LANDB.COM
+.made   by a model on 2026-10-24 in the kit experiment, unchanged since: ~142K tokens, 2 builds

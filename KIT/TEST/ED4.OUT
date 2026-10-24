@@ -1,0 +1,60 @@
+PASS D4_INIT rowtab[100] = 16000  got 16000
+PASS D4_INIT narrow: 160 bytes a row  got 160
+PASS D4_INIT dimtab: AF -> 27  got 39
+PASS D4_ROWS rows 198..(clamped) colour 6  got 102
+PASS D4_ROWS row 197 untouched  got 0
+PASS D4_ROWS backwards draws nothing  got 0
+PASS D4_PSET x 4 = C (high), x 5 = 9 (low)  got 201
+PASS D4_GET (5,3) = 9  got 9
+PASS D4_PSET off the left keeps registers  got 0
+PASS D4_PSET below the bottom keeps registers  got 0
+PASS D4_PSET off the left wrote nothing  got 0
+PASS D4_FILL keeps registers  got 0
+PASS D4_FILL box x 10 w 4: byte 5  got 119
+PASS D4_FILL box: row 11 byte 6  got 119
+PASS D4_FILL box: byte 7 untouched  got 0
+PASS D4_FILL box: row 12 untouched  got 0
+PASS D4_FILL clipped left: byte 1 filled  got 170
+PASS D4_FILL clipped left: nothing before the row  got 0
+PASS D4_COMP holed 4x2: 2 + 8 bytes  got 10
+PASS D4_COMP SI past the picture (2 + 8)  got 10
+PASS D4_COMP header: 2 rows, 2 bytes  got 514
+PASS D4_SPR see-through keeps the backdrop: 1E  got 30
+PASS D4_SPR row 0 byte 1: 23  got 35
+PASS D4_SPR row 1 byte 0: 45  got 69
+PASS D4_SPR clipped left: byte 1 at column 0  got 35
+PASS D4_SPR clipped left: the row before untouched  got 238
+PASS D4_SPR d4_clipt: the row above it skipped  got 238
+PASS D4_SPR d4_clipt: the row below drawn  got 69
+PASS D4_SPR keeps registers  got 0
+PASS D4_COMP solid: 2 rows, 1 byte + 80h  got -32510
+PASS D4_COMP solid 2x2: 2 + 2 bytes  got 4
+PASS D4_SPR solid row 1: 34  got 52
+PASS D4_COMP2 1x: 2 rows, 2 bytes  got 514
+PASS D4_COMP2 doubled pixel, second row  got 17
+PASS D4_COMP2 see-through pixel kept  got 238
+PASS D4_COMP the look: S = d4_look  got 90
+PASS D4_DIM F A -> 7 2  got 114
+PASS D4_DIM stops at DX  got 0
+PASS D4_COPYBG row 51 copied  got 51
+PASS D4_COPYBG row 52 not  got 0
+PASS D4_PRINT4 SI past the zero  got 2
+PASS D4_PRINT4 tx on by 4  got 64
+PASS D4_PRINT4 "1": (61,60) lit  got 15
+PASS D4_PRINT4 "1": (60,60) dark  got 0
+PASS D4_PRINT4 "1": (62,64) lit  got 15
+PASS D4_NUM 7, 3 digits: 007  got 76
+PASS D4_NUM first digit 0: its middle hollow  got 0
+PASS D4_SNUM -5: two letters  got 84
+PASS D4_PRINT8 tx on by 8  got 108
+PASS D4_PRINT8 "A" from the BIOS font: lit pixels  got 1
+PASS D4_BANNER box colour 1 (centred)  got 1
+PASS D4_INIT wide: 320 bytes a row  got 320
+PASS D4_ROWS wide: the last byte  got 0
+PASS D4_PSET wide: the column byte, both halves  got 153
+PASS D4_PSETF wide: fine x 11 = byte 5 low  got 148
+PASS D4_COMP wide: a byte a pixel, 11h  got 4352
+PASS D4_COMP wide: see-through keeps the byte  got 255
+PASS D4_FILL wide: 3 columns = 3 bytes  got 238
+PASS D4_FILL wide: the 4th untouched  got 0
+ALL PASS

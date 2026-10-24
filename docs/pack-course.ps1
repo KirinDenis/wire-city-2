@@ -97,6 +97,13 @@ $picked += Pick "GAMES\MULTSOKO" '\.COM$'
 $picked += Pick "GAMES\MULTSOK2" $TEXT
 $picked += Pick "GAMES\MULTSOK2" '\.(COM|DAT)$'
 $picked += Get-Item (Join-Path $root "TOOLS\OBJ2DAT.COM")
+# The KIT: proven blocks a model glues a game from (docs\guide\KIT.MD). Its
+# sources, recipes, art and templates; the tests' data (a test clip and its
+# sums) and the templates' INI files. Not its .ps1 helpers - they are Windows'.
+$picked += Pick "KIT" '\.(TXT|BAT)$'
+foreach ($d in Get-ChildItem (Join-Path $root "KIT") -Directory) {
+  $picked += Pick "KIT\$($d.Name)" '\.(ASM|INC|BAT|INF|TXT|MD|INI|OWV|SUM)$'
+}
 
 # FASM gets -m 4096 on the disk's copies: a line that runs it ON something,
 # not the "if not exist ...FASM.EXE goto" checks.

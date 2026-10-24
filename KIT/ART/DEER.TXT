@@ -1,0 +1,33 @@
+; DEER 16x16 - a doe grazing, side on (drawn by hand, pixel by pixel)
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Deer() 474; example GAMES\MULTSOK2\ART.INC
+;       DEE_16
+;
+; WHAT: a creature standing still in the garden, the wood, the pines. A
+; hand-drawn picture: no rule; reduce it by majority (RULES.TXT); at double
+; width double each pixel.
+; COLOURS: '6' brown body, 'E' gold spots and its eye, 'F' the lit edge
+; of its rump, '0' the outline, legs '0'/'6', a dithered '0' shadow row.
+; THE RULE for drawing creatures by hand: an outline of '0' all round (it
+; stands on grass), the body one colour, ONE lighter colour on its top-left
+; edge, legs two pixels '0' + body colour, a shadow row of '0' on a
+; checker under the feet. Side on, head down: it grazes, calm.
+; ANIMATION: none. A living deer: every 3 to 6 s (a period of its own)
+; lift its head - redraw rows 4..9 one row higher for 2 s.
+DEER16:   db 16,16
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '.........00.....'
+          db '..00000000060...'
+          db '.066E6666E660...'
+          db '0F6666666666000.'
+          db '006666666660.660'
+          db '.0666666660..0E0'
+          db '..0660..0660..0.'
+          db '..060....060....'
+          db '..060....060....'
+          db '..060....060....'
+          db '..00......00....'
+          db '...0.0.0.0.0.0..'

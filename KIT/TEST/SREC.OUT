@@ -1,0 +1,10 @@
+SREC - KIT\REC\R_SOUND.ASM
+  on the Sound Blaster:
+PASS S1 SNDDIFF: coin, hit, game over heard; a new level quiet
+PASS S2 SNDNEAR: near heard, far not
+PASS S3 SNDTOG: all, effects only, off, all again
+  on the PC speaker alone:
+PASS S1 SNDDIFF: coin, hit, game over heard; a new level quiet
+PASS S2 SNDNEAR: near heard, far not
+PASS S3 SNDTOG: all, effects only, off, all again
+SREC done

@@ -1,0 +1,43 @@
+PASS R_HORIZ level: (160,90) is sky  got 1
+PASS R_HORIZ level: (160,110) is ground  got 2
+PASS R_HORIZ banked right 45: (300,60) is ground  got 2
+PASS ...and (20,60) is sky  got 1
+PASS R_HORIZ nose up 16: the horizon drops to row 190  got 190
+PASS ...and (160,150) is sky  got 1
+PASS R_STARS: no star below the horizon (rows 101..199)  got 0
+PASS R_STARS: stars above it  got 1
+PASS R_BOX3D: a box ahead shows its south wall (lit, 4)  got 4
+PASS R_BOX3D: from the east, looking west: the east wall (5)  got 5
+PASS R_BOX3D: from above: the roof (6)  got 6
+PASS R_BOX3D BOXALL: sorted - the near box (4) is on top  got 4
+PASS ...and the far one (9) beside it  got 9
+PASS R_BOX3D: a box past BOXFAR is not drawn  got 0
+PASS R_TERRDR: the disk of 12 nodes is 441 squares  got 441
+PASS R_TERRDR: ground at the bottom of the screen  got 1
+PASS ...and nothing at the top (above the horizon)  got 0
+PASS ...no divide faults  got 0
+PASS R_WIRE: the see-through lattice draws  got 1
+      pixels lit: 4337
+      pixels lit: 3572
+PASS R_WIRE: the skyline hides some of it  got 1
+PASS ...and leaves r3_line as it found it  got 0
+PASS R_FLIGHT: 10 frames north at 48 = z 480  got 480
+PASS R_FLIGHT: 10 frames of RIGHT turn 20  got 20
+PASS ...and bank to the limit, 30  got 30
+PASS ...and the stick back climbs 200  got 1200
+PASS R_FLIGHT: let go, 5 frames: the bank falls to 15  got 15
+PASS R_GROUND: under the ground: crashed (AL 1)  got 1
+PASS ...the eye put back above the ground  got 0
+PASS R_GROUND: then a wreck (AL 2)  got 2
+PASS R_GROUND: then up again (AL 3)  got 3
+PASS ...above the highest point by GCUP  got 0
+PASS R_GROUND: high up: flying (AL 0)  got 0
+PASS R_LADDER: the +10 rung at row 62 (tan*FOCAL = 38)  got 10
+PASS ...with its gap in the middle  got 0
+PASS R_LADDER: the -10 rung at row 138...  got 10
+PASS ...dashed  got 0
+PASS R_LADDER COMPASS: heading 0, the long tick at x 160  got 10
+PASS R_LADDER VTAPE 1000: the long tick 1000 on the pointer row  got 10
+PASS ...1100 a short one 12 rows up  got 10
+PASS ...4 pixels long  got 0
+RREC: all PASS

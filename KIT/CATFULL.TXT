@@ -1,0 +1,444 @@
+KIT CATFULL - one line a block (made by MKCAT.ps1; do not edit). The short list: CATALOG.TXT.
+
+== LIB - include and call
+R3_CAMERA      LIB\K_3D.INC           place the camera: AX,BX,CX = x,y,z; DX heading, SI pitch, DI roll
+R3_TRIG        LIB\K_3D.INC           rerun SETTRIG after changing heading/pitch/roll yourself
+R3_YAW         LIB\K_3D.INC           world point AX,BX,CX -> camera space turned by the heading
+R3_PITCH       LIB\K_3D.INC           tilt a turned point by the camera's pitch: BX=y, CX=z
+R3_VIEW        LIB\K_3D.INC           world point AX,BX,CX -> full camera space (turned and pitched)
+R3_POINT       LIB\K_3D.INC           world point AX,BX,CX -> screen AX,BX; CF = not on the screen
+R3_EDGE        LIB\K_3D.INC           a 3D line from (r3_x0,r3_y0,r3_z0) to (r3_x1,..) in colour AL
+R3_EDGEC       LIB\K_3D.INC           a 3D line already in camera space (r3_vx0..r3_vz1), colour AL
+R3_QUAD        LIB\K_3D.INC           a quad of 4 world corners (r3_qx/qy/qz): AL colour, AH mode
+R3_MODEL       LIB\K_3D.INC           draw a model (Obj2Inc tables) at [r3_mx/my/mz], yaw [r3_myaw]
+R3_ORBIT       LIB\K_3D.INC           camera on a circle round a point, looking at it
+R3_CHASE       LIB\K_3D.INC           chase camera: behind and above a thing, turning after it
+R3_TRAP        LIB\K_3D.INC           take INT 0: a divide fault in 3D code drops that face/line
+R3_UNTRAP      LIB\K_3D.INC           give INT 0 back (every way out; safe when not taken)
+R3_SAFE        LIB\K_3D.INC           run the routine at SI under the divide guard; CF = it faulted
+CRD_DETECT     LIB\K_CARD.INC         ask the machine which cards it shows: crd_cap, the best in crd_card
+CRD_MEM        LIB\K_CARD.INC         the 4bpp frame (and the copy) for [crd_card], from DOS
+CRD_SET        LIB\K_CARD.INC         put up [crd_card]'s graphics mode (cleared), tables made
+CRD_RESET      LIB\K_CARD.INC         back to the text mode DOS lent us (Hercules: mode 7 by hand)
+CRD_MKTAB      LIB\K_CARD.INC         make the CGA half-tone or Hercules density tables (crd_tab)
+CRD_BLIT       LIB\K_CARD.INC         send what changed in the 4bpp frame to the card
+D4_INIT        LIB\K_D4.INC           point the 4bpp drawing at a buffer; row, dim and font tables
+D4_PSET        LIB\K_D4.INC           one pixel: x BX (0..319), y DX (0..199), colour AL; clipped
+D4_PSETF       LIB\K_D4.INC           one FINE pixel: at EGA 640 x BX 0..639; else as D4_PSET
+D4_GET         LIB\K_D4.INC           read one pixel's colour: x BX (0..319), y DX -> AL
+D4_ROWS        LIB\K_D4.INC           fill whole rows AX..DX-1 with colour BL
+D4_FILL        LIB\K_D4.INC           a box: x BX (even), y DX, CX wide (even), SI high, colour AL
+D4_COPYBG      LIB\K_D4.INC           copy rows BX..DX-1 of a background buffer into the frame
+D4_DIM         LIB\K_D4.INC           darken rows BX..DX-1 one step (dusk, a dialog's backdrop)
+D4_PIXC        LIB\K_D4.INC           a text-art character AL -> colour AL; CF = 1 see-through
+D4_COMP        LIB\K_D4.INC           compile a text-art picture (DS:SI) to masks and inks at ES:DI
+D4_COMP2       LIB\K_D4.INC           compile a text-art picture twice as big both ways (a winner)
+D4_SPR         LIB\K_D4.INC           draw a compiled picture at x BX (even), y DX; clipped
+D4_PRINT4      LIB\K_D4.INC           the zero-ended string at SI in 4x6 letters at [d4_tx],[d4_ty]
+D4_NUM         LIB\K_D4.INC           AX unsigned in 4x6 digits at [d4_tx],[d4_ty], at least CL of them
+D4_SNUM        LIB\K_D4.INC           AX signed in 4x6 digits ('-' first if below 0), CL digits least
+D4_PRINT8      LIB\K_D4.INC           the zero-ended string at SI in the BIOS 8x8 letters
+D4_BANNER      LIB\K_D4.INC           string SI centred across the screen at y DX: 8x8 yellow on a box
+DRW_ADDR       LIB\K_DRAW.INC         DI = the offset of pixel (AX,BX): y*320 + x, no clipping
+DRW_CLIP       LIB\K_DRAW.INC         set the clip window every DRW_ routine cuts to (inclusive)
+DRW_NOCLIP     LIB\K_DRAW.INC         clip to the whole screen again (0..319 x 0..199)
+DRW_PIXEL      LIB\K_DRAW.INC         one pixel in [drw_col], if it is inside the clip window
+DRW_HLINE      LIB\K_DRAW.INC         horizontal line of CX pixels from (AX,BX) to the right, clipped
+DRW_VLINE      LIB\K_DRAW.INC         vertical line of CX pixels from (AX,BX) downwards, clipped
+DRW_RECT       LIB\K_DRAW.INC         filled rectangle, clipped
+DRW_FRAME      LIB\K_DRAW.INC         rectangle outline, one pixel wide, clipped
+DRW_LINE       LIB\K_DRAW.INC         line (AX,BX)-(CX,DX), Cohen-Sutherland clipped, Bresenham
+DRW_CIRCLE     LIB\K_DRAW.INC         round ring (aspect-corrected midpoint), centre AX,BX radius CX
+DRW_DISC       LIB\K_DRAW.INC         filled round disc (aspect-corrected), centre AX,BX radius CX
+DRW_POLY       LIB\K_DRAW.INC         filled convex polygon from a point list, scanline, clipped
+DRW_TRI        LIB\K_DRAW.INC         filled triangle (AX,BX) (CX,DX) (SI,DI), clipped
+DRW_DITHER     LIB\K_DRAW.INC         Bayer-dithered box between two shades: a colour between colours
+DRW_GRADV      LIB\K_DRAW.INC         vertical gradient box, [drw_col] at the top to [drw_col2] at the bottom, dithered
+FNT_TO4        LIB\K_FONT.INC         draw the letters into a 4-bits-a-pixel buffer (EGA/CGA/Hercules) instead of ES
+FNT_OND4       LIB\K_FONT.INC         draw the letters where K_D4 draws (its d4_seg, d4_base, d4_rowb)
+FNT_TO13       LIB\K_FONT.INC         draw the letters into ES again, a byte a pixel (mode 13h, the default)
+FNT_LOOK       LIB\K_FONT.INC         set the whole look at once: AL = FNT_LHUD/LMENU/LTITLE/LSUB/LSCORE/LBODY/LBIG/LFIRE
+FNT_CHAR       LIB\K_FONT.INC         one letter AL at (BX,DX) in the current font, size and style
+FNT_PUT        LIB\K_FONT.INC         zero-ended string SI at (BX,DX) in the current font and look
+FNT_WIDTH      LIB\K_FONT.INC         CX = the width in pixels string SI takes in the current font and look
+FNT_HEIGHT     LIB\K_FONT.INC         CX = the height in pixels of the current font at its scale
+FNT_CENTER     LIB\K_FONT.INC         string SI centred on x BX, its top at y DX (current font and look)
+FNT_RIGHT      LIB\K_FONT.INC         string SI ending at x BX (right-aligned), top at y DX
+FNT_NUM        LIB\K_FONT.INC         AX unsigned in decimal at (BX,DX) in the current font and look
+FNT_NUMZ       LIB\K_FONT.INC         AX unsigned, zero-padded to CL digits (a score: 00120), at (BX,DX)
+FNT_HUD        LIB\K_FONT.INC         fast: string SI in the 4x6 letters ringed, at (BX,DX) - for every frame
+GRD_CLEAR      LIB\K_GRID.INC         empty the whole grid (and its zero rows): every cell 0
+GRD_INSIDE     LIB\K_GRID.INC         CF=1 if cell BX is off the level (outside grd_w x grd_h)
+GRD_AT         LIB\K_GRID.INC         AL = the bits of cell BX; off the level it reads as a wall
+GRD_SET        LIB\K_GRID.INC         set the bits AL in cell BX (nothing if BX is off the grid)
+GRD_CLR        LIB\K_GRID.INC         clear the bits AL in cell BX (nothing if BX is off the grid)
+GRD_CELL       LIB\K_GRID.INC         BX = the cell of column AL, row AH (row*32 + column)
+GRD_XY         LIB\K_GRID.INC         AL = column, AH = row of cell BX
+GRD_STEP       LIB\K_GRID.INC         DX = the cell delta of direction AL (0 up 1 right 2 down 3 left)
+GRD_KEYDIR     LIB\K_GRID.INC         AL = the direction of scan code AH: arrows and W A S D
+GRD_UNSEE      LIB\K_GRID.INC         clear the GRD_SEEN bit in every cell (the searches do it)
+GRD_FLOOD      LIB\K_GRID.INC         set bit AL on every cell reachable from cell BX (AH bits block)
+GRD_BFS        LIB\K_GRID.INC         nearest cell from BX whose bits AND AL equal AH, and its distance
+GRD_PATH       LIB\K_GRID.INC         the first step from cell BX toward cell DI by a shortest path
+GRD_LOAD       LIB\K_GRID.INC         a level from text: db width, height, then the rows' letters
+HOT_ENTRY      LIB\K_HOT.INC          DI = the address of thing BX in the table SI
+HOT_PUT        LIB\K_HOT.INC          fill thing DI from a compiled sprite at (BX,DX): size from it, LOADED
+HOT_HIT        LIB\K_HOT.INC          which thing is at (AX,DX)? Its pixels first, last drawn first; then its box
+HOT_TAKE       LIB\K_HOT.INC          mark thing BX taken (no longer drawn or clicked)
+HOT_NEEDALL    LIB\K_HOT.INC          mark every LOADED thing NEEDED (a screen with no NEED list)
+HOT_NEXTWANTED LIB\K_HOT.INC          BX = the first thing that is needed, there and not taken yet
+HOT_ALLTAKEN   LIB\K_HOT.INC          every needed thing taken?  CF = 1 yes
+HOT_CENTRE     LIB\K_HOT.INC          AX,DX = the middle of thing BX, kept on the screen and above [hot_maxy]
+HOT_DRAW       LIB\K_HOT.INC          draw every thing that is there and not taken, in table order
+INI_READ       LIB\K_INI.INC          read a text file into a buffer, 0-ended, and start scanning it
+INI_TEXT       LIB\K_INI.INC          scan a 0-ended INI text already in memory (built into the program)
+INI_REWIND     LIB\K_INI.INC          scan the text again from its first line
+INI_NEXT       LIB\K_INI.INC          the next line that says something: a [section] or a KEY [SUB] = VALUE
+INI_EQ         LIB\K_INI.INC          are the 0-ended words SI and DI the same, ignoring case?  CF = 1 no
+INI_NUMAT      LIB\K_INI.INC          read a decimal number at SI (CX bytes left), step past it and its comma
+INI_NUM        LIB\K_INI.INC          AX = the (first) number in the value of the line just read
+INI_WORD       LIB\K_INI.INC          copy the next word of a list value (SI, CX bytes left) to DI, 0-ended
+INI_COPY       LIB\K_INI.INC          copy a value (SI, CX bytes) to DI as a 0-ended string, cut to fit
+INI_FIND       LIB\K_INI.INC          the value of KEY [SUB] in [SECTION] - anywhere in the text
+SC_*           LIB\K_KEYS.INC         scan-code equates: SC_ESC SC_UP SC_DN SC_LF SC_RT SC_SPACE SC_A..
+KEY_ON         LIB\K_KEYS.INC         hook INT 9: from now on key_held / key_hit follow the keys
+KEY_OFF        LIB\K_KEYS.INC         give INT 9 back to the BIOS (safe to call when not hooked)
+KEY_HELD       LIB\K_KEYS.INC         is the key AL down now?  NZ = held
+KEY_TAP        LIB\K_KEYS.INC         was key AL pressed since last asked? NZ = yes (latch consumed)
+KEY_NEW        LIB\K_KEYS.INC         AX = a key newly down since the last call (0 none), one a call
+KEY_ANY        LIB\K_KEYS.INC         AL = any key pressed since last asked (0 none); clears all latches
+KEY_FLUSH      LIB\K_KEYS.INC         empty the BIOS key buffer and every latch (a screen starts)
+KEY_WAIT       LIB\K_KEYS.INC         wait for a key -> AH = scan code, AL = character (menus)
+KEY_PEEK       LIB\K_KEYS.INC         is a key waiting? NZ + AX = it, left where it is
+KEY_REMOTE     LIB\K_KEYS.INC         feed keys from the BIOS buffer into key_held (scripted input)
+MTH_RND        LIB\K_MATH.INC         AX = a pseudo-random word (LCG); use its HIGH bits
+MTH_SEED       LIB\K_MATH.INC         seed the random generator from the BIOS tick (every run differs)
+MTH_RANGE      LIB\K_MATH.INC         AX = a random number 0..N-1, N in AX (N = 0 gives 0)
+MTH_SIN        LIB\K_MATH.INC         AX = sin(angle AX) * 256, -256..256 (256 = a circle)
+MTH_COS        LIB\K_MATH.INC         AX = cos(angle AX) * 256, -256..256
+MTH_ATAN2      LIB\K_MATH.INC         AX = the bearing to (east AX, north BX): 0 north, 64 east
+MTH_DIST       LIB\K_MATH.INC         AX = the distance to (AX, BX), near enough (octagon, ~4%)
+MTH_LERP       LIB\K_MATH.INC         AX = a + (b - a) * t / 256  (AX = a, BX = b, CX = t 0..256)
+MTH_CLAMP      LIB\K_MATH.INC         AX held between BX and CX (signed, BX <= CX)
+MTH_ABS        LIB\K_MATH.INC         AX = |AX|  (-32768 stays 8000h: read it unsigned)
+MTH_SGN        LIB\K_MATH.INC         AX = -1, 0 or 1 by the sign of AX
+MTH_HASH       LIB\K_MATH.INC         AX = 0..255, the same for the same cell every time (scenery)
+MTH_SQRT       LIB\K_MATH.INC         AX = floor(sqrt(AX)), unsigned 0..65535 -> 0..255
+MTH_MULDIV     LIB\K_MATH.INC         AX = AX * BX / CX, signed, guarded: CF = 1 on /0 or overflow
+MEM_INIT       LIB\K_MEM.INC          shrink the .COM to its own 64K so DOS can hand out the rest
+MEM_ALLOC      LIB\K_MEM.INC          ask DOS for BX paragraphs (16 bytes each) -> AX = segment
+MEM_FREE       LIB\K_MEM.INC          give a block from MEM_ALLOC back to DOS
+MEM_CLEAR      LIB\K_MEM.INC          fill CX bytes of segment AX with the byte BL (from offset 0)
+MNU_SHOW       LIB\K_MENU.INC         a numbered text menu: digits, arrows + Enter pick, Esc -> 0
+MNU_NAME       LIB\K_MENU.INC         type a name of up to 8 letters at row DH, column DL
+MNU_SCREEN     LIB\K_MENU.INC         a clean text screen: mode 3 (7 on a mono machine), no cursor
+MNU_PUTC       LIB\K_MENU.INC         character AL with attribute number AH at row DH, column DL
+MNU_PUTS       LIB\K_MENU.INC         the zero-ended string SI with attribute number AL at DH, DL
+MOU_INIT       LIB\K_MOUSE.INC        reset the mouse driver, range the whole 320x200 screen
+MOU_RANGE      LIB\K_MOUSE.INC        keep the pointer inside x AX..CX, y BX..DX (screen pixels)
+MOU_SET        LIB\K_MOUSE.INC        put the pointer at (AX,BX), the driver told too
+MOU_READ       LIB\K_MOUSE.INC        where the pointer is and which buttons are down now
+MOU_CLICK      LIB\K_MOUSE.INC        was the left button pressed (or Enter/Space by MOU_KEYS) since last asked?
+MOU_KEYS       LIB\K_MOUSE.INC        the keyboard as a mouse: arrows move the pointer, Enter/Space click
+MOU_CURDRAW    LIB\K_MOUSE.INC        draw the pointer at [mou_x],[mou_y] into ES, keeping what was under it
+MOU_CURHIDE    LIB\K_MOUSE.INC        put back what MOU_CURDRAW drew over, exactly where it was drawn
+MOU_ARROW8     LIB\K_MOUSE.INC        the pointers: MOU_ARROW8 MOU_ARROW16 MOU_HAND8 MOU_HAND16 (mov [mou_shape],...)
+NTX_WAITNAME   LIB\K_NETX.INC         ask the wire for our name, once a frame, never waiting
+NTX_SENDST     LIB\K_NETX.INC         send our whole state on a change, or on the heartbeat
+NTX_DRAIN      LIB\K_NETX.INC         every packet that came, through a handler of yours
+NTX_CLAMP      LIB\K_NETX.INC         a signed word off the wire into BX..DX
+NTX_CLAMPU     LIB\K_NETX.INC         an unsigned word (or a byte with AH = 0) into BX..DX
+NTX_NAME       LIB\K_NETX.INC         8 letters off the wire made printable: 32..126 kept, else '?'
+NTX_JOIN       LIB\K_NETX.INC         into the room's game: wait for our name, listen for a host, else host
+OWV_ALLOC      LIB\K_OWV.INC          ask DOS for OWV's 3 segments: 2 frames + a 64K chunk buffer
+OWV_OPEN       LIB\K_OWV.INC          open a 320x200 OWV: header read, palette to the DAC, frames cleared
+OWV_CLOSE      LIB\K_OWV.INC          close the OWV file (nothing if none is open)
+OWV_FRAME      LIB\K_OWV.INC          decode the next frame of the open OWV into [owv_cur]
+OWV_SHOW       LIB\K_OWV.INC          copy the decoded frame [owv_cur] to ES:0 (A000h = the screen)
+OWV_PLAY       LIB\K_OWV.INC          play the open OWV to its end, paced by the BIOS tick at its fps
+OWV_STILL      LIB\K_OWV.INC          load a compressed picture: an OWV's first frame to ES:0, palette set
+OWV_UNRLE      LIB\K_OWV.INC          unpack OWV's byte RLE: DS:SI -> ES:DI until CX bytes are out
+PEER_INIT      LIB\K_PEER.INC         empty the player table; we are not named yet
+PEER_HEARD     LIB\K_PEER.INC         a packet came from AX: find his slot or take a free one
+PEER_FIND      LIB\K_PEER.INC         the slot of player AX
+PEER_DROP      LIB\K_PEER.INC         free slot BX (he left, or the game threw him out)
+PEER_TIMEOUT   LIB\K_PEER.INC         free a slot not heard for PEER_GONE ticks - call until CF
+PEER_COUNT     LIB\K_PEER.INC         players in the table (us not counted)
+PEER_HOST      LIB\K_PEER.INC         who keeps the shared world: the lowest name heard lately
+PEER_COLOR     LIB\K_PEER.INC         a colour/start index 0..7 from a name, the same on every machine
+PEER_BEAT      LIB\K_PEER.INC         send our state now? on a change at once, else every PEER_EVERY
+PHY_ADD        LIB\K_PHYS.INC         move axis SI by AX (8.8): the fraction carries into the whole
+PHY_INTEG      LIB\K_PHYS.INC         one tick on axis SI: v += AX, then p += v (fraction kept)
+PHY_BOUNCE     LIB\K_PHYS.INC         axis SI past floor BX: pin it there, v = -v * CX/256 (CF=1)
+PHY_FALL       LIB\K_PHYS.INC         one tick of a falling, bouncing thing that comes to rest
+PHY_DRAG       LIB\K_PHYS.INC         AX -= AX >> CL: lose 1/2^CL of a speed, and its last bit too
+PHY_CLAMPV     LIB\K_PHYS.INC         AX limited to -BX..+BX
+PHY_EASE       LIB\K_PHYS.INC         AX toward 0 by BX, landing exactly on 0 (a spring back, a stop)
+PHY_SIN        LIB\K_PHYS.INC         AX = sin(AL) * 256  (AL: 256 a circle; -256..256)
+PHY_COS        LIB\K_PHYS.INC         AX = cos(AL) * 256
+PHY_STEPXZ     LIB\K_PHYS.INC         one pace of speed CX along heading AL: AX east, DX north (8.8)
+PHY_TURNTO     LIB\K_PHYS.INC         angle AL turned toward AH the short way, at most CL a call
+SB_INIT        LIB\K_SB.INC           find the Sound Blaster, start the ring looping (CF=1: no sound)
+SB_DONE        LIB\K_SB.INC           silence the card, stop the DMA, IRQ as found, ring memory freed
+SB_HEAL        LIB\K_SB.INC           renew the ring behind the playing position (call every frame)
+SB_BED         LIB\K_SB.INC           the ambient bed: 0 silence, 1 breeze and waves, 2 and birds
+SB_VOL         LIB\K_SB.INC           everything's loudness: effects and bed, 0 (silent) .. 16 (full)
+SB_SPKR        LIB\K_SB.INC           the card's output switch: AL=0 silent at once, 1 heard again
+SB_FX          LIB\K_SB.INC           play effect AL (SBX_...) at full loudness, mixed into the ring
+SB_FXV         LIB\K_SB.INC           play effect AL at loudness AH (0..16): the far ones quieter
+SB_PLAY        LIB\K_SB.INC           mix a tone list (the format in this file's header) into the ring
+SFD_LOAD       LIB\K_SFXDAT.INC       load a sound bank (SFX.DAT from Snd2Dat) into 64K of its own
+SFD_FREE       LIB\K_SFXDAT.INC       give the sound bank's 64K back to DOS
+SFD_PLAY       LIB\K_SFXDAT.INC       mix recorded sound AL into K_SB's ring at volume shift AH
+SPK_TONE       LIB\K_SPK.INC          sound a divisor on the speaker now (PIT ch2 mode 3, gate open)
+SPK_ON         LIB\K_SPK.INC          open the speaker gate (port 61h bits 0,1) on whatever the PIT has
+SPK_OFF        LIB\K_SPK.INC          shut the speaker gate: silence now (the state is kept)
+SPK_FX         LIB\K_SPK.INC          start effect AL (SPX_...) if it outranks the one playing
+SPK_DRONE      LIB\K_SPK.INC          set the steady drone under everything (an engine)
+SPK_NOTE       LIB\K_SPK.INC          divisor of a note number (1 = C2, 13 = C3, 25 = middle C)
+SPK_TUNE       LIB\K_SPK.INC          start a tune: note,ticks byte pairs, played by SPK_TICK
+SPK_TICK       LIB\K_SPK.INC          advance the effect and tune one step and set the speaker
+SPK_STOP       LIB\K_SPK.INC          silence everything: effect, tune, drone, gate (every way out)
+SPR_TEXT       LIB\K_SPR.INC          draw a text-art sprite straight from its text, clipped, see-through
+SPR_COMPILE    LIB\K_SPR.INC          text art -> a compiled sprite (db w,h, w*h bytes, 255 see-through)
+SPR_DRAW       LIB\K_SPR.INC          draw a compiled sprite, clipped at every edge, see-through kept
+SPR_DRAWF      LIB\K_SPR.INC          draw a compiled sprite flipped across (facing the other way)
+SPR_DRAWS      LIB\K_SPR.INC          draw a compiled sprite twice as big (each pixel 2x2)
+SPR_DRAWM      LIB\K_SPR.INC          draw a compiled sprite in mode AL: bit 0 flipped, bit 1 x2
+SPR_NTH        LIB\K_SPR.INC          SI = frame AX of a strip of equal compiled sprites
+SPR_ANIM       LIB\K_SPR.INC          AX = which frame a looping animation is at, from a clock
+SPR_HIT        LIB\K_SPR.INC          CF = 1 if two boxes overlap (axis-aligned, signed coordinates)
+SPR_PIXHIT     LIB\K_SPR.INC          CF = 1 if two compiled sprites overlap in a solid pixel of both
+SPR_RLE        LIB\K_SPR.INC          draw an RLE stream (literal/run/skip tokens) at (BX,DX), not clipped
+SPR_RLEPACK    LIB\K_SPR.INC          pack a compiled sprite into an SPR_RLE stream
+TER_GEN        LIB\K_TERR.INC         make the island from a seed (AX; 0 = from the BIOS tick)
+TER_RAW        LIB\K_TERR.INC         AX = the raw map byte (0..255) of node BX = gi, DX = gj
+TER_WH         LIB\K_TERR.INC         AX = the world height of a raw map byte AX
+TER_NODEH      LIB\K_TERR.INC         AX = the world height at node BX = gi, DX = gj
+TER_H          LIB\K_TERR.INC         AX = the ground's height at world point AX = x, BX = z
+TER_BAND       LIB\K_TERR.INC         AL = the band colour (1..6) of a raw height AL
+TER_PAL        LIB\K_TERR.INC         set DAC 1..6 to the six bands and 9..14 to them at half light
+TER_MAP        LIB\K_TERR.INC         the island seen from above, by bands, north up, into ES
+TER_MAPPT      LIB\K_TERR.INC         world point AX = x, BX = z -> its pixel AX,BX on the last TER_MAP
+TER_TOP        LIB\K_TERR.INC         AX = the highest ground on the whole island (world units)
+TER_FINDGND    LIB\K_TERR.INC         legal ground near AX = x, BX = z: out of the sea, off the peaks
+TXT_CHAR       LIB\K_TEXT.INC         one letter AL at (BX,DX) in the current font, scale and style
+TXT_PUT        LIB\K_TEXT.INC         zero-ended string SI at (BX,DX) in the current font and look
+TXT_PUT8       LIB\K_TEXT.INC         string SI at (BX,DX) in the BIOS 8x8 letters (x1/x2, styled)
+TXT_PUT4       LIB\K_TEXT.INC         string SI at (BX,DX) in the built-in 4x6 letters (x1/x2, styled)
+TXT_LEN        LIB\K_TEXT.INC         CX = the length of the zero-ended string at SI
+TXT_WIDTH      LIB\K_TEXT.INC         CX = the width in pixels string SI takes in the current font
+TXT_CENTER     LIB\K_TEXT.INC         string SI centred on x BX, its top at y DX
+TXT_BOX        LIB\K_TEXT.INC         string SI centred on x BX at y DX, on a box of [txt_boxc]
+TXT_UTOA       LIB\K_TEXT.INC         AX unsigned as decimal digits at DI, at least CL of them
+TXT_NUMSTR     LIB\K_TEXT.INC         SI = AX as a zero-ended decimal string, at least CL digits
+TXT_NUM        LIB\K_TEXT.INC         AX unsigned in decimal at (BX,DX), current font and look
+TXT_NUMZ       LIB\K_TEXT.INC         AX unsigned, zero-padded to CL digits, at (BX,DX)
+TXT_SNUM       LIB\K_TEXT.INC         AX signed in decimal at (BX,DX): "-12", "7"
+TXT_NUMK       LIB\K_TEXT.INC         AX unsigned, short: 999 as "999", 1400 as "1.4K", 65535 "65.5K"
+TXT_DOS        LIB\K_TEXT.INC         print the $-ended string at DX by DOS (text mode, redirectable)
+TXT_DOSZ       LIB\K_TEXT.INC         print the zero-ended string at SI by DOS
+TXT_DOSNUM     LIB\K_TEXT.INC         print AX unsigned in decimal by DOS
+TXT_DOSCR      LIB\K_TEXT.INC         print a new line (CR LF) by DOS
+TIM_TICK       LIB\K_TIME.INC         AX = the BIOS tick now (low word, 18.2 a second)
+TIM_STEPS      LIB\K_TIME.INC         AX = ticks since the last call, capped at [tim_max] (fixed step)
+TIM_WAIT       LIB\K_TIME.INC         wait AX ticks (18 = about a second), giving the time back
+TIM_YIELD      LIB\K_TIME.INC         give the time back to Windows/DOSBox until the next tick or key
+TIM_FPS        LIB\K_TIME.INC         count a frame; AX = frames drawn in the last second
+TIM_SECS       LIB\K_TIME.INC         AX ticks -> AX whole seconds (ticks * 5 / 91)
+UI_ICON        LIB\K_UI.INC           a compiled sprite at (BX,DX) in colour (AL=1) or as its outline (AL=0)
+UI_SLOT        LIB\K_UI.INC           draw slot BX of the panel: its box, and thing BX outlined or in colour
+UI_PANEL       LIB\K_UI.INC           draw every slot: one per thing of K_HOT's table
+UI_CAPTION     LIB\K_UI.INC           a line of text in a band at [ui_capy] for [ui_caphold] ticks; under it kept
+UI_CAPHIDE     LIB\K_UI.INC           take the caption down now: the band exactly as it was before
+UI_CAPCHECK    LIB\K_UI.INC           from the loop: a caption whose [ui_caphold] ticks are up comes down
+UI_CAPWAIT     LIB\K_UI.INC           let the caption have its time, then take it down (the last word read)
+UI_WAITKEY     LIB\K_UI.INC           wait for a key, or AX ticks (0: no limit); the BIOS keys emptied first
+UI_MSGBOX      LIB\K_UI.INC           one or two lines in a framed box, shown, then a key or AX ticks
+UI_QUIZ        LIB\K_UI.INC           a question and its answers 1..9 in a box at the foot; the answer's CODE
+UI_FADEUP      LIB\K_UI.INC           bring the DAC up from [ui_lvl] to the full palette SI, [ui_fstep] levels a tick
+UI_FADEDN      LIB\K_UI.INC           take the DAC down from [ui_lvl] to black, [ui_fstep] levels a tick
+VGA_ON         LIB\K_VGA.INC          mode 13h + a back buffer (cleared to 0) in [vga_buf]
+VGA_OFF        LIB\K_VGA.INC          back to text mode 3 and the buffer given back (every way out)
+VGA_CLS        LIB\K_VGA.INC          fill the whole back buffer with colour AL
+VGA_WAIT       LIB\K_VGA.INC          wait for the start of the next vertical retrace
+VGA_SHOW       LIB\K_VGA.INC          wait for the retrace, copy the back buffer to the screen
+VGA_PAL        LIB\K_VGA.INC          set DAC entries from a tagged list: index,r,g,b ... 255
+VGA_PALRUN     LIB\K_VGA.INC          set CX DAC entries from AL on, from r,g,b bytes at SI
+VGA_PALGET     LIB\K_VGA.INC          read CX DAC entries from AL on into r,g,b bytes at DI
+VGA_FADE       LIB\K_VGA.INC          the whole DAC at level AL (0 black .. 64 full) of a palette
+VGA_CYCLE      LIB\K_VGA.INC          rotate DAC entries AL..AL+CX-1 one place (colour cycling)
+VGA_RAMP       LIB\K_VGA.INC          make a gradient: CX bands of BL steps between key colours
+VGA_GLOW       LIB\K_VGA.INC          set DAC entry AL to colour (BX mod CX) of a table: a glow
+VGA_PALCOL     LIB\K_VGA.INC          a palette's brightest, darkest and greyest entries
+VGA_ROW        LIB\K_VGA.INC          DI = row AX * 320 (the row's first byte), by shifts
+
+== T_* - templates (start here)
+T_ARCADE       T_ARCADE\T_ARCADE.ASM  2D shooter skeleton: ship, bullet pool, animated enemies, score, lives, title/over cards, sound
+T_BLANK        T_BLANK\T_BLANK.ASM    the smallest real-time game: 13h + back buffer + keys + fixed step
+T_BREAK        T_BREAK\T_BREAK.ASM    breakout skeleton: paddle, ball with 8.8 velocity, wall / brick / paddle bounces, lives
+T_FLY          T_FLY\T_FLY.ASM        fly over a generated island: filled terrain, bank-and-turn, crash, FPS
+T_FX           T_FX\T_FX.ASM          title screen / demo effect: plasma + colour cycling, wavy rows, sine scroller, tune, fades
+T_NET          T_NET\T_NET.ASM        network game skeleton: a square each, colours per player, heartbeat, timeout, HOST shown
+T_OBJ3D        T_OBJ3D\T_OBJ3D.ASM    a 3D object you steer: a filled model, chase camera, floor grid, Esc
+T_PLAT         T_PLAT\T_PLAT.ASM      platformer skeleton: text-row tile map, 8.8 gravity and jump, tile collision, coins, scrolling camera
+T_ROOM         T_ROOM\T_ROOM.ASM      a point-and-click game: rooms, things to take, captions - all in ROOM.INI
+T_SNAKE        T_SNAKE\T_SNAKE.ASM    grid-step game: snake in a ring buffer, food on a free cell, speed-up, best score
+
+== REC - recipes to copy
+AIGUN          REC\R_AIGUN.ASM        every AIGT ticks a random gunner in range fires a burst; CF=1 a hit
+BGBUILD        REC\R_BGTWO.ASM        draw the background once: every cell's ground, then its upright thing
+BGCOPY         REC\R_BGTWO.ASM        the background under the frame: copy segment AX to segment ES
+BLASTSTAGE     REC\R_BLAST.ASM        the fireball at age AX: radius, rise and colours (CF=1 over)
+BLASTDRAW      REC\R_BLAST.ASM        draw the blast of age CX standing at pixel (AX,BX)
+BLDISC         REC\R_BLAST.ASM        a solid disc, centre (AX,BX), radius CX, colour DL, clipped
+BOXALL         REC\R_BOX3D.ASM        solid boxes from a table, sorted far to near, culled, drawn
+BOXDRAW        REC\R_BOX3D.ASM        one solid box: only the walls that face the eye, the roof from above
+CAMAXIS        REC\R_CAMERA.ASM       one axis of a 2D camera: centre a map that fits, else follow
+CLOCK          REC\R_CLOCK.ASM        the scene clock: now = BIOS tick, fstep = tick/2, beat = tick/8
+PERIOD         REC\R_CLOCK.ASM        a thing's own period and moment: never in step with another
+CUTSCENE       REC\R_CUTSC.ASM        play an OWV clip inside a game: fade out, play, fade back
+RUINED         REC\R_DAMAGE.ASM       ZF=0 if cell BX is rubble
+RUIN           REC\R_DAMAGE.ASM       make cell BX rubble for good
+HIT            REC\R_DAMAGE.ASM       one hit on cell BX: CF=1 it fell with this one (now rubble)
+LIVEGEN        REC\R_DEAD.ASM         mark every cell a crate could still be pushed home from
+LIVEAT         REC\R_DEAD.ASM         ZF=0 if a crate on cell BX can still be pushed home
+STUCK          REC\R_DEAD.ASM         CF=1, BX = a crate that can never go home (the level is lost)
+DEBRISAT       REC\R_DEBRIS.ASM       break a thing at pixel (AX,BX) into NPIECE flying pieces
+DEBRISSTEP     REC\R_DEBRIS.ASM       one tick of every wreck: pieces fly, fall, rest on the ground
+DEBRISDRAW     REC\R_DEBRIS.ASM       every piece a 2x2 block; a flicker of flame while it burns
+DUSKPREP       REC\R_DUSK.ASM         the dusk for a view: how far across its margin each column, row is
+DUSK           REC\R_DUSK.ASM         darken box AX..BX-1, CX..DX-1 of the buffer in ES, one step, dithered
+ENG_TICK       REC\R_ENGINE.ASM       once a tick: the chime or crash if one plays, else the engine rumble or silence
+ENG_CHIME      REC\R_ENGINE.ASM       start the landing chime (C E G C', ~2 s)
+ENG_CRASH      REC\R_ENGINE.ASM       start the crash: a falling pitch with noise (~2 s)
+FLAME          REC\R_FLAME.ASM        a torch's flame, alive: a little different every frame
+FLIGHT         REC\R_FLIGHT.ASM       one frame of bank-and-turn flight: moves and turns the K_3D camera
+GCCHECK        REC\R_GROUND.ASM       ground collision: AL 0 flying, 1 crashed now, 2 wreck, 3 up again
+GCSPAWN        REC\R_GROUND.ASM       the eye in the air again, above the island's highest point
+HZPIVOT        REC\R_HORIZ.ASM        the horizon's pivot and slope this frame (from the pitch and roll)
+HZFILL         REC\R_HORIZ.ASM        sky and ground split along the banked horizon (the frame's clear)
+HUDBAR         REC\R_HUD.ASM          segmented bar gauge: CX of DX at (AX,BX), [hudnseg] segments
+HUDBLINK       REC\R_HUD.ASM          CF = 1 while a blink is lit: tick mod [hudbper] < [hudbon]
+HUDWARN        REC\R_HUD.ASM          warning string SI centred at y DX, blinking by HUDBLINK
+HUDPOPADD      REC\R_HUD.ASM          start a floating "+N" (or "-N") at (BX,DX), the tick AX
+HUDPOPDRAW     REC\R_HUD.ASM          draw the live popups for the tick AX, retire the old ones
+HPAT           REC\R_LADDER.ASM       plot (AX,BX) if bit CX of the 16-bit pattern [ladpat] is set
+LADDER         REC\R_LADDER.ASM       pitch ladder: rungs every 10 deg by true tangent, banked, dashed below
+COMPASS        REC\R_LADDER.ASM       heading tape across the top: a tick every 5.6 deg, a caret
+VTAPE          REC\R_LADDER.ASM       a vertical tape: value AX at column BX sliding past a pointer
+JUDGE          REC\R_LAND.ASM         the first rule of table SI that is broken: SI = its verdict
+FINDDIR        REC\R_LEVELS.ASM       levpath = the folder this program was started from (+ file name)
+LEVOPEN        REC\R_LEVELS.ASM       open the level file: our folder first, then the current one
+LEVTABLE       REC\R_LEVELS.ASM       read the file's magic, count and table into levtab, nlev
+LEVREAD        REC\R_LEVELS.ASM       level BX (0..nlev-1) from the file into levbuf
+LIFEADD        REC\R_LIFE.ASM         a creature of the park: its kind and home, its own phase
+LIFE           REC\R_LIFE.ASM         every frame: each creature flutters, glows or drifts
+R_MAIN         REC\R_MAIN.ASM         the main loop and its ONE way out: init order, exit order, every layer given back
+R_NETAD        REC\R_NETAD.ASM        announce a game inside a room: an ad a second, a list of games heard, join the first or create
+R_NETHST       REC\R_NETHST.ASM       who hosts the shared world: two hosts merge to the lower, a quiet host is replaced
+R_NETST        REC\R_NETST.ASM        state-not-events packet: whole state each time, an event repeated until acknowledged
+R_NETWLD       REC\R_NETWLD.ASM       the host's shared world: WSEND/HSEND/SENDM out, WTAKE/WAPPLY in, all checked
+OWLCALL        REC\R_OWLFLY.ASM       an owl comes: from the left or right edge to cell BX, DX
+OWLAWAY        REC\R_OWLFLY.ASM       the sitting owl flies off, the nearer way, up past the top
+OWLTICK        REC\R_OWLFLY.ASM       the owl's flight: 2 px a tick each way, by the ticks gone
+OWLDRAW        REC\R_OWLFLY.ASM       the owl now: sitting, or flying with its wings beating
+PSTEP          REC\R_PARTIC.ASM       one tick of the particle pool: age, buoyancy, drag, kick, move
+PSPAWN         REC\R_PARTIC.ASM       a fresh particle in slot BX/2 at the source, thrown up
+PDRAW          REC\R_PARTIC.ASM       draw every live particle: a dot of fire, a 2x2 puff of smoke
+PATROLAI       REC\R_PATROL.ASM       fill each enemy's demand: chase if it sees, home if far, else roam
+PATROLMOVE     REC\R_PATROL.ASM       carry out the demands at each enemy's pace (CF=1 one reached him)
+MANHAT         REC\R_PATROL.ASM       AX = |columns| + |rows| between cells BX and DI
+PUSHMOVE       REC\R_PUSH.ASM         the man one step AL; a crate in front goes too if it can
+ROOMRUN        REC\R_ROOM.ASM         the room's loop: pointer by mouse or keys, clicks take things, until all needed
+TAKE           REC\R_ROOM.ASM         thing BX is taken: the room redrawn without it, its slot lit, its caption up
+PRESENT        REC\R_ROOM.ASM         the frame: the pointer (a hand over a thing) into the buffer, shown, taken out
+AUTOSTEP       REC\R_ROOM.ASM         /AUTO: one arrow key toward the next wanted thing, or Enter on it
+SCENESECT      REC\R_SCENES.ASM       SI = a section's name: the INI scan stands on the line after its [NAME]
+SCENENEXT      REC\R_SCENES.ASM       AX = a scene's exit code: cur = the first in ORDER whose ENTERS holds it
+SCORE          REC\R_SCORE.ASM        CX points (signed) made at cell BX: score, the level's, a pop-up
+POPTICK        REC\R_SCORE.ASM        the pop-up's clock down by DX elapsed ticks (never under 0)
+CELLVAL        REC\R_SCORE.ASM        AX = 1..3, a treat's worth for cell BX in level AX (a hash)
+ASK2           REC\R_SCORE.ASM        press twice to do it: CF=1 the first press (only asks)
+ASKAGE         REC\R_SCORE.ASM        forget an unanswered question after ASKT ticks: CF=1 forgot
+SCRSTART       REC\R_SCRIPT.ASM       start the keyframe script at BX (segments: dw ticks, dA, dB)
+SCRSTEP        REC\R_SCRIPT.ASM       one tick of the script: add its rates to the two words
+SPAWNAT        REC\R_SPAWN.ASM        BX = a random cell whose bits AND AL equal AH (by lot, fair)
+MINESET        REC\R_SPAWN.ASM        lay the mine on cell BX: a FUSE-tick fuse (CF=1 one still burns)
+MINETICK       REC\R_SPAWN.ASM        the mine's clock by DX ticks: CF=1 it went off in this call
+INBLAST        REC\R_SPAWN.ASM        CF=1 if cell BX is one of the nine round the mine
+STARS          REC\R_STARS.ASM        stars on the celestial sphere: they turn, pitch and bank with the camera
+STATETICK      REC\R_STATE.ASM        one tick of the game by its state (title, play, end card)
+CARDTEXT       REC\R_STATE.ASM        SI = the text of the card to draw now (0 in play)
+BG_LOAD        REC\R_STILL.ASM        a background picture from a one-frame OWV into ES:0
+BG_PICK        REC\R_STILL.ASM        picture AX (from 0) of an OWV set into ES:0
+GNDORD         REC\R_TERRDR.ASM       once: the ground's drawing order (a disk, nearest first), seam owners
+GNDDRAW        REC\R_TERRDR.ASM       the island as filled quads far to near, seams creased (each frame, ES)
+TIMERS         REC\R_TIMERS.ASM       count every running clock down by the ticks since the last call
+TIMOFF         REC\R_TIMERS.ASM       paused: keep the tick fresh, count nothing (no burst on resume)
+TTLCARD        REC\R_TITLE.ASM        the title card (name, subtitle, keys, blinking PRESS ENTER) over the picture in ES
+TTLBLINK       REC\R_TITLE.ASM        CF = 1 in the lit part of the blink: 11 ticks lit of every 16 (0.9 s)
+TTLRUN         REC\R_TITLE.ASM        the title's loop: [ttlbg] draws the picture, TTLCARD over it, shown; until Enter/Esc
+TTLHUD         REC\R_TITLE.ASM        the score line over the play picture: SCORE 00120  HI 05000  LIVES 3, ringed
+TRFIRE         REC\R_TRACER.ASM       a round into the pool at pixel (AX,BX), speed CX,DX (16ths)
+TRSTEP         REC\R_TRACER.ASM       one tick of every round: age, move, droop, off-screen, TRHIT
+TRDRAW         REC\R_TRACER.ASM       every flying round: a two-pixel streak, flickering
+HREC           REC\R_UNDO.ASM         remember step AL (direction, +4 a crate went) in the undo ring
+HCLEAR         REC\R_UNDO.ASM         forget every step (a new level)
+UNSTEP         REC\R_UNDO.ASM         take the last step back, and pull its crate after the man
+WATERCELL      REC\R_WATER.ASM        a water cell's frame by the beat and its own phase; the wind
+GLINT          REC\R_WATER.ASM        a thing's glint: a spot of light on its own period, a star
+SHIMMER        REC\R_WATER.ASM        a spot of light going round a gem, a place each beat
+WIRORD         REC\R_WIRE.ASM         once: the wire lattice's drawing order, nearest first
+WIRDRAW        REC\R_WIRE.ASM         the island as a wireframe relief, hills hiding hills (floating horizon)
+WIRLINE        REC\R_WIRE.ASM         a clipped screen line drawn only above the skyline (an r3_line hook)
+
+== ART - drawing recipes (KIT\ART\NAME.TXT)
+BANK           ART\BANK.TXT           BANK 16x16 - an earth bank along the water's edge where the next cell is dry land
+BIRCH          ART\BIRCH.TXT          BIRCH 16x32 - a slim white birch with black marks, an airy light crown
+BLAST          ART\BLAST.TXT          BLAST 16x16 - an explosion: a white heart, gold, a ragged red edge with rays, smoke specks
+BLOSSOM        ART\BLOSSOM.TXT        BLOSSOM 16x24 - a tree in blossom: its crown white and pink over the leaves
+BOULDER        ART\BOULDER.TXT        BOULDER 16x16 - two grey stones lying together, lit from the top left
+BRIDGE         ART\BRIDGE.TXT         BRIDGE 16x16 - a drawbridge of planks over the moat, two ways
+BUSH           ART\BUSH.TXT           BUSH 16x16 - a round bush of four leafy lobes, with its shadow
+CANDY          ART\CANDY.TXT          CANDY 16x16 x3 - Pac-Man's treats: small lit balls, green 1, gold 2, pink 3 points
+CRATE          ART\CRATE.TXT          CRATE 16x16 (and 8x8) - a crate on a black floor: gold rim lit top-left, iron corners, planks
+DEER           ART\DEER.TXT           DEER 16x16 - a doe grazing, side on (drawn by hand, pixel by pixel)
+FLOWERS        ART\FLOWERS.TXT        FLOWERS 16x16 and 32x16 - flowers in the grass, and a flower bed in a stone border
+FOLIAGE        ART\FOLIAGE.TXT        FOLIAGE - leaves by rule: overlapping round lobes, a dark edge, lime where the light falls
+FONTS          ART\FONTS.TXT          FONTS - which letters for what at 320x200, the outline rule, colours, sizes, calls
+FOREST         ART\FOREST.TXT         FOREST 16x16 - the floor of a pine wood: dark, needles and earth
+FOUNTAIN       ART\FOUNTAIN.TXT       FOUNTAIN 32x24 x4 - a fountain two cells wide: basin, column, bowl, jets falling as parabolas
+GATE           ART\GATE.TXT           GATE 16x16 - a gatehouse of red brick, its arch, a gold portcullis: down, half, up
+GEM            ART\GEM.TXT            GEM 16x16 x3 - the diamond prize: growing small, whole, whole with a star
+GOAL           ART\GOAL.TXT           GOAL 16x16 - a mark on the black floor: a red disc ringed in gold, a white heart
+GRASS          ART\GRASS.TXT          GRASS 16x16 - the park's ground: green, blades of lime, dark specks; one with a stone
+GROWTH         ART\GROWTH.TXT         GROWTH 16x16 - juicy lime leaves over a wall's outer edge, a flower now and then
+HEDGE          ART\HEDGE.TXT          HEDGE 32x16 - a hedge trimmed square, two cells wide, its top in the light
+LAMP           ART\LAMP.TXT           LAMP 16x24 - a lantern on a post, burning gold, with a dithered shadow
+MEADOW         ART\MEADOW.TXT         MEADOW 16x16 - a garden lawn in the sun: lime half-tone through green, buttercups
+MINE           ART\MINE.TXT           MINE 16x16 - a round iron mine, its fuse burning at the top
+MUSHROOM       ART\MUSHROOM.TXT       MUSHROOM 16x16 - three red caps with white spots in the grass
+OAK            ART\OAK.TXT            OAK 32x32 - a great oak, two cells wide and two tall: a crown of six lobes, a thick trunk
+OWL            ART\OWL.TXT            OWL 16x16 x3 - the dusk's bird: sitting, then flying with wings up and wings down
+OWV            ART\OWV.TXT            OWV - video and compressed pictures for mode 13h: the format in plain words, how to make one
+PALETTE        ART\PALETTE.TXT        PALETTE - the sixteen colours as meanings: DAC values for mode 13h, EGA, CGA, Hercules
+PINE           ART\PINE.TXT           PINE 16x32 - a tall pine: four tiers of needles, each wider, lit on its left
+POND           ART\POND.TXT           POND 32x16 - a pond, two cells wide: water in a ring of reeds, lily pads, one in flower
+RABBIT         ART\RABBIT.TXT         RABBIT 16x16 - a grey rabbit sitting up, its ears listening (drawn by hand)
+ROAD           ART\ROAD.TXT           ROAD 16x16 - a dirt road with grey stones and a glint of gravel
+RULES          ART\RULES.TXT          RULES - light, outlines, seamless tiles, smaller sizes, CGA/Hercules, isometric tiles
+SCATTER        ART\SCATTER.TXT        SCATTER - what grows where: Diamond-Square land, zones by height, things by a hash
+SHADE          ART\SHADE.TXT          SHADE - a round thing lit from the top left: the five-colour light ramp (ball, candy, boulder)
+SHADOW         ART\SHADOW.TXT         SHADOW - a dithered ellipse under a thing, only where the thing is see-through
+SHIPS          ART\SHIPS.TXT          SHIPS 9x8 and others - a lunar lander with its flames, a fighter, and an explosion ring
+SPARKLE        ART\SPARKLE.TXT        SPARKLE 16x16 - a little white star: a candy's glint, a gem's light
+STATUE         ART\STATUE.TXT         STATUE 16x32 - a knight of stone on a tall pedestal (drawn by hand)
+STONES         ART\STONES.TXT         STONES 16x16 - a castle wall: big grey stones in three courses, lit on top and left
+STUMP          ART\STUMP.TXT          STUMP 16x16 - an old stump: rings on its top, moss on its side, roots in the grass
+TORCH          ART\TORCH.TXT          TORCH 16x16 - a torch on the wall: the bare stick and cup, and a LIVE flame drawn every frame
+TOWER          ART\TOWER.TXT          TOWER 16x32 - a round stone tower, a lit window, a slender slate-blue spire, a red pennant
+TREE           ART\TREE.TXT           TREE 16x24 - a round leafy tree on a two-pixel trunk, with its shadow
+WATER          ART\WATER.TXT          WATER 16x16 x5 - still water at dusk: long low swells drifting, a rare glint, a breath of wind
+WELL           ART\WELL.TXT           WELL 16x24 - a well: a ring of stones, two posts, a windlass, a bucket, a red roof
+WILLOW         ART\WILLOW.TXT         WILLOW 32x32 - a willow by the water: a dome of leaves, strands hanging to the ground

@@ -1,0 +1,51 @@
+; WILLOW 32x32 - a willow by the water: a dome of leaves, strands hanging to the ground
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Willow() 461; example GAMES\MULTSOK2\ART.INC
+;       WIL_16
+;
+; WHAT: the wet zone's tree (hash 18..29), two cells wide, two tall.
+; COLOURS: dome FOLIAGE.TXT's Leaf; strands 'A' (a '2' every fourth row)
+; and checkers of '2'/'0'; trunk x 15 '6', x 16..17 '0'; shadow '0'.
+; THE RULE: dx = x + 0.5 - 16; the dome's top edge = 3 + dx^2 / 40
+;   (integers: 40*y < 120 + dx^2 -> '.');
+;   y < 11: the dome, Leaf(dx / 14, (y - 7) / 6);
+;   below: strand = (x + 1) mod 3, len = 22 + hash(x, 7) mod 7 (each its
+;   own length); |dx| > 14.5 or y > len or strand = 0 -> '.';
+;   strand 1: y mod 4 = 0 ? '2' : 'A';  strand 2: checker '2' / '0'.
+;   Trunk x 15..17, y 18..29 (drawn first, the strands over it).
+;   Shadow: ellipse (19, 30), radii 13 and 2.
+; ANIMATION: none in the game. A breeze: shift the strands' x by
+;   R_LIFE.ASM's WANDER[(tick/8 + x) and 15] / 4 - slow, never on the beat.
+WILLOW32: db 32,32
+          db '................................'
+          db '................................'
+          db '................................'
+          db '................................'
+          db '..........AAAAAAAAA2A2..........'
+          db '.......AAAAAAAAA2A2A2A2A2.......'
+          db '.....A222AAAA2A2A2A2A222222.....'
+          db '...AAA2AAAAA2A2A2A2A222222220...'
+          db '..AAAAA2A2A2A2A2A2222222222020..'
+          db '.AAAAA2A2A2A2A22222222220202020.'
+          db 'AAA2A2A2A2A2A2222222202020202020'
+          db '.2.A0.A2.A0.A2.A0.A2.A0.A2.A0.A.'
+          db '.0.22.20.22.20.22.20.22.20.22.2.'
+          db '.2.A0.A2.A0.A2.A0.A2.A0.A2.A0.A.'
+          db '.0.A2.A0.A2.A0.A2.A0.A2.A0.A2.A.'
+          db '.2.A0.A2.A0.A2.A0.A2.A0.A2.A0.A.'
+          db '.0.22.20.22.20.22.20.22.20.22.2.'
+          db '.2.A0.A2.A0.A2.A0.A2.A0.A2.A0.A.'
+          db '.0.A2.A0.A2.A0.600A0.A2.A0.A2.A.'
+          db '.2.A0.A2.A0.A2.600A2.A0.A2.A0.A.'
+          db '.0.22.20.22.20.60020.22.20.22.2.'
+          db '.2.A0.A2.A0.A2.600A2.A0.A2.A0.A.'
+          db '.0.A2.A0.A2.A0.600A0.A2.A0.A2.A.'
+          db '.2.A0.A2.A0.A2.600A2..0.A2.A..A.'
+          db '.0.22.20.2..2..6002...2.20.2....'
+          db '...A0.A2.A..A..600....0.A..A....'
+          db '...A..A0....A..600....2.A..A....'
+          db '......A.....A..600......A..A....'
+          db '......2...0.0.06000.0.0.2.0.....'
+          db '.......0.0.0.0.600.0.0.0.0.0.0.0'
+          db '......0.0.0.0.0.0.0.0.0.0.0.0.0.'
+          db '...........0.0.0.0.0.0.0.0.0....'

@@ -1,0 +1,8 @@
+SSFD - K_SFXDAT.INC, a recorded sound bank
+  a Sound Blaster answered: the sounds go into the ring
+  OWL FLY III SFX.DAT loaded, sounds: 7
+PASS S1 SFD_LOAD read the bank and its count
+PASS S2 every sound mixed, one past the bank ignored
+PASS S3 SFD_FREE twice: the 64K back
+PASS S4 no file: CF=1, no memory kept, SFD_PLAY returns
+SSFD done

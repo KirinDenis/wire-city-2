@@ -1,0 +1,41 @@
+; LAMP 16x24 - a lantern on a post, burning gold, with a dithered shadow
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Lamp() 401; example GAMES\MULTSOK2\ART.INC
+;       LMP_16
+;
+; WHAT: the garden's (hash 11..15). One cell, rises 8 over the cell above.
+; COLOURS: post '8' lit / '0' shade; the lantern's frame '0', its glass 'E'
+; with a 'F' white heart; cap '0'; a shadow '0' dithered under it.
+; THE RULE: post x 7..8, y 9..21 (x 7 '8', x 8 '0'); its foot y 20..21,
+;   x 5..10 (y 20 '8', y 21 '0'); cap y 1 x 7..8 and y 2 x 6..9 '0';
+;   the lantern y 3..8, x 5..10: x = 5, x = 10, y = 8 '0'; inside, within
+;   1.5 px of (7.5, 5.5) 'F', else 'E'; shadow y >= 22, |x + 0.5 - 9| < 5,
+;   (x + y) even -> '0'.
+; ANIMATION: none. A living lamp: let its 'E' glass take 'F' for a frame
+; or two on a period of its own (R_CLOCK.ASM PERIOD) - never all lamps at
+; once, never a blink on the beat.
+LAMP16:   db 16,24
+          db '................'
+          db '.......00.......'
+          db '......0000......'
+          db '.....0EEEE0.....'
+          db '.....0FFFE0.....'
+          db '.....0FFFE0.....'
+          db '.....0FFFE0.....'
+          db '.....0EEEE0.....'
+          db '.....000000.....'
+          db '.......80.......'
+          db '.......80.......'
+          db '.......80.......'
+          db '.......80.......'
+          db '.......80.......'
+          db '.......80.......'
+          db '.......80.......'
+          db '.......80.......'
+          db '.......80.......'
+          db '.......80.......'
+          db '.......80.......'
+          db '.....888088.....'
+          db '.....008000.....'
+          db '....0.0.0.0.0...'
+          db '.....0.0.0.0.0..'

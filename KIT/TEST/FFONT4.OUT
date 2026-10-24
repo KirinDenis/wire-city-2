@@ -1,0 +1,26 @@
+PASS the scene draws over 4000 pixels in mode 13h  got 1
+PASS 160 a row: every pixel = the 13h picture (64000 compared)  got 0
+PASS FNT_TO4 sets fnt_target 1  got 1
+PASS EGA 640 columns: every byte = 11h * the 13h colour  got 0
+PASS FNT_TO4 fine: the last x is 639  got 639
+PASS EGA 640 fine pixels 0..319 = the 13h picture  got 0
+PASS fine: x 600 ring 0, x 601 the A (byte 0Fh)  got 15
+PASS fine: AB at x 636 never wraps to the next row  got 4369
+PASS fine: AB at x 636 drawn up to the edge  got 240
+PASS FNT_OND4 takes K_D4's 160 bytes a row  got 160
+PASS D4_GET (21,20): the A's top, colour 14  got 14
+PASS D4_GET (20,20): its ring, 0  got 0
+PASS D4_GET (21,19): the ring above, 0  got 0
+PASS D4_GET (22,22): the bar of the A, 14  got 14
+PASS D4_GET (18,20): untouched, 1  got 1
+PASS LTITLE on 4bpp: only 15 14 6 (gold4), ring 0, blue 1  got 0
+PASS LTITLE on 4bpp: gold 14 and brown 6 both there  got 16448
+PASS LFIRE on 4bpp: fire4's red 12 there  got 4096
+PASS LFIRE on 4bpp: no colour outside fire4, ring, blue  got 0
+PASS FNT_PUT on 4bpp keeps AX CX DX SI DI BP ES  got 0
+PASS FNT_HUD on 4bpp keeps AX CX DX SI DI BP ES  got 0
+PASS FNT_OND4 keeps every register  got 0
+PASS FNT_TO13: the A lands in ES again (13h byte 15)  got 15
+PASS FNT_TO13: the 4bpp buffer untouched  got 17
+the picture went to card 2, the scene has ink pixels: 15364
+FFONT4: ALL PASS

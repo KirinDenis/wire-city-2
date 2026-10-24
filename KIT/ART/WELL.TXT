@@ -1,0 +1,43 @@
+; WELL 16x24 - a well: a ring of stones, two posts, a windlass, a bucket, a red roof
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Well() 419; example GAMES\MULTSOK2\ART.INC
+;       WEL_16 (drawn by rule, not reduced: kept as it is at every size)
+;
+; WHAT: the garden's (hash 16..19). One cell, the roof over the cell above.
+; COLOURS: roof 'C' lit left / '4' right, '0' its edge; posts '6' / '0';
+; windlass '6'; rope '0', bucket '8'; stones 'F' left, '7' middle, '8'
+; right, '0' joints; the water inside '1' on a checker; shadow '0'.
+; THE RULE: roof y 0..6: half-width w = 2 + 1.1y; dx = x + 0.5 - 8;
+;   |dx| > w '.'; |dx| > w - 1 or y = 6 '0'; dx < 0 'C' else '4'.
+;   posts x 3 and 12, y 7..13 ('6', '0'); windlass y 9, x 4..11 '6';
+;   rope y 10 x 7..8 '0', bucket y 11..12 '8'.
+;   the ring y 14..22, x 2..13: y 14 the water (edges '0', checker '0'/'1');
+;   x = 2, x = 13, y = 22 '0'; joints (y - 15) mod 3 = 2 or (x + ((y-15)/3)*2)
+;   mod 4 = 0 -> '0'; else x < 6 'F', x < 10 '7', else '8'.
+;   shadow y 23, x 3..14 on a checker.
+; ANIMATION: none.
+WELL16:   db 16,24
+          db '......0C40......'
+          db '.....0CC440.....'
+          db '....0CCC4440....'
+          db '...0CCCC44440...'
+          db '..0CCCCC444440..'
+          db '0CCCCCCC44444440'
+          db '0000000000000000'
+          db '...6........0...'
+          db '...6........0...'
+          db '...6666666660...'
+          db '...6...00...0...'
+          db '...6...88...0...'
+          db '...6...88...0...'
+          db '...6........0...'
+          db '..010101010100..'
+          db '..0F0F77078800..'
+          db '..0F0F77078800..'
+          db '..000000000000..'
+          db '..0FFF07770880..'
+          db '..0FFF07770880..'
+          db '..000000000000..'
+          db '..0F0F77078800..'
+          db '..000000000000..'
+          db '...0.0.0.0.0.0..'

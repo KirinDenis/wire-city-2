@@ -1,0 +1,31 @@
+; HEDGE 32x16 - a hedge trimmed square, two cells wide, its top in the light
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Hedge() 302; example GAMES\MULTSOK2\ART.INC
+;       HED_16
+;
+; WHAT: the garden's (land 64..135). Two cells wide, 13 rows tall.
+; COLOURS: 'A' the lit top, '2' its sides with 'A' and '0' specks, '0' the
+; edge, a dithered '0' shadow row under it.
+; THE RULE: x 1..30, y 3..15 (outside: '.'); y = 15 -> checker '0' / '.';
+;   x = 1, x = 30, y = 3, y = 14 -> '0' (the corners (2, 3), (29, 3) '.');
+;   y <= 6 (the top): hash(x, y) mod 7 = 0 ? '2' : 'A'
+;   else hash(x, y) mod 5 = 0 ? 'A' : checker '2' / (hash(x, y+3) mod 3 = 0
+;   ? '0' : '2')
+; ANIMATION: none.
+HEDGE32:  db 32,16
+          db '................................'
+          db '................................'
+          db '................................'
+          db '.0.00000000000000000000000000.0.'
+          db '.02AAAAAAAAAA2AA2AAA2AA2AA2AAA0.'
+          db '.0AAAAAAAAAAAAAAAAAAAAAAAAAAAA0.'
+          db '.02AA2AAAAAAAAAAAAAAA2AA2A2AAA0.'
+          db '.02A0222AAA2AAA2222AA202A222A20.'
+          db '.022A22222222222222022AAA220220.'
+          db '.002022222A22222222A2202A222020.'
+          db '.02022A222A220A222222222A222A00.'
+          db '.0A2A2222222A20A2A22A2022222220.'
+          db '.0222020202022AA20A02222A22A220.'
+          db '.0AA22022A2222022A2222A2A2A2220.'
+          db '.000000000000000000000000000000.'
+          db '.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0..'

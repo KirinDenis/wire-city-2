@@ -1,0 +1,29 @@
+; FOREST 16x16 - the floor of a pine wood: dark, needles and earth
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Forest() 251; example GAMES\MULTSOK2\ART.INC
+;       GRD_16
+;
+; WHAT: the highest zone's ground (land 196..255, SCATTER.TXT), under the
+; pines. SOLID, seamless; dark so the pines stand out.
+; COLOURS: '0' shade, '2' needles, '6' earth.
+; THE RULE, h = hash(x + 51, y + 3):
+;   h mod 9 = 0 -> '6';  h mod 5 = 1 -> '2';
+;   (x + y) even -> '0';  else h mod 4 = 0 ? '2' : '0'
+; ANIMATION: none.
+FOREST16: db 16,16
+          db '0602220000002060'
+          db '0000206020062020'
+          db '0202220020000002'
+          db '6206200002006000'
+          db '0060062002000000'
+          db '0000200020260000'
+          db '0202606002206222'
+          db '0600002060200002'
+          db '0200662062020206'
+          db '0060062000606002'
+          db '0202020022002202'
+          db '2060000000260062'
+          db '2200000200000002'
+          db '0600200006000002'
+          db '0200026020000202'
+          db '0006066220060020'

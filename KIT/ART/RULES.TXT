@@ -1,0 +1,85 @@
+; RULES - light, outlines, seamless tiles, smaller sizes, CGA/Hercules, isometric tiles
+; ----------------------------------------------------------------------------
+; from: docs\guide\ART.MD; TOOLS\ArtGen2\Program.cs Down() 763, IsoBlock()
+;       816-883; GAMES\MULTSOK2\ART.INC (the examples)
+;
+; THE TEXT-ART FORMAT (every picture in KIT\ART):
+;   NAME:   db width, height
+;           db '................'   one string a row, one character a pixel
+;   '.' see-through; '0'..'9' 'A'..'F' a colour of the sixteen (PALETTE.TXT).
+; Every KIT\ART file is a FASM include: words are comments, pictures db.
+; Include it after your program's way out. In mode 13h a colour character
+; becomes a byte: c - '0' for '0'..'9', c - 'A' + 10 for 'A'..'F'
+; (KIT\TEST\ASCENE.ASM DRAWTXT draws one, see-through and clipped).
+; A picture STANDS on its cell's bottom row: draw it at y + cell - height,
+; and centred across (x + (cell - width) / 2) when narrower than its cell,
+; so a tree 24 tall rises 8 over the cell above. Draw rows top first, the
+; things lower on the screen after: what is nearer covers what is behind.
+;
+; LIGHT - from the top left, on every picture, no exception:
+; - lit on the top and left edges, shaded on the bottom and right; a
+;   highlight up-left of the middle. One light makes forty pictures one world.
+; - For a round thing at (dx, dy) from its middle the light is L = -(dx+dy):
+;   larger is brighter. SHADE.TXT turns L into a five-colour ramp.
+;
+; OUTLINES
+; - Things in the park get a dark edge ('0') - it parts them from grass.
+; - Nothing PLAYED WITH may be black at its edge on a black floor: a crate
+;   is a gold rim lit on top and left, brown below and right (CRATE.TXT).
+;   Black-edged crates "looked like arrows".
+; - Lines a pixel thin (joints, rims, the bars of a gate): never two.
+;
+; SEAMLESS TILES - ground, water, walls are 16x16 and SOLID (no '.'), and
+; every pattern in them repeats in 16 across and down: use x mod 16, y mod
+; 16 in the rule, or a hash of (x, y) only (never of the cell), so the right
+; column meets the next tile's left column. Solid pictures can be drawn as a
+; plain copy (rep movsw a row), half the memory of a masked one.
+;
+; SMALLER SIZES (a level that must fit: cells of 16, 12, 10, 8, 6)
+; Each small pixel covers 16/n x 16/n of the big picture. Count what it
+; covers; if half or more is '.', it is '.'. Else one of three:
+;  'm' MAJORITY - the colour covering most, '0' on a tie: outlines, dots,
+;      stones, creatures, flowers.
+;  'a' AVERAGE - add the R, G, B (PAL16) of the colours it covers, divide by
+;      their count (never 0: at least half are not '.'), then the nearest of
+;      the sixteen by  3*dR*dR + 6*dG*dG + dB*dB  (green weighs most):
+;      round shaded things - candies, boulders, the gem, a mine.
+;  'r' REDRAW - the rule draws it again at n: crates (their rim must
+;      survive), growth, banks. Thin lines vanish under 'm' and 'a'.
+; At 16 -> 8 exactly: every 2x2 block; two or more '.' -> '.'.
+; Example: the bush (BUSH.TXT) brought down to 8x8 by majority (ArtGen2's):
+BUSH8:    db 8,8
+          db '........'
+          db '..0AA0..'
+          db '..AAAA0.'
+          db '.AAAAA2.'
+          db '.AAAA22.'
+          db '.AAA220.'
+          db '..0220..'
+          db '...00...'
+;
+; CGA (four colours) - each of the sixteen is a 2x2 half-tone of the four
+; (PALETTE.TXT PALCGA): pixel (x, y) of colour c takes PALCGA[c*4 + (y and
+; 1)*2 + (x and 1)]. One buffer of sixteen colours, converted when sent.
+; HERCULES (black and amber) - colour c is PALHGC[c] dots of a 2x2 lit;
+; each pixel two dots wide, 200 rows stretched to 300.
+; Check the small and reduced versions by eye: what reads at 16 may vanish
+; at 6, and a red cone roof dithered into "brown swirls" at 8.
+;
+; ISOMETRIC TILES (ArtGen2 IsoBlock 816-883) - a 16x16 top picture laid on a
+; diamond 24 wide and t rows tall (t = 12 a flat tile, 8 a crate's top):
+;   the diamond's row y (0..t-1) spans columns 12-hw .. 11+hw, where
+;   hw = t - round(2 * |y - (t/2 - 0.5)|)       (t = 12: hw 1,3,5,7,9,11,
+;                                                 11,9,7,5,3,1)
+;   its pixel (x, y) takes the top picture's texel (u, v); at t = 12:
+;     u = (2x + 4y - 45) / 3 + 8      v = (4y - 2x + 1) / 3 + 8
+;   (both clamped to 0..15; a '.' there becomes '0'). For any t:
+;     u = 16 * ((x + 0.5 - 12) / (2t) + (y + 0.5 - t/2) / t + 0.5)
+;     v = 16 * ((y + 0.5 - t/2) / t - (x + 0.5 - 12) / (2t) + 0.5)
+; A block (a wall, a crate) adds H rows of faces under the diamond's two
+; lower edges: column x's face starts under that column's last diamond row;
+; the face texel is the side picture at u = how far along its edge (0..16),
+; v = row * 16 / H. The LEFT face is one step darker (PALDIM) where
+; (x + row) is even, the face's bottom row '0'. Walls rise 6, crates 10.
+; Lay the tiles back to front: a column on = 12 right, 6 down; a row on =
+; 12 left, 6 down.

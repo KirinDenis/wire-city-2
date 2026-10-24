@@ -1,0 +1,5 @@
+PASS T_FX VGA_FADE brought the palette up from black to full
+PASS T_FX VGA_CYCLE turned the plasma colours (DAC 64 changed)
+PASS T_FX the sine scroller moved
+PASS T_FX SPK_TUNE played on from its first note
+PASS T_FX the fade out left the DAC black (entry 15 read back 0,0,0)

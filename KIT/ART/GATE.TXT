@@ -1,0 +1,73 @@
+; GATE 16x16 - a gatehouse of red brick, its arch, a gold portcullis: down, half, up
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Gate() 176; examples GAMES\MULTSOK2\ART.INC
+;       GT0_16 (shut), GT1_16 (half raised), GT2_16 (up)
+;
+; WHAT: the castle's way out, one wall cell. The three pictures are the
+; gate rising when a level is won (about 1.5 s), then the bridge comes down
+; (BRIDGE.TXT).
+; COLOURS: 'C' red brick lit (and its whole left 3 columns), '4' brick in
+; shade, '0' mortar and the dark arch, 'E' gold bars, '6' the cross bars,
+; 'F' the bars' lit points, '8' the road seen through when it is up.
+; THE RULE for (x, y), open = 0 shut, 1 half, 2 up:
+;   hole = (y >= 7 and 3 <= x <= 12) or (3 <= y < 7 and
+;          (2x+1-16)^2 + (2y+1-15)^2 < 102^2/100)        (the arch, r 5.1)
+;   not hole: brick courses 3 rows tall; u = (x + (y/3 mod 2)*2) mod 4
+;     y mod 3 = 2 or u = 3 -> '0'  (mortar, a pixel thin)
+;     y mod 3 = 0 -> 'C', else x < 3 ? 'C' : '4'
+;   hole: bottom = 15 | 9 | 4 (by open); rod = x even
+;     y <= bottom and (rod or y = 6 or y = 10 or y = bottom) -> a bar:
+;        y = bottom and rod -> 'F', rod -> 'E', else '6'
+;     open = 2 and y >= 12 -> '8';  else '0'
+; ANIMATION: three pictures, one after another, never back and forth.
+GATE16:   db 16,16
+          db 'CCC0CCC0CCC0CCC0'
+          db 'CCC0444044404440'
+          db '0000000000000000'
+          db 'C0CCC0E0E0ECC0CC'
+          db 'C0C4E0E0E0E04044'
+          db '0000E0E0E0E0E000'
+          db 'CCC6E6E6E6E6ECC0'
+          db 'CCC0E0E0E0E0E440'
+          db '0000E0E0E0E0E000'
+          db 'C0C0E0E0E0E0E0CC'
+          db 'C0C6E6E6E6E6E044'
+          db '0000E0E0E0E0E000'
+          db 'CCC0E0E0E0E0ECC0'
+          db 'CCC0E0E0E0E0E440'
+          db '0000E0E0E0E0E000'
+          db 'C0C6F6F6F6F6F0CC'
+GATE16H:  db 16,16
+          db 'CCC0CCC0CCC0CCC0'
+          db 'CCC0444044404440'
+          db '0000000000000000'
+          db 'C0CCC0E0E0ECC0CC'
+          db 'C0C4E0E0E0E04044'
+          db '0000E0E0E0E0E000'
+          db 'CCC6E6E6E6E6ECC0'
+          db 'CCC0E0E0E0E0E440'
+          db '0000E0E0E0E0E000'
+          db 'C0C6F6F6F6F6F0CC'
+          db 'C0C0000000000044'
+          db '0000000000000000'
+          db 'CCC0000000000CC0'
+          db 'CCC0000000000440'
+          db '0000000000000000'
+          db 'C0C00000000000CC'
+GATE16U:  db 16,16
+          db 'CCC0CCC0CCC0CCC0'
+          db 'CCC0444044404440'
+          db '0000000000000000'
+          db 'C0CCC0E0E0ECC0CC'
+          db 'C0C4F6F6F6F64044'
+          db '0000000000000000'
+          db 'CCC0000000000CC0'
+          db 'CCC0000000000440'
+          db '0000000000000000'
+          db 'C0C00000000000CC'
+          db 'C0C0000000000044'
+          db '0000000000000000'
+          db 'CCC8888888888CC0'
+          db 'CCC8888888888440'
+          db '0008888888888000'
+          db 'C0C88888888880CC'

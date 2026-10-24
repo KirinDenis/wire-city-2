@@ -9,7 +9,8 @@
 # imports only that copy, so it keeps working whatever OWLOSUI is doing
 # today, and GitHub Pages, which serves docs\ alone, has everything it needs.
 #
-# What is copied, unchanged: owlosui.js, owlosui-wire.wasm (the Rust core,
+# What is copied, unchanged: owlosui.js and the modules beside it (touch.js),
+# owlosui-wire.wasm (the Rust core,
 # built by lib\js\build.cmd - it is not in OWLOSUI's git), dosbox\, files\,
 # jsdos\, apps\ (the web commander, documents, DOS PC, console, log), three
 # files of lib\dos for the DOS PC's C: (into dos\), and OWLOSUI's LICENSE.
@@ -42,7 +43,11 @@ $state  = if ($dirty) { "plus changes not yet committed in lib\ (" + @($dirty).C
 # Everything but our README goes; then the library, as it is.
 New-Item -ItemType Directory -Force $to | Out-Null
 Get-ChildItem $to | Where-Object { $_.Name -ne "README.md" } | Remove-Item -Recurse -Force
-foreach ($f in "owlosui.js", "owlosui-wire.wasm") { Copy-Item (Join-Path $lib $f) $to }
+# Every module beside owlosui.js, not owlosui.js alone: it imports them
+# (touch.js - a finger, a phone's keyboard), and one left behind breaks
+# the page.
+Copy-Item (Join-Path $lib "owlosui-wire.wasm") $to
+Get-ChildItem (Join-Path $lib "*.js") | Copy-Item -Destination $to
 foreach ($d in "dosbox", "files", "jsdos", "apps") { Copy-Item -Recurse (Join-Path $lib $d) (Join-Path $to $d) }
 # The DOS PC's drive C: (apps\dos.js, BASE_DISK): the toolkit resident and
 # its DPMI host - from lib\dos, into dos\, which the page passes to DosTool as

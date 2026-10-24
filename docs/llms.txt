@@ -88,6 +88,7 @@ its lecture number.
 - **L28** (lecture 1C) - The middle of the display: the gunsight, the horizon and the pitch ladder. Open: https://kirindenis.github.io/wire-city-2/course/?l=28 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L28/LADDER.ASM - video: https://www.youtube.com/watch?v=QsAhPJk0-pM
 - **L29** (lecture 1D) - The wing: lift, the angle of attack, and a stall that comes from the angle. Open: https://kirindenis.github.io/wire-city-2/course/?l=29 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L29/WING.ASM - video: https://www.youtube.com/watch?v=niFnrug9WiY
 - **L30** (lecture 1E) - The hangar: an aeroplane is a list of points. Open: https://kirindenis.github.io/wire-city-2/course/?l=30 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L30/HANGAR.ASM - video: https://www.youtube.com/watch?v=aLovLUCeb2g
+- **L31** (lecture 1F) - Only the palette moves: a fractal, and colours that turn. Open: https://kirindenis.github.io/wire-city-2/course/?l=31 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L31/MANDEL.ASM - video: https://www.youtube.com/watch?v=bzKi4aEFuGE
 <!-- LESSONS END -->
 
 ### If you are an AI helping a student

@@ -1,0 +1,7 @@
+.title  Flat Climb (Haiku, EGA)
+.what   A burglar climbs the front of a block of flats; bottles, bricks and hammers fly out of the windows; BOOM! BAM! CLANK! EGA 640x200 from K_CARD and K_D4.
+.tier   EXAMPLE
+.main   CLIMBE.ASM
+.build  FASM CLIMBE.ASM CLIMBE.COM
+.run    CLIMBE.COM
+.made   by a model on 2026-10-24 in the kit experiment, unchanged since: ~229K tokens, 2 builds

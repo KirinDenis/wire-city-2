@@ -1,0 +1,4 @@
+PASS T_BREAK bricks broken: 1
+PASS T_BREAK score: 10
+PASS T_BREAK paddle returns (angled by where it hit): 1
+PASS T_BREAK wall bounces: 1

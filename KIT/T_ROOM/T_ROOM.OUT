@@ -1,0 +1,3 @@
+room HALL: 2 taken, code 1
+room ATTIC: 3 taken, code 2
+PASS T_ROOM: rooms 2, things taken by the keyboard path 5, clicks that missed 0

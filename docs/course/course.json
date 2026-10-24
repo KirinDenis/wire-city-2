@@ -2,9 +2,9 @@
     "playlist":  "PLYAv8-EdgIF8",
     "disk":  {
                  "url":  "disk.zip",
-                 "version":  "151562F0A61E",
-                 "files":  458,
-                 "bytes":  11084411
+                 "version":  "7A49AB24CB98",
+                 "files":  646,
+                 "bytes":  13402317
              },
     "lessons":  [
                     {
@@ -378,6 +378,18 @@
                         "size":  43434,
                         "video":  "aLovLUCeb2g",
                         "length":  "6:08"
+                    },
+                    {
+                        "id":  "L31",
+                        "folder":  "L31",
+                        "lecture":  "1F",
+                        "title":  "Only the palette moves: a fractal, and colours that turn",
+                        "about":  "A debt paid: lesson 1E\u0027s nozzle burned by rewriting one palette entry and never said how. The Mandelbrot set is drawn once, in 4.12 fixed point - IMUL into DX:AX, the escape test on the high word, a shift across both words - each pixel\u0027s number the count of steps its point took to run away. Then every frame, in the vertical retrace, 385 OUTs to ports 3C8h and 3C9h turn 128 colours of the DAC, and the whole picture moves without one pixel written. The program times both with the BIOS clock: the picture, and a thousand palette turns. A pixel is a number, not a colour",
+                        "main":  "MANDEL.ASM",
+                        "buildable":  true,
+                        "size":  19067,
+                        "video":  "bzKi4aEFuGE",
+                        "length":  "6:28"
                     }
                 ]
 }

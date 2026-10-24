@@ -1,0 +1,46 @@
+; OAK 32x32 - a great oak, two cells wide and two tall: a crown of six lobes, a thick trunk
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Oak() 294; example GAMES\MULTSOK2\ART.INC
+;       OAK_16
+;
+; WHAT: the wood's biggest thing (the first of its table: hash < 24). It
+; claims 2 x 2 cells (SCATTER.TXT STANDING).
+; COLOURS: leaves FOLIAGE.TXT; trunk '6' lit (x 14..15), shade x 16..17 a
+; checker '6'/'0', x 18 '0'; roots '6' at x 13 and 19, y 28..29; shadow '0'.
+; THE RULE: trunk x 14..18, y 21..29. Crown: FOLIAGE.TXT over (16, 8, 8),
+; (8, 12, 7), (24, 12, 7), (11, 18, 6.5), (21, 18, 6.5), (16, 15, 7.5).
+; Shadow: ellipse (19, 29.5), radii 12 and 2.5.
+; ANIMATION: none; fireflies by it at dusk (R_LIFE.ASM).
+OAK32:    db 32,32
+          db '.............000000.............'
+          db '...........000A2AA000...........'
+          db '..........00AAAAAAA200..........'
+          db '.........00A2A2AAA2A200.........'
+          db '.........0AAAAAAA2A2A20.........'
+          db '.....000000AAAAA2A2A2000000.....'
+          db '....00222A00AAA2A2A200AAA200....'
+          db '...0AA2AAA2A0A2A2A20AAAAAA2A0...'
+          db '..0AAAA2A2A200000000AAAAA2A2A0..'
+          db '.00AAAA22A200AAAAAA00AAA2A2A200.'
+          db '.0A2AAA2A202AAAAAAA2A022A2A2220.'
+          db '.0AA2A2A200AAAAAAA2A200A2A22220.'
+          db '.02AA2A2002A00AAA200AA00A222200.'
+          db '.02A2A002AAAAA0000AAAAAA0022020.'
+          db '.002A20AAAA2A2A002AAAAA2A020200.'
+          db '..0A20A2A22A2A22AAAAAA2A220200..'
+          db '...0A0AAAAA2A222AAAAA2A222000...'
+          db '....0AAAAA2A2222AAAA2A222220....'
+          db '.....AAAA2A22222AAA2A222222.....'
+          db '.....0AA2A222222AA2A2222220.....'
+          db '.....0A2A2222220A2A22222200.....'
+          db '......0A222222660602222200......'
+          db '......00222220666002222000......'
+          db '........0022006606002200........'
+          db '..............66600.............'
+          db '..............66060.............'
+          db '..............66600.............'
+          db '.............0660600.0.0.0......'
+          db '........0.0.066660060.0.0.0.0...'
+          db '.......0.0.0.6660606.0.0.0.0.0..'
+          db '........0.0.0.0.0.0.0.0.0.0.0...'
+          db '.............0.0.0.0.0.0.0......'

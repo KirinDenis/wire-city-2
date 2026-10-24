@@ -30,6 +30,7 @@
 // kills it too.
 
 import { sub, line, Style } from '../owlosui/owlosui.js';
+import { touchFirst } from '../owlosui/touch.js';
 import { BrowserStorage } from '../owlosui/files/browser.js';
 import { CommanderTool, ASSOCIATIONS } from '../owlosui/apps/commander.js';
 import { Documents, DocCm } from '../owlosui/apps/documents.js';
@@ -376,9 +377,31 @@ export class CourseApp {
    */
   layout() {
     const W = this.owl.width, H = this.owl.height;
-    // A screen too small for four windows side by side - a phone, or a
-    // hidden pane whose canvas shrank - gets them one over another, each
-    // as big as the screen.
+    // A PHONE (2026-10-24, OWLOSUI's touch support): once DOS runs, OWLOSUI
+    // lays a PC keyboard along the bottom and the screen loses those rows -
+    // and the core shrinks every window by the same proportion itself. So
+    // the layout is made for the screen as it is now: a room kept for the
+    // keyboard was shrunk too, and stayed as an empty band (tried, the same
+    // day). placeDos, on every run, puts DOS back at its picture's height.
+    // A phone held upright: one column, and three things seen at once. DOS
+    // on top across the whole width, as tall as its picture; FASM's words
+    // under it; and under them the source - or the video, in the same
+    // place, whichever was touched last. F5 makes any of them the screen.
+    if (touchFirst() && W < 80) {
+      const D = Math.max(H - 2, 12);
+      const fit = DosBox.insideFor(this.owl, W - 2, D - 2 - 6 - 4);
+      const dh = fit.h + 2, B = 6;
+      const rest = { x: 0, y: 1 + dh + B, w: W, h: Math.max(D - dh - B, 4) };
+      return {
+        dos: { x: 0, y: 1, w: W, h: dh },
+        build: { x: 0, y: 1 + dh, w: W, h: B },
+        video: rest,
+        editor: rest,
+      };
+    }
+    // A screen too small for four windows side by side - a hidden pane
+    // whose canvas shrank - gets them one over another, each as big as the
+    // screen.
     if (W < 80 || H < 20) {
       const all = { x: 0, y: 1, w: Math.max(W, 12), h: Math.max(H - 2, 4) };
       return { editor: all, dos: all, build: all, video: all };
@@ -497,11 +520,15 @@ export class CourseApp {
   /**
    * Until the canvas has its size: a window opened in the first frames is
    * cut to the size the screen had then. Not from poll(), which runs only
-   * when something happens - the list waited for a click.
+   * when something happens - the list waited for a click. A phone's screen
+   * is never eighty columns - OWLOSUI's smaller cells give a portrait phone
+   * forty-odd - and the course waited for it for ever (2026-10-24): there,
+   * the canvas has its size once it is past a collapsed pane's twenty.
    */
   waitForScreen() {
+    const enough = touchFirst() ? 30 : 80;
     return new Promise(resolve => {
-      const t = setInterval(() => { if (this.owl.width >= 80) { clearInterval(t); resolve(); } }, 50);
+      const t = setInterval(() => { if (this.owl.width >= enough) { clearInterval(t); resolve(); } }, 50);
     });
   }
 
@@ -975,10 +1002,19 @@ class LessonsWindow {
   show() {
     const owl = this.owl, lessons = this.app.course?.lessons ?? [];
     if (this.win) { owl.activate(this.win); return; }
-    const w = Math.min(78, owl.width), h = Math.min(22, owl.height - 2);
+    // A screen narrower than the dialog - a phone held upright - gets it in
+    // one column: the list on top, what the chosen lesson is under it.
+    const narrow = owl.width < 78;
+    const w = Math.min(78, owl.width), h = narrow ? Math.min(34, owl.height - 2) : Math.min(22, owl.height - 2);
     this.win = owl.window('Lessons', w, h, { style: Style.Dialog, closeCmd: Cm.ListClose });
-    this.list = owl.list(this.win, 2, 1, 46, h - 6, lessons.map(l => this.label(l)));
-    this.about = owl.staticText(this.win, 50, 1, '', w - 54, h - 6);
+    if (narrow) {
+      const lh = Math.max(5, Math.floor((h - 6) / 2));
+      this.list = owl.list(this.win, 1, 1, w - 4, lh, lessons.map(l => this.label(l)));
+      this.about = owl.staticText(this.win, 1, lh + 2, '', w - 4, Math.max(2, h - 6 - lh - 1));
+    } else {
+      this.list = owl.list(this.win, 2, 1, 46, h - 6, lessons.map(l => this.label(l)));
+      this.about = owl.staticText(this.win, 50, 1, '', w - 54, h - 6);
+    }
     owl.buttons(this.win, { label: '~O~pen', cmd: Cm.Open, default: true }, { label: '~W~atch', cmd: Cm.ListWatch },
       { label: 'Close', cmd: Cm.ListClose, cancel: true });
     this.shown = -1;

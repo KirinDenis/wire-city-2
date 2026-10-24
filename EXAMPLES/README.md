@@ -102,3 +102,25 @@ the restriction back, and every one of these includes it.
    derived. The second file is where the aeroplane stops being a cartoon.
 6. `SOLO.ASM` — all of it at once, and the nearest thing here to a game.
 7. `GAMES\OWLFLY2\SRC\` — the whole simulator, built from the same parts.
+
+## Games made by models
+
+Five small games written by AI models in one afternoon, each from a single
+sentence, through the same few actions a model has on the site (read a
+file, write a file, build, run) - the first trial of the block kit in
+[`KIT/`](../KIT/README.TXT). They are kept exactly as the models left them:
+they are the experiment's record, not polished games. Each folder has the
+source, the .COM, a SCREEN.PNG the game saved of itself, and its .INF
+(who made it, with what, at what cost).
+
+| Folder | The game | Made by | Tokens, builds |
+|---|---|---|---|
+| `LANDA\` | Lunar Lander | Sonnet, from the guide and sources alone | ~120K, 1 |
+| `LANDB\` | Lunar Lander | Sonnet, on the kit's T_ARCADE | ~142K, 2 |
+| `LANDC\` | Lunar Lander | Haiku, read the kit, used none of it - flickers | ~197K, 2 |
+| `LANDD\` | Lunar Lander | Haiku, after the kit's rules were made rules | ~269K, 18 |
+| `CLIMBE\` | Flat Climb: a burglar on the front of a block of flats, EGA 640 | Haiku, with the kit's EGA blocks | ~229K, 2 |
+
+Build one in its folder: `FASM LANDA.ASM LANDA.COM` (they include
+`..\..\ENGINE`, `..\..\KIT\LIB` and `..\SHOT.INC`, the screen-saving tool of
+the experiment). `/AUTO` makes each play itself for a few seconds and quit.

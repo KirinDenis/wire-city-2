@@ -1,0 +1,30 @@
+; SPARKLE 16x16 - a little white star: a candy's glint, a gem's light
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Sparkle() 628; GAMES\MULTSOK2\SCENE.INC GLINT
+;       1969-2014; example ART.INC CSP_16
+;
+; WHAT: drawn OVER a candy or a gem in the middle ticks of every fourth
+; glint. Up-right of the middle: where the light falls.
+; COLOURS: 'F' the heart and the four arms' inner pixels, 'B' the arms'
+; tips and the diagonal touches.
+; THE RULE, the star at (11, 4): column 11 and row 4, |d| <= 3: |d| <= 1
+;   'F', else 'B'; (10, 3) (12, 3) (10, 5) (12, 5) 'B'.
+; ANIMATION: never on a clock all together: each thing its own period
+; (80..207 ticks) and phase (R_WATER.ASM GLINT); 4 ticks of star, then gone.
+SPARKL16: db 16,16
+          db '................'
+          db '...........B....'
+          db '...........B....'
+          db '..........BFB...'
+          db '........BBFFFBB.'
+          db '..........BFB...'
+          db '...........B....'
+          db '...........B....'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'

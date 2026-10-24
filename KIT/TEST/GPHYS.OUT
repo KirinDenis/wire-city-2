@@ -1,0 +1,11 @@
+PASS GPHYS PHY_ADD 10 +1.5 +1.5 -0.5 = 12.5
+PASS GPHYS PHY_INTEG a=40 x10: v 400, p 8+152/256
+PASS GPHYS PHY_INTEG saturates at 32767
+PASS GPHYS PHY_BOUNCE 1000 back as -801, pinned to the floor
+PASS GPHYS PHY_FALL bounces, then rests on the floor
+PASS GPHYS PHY_DRAG 1000 -> 938, both signs reach 0
+PASS GPHYS PHY_CLAMPV and PHY_EASE
+PASS GPHYS PHY_SIN / PHY_COS at 0 32 64 128 192 224
+PASS GPHYS PHY_STEPXZ 2.0 east, north, south
+PASS GPHYS PHY_TURNTO the short way, clamped
+GPHYS: ALL PASS

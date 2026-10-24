@@ -1,0 +1,8 @@
+PASS SHIPS picture lights exactly its solid characters
+PASS SHIPS picture lights exactly its solid characters
+PASS SHIPS picture lights exactly its solid characters
+PASS SHIPS picture lights exactly its solid characters
+PASS ENG_CHIME runs out to eng_t 0
+PASS ENG_CRASH runs out to eng_t 0, over the engine
+PASS SPK_STOP shuts the gate after ENG_TICK
+SENG ALL PASS

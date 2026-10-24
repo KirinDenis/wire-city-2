@@ -1,0 +1,49 @@
+; SHIPS 9x8 and others - a lunar lander with its flames, a fighter, and an explosion ring
+; ----------------------------------------------------------------------------
+; from: the kit's first experiment, game A (MY\LANDA\LANDA.ASM ship, exdir):
+;       the pilot judged its ship the best drawn of the three.
+;
+; COLOURS here are the DEFAULT mode-13h palette (the BIOS's, before any
+; VGA_PAL): 'F' white, '7' light grey, '8' dark grey, 'B' light cyan,
+; 'E' yellow, 'C' light red, '4' red. With the kit's PALETTE.TXT loaded the
+; same letters mean that palette's colours instead - pick to suit.
+; THE RULE of a small ship: a bright point at the top (the eye goes there),
+; a light body widening down, a dark band under it (its shadow side), and
+; thin legs splayed out to two-pixel feet - legs read at 9 pixels where a
+; filled base would be a blob. The window ('B') one pixel, off the centre
+; line by nothing: a symmetric ship looks steady.
+; FLAMES: drawn UNDER the ship's centre while the engine pushes, frame by
+; tick parity (SPR_ANIM, 2 frames) so it flickers on purpose; side jets a
+; single 'E' pixel beside the body on the side that fires.
+; THE EXPLOSION: 16 directions (dx,dy byte pairs, EXDIR below); each debris
+; dot at centre + dir * age / 2 for age 0..40 ticks, 'E' then 'C' then '4'
+; as it cools, drawn only while age < 40. Cheap and reads at once.
+LANDER:   db 9,8
+          db '....F....'
+          db '...7F7...'
+          db '..77B77..'
+          db '.7777777.'
+          db '.7788877.'
+          db '..8...8..'
+          db '.8.....8.'
+          db '77.....77'
+LFLAME1:  db 9,3
+          db '....E....'
+          db '....E....'
+          db '....C....'
+LFLAME2:  db 9,3
+          db '...EEE...'
+          db '....E....'
+          db '...C.C...'
+FIGHTER:  db 9,9
+          db '....F....'
+          db '....7....'
+          db '...777...'
+          db '...7B7...'
+          db '..77777..'
+          db '.7777777.'
+          db '77.888.77'
+          db '7...8...7'
+          db '...C.C...'
+EXDIR:    db 4,0, 4,2, 3,3, 2,4, 0,4, -2,4, -3,3, -4,2
+          db -4,0, -4,-2, -3,-3, -2,-4, 0,-4, 2,-4, 3,-3, 4,-2

@@ -1,0 +1,9 @@
+PASS UI_ICON outline = the edge (20 of 6x6, 44 of a ring), colour all, clipped
+PASS UI_PANEL outline in the room, colour once taken
+PASS UI_CAPTION only the band changes; UI_CAPHIDE exact, twice over
+PASS UI_CAPCHECK at its time; cut at the bottom; UI_CAPWAIT waits
+PASS UI_WAITKEY 4 ticks, no key: AX = 0 after 4..9 ticks
+PASS UI_MSGBOX framed, letters drawn, the time runs out: AX = 0
+PASS UI_QUIZ no answer in time: the first, code 21; box at the foot
+PASS UI_FADEDN to black, UI_FADEUP to the palette (VGA_FADE)
+ALL PASS

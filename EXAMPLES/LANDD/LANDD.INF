@@ -1,0 +1,7 @@
+.title  Lunar Lander (Haiku, kit rules)
+.what   Haiku after the kit rules were made rules: started from T_ARCADE, K_PHYS and R_ENGINE.
+.tier   EXAMPLE
+.main   LANDD.ASM
+.build  FASM LANDD.ASM LANDD.COM
+.run    LANDD.COM
+.made   by a model on 2026-10-24 in the kit experiment, unchanged since: ~269K tokens, 18 builds (most for its autopilot)

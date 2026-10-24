@@ -1,0 +1,50 @@
+; SHADOW - a dithered ellipse under a thing, only where the thing is see-through
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Shadow() 268 (the example: computed by FASM)
+;
+; WHAT: the shadow every free-standing thing casts on the grass - trees,
+; bushes, fountains, lamps. It is part of the thing's own picture, drawn
+; once, not a separate sprite.
+; COLOURS: '0' on a checker - every other pixel - so the grass shows
+; through: a shadow, not a hole.
+; THE RULE: the light is top left, so the shadow falls down and to the
+; right of the foot. For each pixel that is '.' in the thing:
+;   ((2x + 1 - 2cx)^2 * ry*ry + (2y + 1 - 2cy)^2 * rx*rx) < (rx*ry)^2
+;   (cx, cy the centre, rx, ry the radii, all doubled) and (x + y) even
+;   -> '0'
+; ArtGen2's ellipses (cx, cy, rx, ry in pixels): bush 9.5,13.5,7,2.5;
+; tree 10,22,6,2; pine 10,30,6,2; oak 19,29.5,12,2.5; fountain 19,23,14,1.5;
+; birch 10,30,5,2; willow 19,30,13,2. Never draw a pixel of shadow over the
+; thing itself.
+; ANIMATION: none. A moving thing (the owl, a creature) casts none - or a
+; tiny one drawn each frame at its feet.
+;
+; FASM draws a grey stone (SHADE.TXT ramp F7788, radius 4) and its shadow:
+SHADOW16: db 16,16
+repeat 16
+  qy = (% - 1) * 2 + 1          ; doubled pixel middle
+  repeat 16
+    qx = (% - 1) * 2 + 1
+    ddx = qx - 14               ; the stone's middle (7, 10), doubled
+    ddy = qy - 20
+    qd = ddx*ddx + ddy*ddy
+    ql = -(ddx + ddy) * 64
+    if qd <= 64                 ; inside the stone: D = 8
+      if qd > 52
+        db '0'
+      else if ql > 50 * 8 & qd < 32
+        db 'F'
+      else if ql > 14 * 8
+        db '7'
+      else if ql > -23 * 8
+        db '7'
+      else
+        db '8'
+      end if
+    else if (qx-17)*(qx-17)*16 + (qy-27)*(qy-27)*144 < 2304 & ((qx + qy) / 2) mod 2 = 1
+      db '0'                    ; the shadow: rx 6, ry 2 (doubled 12, 4), dithered
+    else
+      db '.'
+    end if
+  end repeat
+end repeat

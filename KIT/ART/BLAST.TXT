@@ -1,0 +1,35 @@
+; BLAST 16x16 - an explosion: a white heart, gold, a ragged red edge with rays, smoke specks
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Blast() 669; example GAMES\MULTSOK2\ART.INC
+;       BLA_16
+;
+; WHAT: a mine going off; drawn on each of the nine cells round it for a
+; moment. Reduce by AVERAGE.
+; COLOURS: 'F' heart, 'E' gold, checkers 'C'/'E' then '4'/'C', '8' smoke.
+; THE RULE: dx = x + 0.5 - 8, dy = y + 0.5 - 8, d = |(dx, dy)|;
+;   ray = |sin(4 * atan2(dy, dx))| * 1.6  (four pairs of rays)
+;   NO TRIG in integers: ray = 1.6 * |4 * dx * dy * (dx^2 - dy^2)| /
+;   (dx^2 + dy^2)^2 is the same |sin 4a| (sin 4a = 4 sin a cos a cos 2a);
+;   d < 2.5 'F';  d < 4.2 + ray/2 'E';  d < 6 + ray checker 'C'/'E';
+;   d < 7.2 + ray checker '4'/'C';  d < 8 and (3x + 5y) mod 4 = 0 '8';  '.'
+;   (compare d^2 with the squared bound - no square root.)
+; ANIMATION: grow it in over 3 frames (draw the picture's middle 8x8, then
+; 12x12, then all), hold, then let the '8' smoke specks drift up a pixel a
+; beat while the rest is gone.
+BLAST16:  db 16,16
+          db '....4C4C4C4C....'
+          db '...4ECE4CCECC...'
+          db '..8CCECECECE4...'
+          db '.4C4ECEEEEECC4C.'
+          db '4ECECEEEEEEECECC'
+          db 'CCECEEEEEEEEECE4'
+          db '4ECEEEFFFFEEEECC'
+          db 'C4EEEEFFFFEEECC4'
+          db '4CCEEEFFFFEEEE4C'
+          db 'CCEEEEFFFFEEECE4'
+          db '4ECEEEEEEEEECECC'
+          db 'CCECEEEEEEECECE4'
+          db '.C4CCEEEEECE4C4.'
+          db '...4ECECECECC8..'
+          db '...CCECC4ECE4...'
+          db '....C4C4C4C4....'

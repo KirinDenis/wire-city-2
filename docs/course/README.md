@@ -226,6 +226,34 @@ because `docs/pack.ps1` renames it on every release. II and III join the
 same sky as their pages on the relay (`wss://view.owlos.sk`, rooms `owlfly2`
 / `owlfly3`; `ws://localhost:1900` when served from localhost).
 
+## On a phone
+
+OWLOSUI does the phone itself (its commits of 2026-10-24, pulled with
+`docs/pull-owlosui.ps1`): a finger is read as taps, drags and holds, a tap on
+a caret opens the phone's keyboard, a key bar along the bottom gives Esc,
+Tab, Ctrl, Alt, the arrows and the F keys, and while DOS runs a PC keyboard
+lies under it whose keys stay down as long as the finger does - a game sees
+an arrow held. The cells are smaller there: a phone held upright is about
+46 columns. What the course adds (`course.js`):
+
+- `waitForScreen` waited for 80 columns before opening a lesson, and a phone
+  never has them: the page stood empty. On a touch screen 30 is enough.
+- `layout()` on a phone held upright: one column. DOS on top across the
+  width, as tall as its picture; the Build strip under it; under that the
+  source, or the video in the same place, whichever was touched last. F5
+  makes any of them the screen. The layout is for the screen as it is: when
+  the PC keyboard comes up, OWLOSUI shrinks every window by the same
+  proportion itself, and room kept for it in advance ended as an empty band.
+- The Lessons dialog on a screen under 78 columns: the list on top, the
+  chosen lesson's notes under it.
+- `index.html`: `interactive-widget=resizes-visual`, as OWLOSUI's demo has:
+  the phone's keyboard does not resize the page, OWLOSUI pans it instead.
+
+Checked in the desktop app's browser pane with its phone emulation (375 by
+812, touch): a lesson opens, builds and runs, the PC keyboard is there, the
+source and the video show, and the 1024 by 700 desktop is as before. Real
+fingers and a real phone keyboard only a person on a phone can check.
+
 ## Open
 
 - Why js-dos crashes now and then.

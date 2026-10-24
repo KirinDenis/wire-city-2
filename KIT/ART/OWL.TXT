@@ -1,0 +1,71 @@
+; OWL 16x16 x3 - the dusk's bird: sitting, then flying with wings up and wings down
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Bird() 711; GAMES\MULTSOK2\SCENE.INC BIRDTICK
+;       2827-2933, DRAWBIRD 2935-2958; examples ART.INC BD0_16..BD2_16
+;
+; WHAT: an owl (OWLOS's, too): round, brown, a pale breast, big gold eyes,
+; ear tufts. It flies in from the screen's edge, sits on a wall half a
+; minute or so, flies off the nearer way. Hand-drawn; for any small bird
+; keep the same three poses.
+; COLOURS: '6' brown, 'E' gold eyes and feet, '0' outline and pupils, '7'
+; the pale breast with 'F' lit flecks.
+; THE RULE: as DEER.TXT - outline '0', one body colour, the breast one
+; lighter, the eyes the brightest warm colour; flying, the wings are the
+; widest thing - 16 across, up (frame 1) or down (frame 2).
+; ANIMATION (R_OWLFLY.ASM): sitting - frame 0, still. Flying - frames 1
+; and 2 swapped every 2 ticks: (tick and 2) / 2 + 1; flying is the one
+; place a two-picture swap reads right (wings beat fast). It moves 2 px a
+; tick each way at most (36 px a second), in from the edge in 3 to 5 s;
+; it hoots on landing and once near its going; the dusk is laid over it
+; again where it flies (R_DUSK.ASM).
+OWL16S:   db 16,16
+          db '................'
+          db '...0........0...'
+          db '...60......06...'
+          db '...6600000066...'
+          db '...6666666666...'
+          db '..066EE66EE660..'
+          db '..06E0E66E0E60..'
+          db '..066EE66EE660..'
+          db '..06666EE66660..'
+          db '..0667777776600.'
+          db '..067F7F7F7760..'
+          db '..0677777777600.'
+          db '...06F7F7F760...'
+          db '....06777760....'
+          db '.....E0..0E.....'
+          db '....EEE..EEE....'
+OWL16U:   db 16,16
+          db '0..............0'
+          db '60............06'
+          db '760..........067'
+          db '6760...00...0676'
+          db '.6766.0660.6676.'
+          db '..6676E66E6766..'
+          db '...0666EE6660...'
+          db '....06777760....'
+          db '.....067760.....'
+          db '......0770......'
+          db '.......00.......'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+OWL16D:   db 16,16
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '.......00.......'
+          db '......0660......'
+          db '.....06EE60.....'
+          db '....0667766600..'
+          db '..0666777766660.'
+          db '.066760770676660'
+          db '067660.00.066766'
+          db '6760........0676'
+          db '760..........067'
+          db '60............06'
+          db '................'
+          db '................'

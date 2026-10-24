@@ -1,0 +1,25 @@
+PASS TER_GEN 1234 twice: the same checksum  got 0
+PASS TER_GEN 999: a different island  got 0
+PASS the map is stretched: lowest byte 0  got 0
+PASS ...highest byte 255  got 255
+PASS TER_H on 40 nodes = TER_NODEH of each  got 0
+PASS TER_H halfway to the next node lies between the two  got 0
+PASS TER_H past the last node wraps to node 0  got 0
+PASS TER_BAND 0 = 1 (sea)  got 1
+PASS TER_BAND 88 = 2 (sand)  got 2
+PASS TER_BAND 167 = 3 (grass)  got 3
+PASS TER_BAND 199 = 4 (woods)  got 4
+PASS TER_BAND 229 = 5 (rock)  got 5
+PASS TER_BAND 255 = 6 (snow)  got 6
+PASS TER_WH 87 (sea) = 0  got 0
+PASS TER_WH 100 = (100-88)*5*2 = 120  got 120
+PASS TER_TOP = TER_WH 255 = 2220 (the stretch reaches 255)  got 2220
+PASS TER_RAW and TER_H keep their registers (CL too)  got 0
+PASS TER_FINDGND near 0,0 finds ground (CF 0)  got 0
+PASS ...its height is legal and is TER_H there  got 0
+PASS TER_FINDGND with nothing legal: CF = 1  got 1
+PASS TER_MAP: the top-left cell is node (0,63) by its band  got 0
+PASS TER_MAPPT node 10: x = 64 + 10*3 + 1  got 95
+PASS TER_MAPPT node 20: y = 4 + 43*3 + 1  got 134
+PASS TER_MAP: the pixel TER_MAPPT names is node (10,20)  got 0
+RTERR: all PASS

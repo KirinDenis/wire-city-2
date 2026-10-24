@@ -1,0 +1,43 @@
+; STATUE 16x32 - a knight of stone on a tall pedestal (drawn by hand)
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Statue() 366; example GAMES\MULTSOK2\ART.INC
+;       STA_16
+;
+; WHAT: the garden's (hash 6..10); 32 rows, 16 over the cell above.
+; COLOURS: stone 'F' lit left, '7', '8' shade, '0' outline; a shadow row.
+; THE RULE: hand-drawn; stone things share one ramp: 'F' on the left
+; column of every face, '7' the body, '8' the right, '0' round it.
+; ANIMATION: none.
+STATUE16: db 16,32
+          db '................'
+          db '.......00.......'
+          db '......0FF0......'
+          db '......07F0...0..'
+          db '.......00...070.'
+          db '.....0F770..070.'
+          db '....0F77770.070.'
+          db '....07077070F0..'
+          db '....0707707780..'
+          db '.....0F77800....'
+          db '.....0F70870....'
+          db '.....0F70870....'
+          db '.....0700870....'
+          db '.....000.000....'
+          db '...0000000000...'
+          db '...0FFF77778....'
+          db '...07777777780..'
+          db '...07777777780..'
+          db '...08888888880..'
+          db '....0F777780....'
+          db '....0F777780....'
+          db '....0F777780....'
+          db '....0F777880....'
+          db '....0F777880....'
+          db '....0F777880....'
+          db '...0000000000...'
+          db '..0FFFF77777780.'
+          db '..07777777777780'
+          db '..08888888888880'
+          db '..00000000000000'
+          db '...0.0.0.0.0.0..'
+          db '....0.0.0.0.0...'

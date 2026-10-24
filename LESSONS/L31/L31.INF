@@ -1,0 +1,7 @@
+.title  Only the palette moves: a fractal, and colours that turn
+.what   A debt paid: lesson 1E's nozzle burned by rewriting one palette entry and never said how. The Mandelbrot set is drawn once, in 4.12 fixed point - IMUL into DX:AX, the escape test on the high word, a shift across both words - each pixel's number the count of steps its point took to run away. Then every frame, in the vertical retrace, 385 OUTs to ports 3C8h and 3C9h turn 128 colours of the DAC, and the whole picture moves without one pixel written. The program times both with the BIOS clock: the picture, and a thousand palette turns. A pixel is a number, not a colour
+.tier   LESSON
+.main   MANDEL.ASM
+.build  FASM MANDEL.ASM MANDEL.COM
+.run    MANDEL.COM
+.uses   IMUL ADC SBB OUT IN

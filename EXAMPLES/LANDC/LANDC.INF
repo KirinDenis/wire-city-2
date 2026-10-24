@@ -1,0 +1,7 @@
+.title  Lunar Lander (Haiku, kit unused)
+.what   Haiku read the kit catalog, then wrote everything itself. It flickers: no back buffer - kept as the lesson of why to start from a template.
+.tier   EXAMPLE
+.main   LANDC.ASM
+.build  FASM LANDC.ASM LANDC.COM
+.run    LANDC.COM
+.made   by a model on 2026-10-24 in the kit experiment, unchanged since: ~197K tokens, 2 builds

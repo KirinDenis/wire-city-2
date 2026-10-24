@@ -1,0 +1,19 @@
+PASS MEM_ALLOC before MEM_INIT fails (CF = 1)  got -1
+PASS MEM_INIT CF = 0  got 0
+PASS MEM_ALLOC 0FA0h CF = 0  got 0
+PASS MEM_ALLOC block lies above our 64K  got 0
+PASS MEM_CLEAR bytes 0,1 = 11h  got 4369
+PASS MEM_CLEAR byte 2 = 11h, byte 3 = 5Ah (odd count)  got 23057
+PASS MEM_CLEAR byte 63999 = 5Ah  got 90
+PASS MEM_CLEAR CX = 0 writes nothing  got 23057
+PASS MEM_ALLOC a second 64K CF = 0  got 0
+PASS MEM_ALLOC second block above the first  got 0
+PASS MEM_FREE then MEM_ALLOC gets the same block back  got 0
+PASS MEM_ALLOC 0FFFFh fails (CF = 1)  got -1
+PASS MEM_ALLOC failure: AX = the largest block (> 100h)  got 0
+PASS MEM_FREE 0 is ignored  got 0
+PASS MEM_INIT keeps registers  got 0
+PASS MEM_FREE keeps registers  got 0
+PASS MEM_CLEAR keeps registers  got 0
+PASS MEM_ALLOC keeps BX  got 0
+ALL PASS

@@ -1,0 +1,29 @@
+; GOAL 16x16 - a mark on the black floor: a red disc ringed in gold, a white heart
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Goal() 112; example GAMES\MULTSOK2\ART.INC
+;       GOL_16
+;
+; WHAT: where a crate must go. Warm on the black floor, so the eye finds it.
+; COLOURS: 'F' heart, 'C' red lit half, '4' shade half, '0' a thin dark
+; ring, 'E' gold ring lit half, '6' its shade half, '4' outer edge.
+; THE RULE: d = distance to (8, 8) (compare d^2): d < 1.4 'F'; d < 3.4 x+y <
+;   15 ? 'C' : '4'; d < 4.3 '0'; d < 5.6 x+y < 15 ? 'E' : '6'; d < 6.2 '4';
+;   else '.'.
+; ANIMATION: none; a crate on it turns to its home colours (CRATE.TXT).
+GOAL16:   db 16,16
+          db '................'
+          db '................'
+          db '.....44EE44.....'
+          db '....4EEEEEE4....'
+          db '...4EE0000E64...'
+          db '..4EE0CCCC0664..'
+          db '..4E0CCCC44064..'
+          db '..EE0CCFF44066..'
+          db '..EE0CCFF44066..'
+          db '..4E0C44444064..'
+          db '..4EE044440664..'
+          db '...4660000664...'
+          db '....46666664....'
+          db '.....446644.....'
+          db '................'
+          db '................'

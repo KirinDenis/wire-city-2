@@ -1,0 +1,5 @@
+PASS TTLCARD blink: PRESS ENTER lit at tick 0, gone at 12, rest same
+PASS TTLCARD: the name centred, big
+PASS TTLRUN: 10 ticks over the sky, then AL = 0
+PASS TTLHUD on white: yellow digits, black ring, only its strip
+FTITLE: all checks PASS

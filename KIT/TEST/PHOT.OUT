@@ -1,0 +1,11 @@
+PASS HOT_PUT: the size from the sprite, LOADED; a plain rectangle
+PASS HOT_HIT an opaque pixel of a lower thing beats the top box
+PASS HOT_HIT two opaque things overlap: the last drawn wins
+PASS HOT_HIT within 3 px of a lone pixel (pass 1); 4 away: box
+PASS HOT_HIT a clear middle: pass 2, last drawn; taken skipped
+PASS HOT_HIT nothing there: CF, BX kept; hot_maxy is a panel
+PASS HOT_HIT a thing with no sprite is solid; registers kept
+PASS HOT_NEEDALL / NEXTWANTED / TAKE / ALLTAKEN
+PASS HOT_CENTRE the middle clicks the thing; clamped to edge, panel
+PASS HOT_DRAW draws in order, holes kept, taken ones not drawn
+ALL PASS

@@ -1,0 +1,15 @@
+PASS DRW_RECT fills exactly 30*20 = 600 pixels
+PASS DRW_RECT clipped at both corners: 300 + 200
+PASS DRW_PIXEL: four off-screen pixels skipped, one drawn
+PASS DRW_HLINE/VLINE clipped, DRW_FRAME 26: 51 pixels
+PASS DRW_LINE from x -50 to 400: exactly 320 pixels
+PASS DRW_CLIP window: nothing lands outside it
+PASS DRW_LINE wholly off the screen draws nothing
+PASS DRW_DISC edge at r across, r*213/256 down
+PASS DRW_CIRCLE edges on, centre empty
+PASS shapes past the corner: bytes past 64000 untouched
+PASS DRW_POLY square: 30 rows * 41 = 1230 pixels
+PASS DRW_TRI: inside drawn, outside empty
+PASS DRW_DITHER at 128: 128 of each shade in 16*16
+PASS DRW_GRADV: the top row pure, the bottom row near the end
+DDRAW: all checks PASS

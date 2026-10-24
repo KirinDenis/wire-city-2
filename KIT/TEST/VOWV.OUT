@@ -1,0 +1,43 @@
+PASS OWV_ALLOC gets 2 frames + a 64K buffer (CF = 0) = 0
+PASS OWV_UNRLE 82 07 02 01 02 03 81 09 -> 7 7 7 1 2 3 9 9, SI DI CX right = 1
+PASS OWV_OPEN of a missing file: CF, AL = 1 = 1
+PASS OWV_OPEN of VBAD4 (not OWV1): CF, AL = 2 = 2
+PASS OWV_OPEN of VBAD5 (640x400): CF, AL = 3 = 3
+PASS OWV_FRAME with no file open: CF, AL = 8 = 8
+PASS VBAD1 (cut inside frame 3): 2 frames, then CF 5 = 205 = 205
+PASS VBAD2 (opcode 90h): 1 frame, then CF 6 = 106 = 106
+PASS VBAD3 (a 70000-byte chunk): CF 4 at once = 4 = 4
+PASS VBAD6 (COPY from outside the frame): 1 frame, then CF 6 = 106 = 106
+PASS VTEST.SUM read: frames = 24
+PASS OWV_OPEN VTEST.OWV: CF = 0 = 0
+PASS OWV_PLAY: CF = 0 = 0
+PASS OWV_PLAY: AL = 0, the clip ran to its END = 0
+PASS OWV_ONFRAME saw 24 frames = 24
+PASS frame 01 sum as the encoder made it = 4F50
+PASS frame 02 sum as the encoder made it = 8A77
+PASS frame 03 sum as the encoder made it = 8186
+PASS frame 04 sum as the encoder made it = 8920
+PASS frame 05 sum as the encoder made it = BEB0
+PASS frame 06 sum as the encoder made it = BA36
+PASS frame 07 sum as the encoder made it = 6B43
+PASS frame 08 sum as the encoder made it = A1D8
+PASS frame 09 sum as the encoder made it = A718
+PASS frame 10 sum as the encoder made it = 705D
+PASS frame 11 sum as the encoder made it = 102D
+PASS frame 12 sum as the encoder made it = 70C7
+PASS frame 13 sum as the encoder made it = 86F7
+PASS frame 14 sum as the encoder made it = A8E6
+PASS frame 15 sum as the encoder made it = 3A35
+PASS frame 16 sum as the encoder made it = 9C14
+PASS frame 17 sum as the encoder made it = B913
+PASS frame 18 sum as the encoder made it = 10AB
+PASS frame 19 sum as the encoder made it = D800
+PASS frame 20 sum as the encoder made it = 56A6
+PASS frame 21 sum as the encoder made it = ED14
+PASS frame 22 sum as the encoder made it = CBB0
+PASS frame 23 sum as the encoder made it = C4BE
+PASS frame 24 sum as the encoder made it = 1A53
+PASS OWV_STILL VTEST.OWV: CF = 0 = 0
+PASS OWV_STILL: the screen sums as frame 1 = 4F50
+decode flat out (FRAME + SHOW to A000h): 72 frames in 6 ticks = 218.4 frames a second
+PASS VOWV failures = 0

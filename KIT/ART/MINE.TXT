@@ -1,0 +1,32 @@
+; MINE 16x16 - a round iron mine, its fuse burning at the top
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Mine() 657; example GAMES\MULTSOK2\ART.INC
+;       MIN_16
+;
+; WHAT: a player's mine on the floor: 5 s, then BLAST.TXT. Round and
+; shaded: reduce it by AVERAGE.
+; COLOURS: SHADE.TXT ramp "F7880" (iron), its rim '7' (grey, not black - on
+; the floor); the fuse '6', its spark 'F' with 'E' and 'C' beside it.
+; THE RULE: spark (9, 0) 'F', (10, 1) 'E', (8, 1) 'C'; fuse (9, 2), (8, 3)
+;   '6'; the ball centre (8, 9.5) radius 5.6: nx, ny in radii, d = nx^2 +
+;   ny^2: d > 1 '.', d > 0.8 '7', else the ramp.
+; ANIMATION: the spark should burn, not blink: each frame pick its colour
+; from F, E, C by a short irregular table (R_FLAME.ASM's FLH) and its
+; place one pixel left or right by FLS.
+MINE16:   db 16,16
+          db '.........F......'
+          db '........C.E.....'
+          db '.........6......'
+          db '........6.......'
+          db '.....777777.....'
+          db '....77777777....'
+          db '...77FF777887...'
+          db '...77F7778888...'
+          db '..77F777888887..'
+          db '..777778888887..'
+          db '..777788888807..'
+          db '...7788888800...'
+          db '...7888888007...'
+          db '....78888007....'
+          db '.....777777.....'
+          db '................'

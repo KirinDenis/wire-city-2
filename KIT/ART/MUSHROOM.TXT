@@ -1,0 +1,32 @@
+; MUSHROOM 16x16 - three red caps with white spots in the grass
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Mushrooms() 512; example GAMES\MULTSOK2\ART.INC
+;       MUS_16
+;
+; WHAT: a little thing for wet ground, the wood and the pines.
+; COLOURS: caps 'C' lit left, '4' shade, 'F' spots; stems 'F', '0' at the
+; foot; 'A' grass blades round them.
+; THE RULE: three caps (cx, cy, r) = (5, 9, 3.2), (11, 11, 2.6), (8.5, 13,
+;   1.8); for each: nx = (x + 0.5 - cx) / r, ny = (y + 0.5 - cy) / (0.7 r);
+;   ny <= 0 and nx^2 + ny^2 < 1 -> the cap: hash(x, y+3) mod 4 = 0 'F',
+;   nx < -0.3 'C', else '4';
+;   0 < ny < 2.2 and |x + 0.5 - cx| < 0.35 r -> the stem ('0' past 1.9);
+;   y >= 14 and hash(x, y) mod 3 = 0 -> 'A';  else '.'
+; ANIMATION: none.
+MUSHRM16: db 16,16
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '...C44F.........'
+          db '..CF4FF4........'
+          db '....FF....44....'
+          db '....FF...FFF4...'
+          db '....FF....FF....'
+          db '....FF.C44FF....'
+          db '....00..F.FF....'
+          db '...A.A..F.00..A.'
+          db 'AA..AA.A0AAA....'

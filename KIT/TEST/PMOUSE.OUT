@@ -1,0 +1,6 @@
+PASS MOU_SET/MOU_READ 123,77 and 319,199 back halved; MOU_RANGE holds
+PASS MOU_KEYS arrows move by mou_step, clamp at 0, Esc not ours
+PASS MOU_CLICK none: CF 0, AX BX kept; Enter latched once, at the pointer
+PASS MOU_CURDRAW tip outline, inside fill, registers kept; HIDE exact
+PASS MOU_CURDRAW cut at right/bottom/left (hand), redrawn: screen exact
+ALL PASS

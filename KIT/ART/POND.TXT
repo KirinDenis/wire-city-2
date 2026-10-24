@@ -1,0 +1,35 @@
+; POND 32x16 - a pond, two cells wide: water in a ring of reeds, lily pads, one in flower
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Pond() 329; example GAMES\MULTSOK2\ART.INC
+;       PND_16
+;
+; WHAT: the wet zone's first thing (hash < 18). Still - it is drawn into
+; the background once (only the moat's water moves).
+; COLOURS: '1' water, '9' ripples, 'B' a glint, 'A' lily pads, 'D' the
+; flower on one, the reeds a mix of 'A', '2', '0'.
+; THE RULE: nx = (x + 0.5 - 16) / 15.5, ny = (y + 0.5 - 8.5) / 7, d = nx^2
+;   + ny^2 (integers: d*100 = (2x+1-32)^2*100/31^2 + (2y+1-17)^2*100/14^2):
+;   d > 1 '.';  d > 0.74 the reeds: (x + y) mod 3 = 0 'A', else checker '2'/'0'
+;   a pad round (9, 7), (21, 10), (14, 11): (x+0.5-px)^2 + 2.56 (y+0.5-py)^2
+;   < 2.4^2 -> 'A' (the one at 21,10: 'D' within 0.9 of its middle)
+;   y mod 3 = 1 and (3x + y) mod 7 < 2 -> '9';  ((5x + 3y) and 15) = 0 -> 'B'
+;   else '1'
+; ANIMATION: none in the game. To make it live, let R_WATER.ASM's GLINT
+; light one of its 'B's on a period of its own.
+POND32:   db 32,16
+          db '................................'
+          db '................................'
+          db '........20A02A21102A20A0........'
+          db '.....2A2011B111111111112A20.....'
+          db '...02A91911119191111919111A02...'
+          db '..02111111111B11111111111111A2..'
+          db '.02111BAAAA11111111111B1111110A.'
+          db '.2A1191AAAA1919B1119191111919A0.'
+          db '2A211111B111111111111111B111102A'
+          db '.2011111111111111B1ADDA1111112A.'
+          db '.0A1919111B9AAAA119ADDA119B91A2.'
+          db '..0211111111AAAA111B11111111A2..'
+          db '...A20111111B11111111111112A2...'
+          db '.....A02A191911119191B1A02A.....'
+          db '........20A02A21102A20A0........'
+          db '................................'

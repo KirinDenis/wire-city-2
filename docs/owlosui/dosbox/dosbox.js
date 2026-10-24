@@ -21,6 +21,8 @@
 // command interface: its files, its keys, its statistics.
 
 import { NetTap } from './nettap.js';
+import { DosKeys, Trackpad } from './doskeys.js';
+import { touchFirst } from '../touch.js';
 
 const JSDOS = new URL('../jsdos/', import.meta.url);
 
@@ -182,6 +184,16 @@ export class DosBox {
     this.el = el;
     this.screenEl = screen;
     this.hole = this.owl.hole(win);
+    // On a phone: the whole screen for DOS, a PC keyboard under it, and
+    // the picture a touchpad. The window is zoomed only if it is not
+    // already as big as the screen allows; F5 or its box gives it back.
+    if (this.owl.touch && touchFirst()) {
+      this.keys ??= new DosKeys(this);
+      this.owl.holeTouch = new Trackpad(this);
+      this.owl.touch.setInset(DosKeys.HEIGHT, false);
+      const p = this.owl.place(win);
+      if (p && p.w < this.owl.width - 2) this.owl.zoom(win);
+    }
     this.layout();
     this.owl.refresh?.();
     const ready = new Promise((resolve, reject) => {
@@ -245,6 +257,12 @@ export class DosBox {
       if (!(await Promise.race([stopped, late]))) result = 'dropped';
     }
     el?.remove();
+    // The phone's DOS keyboard and touchpad go with the machine.
+    if (this.keys) {
+      this.keys.show(false);
+      this.owl.holeTouch = null;
+      this.owl.touch?.setInset(0);
+    }
     if (dos) this.emit('stopped');
     return result;
   }
@@ -270,6 +288,14 @@ export class DosBox {
       left: `${s.x - area.x}px`, top: `${s.y - area.y}px`, width: `${s.w}px`, height: `${s.h}px`,
     });
     if (p.covered && this.hasKeys()) this.release();
+    // The PC keyboard while DOS is the window in front and nothing is over
+    // it; the page's own key bar otherwise - a menu opened over DOS is
+    // worked with the page's keys.
+    if (this.keys && this.dos) {
+      const front = !p.covered && this.owl.active() === this.win;
+      this.keys.show(front);
+      this.owl.touch?.setInset(DosKeys.HEIGHT, !front);
+    }
   }
 
   /**

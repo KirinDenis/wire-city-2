@@ -1,0 +1,41 @@
+PASS FOCAL defaults to 220  got 220
+PASS NEARZ defaults to 40  got 40
+PASS R3_POINT ahead: on the screen (CF 0)  got 0
+PASS R3_POINT ahead: x = 160  got 160
+PASS R3_POINT ahead: y = 100 (horiz)  got 100
+PASS R3_POINT 100 right at 1000: x = 160+100*220/1000  got 182
+PASS R3_POINT 100 up at 1000: y = 78  got 78
+PASS R3_POINT behind: CF = 1  got 1
+PASS R3_POINT nearer than NEARZ: CF = 1  got 1
+PASS R3_POINT far off to the side: CF = 1  got 1
+PASS R3_POINT leaves the depth in r3_pz  got 1000
+PASS heading 64: a point east is ahead, x = 160  got 160
+PASS heading 64: y = 100  got 100
+PASS heading 64: north is off the left edge (CF)  got 1
+PASS camera at 5000,200,5000: the point 1000 north, x 160  got 160
+PASS z -30000 seen from 30000 wraps to 5536 ahead (CF 0)  got 0
+PASS the wrapped point: y = 100  got 100
+PASS pitch 16 (nose up): the point ahead drops to y 190  got 190
+PASS roll 64 (banked right): a point on the right: x 160  got 160
+PASS ...and it rises to y 78  got 78
+PASS R3_POINT keeps CX DX SI DI BP  got 0
+PASS R3_ORBIT d 1000 h 0: the eye 1000 south (z -1000)  got -1000
+PASS R3_ORBIT: the point in the middle, x 160  got 160
+PASS R3_ORBIT d 1000 h 1000: pitch -32 (45 deg down)  got -32
+PASS R3_ORBIT looking down: the point at y 100  got 100
+PASS R3_CHASE heading 64, 300 behind: camx 1700  got 1700
+PASS R3_CHASE: camz 2000  got 2000
+PASS R3_CHASE eases a quarter of 40: heading 74  got 74
+PASS R3_MODEL with too many vertices: CF = 1  got 1
+PASS R3_TRAP: vector 0 = CS:R3_INT0  got 0
+PASS R3_SAFE: a real divide by 0 is caught, CF = 1  got 1
+PASS ...and counted in r3_faults  got 1
+PASS R3_SAFE: a clean routine, CF = 0  got 0
+PASS ...and its AX comes back  got 1234
+PASS no guard left set after R3_SAFE  got 0
+PASS R3_MODEL cube ahead: its near face (9) in the middle  got 9
+PASS R3_EDGE: the line at y -120, z 500 crosses (160,152)  got 15
+PASS R3_QUAD: the quad round (-500,0,1000) fills (50,100)  got 4
+PASS the first frame (and a near-plane edge): no faults  got 0
+PASS R3_UNTRAP: DOS vector 0 back  got 0
+R3D: all PASS

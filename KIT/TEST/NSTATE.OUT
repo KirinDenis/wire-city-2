@@ -1,0 +1,5 @@
+PASS NSTATE his state clamped into his slot
+PASS NSTATE his hit applied once of three, echoed; next applied; floor 0
+PASS NSTATE our hit repeats until his state shows it
+PASS NSTATE event for one not here dropped; another version ignored
+NSTATE ALL PASS

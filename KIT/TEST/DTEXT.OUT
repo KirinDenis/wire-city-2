@@ -1,0 +1,14 @@
+PASS TXT_PUT8: one letter draws exactly its glyph bits
+PASS TXT_PUT8 x2: four times the pixels, BX on by 16
+PASS transparent: ink + untouched background = 64000
+PASS style 1: ink whole, a shadow beside it
+PASS style 2: ink whole, the ring at the letter edge
+PASS TXT_PUT4: H = 11 pixels, h the same, BX on by 4
+PASS letters half off either edge never wrap
+PASS TXT_NUMSTR: 0, 65535, 007, 12345 too wide runs long
+PASS TXT_NUMK: 1.4K, 65.5K, 999
+PASS TXT_SNUM -12 draws what "-12" draws
+PASS TXT_WIDTH: HELLO 40 in 8x8, 40 in 4x6 x2
+PASS TXT_BOX: box + letters fill 24*14 exactly
+DTEXT: all checks PASS
+TXT_DOS, TXT_DOSNUM: 12345 (TXT_DOSZ)

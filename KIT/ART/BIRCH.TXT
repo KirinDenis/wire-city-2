@@ -1,0 +1,49 @@
+; BIRCH 16x32 - a slim white birch with black marks, an airy light crown
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Birch() 442; example GAMES\MULTSOK2\ART.INC
+;       BIR_16
+;
+; WHAT: the wood's and the pines' lighter tree. 32 rows, 16 over the cell
+; above. "The bushes and trees behind the castle - make life more
+; interesting": birches came with that.
+; COLOURS: trunk 'F' its left column, '7' its right, '0' the marks; crown
+; FOLIAGE.TXT but its '2' green on a checker becomes 'A' (lighter), and one
+; leaf in five is '.' - light through it; shadow '0'.
+; THE RULE: trunk x 7..8, y 12..29: (3y + x) mod 7 = 0 -> '0', x = 7 'F',
+;   else '7'. Crown: FOLIAGE.TXT over (8, 5, 4.8), (5, 10, 3.8), (11, 9.5,
+;   3.8), (8, 14, 3.6); a leaf with hash(x + 9, y) mod 5 = 0 -> '.'; a '2'
+;   where (x + y) even -> 'A'. Shadow: ellipse (10, 30), radii 5 and 2.
+; ANIMATION: none.
+BIRCH16:  db 16,32
+          db '......0000......'
+          db '.....0..AA0.....'
+          db '....0AAA.2A0....'
+          db '...0AAA.2A2.0...'
+          db '...0AAA.A2.20...'
+          db '...02A2A2A2.0...'
+          db '...000A2A0A.0...'
+          db '..0...20AA..2A..'
+          db '..AAA2A2AAA2A.0.'
+          db '.0AA2A2A0A.A2A0.'
+          db '.0A2A.A002A2A00.'
+          db '..2.20.A.A0.0A..'
+          db '..02A..F7.A00...'
+          db '....0AAF7A20....'
+          db '....0AA072A0....'
+          db '.....A2F7A0.....'
+          db '.....0AF000.....'
+          db '.......F7.......'
+          db '.......F7.......'
+          db '.......F7.......'
+          db '.......F7.......'
+          db '.......07.......'
+          db '.......F7.......'
+          db '.......F0.......'
+          db '.......F7.......'
+          db '.......F7.......'
+          db '.......F7.......'
+          db '.......F7.......'
+          db '.......07.0.0...'
+          db '.....0.F70.0.0..'
+          db '......0.0.0.0.0.'
+          db '.......0.0.0....'

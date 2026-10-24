@@ -1,0 +1,98 @@
+; FOLIAGE - leaves by rule: overlapping round lobes, a dark edge, lime where the light falls
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Leaf() 88, Foliage() 97 (simplified to
+;       integers; the example is computed by FASM at assembly time)
+;
+; WHAT: every crown of leaves - bushes, trees, oaks, birches, blossom, the
+; growth on walls - is a few overlapping circles (LOBES). Any size.
+; COLOURS: 'A' lime (leaves in the light), '2' green (in shade), '0' the
+; dark edge and the deepest shade; specks of '2' in the lime.
+;
+; THE RULE, in doubled pixels (px = 2x+1, py = 2y+1; a lobe's centre cx,
+; cy and radius r doubled too):
+; 1. Which lobe: of the lobes covering the pixel ((px-cx)^2 + (py-cy)^2 <
+;    r*r), the LOWEST one (largest cy) - the front of the bush covers its
+;    back. None: '.' (see-through).
+; 2. In that lobe: ddx = px - cx, ddy = py - cy.
+;    past 0.86 of its radius: (ddx^2 + ddy^2) * 100 > 74 * r * r -> '0'
+; 3. else the light L = -(ddx + ddy) * 64, against the lobe's r:
+;    L > 23*r   lime, a '2' speck where hash(x, y) mod 9 = 0
+;    L > -18*r  a checker of lime and green ((x + y) even -> 'A' else '2')
+;    L > -54*r  green
+;    else       a checker of green and black
+;    (ArtGen2: l = -(nx + ny) * 0.7071 > 0.25, > -0.2, > -0.6.)
+; 4. A shadow under it (SHADOW.TXT): a dithered ellipse where it is '.'.
+; Lobes used by ArtGen2 (cx, cy, r in pixels of a 16 cell):
+;   bush  (5.5,9,4.6) (10.5,8.5,4.8) (8,6,5) (8,11,4.2)
+;   tree  (8,6,5.6) (4.8,9.5,4.4) (11.2,9.5,4.4) (8,11.5,4.5) on a trunk
+;   oak   (16,8,8) (8,12,7) (24,12,7) (11,18,6.5) (21,18,6.5) (16,15,7.5)
+;   birch (8,5,4.8) (5,10,3.8) (11,9.5,3.8) (8,14,3.6), one leaf in five '.'
+;   growth on a wall's side: four lobes r = n/4 along the edge, n*0.3 deep
+; Blossom: lime leaves become 'D' pink, one in four 'F' white.
+; ANIMATION: none - leaves stand still; life over them is R_LIFE.ASM.
+;
+; FASM draws the bush at assembly time (lobes doubled, lowest first):
+LEAF16: db 16,16
+repeat 16
+  py = (% - 1) * 2 + 1          ; the pixel's middle, doubled
+  repeat 16
+    px = (% - 1) * 2 + 1
+    lx = 0                      ; which lobe covers it: the lowest
+    ly = 0
+    lr = 0
+    if (px-16)*(px-16) + (py-22)*(py-22) < 8*8
+      lx = 16
+      ly = 22
+      lr = 8
+    else if (px-11)*(px-11) + (py-18)*(py-18) < 9*9
+      lx = 11
+      ly = 18
+      lr = 9
+    else if (px-21)*(px-21) + (py-17)*(py-17) < 10*10
+      lx = 21
+      ly = 17
+      lr = 10
+    else if (px-16)*(px-16) + (py-12)*(py-12) < 10*10
+      lx = 16
+      ly = 12
+      lr = 10
+    end if
+    qx = (px - 1) / 2           ; the pixel itself, for the checker
+    qy = (py - 1) / 2
+    qh = (((qx * 7 + qy * 13 + 5) * 25173 + 13849) and 0FFFFh) shr 8
+    if lr = 0
+      if (px-19)*(px-19)*25 + (py-27)*(py-27)*196 < 4900 & (qx + qy) mod 2 = 0
+        db '0'                  ; its shadow, dithered, under it
+      else
+        db '.'
+      end if
+    else
+      ddx = px - lx
+      ddy = py - ly
+      ql = -(ddx + ddy) * 64    ; the light, top left +
+      if (ddx*ddx + ddy*ddy) * 100 > 74 * lr * lr
+        db '0'                  ; the lobe's dark edge
+      else if ql > 23 * lr
+        if qh mod 9 = 0
+          db '2'                ; a speck in the light
+        else
+          db 'A'
+        end if
+      else if ql > -18 * lr
+        if (qx + qy) mod 2 = 0
+          db 'A'
+        else
+          db '2'
+        end if
+      else if ql > -54 * lr
+        db '2'
+      else
+        if (qx + qy) mod 2 = 0
+          db '2'
+        else
+          db '0'
+        end if
+      end if
+    end if
+  end repeat
+end repeat

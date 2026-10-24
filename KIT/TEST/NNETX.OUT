@@ -1,0 +1,11 @@
+PASS NNETX clamp signed: 500->308, -5->0, 100 kept, -80->-50
+PASS NNETX clamp unsigned: FFFBh->308, 3->10, 200 kept
+PASS NNETX name: printable, zero-padded, in place, registers kept
+NNETX NETOPEN: an IPX driver answered
+NNETX (net_ok switched off to test the absent path)
+PASS NNETX join with no IPX: alone at once, no name, no caption
+PASS NNETX no name: waitname ZF, sendst refused, drain 0
+PASS NNETX a dropped send stays to go
+NNETX   no address came: alone
+PASS NNETX join with IPX: the waits end, the caption moves
+NNETX ALL PASS

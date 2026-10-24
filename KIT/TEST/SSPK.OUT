@@ -1,0 +1,25 @@
+SSPK - K_SPK.INC, the PC speaker
+  effect 1 ran ticks: 1 ok
+  effect 2 ran ticks: 2 ok
+  effect 3 ran ticks: 6 ok
+  effect 4 ran ticks: 4 ok
+  effect 5 ran ticks: 3 ok
+  effect 6 ran ticks: 3 ok
+  effect 7 ran ticks: 10 ok
+  effect 8 ran ticks: 8 ok
+  effect 9 ran ticks: 12 ok
+  effect 10 ran ticks: 30 ok
+PASS S1 every effect ends after its own ticks
+PASS S2 the gate opens while it plays, shuts after
+PASS S3 a smaller effect is not heard over a bigger
+PASS S4 a bigger effect takes the voice
+PASS S5 mute: nothing starts, the gate stays shut
+  tune over after ticks: 9
+PASS S6 the tune ends on its 9th tick
+PASS S7 a looping tune runs on
+PASS S8 SPK_STOP: the tune gone, the gate shut
+PASS S9 SPK_TICK keeps every register
+PASS S10 the drone sounds alone
+PASS S11 SPK_NOTE 34 is A4 = 2712, 0 a rest
+PASS S12 an explosion by the BIOS tick reached idle
+SSPK done

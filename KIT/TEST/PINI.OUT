@@ -1,0 +1,21 @@
+PASS INI_READ a missing file: CF, and the text is empty
+PASS INI_READ PINI.INI: CF = 0, the bytes read
+PASS INI_NEXT keeps BX CX DX SI DI BP ES
+PASS INI_NEXT the first key: TITLE = "The Test" (trailing spaces cut)
+PASS INI_NUM SPEED=7 (no spaces round =)
+PASS INI_NEXT a comment (#) and a blank passed, [HALL]
+PASS INI_NEXT ITEM KEY = 40,60: the sub-key, INI_NUMAT twice, then CF
+PASS INI_NUMAT -5 , 12
+PASS INI_WORD KEY LAMP BOOK (BO in 3 bytes), then CF
+PASS INI_NEXT a 19-letter key cut at 15, not a sub-key
+PASS INI_NEXT tabs round the key, the = and the value
+PASS INI_NEXT a line with no = passed; [attic] = ATTIC
+PASS INI_FIND [HALL] TEXT KEY, the scan position kept
+PASS INI_FIND [attic] CODE = 21
+PASS INI_FIND TITLE at the top and in [attic]: two values
+PASS INI_FIND missing key / sub-key / empty section / no section: CF
+PASS INI_NEXT ENTERS 1 21 300, [EMPTY], then the end on a comment
+PASS INI_REWIND then 14 lines that say something
+PASS INI_TEXT an INI in memory with no last line end: X = 1
+PASS INI_COPY cut to the room; INI_EQ blind to case
+ALL PASS

@@ -42,7 +42,9 @@ import { PAGE_KEPT, PAGES_DIR, EXAMPLES, parsePage, checkPage, judgeLine, pageBr
 import { HtmlPage, checkHtmlPage } from './htmlpage.js';
 import { Help } from './help.js';
 import { DosBox } from '../owlosui/dosbox/dosbox.js';
+import { touchFirst } from '../owlosui/touch.js';
 import { Loading } from './loading.js';
+import { GameKeys } from './gamekeys.js';
 
 // Before anything can remove a file: every removal from this browser's
 // storage into a journal that outlives a reload (drives.js says why).
@@ -131,23 +133,23 @@ const GAMES = [
   { key: 'owlfly3', name: 'OWL FLY III', dir: 'OWLFLY3', room: 'owlfly3', hint: 'CGA, EGA, VGA and a Hercules edition of the same war; multiplayer',
     about: 'The same war on every video card a PC could have: CGA in cyan and magenta, EGA, VGA, and a Hercules edition in monochrome. ' +
       'Its first menu asks the machine - a card it has not got refuses the key - and every card has a cockpit drawn for it.',
-    keys: 'arrows fly, W/S throttle, A burner, Enter locks, Space cannon, Backspace missile, F2-F7 views, Esc pauses' },
+    keys: 'Enter through the menus; arrows fly, W/S throttle, A burner, Enter locks, Space cannon, Backspace missile, F2-F7 views, Tab or F8 the Shilka seat, Esc pauses, Alt+Q quits' },
   { key: 'owlfly2', name: 'OWL FLY II', dir: 'OWLFLY2', room: 'owlfly2', hint: 'One shared sky over the network, an F-15 cockpit with three MFD pages',
     about: 'One shared sky over the network, and no menu: you arrive watching the war through an orbit camera, and Enter takes a jet on your own runway. ' +
       'An F-15 cockpit with a radar, three MFD pages, and a name over every human pilot in view.',
-    keys: 'before a jet: arrows swing the camera, Z/X in and out, Enter takes one; then arrows fly, W/S throttle, Enter locks, Space cannon' },
+    keys: 'before a jet: arrows swing the camera, Z/X in and out, Enter takes one; then arrows fly, W/S throttle, Enter locks, Space cannon, Alt+Q quits' },
   { key: 'owlfly', name: 'OWL FLY', dir: 'OWLFLY', hint: 'The combat flight simulator: an island, a city, two air forces',
     about: 'The combat flight simulator: an island made by the program, a city that can be destroyed, two air forces of five aircraft types ' +
       'across a front line, homing missiles, a cockpit with a working radar, and a jet engine on the Sound Blaster.',
-    keys: 'arrows fly, W/S or +/- throttle, Space (hold) cannon, Backspace missile, F4 orbits the target; after GAME OVER Space flies again' },
+    keys: 'arrows fly, W/S or +/- throttle, Q/E or Z/C rudder, Space (hold) cannon, Backspace missile, F4 orbits the target; after GAME OVER Space flies again; Esc quits' },
   { key: 'trainer', name: 'The Flight School', dir: 'TRAINER', hint: 'Take off, fly the pattern, land: an airfield and a flight model that stalls',
     about: 'Take off, fly the pattern, land. An airfield - a numbered runway, a taxiway, hangars, a tower and a turning radar - and a flight model ' +
       'that knows the take-off speed, the stall and the ground cushion. Its 3-D models came from Blender, through the OBJ-to-8086 converter.',
-    keys: 'W/S or +/- throttle, arrows steer; F flaps, G gear, B brakes, V view, R starts again' },
+    keys: 'W/S or +/- throttle, arrows steer, Z/C rudder, Shift+arrows look; F flaps, G gear, B brakes, V view, O canopy, R starts again, Esc quits' },
   { key: 'wirecity', name: 'WIRE CITY', dir: 'WIRECITY', hint: 'Where it started: a wireframe night flight over a city, one source file',
     about: 'Where it started: a night flight over a wireframe city that the program builds rather than stores. One source file, small enough ' +
       'to read in a sitting, with the three ideas everything here is made of: fixed-point 3-D, hidden lines by the painter, a world from a seed.',
-    keys: 'arrows steer - the horizon banks with you' },
+    keys: 'arrows steer - the horizon banks with you; Space after a crash, Esc quits' },
   // A game that comes as a DISK, not a folder on C:: its clips are hundreds
   // of megabytes in a repository of their own (owlnight-disk), listed by
   // ../owlnight.json. Play fetches them once into a folder of this browser,
@@ -166,7 +168,7 @@ const GAMES = [
   { key: 'multsoko2', name: 'MULTIPLAY SOKO II', dir: 'MULTSOK2', room: 'multsok2', hint: 'Sokoban in a castle for up to eight: EGA 640 or 320, CGA or Hercules, Sound Blaster, candies, a gate out; multiplayer',
     about: 'Crates onto the red marks, in a castle seen from above: a black floor with candies on it, walls of big stones overgrown with green, a moat, ' +
       'a park with oaks, fountains and statues. Every crate home and the gate rises: out through it, and the winner of the level is on the podium.',
-    keys: 'arrows or W A S D walk and push, Space a mine, Q/E turn, V isometric, Z close up, R R anew, N N / P P next or previous' },
+    keys: 'arrows or W A S D walk and push, Backspace or U a step back, Space a mine, Q/E turn, V isometric, Z close up, R R anew, N N / P P next or previous' },
 ];
 
 /**
@@ -289,6 +291,30 @@ export class SiteApp extends CourseApp {
     this.watchJet();
     this.buildMenus();         // again: the course's constructor built it before the drives were there
     this.makeTerminal();
+    this.padForGames();
+  }
+
+  /**
+   * On a touch screen, a game's own pad under DOS (gamekeys.js) in the
+   * place of the library's PC keyboard - which it keeps, for menus and the
+   * commander. Every run starts with no game's pad (`any`); play(),
+   * playDisk() and runInPlace() name the game theirs runs, in `padGame`,
+   * just before they start it.
+   */
+  padForGames() {
+    if (!touchFirst()) return;
+    // Made at the first run, not here: the library attaches its touch
+    // handling (owl.touch) only after this constructor has returned.
+    const pad = () => {
+      if (this.gameKeys || !this.owl.touch) return this.gameKeys;
+      const box = this.dos.box, was = box.keys;
+      if (was) { was.show(false); was.el.remove(); }   // the library's, from a start before this one
+      return (this.gameKeys = box.keys = new GameKeys(box));
+    };
+    for (const m of ['run', 'runLines']) {
+      const f = this.dos[m].bind(this.dos);
+      this.dos[m] = (...a) => { pad()?.setGame(this.padGame ?? null); this.padGame = null; return f(...a); };
+    }
   }
 
   /**
@@ -387,6 +413,7 @@ export class SiteApp extends CourseApp {
     const up = name.toUpperCase();
     const g = drive.letter === 'C' && GAMES.find(x => dir.toUpperCase().startsWith(`/GAMES/${x.dir}/`));
     if (g?.room) this.dos.settings = { ...this.dos.settings, room: g.room };
+    this.padGame = g?.key ?? null;
     const folder = dir.replace(/\/$/, '').replace(/\//g, '\\') || '\\';
     return this.dos.runLines(up, [`${drive.letter}:`, `cd ${folder}`, up.endsWith('.BAT') ? `call ${up}` : up, 'C:', 'cd \\', 'call C:\\COMMANDR.BAT'],
       { network: !!g?.room });
@@ -1634,6 +1661,7 @@ export class SiteApp extends CourseApp {
     const card = this.dos.settings.machine;
     if (machine) this.dos.settings = { ...this.dos.settings, machine };
     this.exampleKey = null;
+    this.padGame = g.key;
     this.track(this.dos.run(g.key)
       .finally(() => { if (machine) this.dos.settings = { ...this.dos.settings, machine: card }; })
       .then(() => {
@@ -1662,6 +1690,7 @@ export class SiteApp extends CourseApp {
     this.afterTable();
     const off = this.dos.box.on(what => { if (what === 'stopped') { off(); this.removeDrive(d).catch(() => {}); } });
     this.exampleKey = null;
+    this.padGame = g.key;
     await this.dos.runLines(g.name, [`${letter}:`, ...g.disk.run, 'C:', 'cd \\', 'call C:\\COMMANDR.BAT'], { grab: true });
     if (this.dos.box.running && !this.dosBig) this.zoomDos();
     this.firstManual(g.key);

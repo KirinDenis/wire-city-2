@@ -20,6 +20,11 @@
 //
 // In Node (for tests) there is no canvas: load a Wire from the file's
 // bytes, make an Owlosui, and read frames as text with frame().row(y).
+//
+// A finger, a phone's keyboard and the keys a phone has not got are in
+// touch.js, beside this file; `run` puts them on the page as well.
+
+import { attachTouch, touchFirst, KeyBar } from './touch.js';
 
 // ------------------------------------------------------------------ wire
 
@@ -120,7 +125,7 @@ const Op = {
   Cluster: 0x1D, ButtonRow: 0x1E, Hex: 0x1F,
   Close: 0x20, GetText: 0x21, SetProgress: 0x22, GetMarked: 0x23, GetCurrent: 0x24,
   Activate: 0x27, Active: 0x2A, SetText: 0x2B, Blit: 0x2C, MenuCheck: 0x2D, GetCluster: 0x2E, GetClick: 0x2F,
-  Key: 0x30, Mouse: 0x31, Tick: 0x32,
+  Key: 0x30, Mouse: 0x31, Tick: 0x32, TouchAt: 0x33, Scroll: 0x34,
   Frame: 0x40, Take: 0x41, GetGlyphs: 0x42, Cycle: 0x43, Zoom: 0x44, SetButton: 0x45, Focus: 0x46,
   Cascade: 0x47, Tile: 0x48, SetReadOnly: 0x49, WindowStatus: 0x4A, WindowMenu: 0x4B, WindowList: 0x4C,
   CycleBack: 0x4D, SizeMove: 0x4E, SetHistory: 0x4F, GetHistory: 0x50, Palette: 0x51, SetColor: 0x52,
@@ -426,17 +431,18 @@ export class Owlosui {
    * caret's line:column on the bottom edge. The person can change each from
    * the Edit menu; `editorState` reads them back.
    */
-  editor(id, offers, { wrap = false, readOnly = false, classic = false, hex = false, numbers = false, position = false } = {}) {
-    const state = (wrap ? 1 : 0) | (readOnly ? 2 : 0) | (classic ? 4 : 0) | (hex ? 8 : 0) | (numbers ? 32 : 0) | (position ? 64 : 0);
+  /** suggest: words offered while one is typed, in a text coloured as a language (on unless false). */
+  editor(id, offers, { wrap = false, readOnly = false, classic = false, hex = false, numbers = false, position = false, suggest = true } = {}) {
+    const state = (wrap ? 1 : 0) | (readOnly ? 2 : 0) | (classic ? 4 : 0) | (hex ? 8 : 0) | (numbers ? 32 : 0) | (position ? 64 : 0) | (suggest ? 0 : 128);
     this.call(Op.Editor, u16(id), u8(offers), u8(state));
   }
-  /** { offers, wrap, readOnly, classic, hex, syntax, numbers, position, line, col } - line and column from 0. */
+  /** { offers, wrap, readOnly, classic, hex, syntax, numbers, position, suggest, line, col } - line and column from 0. */
   editorState(id) {
     const r = this.call(Op.GetEditor, u16(id));
     const s = r[1];
     return {
       offers: r[0], wrap: !!(s & 1), readOnly: !!(s & 2), classic: !!(s & 4), hex: !!(s & 8), syntax: !!(s & 16),
-      numbers: !!(s & 32), position: !!(s & 64),
+      numbers: !!(s & 32), position: !!(s & 64), suggest: !(s & 128),
       line: readU16(r, 2), col: readU16(r, 4),
     };
   }
@@ -808,9 +814,17 @@ export class Owlosui {
   press(key, mods = {}) { const k = encodeKey(key, mods); if (k) this.key(...k); }
   /** Characters, typed. */
   type(text) { for (const ch of text) this.press(ch); }
-  /** kind: 0 down, 1 up, 2 drag, 3 move, 4 wheel up, 5 wheel down, 6 double. button: 0 left, 1 right, 2 middle. */
-  mouse(kind, x, y, button = 0) { this.call(Op.Mouse, u8(kind), u8(button), i16(x), i16(y)); }
+  /** kind: 0 down, 1 up, 2 drag, 3 move, 4 wheel up, 5 wheel down, 6 double. button: 0 left, 1 right, 2 middle. mods: the keys held, as key() spells them - 1 Shift (Shift+click stretches a selection), 2 Ctrl, 4 Alt. */
+  mouse(kind, x, y, button = 0, mods = 0) { this.call(Op.Mouse, u8(kind), u8(button), i16(x), i16(y), u8(mods)); }
   click(x, y) { this.mouse(0, x, y); this.mouse(1, x, y); }
+  /**
+   * What a finger put down on a cell and moved would do: what 0 press and drag
+   * it as the mouse would, 1 move the window by its title, 2 resize the active
+   * window - press at x, y, its corner - 3 scroll what is there, with scroll().
+   */
+  touchAt(x, y) { const r = this.call(Op.TouchAt, i16(x), i16(y)); return { what: r[0], x: readI16(r, 1), y: readI16(r, 3) }; }
+  /** What is under a cell scrolled by rows, down for more than zero: a finger's drag. */
+  scroll(x, y, rows) { this.call(Op.Scroll, i16(x), i16(y), i16(rows)); }
   /** The ninety milliseconds a pressed button is shown down are over: it may happen now. */
   tick() { this.call(Op.Tick); }
   /** What has happened: a button pressed and a command chosen (menu, status line), each 0 for none. */
@@ -1026,8 +1040,15 @@ export class Screen {
  */
 export async function run(canvas, makeApp, { wasm = new URL('./owlosui-wire.wasm', import.meta.url), codePage = 437 } = {}) {
   const wire = await Wire.load(wasm);
-  const screen = new Screen(canvas);
-  let { cols, rows } = screen.fit();
+  // On a phone the cells are smaller: half again as many columns, so the
+  // menus and the dialogs fit; two fingers zoom in on them.
+  const phone = touchFirst();
+  const screen = new Screen(canvas, phone ? { font: '12px "Cascadia Mono", "Consolas", "DejaVu Sans Mono", monospace', cellHeight: 15 } : undefined);
+  // touch.js's part of the page, made last - see the end.
+  let touch = null;
+  // The key bar a touch screen gets takes the bottom of the page.
+  const fit = () => screen.fit(window.innerWidth, window.innerHeight - (touch ? touch.bottom() : phone ? KeyBar.HEIGHT : 0));
+  let { cols, rows } = fit();
   const owl = new Owlosui(wire, cols, rows, codePage);
   // For work that finishes later - a file read over the network: the
   // program calls this when it has changed the screen, and it is painted.
@@ -1070,6 +1091,8 @@ export async function run(canvas, makeApp, { wasm = new URL('./owlosui-wire.wasm
     screen.draw(f);
     shown = f;
     for (const after of owl.afterPaint) after();
+    // The caret above a phone's keyboard, wherever it went.
+    touch?.pan();
     // A menu dropped under a mouse that has not moved is the menu's to
     // click, not the picture's that was there a moment ago.
     through();
@@ -1126,8 +1149,13 @@ export async function run(canvas, makeApp, { wasm = new URL('./owlosui-wire.wasm
   });
 
   setInterval(() => { screen.blink = !screen.blink; paint(); }, 500);
+  let fitWidth = window.innerWidth;
   window.addEventListener('resize', () => {
-    ({ cols, rows } = screen.fit());
+    // A phone's keyboard coming up may shrink the page as well: the
+    // desktop keeps its size, and the canvas slides up instead (pan).
+    if (touch?.keyboardOpen() && window.innerWidth === fitWidth) return touch.pan();
+    fitWidth = window.innerWidth;
+    ({ cols, rows } = fit());
     owl.resize(cols, rows);
     after();
   });
@@ -1136,6 +1164,9 @@ export async function run(canvas, makeApp, { wasm = new URL('./owlosui-wire.wasm
     // An element laid over the screen that takes the keyboard while it has
     // the focus - an emulator - marks itself so; its keys are its own.
     if (e.target instanceof Element && e.target.closest('[data-owl-own-keys]')) return;
+    // A key that is part of a word being composed - a phone's keyboard
+    // says 229 for every key it has - is heard as text by touch.js.
+    if (e.isComposing || e.keyCode === 229) return;
     const k = encodeKey(e.key, { shift: e.shiftKey, ctrl: e.ctrlKey, alt: e.altKey });
     if (!k) return;
     if ((e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'v') || (e.shiftKey && e.key === 'Insert')) {
@@ -1164,7 +1195,7 @@ export async function run(canvas, makeApp, { wasm = new URL('./owlosui-wire.wasm
     lastDown = twice ? 0 : now;
     lastAt = at;
     lastCell = { x, y };
-    owl.mouse(twice ? 6 : 0, x, y, b);
+    owl.mouse(twice ? 6 : 0, x, y, b, (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.altKey ? 4 : 0));
     after();
     e.preventDefault();
   }
@@ -1247,6 +1278,15 @@ export async function run(canvas, makeApp, { wasm = new URL('./owlosui-wire.wasm
     after();
     e.preventDefault();
   }, { passive: false });
+
+  // A finger, a phone's keyboard, and on a touch screen the key bar.
+  touch = attachTouch({
+    owl, screen, canvas, after, ended: () => ended, frame: () => shown, withBar: phone,
+    // Something taller along the bottom - a DOS keyboard: the screen fitted above it.
+    refit: () => { ({ cols, rows } = fit()); owl.resize(cols, rows); after(); },
+  });
+  // For a page's own parts that live on a touch screen too: DosBox's keyboard.
+  owl.touch = touch;
 
   paint();
   return owl;

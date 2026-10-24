@@ -1,0 +1,11 @@
+PASS NPEER heard: a new slot, the same slot again
+PASS NPEER heard: our own name and 0 are refused
+PASS NPEER find: known found, a stranger not
+PASS NPEER full: 4 slots taken, the fifth refused, count 4
+PASS NPEER timeout: the old one freed once, his data readable
+PASS NPEER a freed slot taken again, zeroed
+PASS NPEER host: lowest heard; quiet one left out; old not counted; merge
+PASS NPEER colour: 0186h 0286h 0386h distinct in 0..7
+PASS NPEER beat: change at once, once a tick, kept, then the heartbeat
+PASS NPEER registers kept: CX DX SI DI BP
+NPEER ALL PASS

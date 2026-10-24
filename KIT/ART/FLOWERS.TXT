@@ -1,0 +1,56 @@
+; FLOWERS 16x16 and 32x16 - flowers in the grass, and a flower bed in a stone border
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Flowers() 548, FlowerBed() 315; examples
+;       GAMES\MULTSOK2\ART.INC FLW_16, FLB_16
+;
+; WHAT: FLOWERS - six flowers on stalks over the grass, see-through between
+; (wet ground and garden). FLOWERBED - a mound of leaves with seven big
+; blooms in a stone ring, two cells wide (garden). Butterflies live over
+; both (R_LIFE.ASM).
+; COLOURS: blooms 'C' red, 'D' pink, 'E' gold, 'F' white, hearts 'E' (a
+; flower) or '6' (a bed's); stalks 'A' over '2'; the bed's border 'F' lit on
+; its top half, '8' below, '0' its outer edge; leaves FOLIAGE.TXT's Leaf.
+; FLOWERS rule: for each (fx, fy, c) of (3,4,C) (10,3,D) (13,10,E) (5,11,F)
+;   (10,13,C) (7,7,E): petals c at (fx-1, fy), (fx+1, fy), (fx, fy-1),
+;   (fx, fy+1); heart 'E' at (fx, fy); stalk 'A' at (fx, fy+2), '2' at
+;   (fx, fy+3). Everything else '.'.
+; FLOWERBED rule: nx = (x + 0.5 - 16) / 15.5, ny = (y + 0.5 - 9.5) / 6.2,
+;   d = nx^2 + ny^2: d > 1 '.'; d > 0.8 the border (ny < 0 'F'; d > 0.92
+;   '0'; else '8'); within 0.8 / 1.9 px of a bloom's centre (6,7,C)
+;   (12,5,E) (19,6,D) (25,8,C) (9,11,E) (16,10,F) (22,12,E) its heart '6' /
+;   petals; else FOLIAGE.TXT's leaf colour at (nx, ny).
+; ANIMATION: none (the butterflies move, not the flowers).
+FLOWER16: db 16,16
+          db '................'
+          db '................'
+          db '..........D.....'
+          db '...C.....DED....'
+          db '..CEC.....D.....'
+          db '...C......A.....'
+          db '...A...E..2.....'
+          db '...2..EEE.......'
+          db '.......E........'
+          db '.......A.....E..'
+          db '.....F.2....EEE.'
+          db '....FEF......E..'
+          db '.....F....C..A..'
+          db '.....A...CEC.2..'
+          db '.....2....C.....'
+          db '..........A.....'
+FLOWBED32: db 32,16
+          db '................................'
+          db '................................'
+          db '................................'
+          db '............FFFFFFFF............'
+          db '.......FFFAEEEAAAAAAAAFFF.......'
+          db '....FFAAAAAE6EAAA2DDDA2A2AFF....'
+          db '..FFACCC2AAEEEAAAAD6D2A2A2A2FF..'
+          db '.FFAAC6CAAAAAAAA2ADDDA2ACCC22FF.'
+          db '.FAAACCCAAAAA2A2A2A2A2A2C6C222F.'
+          db '08AAAAA2AAAA2A2FFF2A2222CCC22280'
+          db '.8A2AAAAEEE2A2AF6F2222222220208.'
+          db '.08A2A2AE6EA2A2FFF222EEE0202080.'
+          db '..08A2A2EEE2A22222222E6E202080..'
+          db '....082A2A22222222220EEE0280....'
+          db '.......088222222202020880.......'
+          db '............00000000............'

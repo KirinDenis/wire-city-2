@@ -127,7 +127,7 @@ export const MANUALS = {
 
   owlfly3: {
     title: 'OWL FLY III',
-    keys: 'Enter through the menus, then: B brakes, W/S throttle, A burner, arrows fly, Enter lock, Space gun, Esc pause',
+    keys: 'Enter through the menus, then: B brakes, W/S throttle, A burner, arrows fly, Enter lock, Space gun, Tab/F8 Shilka, Esc pause, Alt-Q quit',
     blocks: [
       { h: 'WHAT THIS IS' },
       { p: 'OWL FLY II\'s war, flown on CGA, EGA, VGA and Hercules - pure 8086 assembly. The aeroplane, the keys and the war are OWL FLY II\'s; what this edition adds is every video card a PC could have, each with a cockpit drawn for it.' },
@@ -138,6 +138,7 @@ export const MANUALS = {
         ['2) CGA', '320x200, the classic palette 1 - cyan, magenta, white - with the cockpit redrawn as CGA line art; H swaps the hardware palette in flight to green/red/yellow and back'],
         ['3) EGA', '320x200, sixteen colours on ANY EGA - the 64K launch card included'],
         ['4) EGA', '640x350, EGA\'s best: sixteen curated colours, the drawn grey cockpit, no dither anywhere'],
+        ['5) MCGA', '320x200, 256 colours - the frame straight, as on VGA'],
         ['6) VGA', '320x200, the game as born, 256 colours'],
         ['7) VGA', '640x480, sixteen colours at the crispest geometry of all'],
       ] },
@@ -145,6 +146,15 @@ export const MANUALS = {
       { p: 'Then, as in OWL FLY II, you arrive watching the war - PRESS ENTER TO JOIN takes a jet on your own concrete.' },
       { h: 'THE KEYS' },
       { p: 'The aeroplane is OWL FLY II\'s, key for key - all of them are below. One key is this edition\'s own: ESC pauses. The world stands still; the glass stays alive: F2-F7 keep switching views, the orbit camera still flies on the arrows, the radar and map still zoom, the MFD still pages. A red P sits on the panel while time is stopped - and it is the photographer\'s key: pause a dogfight, orbit it, frame the shot.' },
+      { p: 'The other is the seat: Tab - or F8, or 0, for a browser that eats Tab - takes you out of the jet and into a Shilka on the ground, and back.' },
+      { k: [
+        ['<- / ->', 'in the Shilka: steer the hull'],
+        ['^ / v', 'in the Shilka: forward / back'],
+        ['A / D', 'turn the turret'],
+        ['W / S', 'raise / lower the barrels'],
+        ['Space', '(hold) fire'],
+        ['F3', 'camera: cabin, follow, orbit; Q / E swing the orbit, Z / X its distance'],
+      ] },
       { h: 'ON HERCULES' },
       { p: 'There was no colour on a Hercules and there is none here: what the card gives you is RESOLUTION - 720x348, twice a CGA\'s dots - and this game spends all of it. Brightness is dither density, and the cockpit ships pre-drawn in those densities, baked offline. On a Hercules machine the front step lands on it by itself, so ENTER through the three screens and you fly (for sound, the speaker is the honest pick there).' },
       ...ON_THIS_SITE,
@@ -163,7 +173,7 @@ export const MANUALS = {
       { k: [
         ['<- / ->', 'bank left / right (numpad 4/6) - roll goes through 360 degrees, loops and barrel rolls work'],
         ['v / ^', 'pull the nose up / push it down, flight-sim yoke (numpad 2/8)'],
-        ['Z / C', 'rudder: a flat turn without banking (numpad 7/9)'],
+        ['Q / E, Z / C', 'rudder: a flat turn without banking (numpad 7/9)'],
         ['W / S', 'throttle up / down (+ / - too - some layouts eat +, W/S always work)'],
         ['A', 'afterburner - double thrust, drinks fuel'],
         ['hands off', 'the plane rights itself and trims to level'],
@@ -198,10 +208,10 @@ export const MANUALS = {
 
   trainer: {
     title: 'The Flight School',
-    keys: 'W/S throttle, arrows steer, F flaps, G gear, B brakes, V view, R reset',
+    keys: 'W/S throttle, arrows steer, Z/C rudder, F flaps, G gear, B brakes, V view, R reset, Esc quit',
     blocks: [
       { h: 'KEYS' },
-      { p: 'W/S or +/- throttle, arrows steer: F flaps, G gear, B brakes, V view, R starts again.' },
+      { p: 'W/S or +/- throttle, arrows steer, Z/C the rudder (on the ground, the nose-wheel trim); hold Shift and the arrows look around while the stick stays centred. F flaps (three settings in turn), G gear, B brakes, V view, O the canopy, R starts again, Esc back to DOS.' },
       { h: 'WHAT THIS IS' },
       { p: 'An airfield and a trainer: a numbered runway, taxiway, hangars, a control tower in obstruction stripes and a radar dish that turns. Take off, fly the pattern, put it back down on the numbers.' },
       { h: 'WHY IT IS WORTH A LOOK' },
@@ -211,10 +221,10 @@ export const MANUALS = {
 
   wirecity: {
     title: 'WIRE CITY',
-    keys: 'arrows steer - the horizon banks with you',
+    keys: 'arrows steer - the horizon banks with you; Space after a crash, Esc quit',
     blocks: [
       { h: 'KEYS' },
-      { p: 'The arrows steer; banking turns. That is all of it.' },
+      { p: 'The arrows steer; banking turns. After a crash Space flies again; Esc goes back to DOS. That is all of it.' },
       { h: 'WHAT THIS IS' },
       { p: 'The program that started the whole arcade: a night flight over a wireframe megacity, minted procedurally rather than drawn by hand. Arrows steer, the horizon banks with you, the towers slide past in the correct order.' },
       { h: 'WHY IT IS WORTH A LOOK' },
@@ -241,7 +251,7 @@ export const MANUALS = {
 
   multsoko2: {
     title: 'MULTIPLAY SOKO II',
-    keys: 'arrows or W A S D walk and push, Backspace a step back, Space mine, Q/E turn, V isometric, Z close up, R R anew, N N / P P',
+    keys: 'arrows or W A S D walk and push, Backspace or U a step back, Space mine, Q/E turn, V isometric, Z close up, R R anew, N N / P P',
     blocks: [
       { h: 'THE FIRST SCREEN' },
       { p: 'It asks three things, in text so that any card shows it: 1, 2, 3 or 4 picks the picture - EGA 640, sixteen colours at 640 by 200, the pictures drawn twice as fine across (recommended); EGA, the same at 320; CGA, four colours; Hercules, black and amber - a card this machine has not got refuses its key; 5 turns the sound on and off (a Sound Blaster at 220h); the letters you type are your name. Enter plays. By default the best card here and the sound on.' },

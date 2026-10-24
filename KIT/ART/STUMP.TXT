@@ -1,0 +1,33 @@
+; STUMP 16x16 - an old stump: rings on its top, moss on its side, roots in the grass
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Stump() 525; example GAMES\MULTSOK2\ART.INC
+;       STU_16
+;
+; WHAT: the wood's and the pines'.
+; COLOURS: top rings 'E' / '6'; side '6' lit left, 'A' moss, '0' shade
+; right; roots '0' and 'A' grass.
+; THE RULE: nx = (x + 0.5 - 8) / 6, ny = (y + 0.5 - 8) / 2.6;
+;   nx^2 + ny^2 < 1 -> the top: d = sqrt(nx^2 + ny^2), int(4d) even 'E'
+;   else '6' (no sqrt: compare (nx^2 + ny^2) * 16 with k^2 for k = 1, 2,
+;   3, 4 - the ring is the first k it is under);
+;   8 < y <= 13 and |x + 0.5 - 8| < 6.3 -> the side: x < 5 '6',
+;   hash(x, y) mod 4 = 0 'A', x > 11 '0', else '6';
+;   y = 14 and |x + 0.5 - 8| < 7.5 -> x mod 3 = 0 '0' else 'A';  else '.'
+; ANIMATION: none.
+STUMP16:  db 16,16
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '......6666......'
+          db '...66EEEEEE66...'
+          db '..66E66EE66E66..'
+          db '..66E66EE66E66..'
+          db '..666EEEEEE66A..'
+          db '..6666666666A0..'
+          db '..666AA66666A0..'
+          db '..6666666666A0..'
+          db '..6666666AAA00..'
+          db '.AA0AA0AA0AA0AA.'
+          db '................'

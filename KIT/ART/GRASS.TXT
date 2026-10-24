@@ -1,0 +1,51 @@
+; GRASS 16x16 - the park's ground: green, blades of lime, dark specks; one with a stone
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Grass() 233; examples GAMES\MULTSOK2\ART.INC
+;       GRS_16, GR2_16
+;
+; WHAT: the ground under the park's things (SCATTER.TXT says where). SOLID,
+; seamless: a hash of (x, y) inside the tile only.
+; COLOURS: '2' green, 'A' a lime blade (two pixels tall now and then), '0'
+; a dark speck; the stone '7' lit / '8' shade.
+; THE RULE for (x, y), h = hash(x + (stone ? 40 : 0), y):
+;   stone and (2x+1-22)^2 + (2y+1-10)^2 < 3.4^2 (r 1.7 at (11, 5))
+;               -> x + y < 16 ? '7' : '8'
+;   h mod 9 = 0 -> 'A'
+;   h mod 9 = 1 and y < 15 and hash(x, y+1) mod 9 <> 0 -> 'A'
+;   h mod 8 = 2 -> '0'
+;   else '2'
+; ANIMATION: none - the ground never moves; the eye rests on it.
+GRASS16:  db 16,16
+          db 'A22222222A222022'
+          db '222222A2AA22222A'
+          db '022220222A2A2022'
+          db '2A222220222AA2AA'
+          db '202A222222222220'
+          db '2A22A22202202222'
+          db '22A222AAA2222222'
+          db 'A22222A222222222'
+          db '220A222A220002A2'
+          db '2022222A22222222'
+          db '222A22222A0A2202'
+          db '2222A22222222222'
+          db '02A2220220A22A22'
+          db '02A2A222A222A220'
+          db '22AA2222220AA2A2'
+          db '2002A22A2AAA2202'
+GRASS16S: db 16,16
+          db 'AA22A02222A2AAA2'
+          db 'A2A2AAA222222A2A'
+          db '220AA022A2222222'
+          db '2222A20A2A77AA2A'
+          db 'A2A2222227778222'
+          db '2222002227788022'
+          db '2222222222882AAA'
+          db '202A0AA2A2002A2A'
+          db '22222A2222202222'
+          db '2202AA0222A20A2A'
+          db '2A2222222202A222'
+          db 'AA22A20A222222AA'
+          db '2022222222A02A22'
+          db '22AA2AA220202022'
+          db '2A22220222222A22'
+          db '2220220A20222222'

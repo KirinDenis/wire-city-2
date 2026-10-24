@@ -1,0 +1,108 @@
+; WATER 16x16 x5 - still water at dusk: long low swells drifting, a rare glint, a breath of wind
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Water() 209; GAMES\MULTSOK2\SCENE.INC
+;       FRAMEFL 1497-1535; examples ART.INC MO0_16..MO4_16
+;
+; WHAT: the moat (every cell round the walls that is not floor), ponds'
+; edges, rivers. SOLID, seamless in 16 both ways. Calm: "a pulse at rest".
+; COLOURS: '1' deep water, '9' a swell, '3' a swell's light, 'B' a glint
+; (frame 0 only); in frame 4, under the wind, the swell 'B' over '9' and a
+; '3' line under it.
+; THE RULE for (x, y), frame f = 0..3:
+;   lane = y / 8;  u = (x + 16 - f + lane * 7) mod 16
+;   swell = (y mod 8 = 3) and u < 6
+;   swell: u = 2 -> '3' (its light, a pixel), else '9'
+;   f = 0 and ((x * 5 + y * 3) and 31) = 7 -> 'B' (a glint)
+;   else '1'
+; frame 4 (the wind): swell -> (2 <= u < 4 ? 'B' : '9');
+;                     y mod 8 = 4 and u < 4 -> '3';  else '1'
+; ANIMATION (R_WATER.ASM): each cell its own phase from a hash (listed
+; when the background is made); frame = (beat / 2 + phase) and 3 - a frame
+; every two beats, 16 ticks. Once a minute a band 48 px wide - a breath of
+; wind - drifts across left to right: gust = (tick and 1023) - 96; a cell
+; under [gust, gust + 48) shows frame 4.
+WATER16A: db 16,16
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111B11'
+          db '993999B111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111B11111'
+          db '111B111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111119939991'
+          db '1111111B11111111'
+          db 'B111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+WATER16B: db 16,16
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1993999111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111993999'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+WATER16C: db 16,16
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1199399911111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '9111111111199399'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+WATER16D: db 16,16
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1119939991111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '9911111111119939'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+WATER16W: db 16,16
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '111199BB99111111'
+          db '1111333311111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'
+          db 'B99111111111199B'
+          db '3111111111111333'
+          db '1111111111111111'
+          db '1111111111111111'
+          db '1111111111111111'

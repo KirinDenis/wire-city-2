@@ -1,0 +1,9 @@
+PASS GMOTION R_PARTIC 80 ticks: a thread of smoke risen 30 px, none past its life
+PASS GMOTION R_DEBRIS every piece thrown, fallen and resting on the ground
+PASS GMOTION R_BLAST the schedule: hot ball, cooling, a gap, a cook-off, over
+PASS GMOTION R_BLAST BLDISC round, clipped at the corner, nothing wrapped
+PASS GMOTION R_TRACER flies 4 px a tick, spent on a wall, a pool of 32
+PASS GMOTION R_PATROL off the leash home, then hunts by the path and reaches him
+PASS GMOTION R_AIGUN a 4-round burst in range, nothing out of range
+PASS GMOTION the show drew smoke, wreck, fireball, tracers (60+ pixels)
+GMOTION: ALL PASS

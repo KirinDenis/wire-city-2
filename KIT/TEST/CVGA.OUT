@@ -1,0 +1,38 @@
+PASS VGA_ON before MEM_INIT: CF = 1  got -1
+PASS VGA_ON failing leaves text mode 3  got 3
+PASS VGA_ON CF = 0  got 0
+PASS VGA_ON mode = 13h  got 19
+PASS VGA_ON vga_buf set  got 0
+PASS VGA_ON buffer cleared to 0  got 0
+PASS VGA_CLS keeps registers  got 0
+PASS VGA_CLS fills byte 0  got 1799
+PASS VGA_CLS fills byte 63999  got 1799
+PASS VGA_ROW 100 = 32000  got 32000
+PASS VGA_ROW 199 = 63680  got -1856
+PASS VGA_WAIT keeps registers  got 0
+PASS VGA_RAMP 0..63 in 64: step 0 = 0, step 32 = 31  got 7936
+PASS VGA_RAMP stops one short of the end key (62)  got 62
+PASS VGA_RAMP keeps registers  got 0
+PASS VGA_RAMP 0..63 in 4: 15 then 31  got 7951
+PASS VGA_PALRUN keeps registers  got 0
+PASS VGA_PALGET keeps registers  got 0
+PASS VGA_PALRUN/PALGET entry 48 = 31 back  got 31
+PASS VGA_PAL keeps registers  got 0
+PASS VGA_PAL entry 1 red 63, entry 2 blue 63  got 16191
+PASS VGA_SHOW keeps registers  got 0
+PASS VGA_SHOW the buffer is on the screen (colour 26)  got 6682
+PASS VGA_CYCLE keeps registers  got 0
+PASS VGA_CYCLE 10..12: 10 = old 11, 11 = old 12  got 770
+PASS VGA_CYCLE 10..12: 12 = old 10  got 1
+PASS VGA_GLOW keeps registers  got 0
+PASS VGA_GLOW phase 4 of 3 = colour 1 (red 2)  got 2
+PASS VGA_PALCOL brightest 5, darkest 0  got 5
+PASS VGA_PALCOL greyest 9 (38,38,38), not 7 (50,10,10)  got 9
+PASS VGA_FADE keeps registers  got 0
+PASS VGA_FADE level 32: red 63 -> 31  got 31
+PASS VGA_FADE level 0: black  got 0
+PASS VGA_OFF keeps registers  got 0
+PASS VGA_OFF mode = 3  got 3
+PASS VGA_OFF vga_buf = 0  got 0
+PASS VGA_OFF gave the buffer back  got 0
+ALL PASS

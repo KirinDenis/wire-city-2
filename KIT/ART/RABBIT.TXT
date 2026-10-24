@@ -1,0 +1,29 @@
+; RABBIT 16x16 - a grey rabbit sitting up, its ears listening (drawn by hand)
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Rabbit() 493; example GAMES\MULTSOK2\ART.INC
+;       RAB_16
+;
+; WHAT: a small creature in the wet ground and the garden. Hand-drawn.
+; COLOURS: '7' grey fur, 'F' lit on its chest's left, '8' its shade down
+; right, '0' outline and eye, a dithered shadow row.
+; THE RULE: as DEER.TXT - '0' outline, one body colour, one lit edge top
+; left, one shade bottom right, ears two columns of '0' round a '7'.
+; ANIMATION: none. Alive: now and then (its own period, 4..9 s) shift it
+; one pixel left or right for a beat - a hop.
+RABBIT16: db 16,16
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '.......0..0.....'
+          db '......070070....'
+          db '......070070....'
+          db '......077770....'
+          db '.....0707770....'
+          db '.....0777780....'
+          db '....077777780...'
+          db '...0F7777778000.'
+          db '...0F777777880..'
+          db '....0777777880..'
+          db '.....00000000...'
+          db '......0.0.0.0...'

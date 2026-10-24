@@ -1,0 +1,28 @@
+; ROAD 16x16 - a dirt road with grey stones and a glint of gravel
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Road() 258; example GAMES\MULTSOK2\ART.INC
+;       ROD_16
+;
+; WHAT: the way out from the gate's bridge straight to the screen's edge,
+; two or more cells out from the gate. SOLID, seamless.
+; COLOURS: '6' earth, '8' a dark stone, '7' a lit one, 'E' gravel in light.
+; THE RULE, h = hash(x + 90, y + 7):
+;   h mod 11 = 0 -> '8';  h mod 17 = 1 -> '7';  h mod 9 = 2 -> 'E';  else '6'
+; ANIMATION: none.
+ROAD16:   db 16,16
+          db '6666E6EE66E66E66'
+          db '6E666667666666EE'
+          db '6866666666686666'
+          db '666666666666666E'
+          db '6676766EE6666666'
+          db 'E66676668E666666'
+          db 'E7666866E6686766'
+          db '8666666686668676'
+          db '66666E667666E866'
+          db '6668E66E6867766E'
+          db '6666668666668666'
+          db '8666686EE66866E6'
+          db '6E68E86676888666'
+          db '666666E666E66666'
+          db '68E6868E667E6666'
+          db '76666666E6E66666'

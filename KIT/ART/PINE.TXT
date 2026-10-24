@@ -1,0 +1,52 @@
+; PINE 16x32 - a tall pine: four tiers of needles, each wider, lit on its left
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Pine() 279; example GAMES\MULTSOK2\ART.INC
+;       PIN_16
+;
+; WHAT: the pine wood's tree (land 196..255, on FOREST.TXT's floor). 32
+; rows: 16 over the cell above.
+; COLOURS: 'A' lime on its lit left, a checker of 'A'/'2' in the middle,
+; '2' green on the right, '0' each tier's edge and bottom row; trunk '6'/'0'.
+; THE RULE: trunk x 7..8, y 26..29 ('6' left, '0' right). Tiers (top, bot,
+; half-width): (0, 9, 3.5), (6, 17, 5.5), (12, 23, 6.8), (18, 27, 7.8); the
+; first tier that holds the row:
+;   w = half * (y - top + 1) / (bot - top + 1)   (a triangle)
+;   dx = x + 0.5 - 8;  |dx| > w -> try the next tier, none: '.'
+;   |dx| > w - 1 or y = bot -> '0'
+;   dx < -0.35 w -> 'A';  dx < 0.3 w -> checker 'A'/'2';  else '2'
+; In integers multiply through by (bot - top + 1) * 20.
+; Shadow: ellipse (10, 30), radii 6 and 2.
+; ANIMATION: none.
+PINE16:   db 16,32
+          db '................'
+          db '.......00.......'
+          db '.......00.......'
+          db '.......00.......'
+          db '......02A0......'
+          db '......0A20......'
+          db '......02A0......'
+          db '.....0AA220.....'
+          db '.....0A2A20.....'
+          db '....00000000....'
+          db '......02A0......'
+          db '.....0AA220.....'
+          db '.....0A2A20.....'
+          db '....0AAA2220....'
+          db '....0AA2A220....'
+          db '...0AA2A22220...'
+          db '...0AAA2A2220...'
+          db '..000000000000..'
+          db '....0AA2A220....'
+          db '...0AA2A22220...'
+          db '...0AAA2A2220...'
+          db '..0AAA2A2A2220..'
+          db '..0AAAA2A22220..'
+          db '.00000000000000.'
+          db '...0AAA2A2220...'
+          db '..0AAA2A2A2220..'
+          db '.0AAAAA60222220.'
+          db '0000000600000000'
+          db '......060.0.0...'
+          db '.....0.600.0.0.0'
+          db '....0.0.0.0.0.0.'
+          db '.......0.0.0.0..'

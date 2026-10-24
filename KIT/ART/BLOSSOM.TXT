@@ -1,0 +1,38 @@
+; BLOSSOM 16x24 - a tree in blossom: its crown white and pink over the leaves
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Blossom() 451; example GAMES\MULTSOK2\ART.INC
+;       BLO_16
+;
+; WHAT: the garden's tree (hash 38..49). TREE.TXT in flower.
+; COLOURS: TREE.TXT's, but leaves in the light become blossom: 'D' pink,
+; one in four 'F' white.
+; THE RULE: TREE.TXT's crown and trunk; then c = the leaf colour,
+;   h = hash(x + 21, y + 4): c = 'A' or (c = '2' and h mod 3 = 0) ->
+;   h mod 4 = 0 ? 'F' : 'D'.
+; ANIMATION: none; butterflies over it (R_LIFE.ASM). Petals falling: a pixel
+; of 'D' each, drifting down a pixel a beat on WANDER's swing.
+BLOSSM16: db 16,24
+          db '.......00.......'
+          db '.....0DDD20.....'
+          db '....0DDFFFD0....'
+          db '...0DFFDDF2D0...'
+          db '...DDDDFD2D22...'
+          db '..00000F200000..'
+          db '..2DDDD00DFDDD..'
+          db '.0DFDD0000DDDF0.'
+          db '.DDDD0FFFD0DD22.'
+          db '0DDF0DDFDD20F220'
+          db '.DF2DDD2DF2D22D.'
+          db '.02D2DDF222DD20.'
+          db '..D2D2F2222020..'
+          db '...00FFF2F000...'
+          db '.....0D6000.....'
+          db '......0600......'
+          db '.......60.......'
+          db '.......60.......'
+          db '.......60.......'
+          db '.......60.......'
+          db '......060.0.0...'
+          db '.....0.600.0.0.0'
+          db '....0.0.0.0.0.0.'
+          db '.......0.0.0.0..'

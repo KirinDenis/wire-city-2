@@ -1,0 +1,52 @@
+PASS BANK.TXT pictures: 2
+PASS BIRCH.TXT pictures: 1
+PASS BLAST.TXT pictures: 1
+PASS BLOSSOM.TXT pictures: 1
+PASS BOULDER.TXT pictures: 1
+PASS BRIDGE.TXT pictures: 2
+PASS BUSH.TXT pictures: 1
+PASS CANDY.TXT pictures: 3
+PASS CRATE.TXT pictures: 3
+PASS DEER.TXT pictures: 1
+PASS FLOWERS.TXT pictures: 2
+PASS FOLIAGE.TXT pictures: 1
+PASS FOREST.TXT pictures: 1
+PASS FOUNTAIN.TXT pictures: 4
+PASS GATE.TXT pictures: 3
+PASS GEM.TXT pictures: 3
+PASS GOAL.TXT pictures: 1
+PASS GRASS.TXT pictures: 2
+PASS GROWTH.TXT pictures: 2
+PASS HEDGE.TXT pictures: 1
+PASS LAMP.TXT pictures: 1
+PASS MEADOW.TXT pictures: 1
+PASS MINE.TXT pictures: 1
+PASS MUSHROOM.TXT pictures: 1
+PASS OAK.TXT pictures: 1
+PASS OWL.TXT pictures: 3
+PASS PINE.TXT pictures: 1
+PASS POND.TXT pictures: 1
+PASS RABBIT.TXT pictures: 1
+PASS ROAD.TXT pictures: 1
+PASS RULES.TXT pictures: 1
+PASS SCATTER.TXT pictures: 0
+PASS SHADE.TXT pictures: 1
+PASS SHADOW.TXT pictures: 1
+PASS SPARKLE.TXT pictures: 1
+PASS STATUE.TXT pictures: 1
+PASS STONES.TXT pictures: 2
+PASS STUMP.TXT pictures: 1
+PASS TORCH.TXT pictures: 2
+PASS TOWER.TXT pictures: 1
+PASS TREE.TXT pictures: 1
+PASS WATER.TXT pictures: 5
+PASS WELL.TXT pictures: 1
+PASS WILLOW.TXT pictures: 1
+PASS ASCENE art: files 44, pictures 67
+PASS R_BGTWO BGBUILD: background pixels drawn 36096
+PASS R_DUSK DUSK: darkened outside the castle 14996, inside 0
+PASS R_FLAME FLAME: fire pixels over the torch 23
+PASS R_WATER WATERCELL: water cells, all water-coloured: 31
+PASS R_LIFE LIFEADD/LIFE: creatures 24
+PASS R_OWLFLY OWLTICK/OWLDRAW: the owl state (1 in, 2 sits) 2
+PASS R_CLOCK CLOCK: frames drawn on the clock 20

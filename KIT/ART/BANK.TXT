@@ -1,0 +1,50 @@
+; BANK 16x16 - an earth bank along the water's edge where the next cell is dry land
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Bank() 218; examples GAMES\MULTSOK2\ART.INC
+;       BKN_16 (north), BKW_16 (west)
+;
+; WHAT: drawn over a water cell on each side whose neighbour is land (not
+; water, not wall): four pictures, side 0 north, 1 east, 2 south, 3 west.
+; Drawn again over the water every frame (the water under it moves).
+; COLOURS: '6' earth, '7' a lit stone, '8' a dark one, a dithered '0'
+; line where the bank meets the water.
+; THE RULE (any size n; drawn by rule, 'r'): depth k = max(1, (3n + 8)/16)
+;   a = how far in from the side (side 0: y, 1: n-1-x, 2: n-1-y, 3: x)
+;   b = along the side (side 0, 2: x; 1, 3: y)
+;   a > k -> '.';  a = k -> checker '0' / '.'
+;   (b*7 + a*3) mod 5 = 0 -> '8';  hash(b, a) mod 3 = 0 -> '7';  else '6'
+; ANIMATION: none.
+BANK16N:  db 16,16
+          db '8767686767866778'
+          db '7867768667686667'
+          db '7686667877678676'
+          db '.0.0.0.0.0.0.0.0'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+BANK16W:  db 16,16
+          db '877.............'
+          db '7860............'
+          db '668.............'
+          db '7760............'
+          db '676.............'
+          db '8660............'
+          db '687.............'
+          db '7680............'
+          db '667.............'
+          db '7770............'
+          db '866.............'
+          db '6870............'
+          db '668.............'
+          db '7660............'
+          db '767.............'
+          db '8760............'

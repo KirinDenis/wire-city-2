@@ -1,0 +1,14 @@
+PASS GGRID load: 7x6, start, 2 crates
+PASS GGRID load refuses a level 32 wide
+PASS GGRID GRD_AT: off the level reads wall, cells read right
+PASS GGRID GRD_CELL / GRD_XY round trip
+PASS GGRID GRD_FLOOD: 17 floor cells
+PASS GGRID GRD_BFS nearest goal through crates: (5,1) in 4
+PASS GGRID GRD_BFS crates blocking: (5,3) in 6
+PASS GGRID GRD_BFS leaves no GRD_SEEN behind
+PASS GGRID GRD_PATH (5,3) to the man: left, 6 steps
+PASS GGRID GRD_PATH (1,4) to the man: up, 3 steps
+PASS GGRID GRD_PATH shut in: no path
+PASS GGRID GRD_KEYDIR W/Left/Q, GRD_STEP down/left
+PASS GGRID GRD_SET / GRD_CLR
+GGRID: ALL PASS

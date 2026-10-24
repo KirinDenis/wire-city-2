@@ -1,0 +1,5 @@
+PASS T_PLAT it walked right more than 100 pixels: 197
+PASS T_PLAT the camera scrolled (camx): 82
+PASS T_PLAT coins taken: 3
+PASS T_PLAT jumps that landed on a floor: 1
+PASS T_PLAT head bumps under a tile: 2

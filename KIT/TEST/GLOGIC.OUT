@@ -1,0 +1,10 @@
+PASS GLOGIC R_CAMERA centre a small map, follow past the band, stop at both edges
+PASS GLOGIC R_LEVELS our folder, the table, level 2 read and loaded, no level 3
+PASS GLOGIC R_LEVELS no file: refused
+PASS GLOGIC R_TIMERS a clock runs out once, a stall capped, pause counts nothing
+PASS GLOGIC R_STATE title, Enter, play, the end card holds, a key back
+PASS GLOGIC R_SCRIPT two segments played, then over
+PASS GLOGIC R_SPAWN 50 prizes on bare floor, none where none fits, the mine
+PASS GLOGIC R_LAND the first broken rule names the verdict
+PASS GLOGIC R_DAMAGE hits, rubble, the round robin forgets the oldest
+GLOGIC: ALL PASS

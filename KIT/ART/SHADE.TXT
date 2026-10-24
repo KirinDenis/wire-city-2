@@ -1,0 +1,63 @@
+; SHADE - a round thing lit from the top left: the five-colour light ramp (ball, candy, boulder)
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Shade() 78; docs\guide\ART.MD "FASM computes
+;       a picture". The example below is computed by FASM at assembly time.
+;
+; WHAT: anything round and solid - a candy, a boulder, a mine, a ball, a
+; fruit. Any size; the example is 16x16, radius 7.
+; COLOURS: a ramp of five, bright to dark - highlight, lit, mid, shade,
+; dark. "FAA22" a green candy, "FEE66" a gold one, "FDD55" a pink one,
+; "F7788" a grey stone, "F7880" an iron mine. A thing on grass gets a dark
+; rim '0'; on the black floor drop the rim (nothing played with is black at
+; its edge).
+;
+; THE RULE (integers, no square root). Work in DOUBLED pixels so the middle
+; of a 16 picture is exact: for pixel (x, y) of a W x H picture
+;   dx = 2x + 1 - W      dy = 2y + 1 - H      d = dx*dx + dy*dy
+;   D  = 2 * radius                           (here 14)
+;   outside if d > D*D; the rim if d > (0.9 D)^2 (here 160)
+;   L = -(dx + dy) * 64                       the light, top left is +
+;   L > 36*D and d < D*D/2  -> highlight      (ArtGen2 50*D: at 16 px a
+;                                              thin line; 36*D a spot)
+;   L > 14*D                -> lit            (> 0.15)
+;   L > -23*D               -> mid            (> -0.25)
+;   L > -54*D               -> shade          (> -0.6)
+;   else                    -> dark
+; (ArtGen2: l = -(nx + ny) * 0.7071 with nx, ny in radii; the integer
+; thresholds are those divided by 0.7071, in 64ths.) An ellipse: divide dx
+; by rx and dy by ry before the test - or scale: d = dx*dx*ry*ry +
+; dy*dy*rx*rx against (rx*ry)^2.
+; ANIMATION: none. A glint over it is KIT\REC\R_WATER.ASM GLINT.
+;
+; FASM draws it at assembly time (the ramp's five letters are the
+; constants SH0..SH4 - change them for another colour). The '%' of a repeat
+; is its own count: take the row's before the inner repeat.
+SH0 = 'F'                       ; highlight
+SH1 = 'E'                       ; lit
+SH2 = 'E'                       ; mid
+SH3 = '6'                       ; shade
+SH4 = '4'                       ; dark
+BALL16: db 16,16
+repeat 16
+  qy = (% - 1) * 2 - 15         ; the row's distance from the middle, x2
+  repeat 16
+    qx = (% - 1) * 2 - 15
+    qd = qx * qx + qy * qy      ; the distance squared, x4
+    ql = -(qx + qy) * 64        ; the light from the top left
+    if qd > 196
+      db '.'                    ; outside (radius 7: D = 14, D*D = 196)
+    else if qd > 160
+      db '0'                    ; the dark rim
+    else if ql > 36 * 14 & qd < 98
+      db SH0
+    else if ql > 14 * 14
+      db SH1
+    else if ql > -23 * 14
+      db SH2
+    else if ql > -54 * 14
+      db SH3
+    else
+      db SH4
+    end if
+  end repeat
+end repeat

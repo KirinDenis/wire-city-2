@@ -1,0 +1,54 @@
+; GROWTH 16x16 - juicy lime leaves over a wall's outer edge, a flower now and then
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Growth() 154; examples GAMES\MULTSOK2\ART.INC
+;       FGN_16 (north side), FGW_16 (west side)
+;
+; WHAT: drawn over a wall cell (STONES.TXT) on each side that faces OUT of
+; the castle - never inward, never over the floor. Four pictures, one per
+; side (0 north/top, 1 east, 2 south, 3 west); a wall cell may take two.
+; COLOURS: FOLIAGE.TXT's leaves ('A', '2', '0' edge), 'D' pink or 'E' gold
+; flowers (pink on top/bottom sides, gold on left/right).
+; THE RULE (any size n): four lobes along the side, i = 0..3:
+;   along = (i + 0.5) * n/3 - n/6 + (hash(i, side) mod 3 - 1) * n/16
+;   radius = n/4 * (0.8 + (hash(side, i) mod 3) * 0.15)
+;   depth  = n * 0.30 - radius * 0.35       (how far in from the edge)
+;   side 0: centre (along, depth)        side 1: (n - depth, along)
+;   side 2: (along, n - depth)           side 3: (depth, along)
+; then FOLIAGE.TXT's rule over those lobes; a leaf pixel (not '.' or '0')
+; with hash(x + side*9, y) mod 29 = 0 becomes a flower.
+; Drawn by rule at every size ('r' in RULES.TXT): lobes scale with n.
+; ANIMATION: none.
+GROW16N:  db 16,16
+          db '....0.....0..0AA'
+          db '2.0AAA0.02AA0DA2'
+          db 'A0AAA22.A2A2A0A2'
+          db '22AA2220AA2A202A'
+          db '20A2222.ADA220A2'
+          db '0022220.0A220A22'
+          db '0..000...000.020'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+GROW16W:  db 16,16
+          db '.AA2220.........'
+          db '.A00020.........'
+          db '.0AAA2..........'
+          db '.2AA220.........'
+          db '0AA2220.........'
+          db '.A22220.........'
+          db '.00000..........'
+          db '0AAAE0..........'
+          db 'AAAAA20.........'
+          db 'AAAA2A20........'
+          db 'AAAEA220........'
+          db 'AEEA2E00........'
+          db 'A2A220E.........'
+          db '002A200.........'
+          db 'AAAEE20.........'
+          db 'AAAAEA2.........'

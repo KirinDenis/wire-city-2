@@ -1,0 +1,64 @@
+; TORCH 16x16 - a torch on the wall: the bare stick and cup, and a LIVE flame drawn every frame
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Torch() 696; GAMES\MULTSOK2\SCENE.INC FLAME
+;       1644-1752; examples ART.INC TR0_16 (bare), TR1_16 (alight, still)
+;
+; WHAT: torches stand on wall cells beside the floor (one wall in twenty,
+; by a hash > 236). The picture is the bare torch; its flame is NOT a
+; picture: two pictures swapped on a clock read as blinking ("the torches
+; do not burn, they blink"). TR1 (alight, still) is for a title or a still.
+; COLOURS: '8' the iron cup, '6' the stick lit, '0' its shade; flame 'F'
+; white heart, 'E' gold, 'C' red edge.
+; THE PICTURE: y 8..13, x 7..8: y = 8 '8', x = 7 '6', x = 8 '0'.
+; THE LIVE FLAME (KIT\REC\R_FLAME.ASM does it), each frame:
+;   the cup at (cell/2, cell/2) of the torch's cell; the torch's own place
+;   p = x/2 + 3y in the tables (nothing in step), step = tick / 2:
+;   height h = FLH[(step + p) and 15] * cell / 16       (pixels)
+;   lean   s = FLS[(step/2 + p + 5) and 15] * cell / 16 (at its tip)
+;   for each row i = 0..h-1 from the cup up:
+;     v = i * 16 / h                     (how far up, 16ths)
+;     w = FLW[v] * cell / 32             (its half-width there)
+;     middle = cupx + s * i / h          (leaning more the higher)
+;     for each pixel k = -w..w:  a = 3 * |k|
+;       w = 0 (a thread): 'E', red 'C' when v >= 12
+;       a < w:  'F' (white heart), 'E' once v >= 8
+;       a < 2w: 'E'          else 'C'
+;   FLH db 7,7,8,7,6,7,8,8,7,6,6,7,8,7,7,6        (16ths of the cell)
+;   FLS db 0,1,1,2,1,0,-1,-1,0,1,0,-1,-2,-1,0,0   (pixels at 16)
+;   FLW db 3,4,4,4,4,3,3,3,2,2,2,2,1,1,1,0        (32nds of the cell)
+; ANIMATION: at the frame rate (9 a second), changing a little each frame;
+; the only things faster than the beat are fire and glints.
+TORCH16:  db 16,16
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '.......88.......'
+          db '.......60.......'
+          db '.......60.......'
+          db '.......60.......'
+          db '.......60.......'
+          db '.......60.......'
+          db '................'
+          db '................'
+TORCH16L: db 16,16
+          db '.......CC.......'
+          db '.......FF.......'
+          db '......CEEC......'
+          db '......CEEC......'
+          db '.....CEFFEC.....'
+          db '.....CEFFEC.....'
+          db '......CEEC......'
+          db '......CEEC......'
+          db '.......88.......'
+          db '.......60.......'
+          db '.......60.......'
+          db '.......60.......'
+          db '.......60.......'
+          db '.......60.......'
+          db '................'
+          db '................'

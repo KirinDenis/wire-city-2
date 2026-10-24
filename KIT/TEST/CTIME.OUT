@@ -1,0 +1,17 @@
+PASS TIM_WAIT 9 takes 9..10 ticks  got 0
+PASS TIM_WAIT 0 returns at once  got 0
+PASS TIM_STEPS after 2 ticks = 2..3  got 0
+PASS TIM_STEPS straight again = 0..1  got 0
+PASS TIM_STEPS capped at tim_max = 4  got 4
+PASS TIM_STEPS after a backward wrap = 4, not negative  got 4
+PASS TIM_STEPS cap follows tim_max  got 1
+PASS TIM_SECS 182 ticks = 10 s  got 10
+PASS TIM_SECS 91 ticks = 5 s  got 5
+PASS TIM_SECS 18 ticks = 0 s (0.99)  got 0
+PASS TIM_SECS 65535 ticks = 3600 s  got 3600
+PASS TIM_FPS at a frame a tick = 15..20  got 0
+PASS TIM_YIELD comes back  got 0
+PASS TIM_WAIT keeps registers  got 0
+PASS TIM_YIELD keeps registers  got 0
+PASS TIM_STEPS/TICK/FPS/SECS keep BX, SI  got 0
+ALL PASS

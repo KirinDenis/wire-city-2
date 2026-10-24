@@ -1,0 +1,13 @@
+PASS CUTSCENE VTEST.OWV: CF = 0, AL = 0 (ran to its end) = 0
+PASS CUTSCENE called CUT_REDRAW once = 1
+PASS after CUTSCENE the DAC is the game palette (bytes off) = 0
+PASS CUTSCENE of a missing clip: CF, AL = 1 = 1
+PASS after it too the DAC is the game palette (bytes off) = 0
+PASS BG_LOAD VTEST.OWV: CF = 0 = 0
+PASS BG_LOAD: the buffer sums as frame 1 (hex) = 4F50
+PASS BG_PICK 4: CF = 0 = 0
+PASS BG_PICK 4: the buffer sums as frame 5 (hex) = BEB0
+PASS BG_PICK 99 of 24: CF, AL = 5 = 5
+PASS BG_PICK 99: the buffer cleared (sum) = 0
+PASS BG_LOAD of a missing file: CF, AL = 1 = 1
+PASS VCUT failures = 0

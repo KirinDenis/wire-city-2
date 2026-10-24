@@ -1,0 +1,154 @@
+KIT CATALOG - one line a file: what it is for, then its blocks. Made by MKCAT.ps1; do not edit.
+LIB: include it after your way out, call its blocks (read only the header of the block you use).
+REC: copy the fragment into your program and adapt. ART: how to draw a thing + a ready picture.
+T_*: whole small games - START FROM ONE (docs guide KIT). CATFULL.TXT: every block with its line.
+
+== LIB - include and call
+LIB\K_3D.INC         3D on the engine's own pipeline (ENGINE\E_M3D.INC and ENGINE\E_RAST.INC) without declaring their sixty vari...
+                     R3_CAMERA R3_TRIG R3_YAW R3_PITCH R3_VIEW R3_POINT R3_EDGE R3_EDGEC R3_QUAD R3_MODEL R3_ORBIT R3_CHASE R3_TRAP R3_UNTRAP R3_SAFE
+LIB\K_CARD.INC       the other video cards.
+                     CRD_DETECT CRD_MEM CRD_SET CRD_RESET CRD_MKTAB CRD_BLIT
+LIB\K_D4.INC         drawing into a FOUR-BITS-A-PIXEL back buffer, the one K_CARD.INC sends to EGA, CGA, Hercules or mode 13h.
+                     D4_INIT D4_PSET D4_PSETF D4_GET D4_ROWS D4_FILL D4_COPYBG D4_DIM D4_PIXC D4_COMP D4_COMP2 D4_SPR D4_PRINT4 D4_NUM D4_SNUM D4_PRINT8 D4_BANNER
+LIB\K_DRAW.INC       2D drawing in mode 13h, one byte a pixel.
+                     DRW_ADDR DRW_CLIP DRW_NOCLIP DRW_PIXEL DRW_HLINE DRW_VLINE DRW_RECT DRW_FRAME DRW_LINE DRW_CIRCLE DRW_DISC DRW_POLY DRW_TRI DRW_DITHER DRW_GRADV
+LIB\K_FONT.INC       the house's good letters - outlined, shadowed, big, smooth, with a colour ramp down the letters.
+                     FNT_TO4 FNT_OND4 FNT_TO13 FNT_LOOK FNT_CHAR FNT_PUT FNT_WIDTH FNT_HEIGHT FNT_CENTER FNT_RIGHT FNT_NUM FNT_NUMZ FNT_HUD
+LIB\K_GRID.INC       the grid of a tile game - a byte a cell, a bit a thing.
+                     GRD_CLEAR GRD_INSIDE GRD_AT GRD_SET GRD_CLR GRD_CELL GRD_XY GRD_STEP GRD_KEYDIR GRD_UNSEE GRD_FLOOD GRD_BFS GRD_PATH GRD_LOAD
+LIB\K_HOT.INC        hotspots - the things on a point-and-click screen, which one a click is on, which must still be taken.
+                     HOT_ENTRY HOT_PUT HOT_HIT HOT_TAKE HOT_NEEDALL HOT_NEXTWANTED HOT_ALLTAKEN HOT_CENTRE HOT_DRAW
+LIB\K_INI.INC        INI files - levels, texts, item lists and settings in a text file a person or a model writes, read by the g...
+                     INI_READ INI_TEXT INI_REWIND INI_NEXT INI_EQ INI_NUMAT INI_NUM INI_WORD INI_COPY INI_FIND
+LIB\K_KEYS.INC       the keyboard for play.
+                     SC_* KEY_ON KEY_OFF KEY_HELD KEY_TAP KEY_NEW KEY_ANY KEY_FLUSH KEY_WAIT KEY_PEEK KEY_REMOTE
+LIB\K_MATH.INC       integer maths for games.
+                     MTH_RND MTH_SEED MTH_RANGE MTH_SIN MTH_COS MTH_ATAN2 MTH_DIST MTH_LERP MTH_CLAMP MTH_ABS MTH_SGN MTH_HASH MTH_SQRT MTH_MULDIV
+LIB\K_MEM.INC        DOS memory for a .COM.
+                     MEM_INIT MEM_ALLOC MEM_FREE MEM_CLEAR
+LIB\K_MENU.INC       text-mode screens before the game - pick a card, a level, the sound; type a name.
+                     MNU_SHOW MNU_NAME MNU_SCREEN MNU_PUTC MNU_PUTS
+LIB\K_MOUSE.INC      the mouse (INT 33h) in mode 13h, a cursor drawn by hand, and the keyboard as a mouse.
+                     MOU_INIT MOU_RANGE MOU_SET MOU_READ MOU_CLICK MOU_KEYS MOU_CURDRAW MOU_CURHIDE MOU_ARROW8
+LIB\K_NETX.INC       the helpers every game writes around ENGINE\E_NET.INC.
+                     NTX_WAITNAME NTX_SENDST NTX_DRAIN NTX_CLAMP NTX_CLAMPU NTX_NAME NTX_JOIN
+LIB\K_OWV.INC        OWV video and compressed pictures, mode 13h, 8086.
+                     OWV_ALLOC OWV_OPEN OWV_CLOSE OWV_FRAME OWV_SHOW OWV_PLAY OWV_STILL OWV_UNRLE
+LIB\K_PEER.INC       the player table every network game needs.
+                     PEER_INIT PEER_HEARD PEER_FIND PEER_DROP PEER_TIMEOUT PEER_COUNT PEER_HOST PEER_COLOR PEER_BEAT
+LIB\K_PHYS.INC       motion in 8.8 fixed point, one step per BIOS tick.
+                     PHY_ADD PHY_INTEG PHY_BOUNCE PHY_FALL PHY_DRAG PHY_CLAMPV PHY_EASE PHY_SIN PHY_COS PHY_STEPXZ PHY_TURNTO
+LIB\K_SB.INC         the Sound Blaster: one ring of samples that IS the mixer
+                     SB_INIT SB_DONE SB_HEAL SB_BED SB_VOL SB_SPKR SB_FX SB_FXV SB_PLAY
+LIB\K_SFXDAT.INC     recorded sounds: a bank of 8-bit samples played into K_SB's ring
+                     SFD_LOAD SFD_FREE SFD_PLAY
+LIB\K_SPK.INC        the PC speaker: one voice, effects, notes and a little tune
+                     SPK_TONE SPK_ON SPK_OFF SPK_FX SPK_DRONE SPK_NOTE SPK_TUNE SPK_TICK SPK_STOP
+LIB\K_SPR.INC        sprites for mode 13h, drawn as TEXT ART in the source.
+                     SPR_TEXT SPR_COMPILE SPR_DRAW SPR_DRAWF SPR_DRAWS SPR_DRAWM SPR_NTH SPR_ANIM SPR_HIT SPR_PIXHIT SPR_RLE SPR_RLEPACK
+LIB\K_TERR.INC       the island. ENGINE\E_TERR.INC's Diamond-Square map on a 64x64 torus, wrapped: made from a seed, asked for i...
+                     TER_GEN TER_RAW TER_WH TER_NODEH TER_H TER_BAND TER_PAL TER_MAP TER_MAPPT TER_TOP TER_FINDGND
+LIB\K_TEXT.INC       letters and numbers on a mode-13h picture, and on DOS.
+                     TXT_CHAR TXT_PUT TXT_PUT8 TXT_PUT4 TXT_LEN TXT_WIDTH TXT_CENTER TXT_BOX TXT_UTOA TXT_NUMSTR TXT_NUM TXT_NUMZ TXT_SNUM TXT_NUMK TXT_DOS TXT_DOSZ TXT_DOSNUM TXT_DOSCR
+LIB\K_TIME.INC       time by the BIOS tick (0040:006Ch, 18.2 a second).
+                     TIM_TICK TIM_STEPS TIM_WAIT TIM_YIELD TIM_FPS TIM_SECS
+LIB\K_UI.INC         the point-and-click screen's furniture: inventory slots (an outline until the thing is taken, then in colou...
+                     UI_ICON UI_SLOT UI_PANEL UI_CAPTION UI_CAPHIDE UI_CAPCHECK UI_CAPWAIT UI_WAITKEY UI_MSGBOX UI_QUIZ UI_FADEUP UI_FADEDN
+LIB\K_VGA.INC        VGA mode 13h (320x200, 256 colours), a back buffer, the retrace, the palette (the DAC: 256 entries of red, ...
+                     VGA_ON VGA_OFF VGA_CLS VGA_WAIT VGA_SHOW VGA_PAL VGA_PALRUN VGA_PALGET VGA_FADE VGA_CYCLE VGA_RAMP VGA_GLOW VGA_PALCOL VGA_ROW
+
+== T_* - templates (start here)
+T_ARCADE\T_ARCADE.ASM a whole small action game to grow from.
+T_BLANK\T_BLANK.ASM  a white dot moved by the arrows on a black field.
+T_BREAK\T_BREAK.ASM  a paddle, a ball, a wall of bricks.
+T_FLY\T_FLY.ASM      a flight over an island made from a seed.
+T_FX\T_FX.ASM        the screen a game opens on.
+T_GRID\T_GRID.ASM    a turn-based tile game (crates onto the red marks) on EVERY card: EGA 640, EGA, CGA, Hercules, or VGA/MCGA ...
+T_NET\T_NET.ASM      a network game's skeleton.
+T_OBJ3D\T_OBJ3D.ASM  a small ship on a floor, drawn from its two tables (vertices, faces) by K_3D's R3_MODEL, the camera followi...
+T_PLAT\T_PLAT.ASM    a side-on platform game to grow from.
+T_ROOM\T_ROOM.ASM    two rooms drawn with K_DRAW, things as text-art sprites, a slot panel at the foot, a caption when a thing i...
+T_SNAKE\T_SNAKE.ASM  the smallest grid game.
+
+== REC - recipes to copy
+REC\R_AIGUN.ASM      enemy guns - in range, a burst, and a dice roll.
+REC\R_BGTWO.ASM      the still background drawn ONCE in two passes, copied under what moves (mode 13h)
+                     BGBUILD BGCOPY
+REC\R_BLAST.ASM      a kill reads as a BANG - a growing fireball, hot core in a cooler shell, cooling to smoke, then three cook-...
+                     BLASTSTAGE BLASTDRAW BLDISC
+REC\R_BOX3D.ASM      solid box buildings. A box shows only the walls that face the eye (the west wall only from the west...) and...
+                     BOXALL BOXDRAW
+REC\R_CAMERA.ASM     the camera of a 2D map, one axis at a time.
+REC\R_CLOCK.ASM      ONE scene clock: nothing in step, nothing blinks
+                     CLOCK PERIOD
+REC\R_CUTSC.ASM      a cutscene or title clip in the middle of a game: fade out, play an OWV, fade back
+REC\R_DAMAGE.ASM     things that take a few hits and then stay rubble.
+                     RUINED RUIN HIT
+REC\R_DEAD.ASM       say when the level can no longer be won.
+                     LIVEGEN LIVEAT STUCK
+REC\R_DEBRIS.ASM     a thing breaks apart - pieces thrown out and up, falling under gravity, coming to rest on the ground, burni...
+                     DEBRISAT DEBRISSTEP DEBRISDRAW
+REC\R_DUSK.ASM       dusk by the golden section: a Bayer-dithered vignette round the play (mode 13h)
+                     DUSKPREP DUSK
+REC\R_ENGINE.ASM     the speaker sounds a vehicle game wants - an engine that RUMBLES while it pushes, a rising chime when it la...
+                     ENG_TICK ENG_CHIME ENG_CRASH
+REC\R_FLAME.ASM      a torch's live flame, drawn every frame (mode 13h)
+REC\R_FLIGHT.ASM     bank-and-turn flight, the whole feel of OWL FLY's first island in four rules and no physics: the eye travel...
+REC\R_GROUND.ASM     the ground is the GROUND.
+                     GCCHECK GCSPAWN
+REC\R_HORIZ.ASM      the sky and the ground, split along the REAL horizon - tilted by the roll, moved by the pitch - so a level ...
+                     HZPIVOT HZFILL
+REC\R_HUD.ASM        KIT recipe: the things a game's head-up display is made of.
+                     HUDBAR HUDBLINK HUDWARN HUDPOPADD HUDPOPDRAW
+REC\R_LADDER.ASM     the head-up display's scales.
+                     HPAT LADDER COMPASS VTAPE
+REC\R_LAND.ASM       judge an outcome by thresholds, the first rule broken names the cause.
+REC\R_LEVELS.ASM     levels in a file beside the game, one read a level.
+                     FINDDIR LEVOPEN LEVTABLE LEVREAD
+REC\R_LIFE.ASM       the park's life: butterflies, fireflies, ducks, each on its own phase (mode 13h)
+                     LIFEADD LIFE
+REC\R_MAIN.ASM       the main loop and its ONE way out: init order, exit order, every layer given back
+REC\R_NETAD.ASM      announce a game inside a room: an ad a second, a list of games heard, join the first or create
+REC\R_NETHST.ASM     who hosts the shared world: two hosts merge to the lower, a quiet host is replaced
+REC\R_NETST.ASM      state-not-events packet: whole state each time, an event repeated until acknowledged
+REC\R_NETWLD.ASM     the host's shared world: WSEND/HSEND/SENDM out, WTAKE/WAPPLY in, all checked
+REC\R_OWLFLY.ASM     an owl flies in from the screen's edge, sits on its cell, flies off (mode 13h)
+                     OWLCALL OWLAWAY OWLTICK OWLDRAW
+REC\R_PARTIC.ASM     a particle pool - fire that ages into smoke, or sparks that fall - for a 2D screen.
+                     PSTEP PSPAWN PDRAW
+REC\R_PATROL.ASM     enemies that patrol near a post, on a leash, and chase the player by the shortest path when they see him (a...
+                     PATROLAI PATROLMOVE MANHAT
+REC\R_PUSH.ASM       the Sokoban step - walk, or push the crate in front.
+REC\R_ROOM.ASM       the point-and-click room - the pointer by mouse or keys, a click takes a thing, its slot lights, its captio...
+                     ROOMRUN TAKE PRESENT AUTOSTEP
+REC\R_SCENES.ASM     scenes (rooms, levels) chained by exit codes, in one INI file a person or a model writes.
+                     SCENESECT SCENENEXT
+REC\R_SCORE.ASM      points a player feels, and the mercy of asking twice.
+                     SCORE POPTICK CELLVAL ASK2 ASKAGE
+REC\R_SCRIPT.ASM     a keyframe script - moves played by the tick.
+                     SCRSTART SCRSTEP
+REC\R_SOUND.ASM      a game's sound: heard from what changed, quieter far off, and the player's switch (all / effects only / off)
+REC\R_SPAWN.ASM      a prize on a random free cell, and a timed bomb.
+                     SPAWNAT MINESET MINETICK INBLAST
+REC\R_STARS.ASM      a starfield on the celestial sphere.
+REC\R_STATE.ASM      the game's states - a title card, play, an end card.
+                     STATETICK CARDTEXT
+REC\R_STILL.ASM      compressed backgrounds: a level's picture as an OWV still, or picture N of a set
+                     BG_LOAD BG_PICK
+REC\R_TERRDR.ASM     the island drawn as FILLED quads, far to near, each square coloured by its highest corner and creased along...
+                     GNDORD GNDDRAW
+REC\R_TIMERS.ASM     a game's clocks, counted down by the BIOS tick.
+                     TIMERS TIMOFF
+REC\R_TITLE.ASM      KIT recipe: a title screen and a score line done properly.
+                     TTLCARD TTLBLINK TTLRUN TTLHUD
+REC\R_TRACER.ASM     bullets as a pool of tracer rounds (2D).
+                     TRFIRE TRSTEP TRDRAW
+REC\R_UNDO.ASM       a step back - the undo ring of a grid game.
+                     HREC HCLEAR UNSTEP
+REC\R_WATER.ASM      water that moves by the beat, glints and a shimmer (mode 13h)
+                     WATERCELL GLINT SHIMMER
+REC\R_WIRE.ASM       the island as a WIREFRAME relief, with a floating horizon so the hills hide what is behind them: one byte p...
+                     WIRORD WIRDRAW WIRLINE
+
+== ART - drawing recipes, KIT\ART\NAME.TXT (each: the rule + a text-art picture)
+BANK BIRCH BLAST BLOSSOM BOULDER BRIDGE BUSH CANDY CRATE DEER FLOWERS FOLIAGE FONTS FOREST FOUNTAIN GATE GEM GOAL GRASS GROWTH HEDGE LAMP MEADOW MINE MUSHROOM OAK OWL OWV PALETTE PINE POND RABBIT ROAD RULES SCATTER SHADE SHADOW SHIPS SPARKLE STATUE STONES STUMP TORCH TOWER TREE WATER WELL WILLOW

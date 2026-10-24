@@ -1,0 +1,12 @@
+PASS SPR_COMPILE: size, hole 255, colours, 66 bytes
+PASS SPR_DRAW: 52 solid pixels drawn, 12 holes see-through
+PASS SPR_DRAW clipped: 13 + 13 at the corners, none off-screen
+PASS SPR_DRAWF: the arrow faces the other way
+PASS SPR_DRAWS: 4 * 52 pixels, half off the edge 2 * 52
+PASS SPR_TEXT draws what SPR_DRAW draws; spr_base shifts
+PASS SPR_HIT: overlap yes, edge no, corner no, corner+1 yes
+PASS SPR_PIXHIT: solid meets solid; holes over holes do not
+PASS SPR_ANIM 0, 1, zeros safe; SPR_NTH frame 2
+PASS SPR_RLEPACK + SPR_RLE draw what SPR_DRAW draws
+PASS SPR_RLE with word counts: 100-wide rows the same
+DSPR: all checks PASS

@@ -1,0 +1,7 @@
+.title  Lunar Lander (Sonnet, no kit)
+.what   Sonnet wrote it from the guide and the sources alone: one build. The pilot: the best sound and ship drawing of the landers.
+.tier   EXAMPLE
+.main   LANDA.ASM
+.build  FASM LANDA.ASM LANDA.COM
+.run    LANDA.COM
+.made   by a model on 2026-10-24 in the kit experiment, unchanged since: ~120K tokens, 1 build

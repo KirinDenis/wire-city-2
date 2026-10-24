@@ -1,0 +1,22 @@
+                                                                                
+  EMENU - THE PICTURE                                                           
+                                                                                
+    1) ONE        offered                                                       
+    2) TWO        greyed  - NOT IN THIS MACHINE                                 
+  > 3) THREE      offered                                                       
+    4) FOUR       offered                                                       
+    5) FIVE       greyed  - NOT IN THIS MACHINE                                 
+                                                                                
+  PRESS 1..5, OR ARROWS AND ENTER.  ESC QUITS.                                  
+PASS MNU_SHOW Down skips a greyed item, Enter: 3  got 3
+PASS MNU_SHOW keeps BX, BP  got 0
+PASS MNU_SHOW greyed and absent digits refused, 4 taken  got 4
+PASS MNU_SHOW Esc -> 0  got 0
+PASS MNU_SHOW Down past the last offered stays: 4  got 4
+PASS MNU_SHOW digit 1 takes item 1  got 1
+PASS MNU_NAME ends on Enter: AX = 13  got 13
+PASS MNU_NAME eight letters at most  got 8
+PASS MNU_NAME keeps BX  got 8738
+PASS MNU_NAME typed PAB1-XYZ (BS, a b 1, ? refused, - x y z, q r refused)  got 0
+PASS MNU_NAME Esc: AX = 27  got 27
+ALL PASS

@@ -1,0 +1,90 @@
+; SCATTER - what grows where: Diamond-Square land, zones by height, things by a hash
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs 969-1017 (land, Ground, Decor); GAMES\MULTSOK2
+;       SCENE.INC HASH 358-383, STAND 939-1135, ZWET..ZPINE 3068-3075;
+;       MULTSOK2.ASM LANDGEN 3137; ENGINE\E_TERR.INC DSGEN
+;
+; NEVER A RANDOM NUMBER - scatter by a HASH of where a thing is and of the
+; level: the same park every run and on every machine (a network game's
+; players must all see one park).
+;
+; HASH (8 bits for cell c, r and level L) - the LCG twice, bytes swapped
+; between (without the swap the cells of one column come out alike):
+;   s = (L * 4096 + (r and 63) * 64 + (c and 63)) and 0FFFFh
+;   s = (s * 25173 + 13849) and 0FFFFh
+;   s = its two bytes swapped
+;   s = (s * 25173 + 13849) and 0FFFFh
+;   hash = s shr 8
+; In 8086 (SCENE.INC HASH; CX = c, DX = r; keeps all but AX):
+;       push bx / push cx / push dx
+;       mov  ax,dx
+;       and  ax,63
+;       mov  bx,cx
+;       mov  cl,6
+;       shl  ax,cl              ; (r and 63) * 64
+;       and  bx,63
+;       add  ax,bx              ; + (c and 63)
+;       mov  bx,[level]
+;       mov  cl,12
+;       shl  bx,cl              ; + level * 4096
+;       add  ax,bx
+;       mov  bx,25173
+;       mul  bx                 ; (DX goes)
+;       add  ax,13849
+;       xchg al,ah              ; its bytes swapped
+;       mul  bx
+;       add  ax,13849
+;       mov  al,ah              ; the high byte: the good one
+;       xor  ah,ah
+;       pop  dx / pop cx / pop bx
+; Salt it for each question: HASH(c+7, r+3) picks the thing, HASH(c+2,
+; r+11) its offset, HASH(c+5, r+13) whether a creature lives there. Inside
+; a picture the same hash of (x, y + salt) scatters specks, pits, blooms -
+; FASM computes it at assembly time with = , * , and , shr.
+;
+; THE LAND - ENGINE\E_TERR.INC DSGEN: Diamond-Square on a 64x64 torus
+; (it needs HMAP rb 4096, dss dsh dsx dsy dsamp dsac dw, and RND16 with
+; rseed from ENGINE\E_MATH.INC). Seed rseed = level * 7919 + 4242 first, so
+; the land is the level's own; the height of cell (c, r) is
+; HMAP[(c and 63) * 64 + (r and 63)], 0 the wettest .. 255 the highest.
+;
+; THE ZONES - the ground picture by the height l:
+;   l <  64  wet low ground   GRASS.TXT GRASS16
+;   l < 136  the garden       MEADOW.TXT; one cell in five (hash mod 5 = 0)
+;                             grass with a stone, GRASS.TXT GRASS16S
+;   l < 196  the wood         GRASS16
+;   else     the pine wood    FOREST.TXT, a dark needle floor
+;
+; THE THINGS - h = HASH(c+7, r+3); each zone a table: "below this h, this
+; kind, this many cells wide" (db limit, kind, width ... 0FFh):
+;   wet:    18 POND 2, 30 WILLOW 2, 44 BUSH 1, 58 FLOWERS 1, 64 MUSHROOM 1,
+;           70 RABBIT 1                                     (else nothing)
+;   garden:  6 FOUNTAIN 2, 11 STATUE 1, 16 LAMP 1, 20 WELL 1, 30 FLOWERBED 2,
+;           38 HEDGE 2, 50 BLOSSOM 1, 66 FLOWERS 1, 76 BUSH 1, 80 RABBIT 1,
+;           84 DEER 1, 87 BOULDER 1
+;   wood:   24 OAK 2, 52 TREE 1, 72 BIRCH 1, 86 BUSH 1, 94 DEER 1,
+;           100 MUSHROOM 1, 106 STUMP 1, 110 BOULDER 1
+;   pines:  80 PINE 1, 92 BIRCH 1, 102 BOULDER 1, 110 STUMP 1, 116 MUSHROOM 1,
+;           120 DEER 1
+; More than half the cells stay bare grass - the park breathes.
+;
+; STANDING - a thing W cells wide and ceil(height / cell) tall claims every
+; cell it covers (a byte a screen cell, cleared for each background); it
+; stands only where all of them are park and unclaimed (what rises above
+; its foot may rise over a road). Walk the cells top row first, left to
+; right, so a thing lower down is drawn later and covers what is behind.
+; A LITTLE OFF THE GRID - k = HASH(c+2, r+11):
+;   x += ((k and 7) - 3) * cell / 16        (-3..4 sixteenths; keep x even
+;                                            in a two-pixels-a-byte buffer)
+;   y += (((k shr 3) and 3) - 1) * cell / 8 (-1..2 eighths)
+;
+; WHERE THE PARK IS - never on the floor or the walls; the moat is every
+; cell next to a wall (eight ways) that is not floor; a road runs from the
+; gate's bridge to the edge; a yard shut in by walls is bare grass. The
+; busy park is outside the walls only, darkening to the screen's edges
+; (KIT\REC\R_DUSK.ASM).
+;
+; LIFE - after a thing is placed, a = HASH(c+5, r+13): flowers, beds and
+; blossom keep a butterfly when (a and 1) = 1; trees, oaks, pines, birches a
+; firefly when (a and 3) = 0; one moat cell in 32 a duck (HASH(c+11, r+2)
+; and 31 = 0). A few of each, never on the floor (KIT\REC\R_LIFE.ASM).

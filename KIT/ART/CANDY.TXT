@@ -1,0 +1,67 @@
+; CANDY 16x16 x3 - Pac-Man's treats: small lit balls, green 1, gold 2, pink 3 points
+; ----------------------------------------------------------------------------
+; from: TOOLS\ArtGen2\Program.cs Candy() 123; GAMES\MULTSOK2\SCENE.INC GLINT
+;       1969; examples ART.INC CA1_16, CA2_16, CA3_16
+;
+; WHAT: a candy on every free floor cell, eaten once; its worth by a hash
+; of the cell. The bigger the worth, the bigger the ball.
+; COLOURS: SHADE.TXT ramps "FAA22" (green), "FEE66" (gold), "FDD55" (pink);
+; no dark rim - it lies on the black floor.
+; THE RULE: radius r = 1.8 + 0.42 v (v = 1..3), centre (8, 8):
+;   nx = (x + 0.5 - 8) / r, ny = (y + 0.5 - 8) / r; nx^2 + ny^2 > 1 -> '.';
+;   else SHADE.TXT's ramp at (nx, ny).
+; ANIMATION: a candy glints (R_WATER.ASM GLINT): dark most of the time, then
+; for 8 ticks a spot of light on a ring round it - blue, pale, white, pale -
+; each candy on a period of its own, 80..207 ticks from its cell, at a new
+; place every time, every fourth time a white star (SPARKLE.TXT).
+CANDY16G: db 16,16
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '......AAAA......'
+          db '......AAA2......'
+          db '......AA22......'
+          db '......A222......'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+CANDY16Y: db 16,16
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '.......EE.......'
+          db '......EEEE......'
+          db '.....EEEE66.....'
+          db '.....EEE666.....'
+          db '......E666......'
+          db '.......66.......'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+CANDY16P: db 16,16
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '......DDDD......'
+          db '.....DFDDDD.....'
+          db '.....DDDDD5.....'
+          db '.....DDDD55.....'
+          db '.....DDD555.....'
+          db '......D555......'
+          db '................'
+          db '................'
+          db '................'
+          db '................'
+          db '................'

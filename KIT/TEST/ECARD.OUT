@@ -1,0 +1,44 @@
+CRD_DETECT: crd_card = 1  caps (EGA640 EGA CGA HGC VGA as bits 4..0) = 29
+PASS CRD_DETECT on this VGA: EGA640 EGA CGA VGA, no Hercules (1Dh)  got 29
+PASS CRD_DETECT best card = EGA 640  got 1
+PASS CRD_DETECT crd_isvga = 1  got 1
+PASS CRD_DETECT keeps registers  got 0
+PASS CRD_SET refuses a Hercules on a VGA: CF = 1  got -1
+PASS CRD_SET refusing leaves text mode 3  got 3
+PASS CRD_MEM CF = 0  got 0
+PASS CRD_MEM narrow: 160 bytes a row  got 160
+PASS CRD_SET EGA: CF = 0  got 0
+PASS CRD_SET EGA: mode 0Dh  got 13
+PASS CRD_BLIT (EGA) keeps registers  got 0
+PASS EGA plane 0 byte 0: F0 F0 F0 F0 -> AAh  got 170
+PASS EGA plane 0 byte 1: colour 1 -> FFh  got 255
+PASS EGA plane 1 byte 1: colour 1 -> 0  got 0
+PASS EGA plane 3 byte 1: colour 1 -> 0  got 0
+PASS EGA plane 3 byte 0: colour F -> AAh  got 170
+PASS CRD_BLIT skips an unchanged row (mark kept)  got 90
+PASS CRD_BLIT sends a changed row: C0h  got 192
+PASS CRD_MEM EGA 640: 320 bytes a row  got 320
+PASS CRD_SET EGA 640: mode 0Eh  got 14
+PASS EGA 640 plane 0 byte 0 -> AAh  got 170
+PASS EGA 640 plane 2 row 1 byte 1 (bar 0) -> 0  got 0
+PASS CRD_BLIT EGA 640 skips an unchanged row (checksum)  got 51
+PASS CRD_SET CGA: mode 4  got 4
+PASS CRD_MKTAB CGA: white left half = F0h  got 240
+PASS CRD_MKTAB CGA: colour 1 right half, even row = 01h  got 1
+PASS CGA B800:0 F,0,F,0 -> CCh  got 204
+PASS CGA B800:2 colour 1 even row -> 11h  got 17
+PASS CGA B800:2001 colour 1 odd row -> 0  got 0
+PASS CRD_SET VGA: mode 13h  got 19
+PASS VGA 13h pixels 0,1 = F, 0  got 15
+PASS VGA 13h pixels 8,9 = 1, 1  got 257
+PASS CRD_SET VGA: DAC 9 blue = 63 (crd_pal)  got 63
+PASS CRD_MKTAB keeps registers  got 0
+PASS CRD_MKTAB HGC: white even row left half = F0h  got 240
+PASS CRD_MKTAB HGC: grey (3) odd row left half = 50h  got 80
+PASS HGC row 24 byte 545: F,0,F,0 -> CCh  got 204
+PASS HGC row 24 byte 547: colour 1 even -> AAh  got 170
+PASS HGC row 25 byte 547: colour 1 odd -> 0  got 0
+PASS Hercules page in RAM allocated  got 0
+PASS CRD_RESET keeps registers  got 0
+PASS CRD_RESET: text mode 3 back  got 3
+ALL PASS

@@ -1,0 +1,9 @@
+PASS GPUSH R_DEAD: the corner crate is STUCK, the other live
+PASS GPUSH R_PUSH onto the goal: +10, one home, the pop-up
+PASS GPUSH R_PUSH off the goal: back to 0
+PASS GPUSH R_UNDO one step back: home again, +10
+PASS GPUSH R_UNDO two steps back: as it began
+PASS GPUSH R_UNDO nothing left: refused
+PASS GPUSH R_PUSH a crate against a wall, a wall: refused
+PASS GPUSH R_SCORE CELLVAL 1..3 and stable, ASK2, ASKAGE
+GPUSH: ALL PASS

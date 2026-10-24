@@ -1,0 +1,15 @@
+PASS 8x8 A plain = its BIOS bits; x2 = 4x, x3 = 9x; BX on by 8, 16
+PASS 8x16 A = its bits; 4x6 A = 10; digits 81 = 45; advances 4, 7
+PASS ring 1px on 8x8 AW: every ring pixel touches ink, none missing
+PASS ring on smooth x4 (Scale2x twice) and x3 (Scale3x): exact
+PASS ring 2px: nothing next to the ink unringed, fatter than 1px
+PASS FNT_HUD AZ: 19 ink pixels, ring exact, BX on by 8
+PASS shadow: ink whole, every shadow pixel down-right of ink
+PASS gradient: first colour on top, last at the bottom, 16x bits
+PASS clipping: off all four edges no wrap, 64000+ untouched
+PASS widths: ABC 23/11/46, digits 20, prop x4 measured, centred
+PASS FNT_HEIGHT 32/15, FNT_NUMZ 00120, NUM 65535 0, FNT_RIGHT
+PASS registers kept by PUT CENTER HUD NUMZ LOOK
+PASS transparent: ink + untouched background = 64000
+PASS K_TEXT + K_FONT in one program: TXT_WIDTH 24, FNT_WIDTH 23
+FFONT: all checks PASS
