@@ -2,9 +2,9 @@
     "playlist":  "PLYAv8-EdgIF8",
     "disk":  {
                  "url":  "disk.zip",
-                 "version":  "7A49AB24CB98",
-                 "files":  646,
-                 "bytes":  13402317
+                 "version":  "776A461F24AC",
+                 "files":  661,
+                 "bytes":  14003443
              },
     "lessons":  [
                     {
@@ -390,6 +390,18 @@
                         "size":  19067,
                         "video":  "bzKi4aEFuGE",
                         "length":  "6:28"
+                    },
+                    {
+                        "id":  "L32",
+                        "folder":  "L32",
+                        "lecture":  "20",
+                        "title":  "The traffic: five aeroplanes in the sky, and F4 - the eye outside",
+                        "about":  "Lesson 1E\u0027s aeroplanes fly in lesson 1D\u0027s sky. Each is five numbers - x, y, z, a heading and a type; a tick turns it a little and moves it on at the game\u0027s speed, and one that strays is leashed back in front of you. Each is drawn as the hangar drew it, with the stand where the aeroplane is: the ground\u0027s own turn takes it into the eye\u0027s space, its heading minus yours turns the model, and FACEFILL pitches and banks it with the world. A green square marks each one, the nozzles burn by the DAC, and F4 is OWL FLY III\u0027s orbit camera: the eye on a sphere round an aeroplane - the way round, the height, the distance - with the arrows and Z and X. A camera is six numbers, and nothing else",
+                        "main":  "TRAFFIC.ASM",
+                        "buildable":  true,
+                        "size":  349543,
+                        "video":  "HJ3OAfWvAhA",
+                        "length":  "5:34"
                     }
                 ]
 }

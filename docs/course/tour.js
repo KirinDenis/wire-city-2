@@ -58,6 +58,9 @@ const ALIASES = {
   esc: 'Escape', escape: 'Escape', pgdn: 'PageDown', pgup: 'PageUp', del: 'Delete', bs: 'Backspace', tab: 'Tab',
 };
 const DOSKEYS = { ...KEYS, space: 32, y: 89, n: 78, '1': 49, '2': 50, '3': 51, '6': 54, up: 265, down: 264, left: 263, right: 262 };
+// The function keys, js-dos's (GLFW's) numbers: F1 is 290. Without them
+// "doskeys f4" sent an F (lesson 20's F4, 2026-10-25).
+for (let i = 1; i <= 10; i++) DOSKEYS['f' + i] = 289 + i;
 /** A script's DOS key name as js-dos's code: a letter is its capital's ASCII. */
 const dosCode = k => DOSKEYS[k.toLowerCase()] ?? k.toUpperCase().charCodeAt(0);
 
