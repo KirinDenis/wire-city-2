@@ -215,3 +215,5 @@ TOOLS/REFGEN/*.LOG
 # The course tour's take files: its script and rendered narration, copied in
 # from the lecture rig for a recording (docs/course/tour.js). Not published.
 docs/course/tour/
+# The site's, the same (docs/site/tour.js) - and what its takes hand the page (a game's ZIP).
+docs/site/tour/

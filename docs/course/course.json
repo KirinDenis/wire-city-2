@@ -2,9 +2,9 @@
     "playlist":  "PLYAv8-EdgIF8",
     "disk":  {
                  "url":  "disk.zip",
-                 "version":  "776A461F24AC",
-                 "files":  661,
-                 "bytes":  14003443
+                 "version":  "09D0A819D3BA",
+                 "files":  677,
+                 "bytes":  14614929
              },
     "lessons":  [
                     {
@@ -394,14 +394,38 @@
                     {
                         "id":  "L32",
                         "folder":  "L32",
-                        "lecture":  "20",
+                        "lecture":  "",
                         "title":  "The traffic: five aeroplanes in the sky, and F4 - the eye outside",
                         "about":  "Lesson 1E\u0027s aeroplanes fly in lesson 1D\u0027s sky. Each is five numbers - x, y, z, a heading and a type; a tick turns it a little and moves it on at the game\u0027s speed, and one that strays is leashed back in front of you. Each is drawn as the hangar drew it, with the stand where the aeroplane is: the ground\u0027s own turn takes it into the eye\u0027s space, its heading minus yours turns the model, and FACEFILL pitches and banks it with the world. A green square marks each one, the nozzles burn by the DAC, and F4 is OWL FLY III\u0027s orbit camera: the eye on a sphere round an aeroplane - the way round, the height, the distance - with the arrows and Z and X. A camera is six numbers, and nothing else",
                         "main":  "TRAFFIC.ASM",
                         "buildable":  true,
                         "size":  349543,
                         "video":  "HJ3OAfWvAhA",
-                        "length":  "5:34"
+                        "length":  "5:34Lecture 20: The Traffic - DOS Game from Scratch (AI aircraft, the F4 orbit camera)"
+                    },
+                    {
+                        "id":  "L33",
+                        "folder":  "L33",
+                        "lecture":  "",
+                        "title":  "The breakup: an aeroplane hit by a shell, and the laws its pieces obey",
+                        "about":  "A test stand of its own, as the hangar was. An aeroplane is already its pieces - each face a centre, four corners from it, a velocity, a mass, a spin - all flying together. The shell changes the numbers: a piece\u0027s mass is its area (half the cross product of its diagonals, a square root by Newton on a double word); the blast pushes each piece away from the hit, harder the nearer, and the push is shared by mass, dv = J/m; the sum of all the pushes is taken out again, because a blast is the aeroplane pushing on itself; the shell brings the only momentum from outside; a push off a piece\u0027s centre spins it, slower the bigger it is; gravity, the air and the floor do the rest. The centre of mass flies on along a whole aeroplane\u0027s path until the floor touches a piece",
+                        "main":  "BREAKUP.ASM",
+                        "buildable":  true,
+                        "size":  56604,
+                        "video":  null,
+                        "length":  null
+                    },
+                    {
+                        "id":  "L34",
+                        "folder":  "L34",
+                        "lecture":  "22",
+                        "title":  "The guns: yours and theirs, and the breakup in the sky",
+                        "about":  "Lesson 20\u0027s sky, armed. A round is lesson 21\u0027s piece with nothing to break: it leaves at 75 units a tick along the nose plus the speed of the aeroplane that fired it, gravity pulls it, and it hits only what it really reaches - tested in four quarter steps a tick, because 75 would step clean over a fighter. No aiming circle, no dice. The last hit breaks the aeroplane by lesson 21\u0027s laws, from where the round really struck, and the pieces fall onto the island. The traffic fires back when you are in its sights - two products of a sine and a distance - and the fighter chases you. A gun is carried by its aeroplane",
+                        "main":  "GUNS.ASM",
+                        "buildable":  true,
+                        "size":  434842,
+                        "video":  "V1oSJuXOmUc",
+                        "length":  "7:39"
                     }
                 ]
 }

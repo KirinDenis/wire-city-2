@@ -1,0 +1,7 @@
+.title  The guns: yours and theirs, and the breakup in the sky
+.what   Lesson 20's sky, armed. A round is lesson 21's piece with nothing to break: it leaves at 75 units a tick along the nose plus the speed of the aeroplane that fired it, gravity pulls it, and it hits only what it really reaches - tested in four quarter steps a tick, because 75 would step clean over a fighter. No aiming circle, no dice. The last hit breaks the aeroplane by lesson 21's laws, from where the round really struck, and the pieces fall onto the island. The traffic fires back when you are in its sights - two products of a sine and a distance - and the fighter chases you. A gun is carried by its aeroplane
+.tier   LESSON
+.main   GUNS.ASM
+.build  FASM GUNS.ASM GUNS.COM
+.run    GUNS.COM
+.uses   IMUL IDIV DIV ADC SBB CBW LEA

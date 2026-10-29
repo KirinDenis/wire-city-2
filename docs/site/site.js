@@ -1308,6 +1308,14 @@ export class SiteApp extends CourseApp {
         + 'If you emptied a folder yourself, delete the folder itself, and it stays deleted.');
     }
     this.owl.refresh?.();
+    // ?tour=NAME: the site plays a script of its own features (tour.js), for
+    // the videos that present it. Loaded only then.
+    const tour = new URLSearchParams(location.search).get('tour');
+    if (tour && /^[\w-]+$/.test(tour)) {
+      const { SiteTour } = await import('./tour.js');
+      this.tour = new SiteTour(this, tour);
+      await this.track(this.tour.start());
+    }
   }
 
   /** What went wrong, in a box with the site's name - the course's says Course. */

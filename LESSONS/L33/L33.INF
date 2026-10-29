@@ -1,0 +1,7 @@
+.title  The breakup: an aeroplane hit by a shell, and the laws its pieces obey
+.what   A test stand of its own, as the hangar was. An aeroplane is already its pieces - each face a centre, four corners from it, a velocity, a mass, a spin - all flying together. The shell changes the numbers: a piece's mass is its area (half the cross product of its diagonals, a square root by Newton on a double word); the blast pushes each piece away from the hit, harder the nearer, and the push is shared by mass, dv = J/m; the sum of all the pushes is taken out again, because a blast is the aeroplane pushing on itself; the shell brings the only momentum from outside; a push off a piece's centre spins it, slower the bigger it is; gravity, the air and the floor do the rest. The centre of mass flies on along a whole aeroplane's path until the floor touches a piece
+.tier   LESSON
+.main   BREAKUP.ASM
+.build  FASM BREAKUP.ASM BREAKUP.COM
+.run    BREAKUP.COM
+.uses   IMUL IDIV DIV ADC CBW LEA
