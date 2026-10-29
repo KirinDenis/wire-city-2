@@ -1,8 +1,8 @@
 Kirin Commander for DOS, copied from C:\repos\KIRIN-COMMANDER
 commit      292036d2e497022303439db6136ffe640d3f2518
-state       plus changes not yet committed in kc\ and dos\ (6 entries)
-copied      2026-10-29 13:28
-KC.BIN      490460 bytes, built 2026-10-29 13:27
+state       plus changes not yet committed in kc\ and dos\ (8 entries)
+copied      2026-10-29 14:07
+KC.BIN      491944 bytes, built 2026-10-29 14:07
 
 Refresh with docs\pull-kc.ps1. Do not edit these files here: change the
 commander, build it, then pull again.

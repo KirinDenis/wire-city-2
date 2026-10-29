@@ -45,6 +45,7 @@ import { DosBox } from '../owlosui/dosbox/dosbox.js';
 import { touchFirst } from '../owlosui/touch.js';
 import { Loading } from './loading.js';
 import { GameKeys } from './gamekeys.js';
+import { KcWindow } from './kcwindow.js';
 
 // Before anything can remove a file: every removal from this browser's
 // storage into a journal that outlives a reload (drives.js says why).
@@ -258,6 +259,9 @@ export class SiteApp extends CourseApp {
     guardRemovals(this.browser, () => this.dos.gates.gates.map(g => g.folder), log);
     this.drives = this.makeDrives();
     this.commanderOnDrives();
+    // Kirin Commander for Web, in a window of the site (kcwindow.js); the
+    // course's CommanderTool stays behind it, for what it opens and runs.
+    this.kcWindow = new KcWindow(this, { closeCmd: Cm.Close });
     this.gatesForAll();
     this.mountDrives();
     this.frameByStart();
@@ -398,6 +402,7 @@ export class SiteApp extends CourseApp {
     }]));
     c.refreshSource = source => {
       refresh(source);
+      this.kcWindow?.reread();
       if (source === this.browser) for (const d of this.drives) if (d.base === this.browser) refresh(d);
       for (const d of this.drives) if (d.base instanceof LocalFolder) refresh(d);
     };
@@ -588,7 +593,7 @@ export class SiteApp extends CourseApp {
         this.afterTable();
       }
     }
-    return this.commander.show({ left, right, leftDir, rightDir });
+    return this.kcWindow.show({ left, right, leftDir, rightDir });
   }
 
   // ------------------------------------------------------------ Map Drives
@@ -2426,6 +2431,7 @@ export class SiteApp extends CourseApp {
   /** Alt+F3 on the terminal: closed its own way, its record kept for the next time. */
   closeActive() {
     if (this.terminal?.owns(this.owl.active())) { this.terminal.close(); return; }
+    if (this.kcWindow?.owns(this.owl.active())) { this.kcWindow.closeWindow(); return; }
     if (this.screens?.owns(this.owl.active())) { this.screens.closeWindow(this.owl.active()); return; }
     if (this.skymap?.owns(this.owl.active())) { this.skymap.close(); return; }
     if (this.ai?.owns(this.owl.active())) { this.ai.closeWindow(this.owl.active()); return; }
@@ -2448,6 +2454,8 @@ export class SiteApp extends CourseApp {
     // The course ends its page on Alt+X (the commander passes it on); a
     // site is left by its browser tab.
     if (cmd === Cm.Exit) return true;
+    // The course's Commander item: here, Kirin Commander for Web.
+    if (cmd === Cm.Commander) { this.send('commander', 'Files'); return true; }
     if (this.terminal?.handles(cmd)) { this.terminal.onCommand(cmd); return true; }
     // The course's list of lessons opens one as the menu does: `lesson N`, on the bus.
     if (cmd === Cm.Open && this.list.owns(this.owl.active()) && this.list.current()) {

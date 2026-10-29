@@ -56,3 +56,32 @@ $version = @(
 )
 [IO.File]::WriteAllText((Join-Path $to "VERSION.TXT"), ($version -join "`r`n") + "`r`n")
 $version | Select-Object -First 5
+
+# ---- the browser's commander, into docs\kc\ -------------------------------
+# kc.js and kc.wasm, and the OWLOSUI canvas they draw with (web\owlosui\, as
+# web\pull-owlosui.cmd put it there): the site's Kirin Commander for Web
+# (docs\site\kcwindow.js). A wasm older than the Rust is refused, as above.
+$web  = Join-Path $From "web"
+$wasm = Get-Item (Join-Path $web "kc.wasm")
+$wrust = Get-ChildItem -Recurse -Include *.rs, Cargo.toml (Join-Path $From "kc\src"), (Join-Path $web "src") |
+         Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if ($wrust.LastWriteTime -gt $wasm.LastWriteTime) {
+  throw "kc.wasm ($($wasm.LastWriteTime)) is older than $($wrust.FullName) ($($wrust.LastWriteTime)). Run web\build.cmd in $From first."
+}
+$kc = Join-Path $root "docs\kc"
+if (Test-Path $kc) { Remove-Item -Recurse -Force $kc }
+New-Item -ItemType Directory -Force (Join-Path $kc "owlosui") | Out-Null
+Copy-Item (Join-Path $web "kc.js"), $wasm.FullName $kc
+foreach ($f in "owlosui.js", "touch.js", "LICENSE.txt") { Copy-Item (Join-Path $web "owlosui\$f") (Join-Path $kc "owlosui") }
+Copy-Item (Join-Path $From "LICENSE") (Join-Path $kc "LICENSE.txt")
+$wstate = if (& git -C $From status --porcelain -- kc web 2>$null) { "plus changes not yet committed in kc\ and web\" } else { "clean" }
+[IO.File]::WriteAllLines((Join-Path $kc "VERSION.txt"), @(
+  "Kirin Commander for the browser, copied from $From",
+  "commit      $commit",
+  "state       $wstate",
+  "copied      $(Get-Date -Format 'yyyy-MM-dd HH:mm')",
+  "kc.wasm     $($wasm.Length) bytes, built $($wasm.LastWriteTime.ToString('yyyy-MM-dd HH:mm'))",
+  "",
+  "Refresh with docs\pull-kc.ps1. Do not edit these files here."
+))
+"docs\kc: kc.js, kc.wasm $($wasm.Length) bytes"

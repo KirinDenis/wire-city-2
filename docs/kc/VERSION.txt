@@ -1,0 +1,7 @@
+Kirin Commander for the browser, copied from C:\repos\KIRIN-COMMANDER
+commit      292036d2e497022303439db6136ffe640d3f2518
+state       plus changes not yet committed in kc\ and web\
+copied      2026-10-29 14:07
+kc.wasm     1034506 bytes, built 2026-10-29 14:07
+
+Refresh with docs\pull-kc.ps1. Do not edit these files here.
