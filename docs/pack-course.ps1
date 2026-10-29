@@ -9,7 +9,9 @@
 #   docs\course\disk.zip     the course disk, unpacked once onto A: by the page:
 #       TOOLS\FASM\          FASM.EXE and its licence
 #       TOOLS\CWSDPMI\       CWSDPMI.EXE and its notice
-#       TOOLS\COMMANDR\      the DOS commander the DOS PC starts into (ours: a
+#       TOOLS\KC\            Kirin Commander, the DOS commander the DOS PC
+#                            starts into (docs\pull-kc.ps1 - see its README)
+#       TOOLS\COMMANDR\      the commander the course started with (ours: a
 #                            copy of an OWLOSUI example - see its README)
 #       ENGINE\              every *.INC
 #       LESSONS\Lnn\         sources, includes, batch files, notes
@@ -65,6 +67,8 @@ $picked += Get-Item (Join-Path $root "TOOLS\FASM\FASM.EXE"), (Join-Path $root "T
                     (Join-Path $root "TOOLS\CWSDPMI\CWSDPMI.EXE"), (Join-Path $root "TOOLS\CWSDPMI\cwsdpmi.doc"),
                     (Join-Path $root "TOOLS\COMMANDR\COMMANDR.EXE"), (Join-Path $root "TOOLS\COMMANDR\COMMANDR.PAS"),
                     (Join-Path $root "TOOLS\COMMANDR\README.md")
+# The commander the DOS PC starts into: Kirin Commander, as docs\pull-kc.ps1 copied it.
+$picked += Get-ChildItem -File (Join-Path $root "TOOLS\KC")
 $picked += Pick "ENGINE" '\.INC$'
 foreach ($d in Get-ChildItem (Join-Path $root "LESSONS") -Directory | Where-Object { $_.Name -match '^L\d\d$' }) {
   $picked += Pick "LESSONS\$($d.Name)" $TEXT          # the lesson's own folder, not its WEB\ copies

@@ -96,18 +96,21 @@ function courseSettings() {
 }
 
 /**
- * The DOS commander, started with the toolkit behind it (C:\OWL.BAT, the
- * library's): the course disk A:\ on the left, C:\ on the right. /STEP: to
+ * The DOS commander - Kirin Commander, A:\TOOLS\KC on the course disk -
+ * with CWSDPMI, the DPMI host it needs, in front (the one the library puts
+ * on C:\OWLOS): the course disk A:\ on the left, C:\ on the right. /STEP: to
  * run a program it steps out of memory, leaving the program's lines in
- * RUNPROG.BAT in the folder it was started in - C:\, here, so nothing is
- * written to the student's disk - and is started again afterwards. A program
- * then has all of DOS's memory, as from the prompt; OWL FLY III needs it.
+ * RUNPROG.BAT and where it was in KC.SAV, in the folder it was started in -
+ * C:\, here, so nothing is written to the student's disk - and is started
+ * again afterwards, where it was. A program then has all of DOS's memory,
+ * as from the prompt; OWL FLY III needs it.
  */
 const COMMANDR_BAT = `@echo off
 C:
 cd \\
 :again
-call C:\\OWL.BAT A:\\TOOLS\\COMMANDR\\COMMANDR.EXE /STEP A:\\ C:\\
+C:\\OWLOS\\CWSDPMI.EXE
+A:\\TOOLS\\KC\\KC.COM /STEP A:\\ C:\\
 if not exist C:\\RUNPROG.BAT goto done
 call C:\\RUNPROG.BAT
 del C:\\RUNPROG.BAT
@@ -283,8 +286,8 @@ export class CourseApp {
    * The DOS PC (OWLOSUI's DosTool - a DOS PC and nothing more): C: with the
    * toolkit, A: and B: the browser's floppy folders, and the games -
    * unpacked onto C:\GAMES once their bundles' names are read (start()).
-   * It starts into OUR DOS commander, A:\TOOLS\COMMANDR on the course disk
-   * (a copy of an OWLOSUI example - see its README), and a lesson's
+   * It starts into the DOS commander, Kirin Commander, A:\TOOLS\KC on the
+   * course disk (its own project - see its README), and a lesson's
    * program, run from the page, gives way to it when it ends. A method of
    * its own so a page built on the course (../site/) can change it.
    */
@@ -296,7 +299,7 @@ export class CourseApp {
       settingsKey: SETTINGS_KEY, network: { relay: RELAY, room: 'owlfly3' },
       starts: {
         commander: { name: 'the commander', label: '~C~ommander on DOS', reread: true, line: 'call C:\\COMMANDR.BAT',
-          hint: 'The DOS file manager: the course disk A: on the left, C: on the right. Enter runs a program, F4 edits' },
+          hint: 'The DOS file manager: the course disk A: on the left, C: on the right. Enter runs a program, F4 edits, F1 the keys' },
         ...Object.fromEntries(GAMES.map(g => [g.key, {
           name: g.name, label: g.label, hint: g.hint, network: !!g.room,
           line: `call C:\\${g.dir}.BAT\ncall C:\\COMMANDR.BAT`,
@@ -548,7 +551,8 @@ export class CourseApp {
    * The course disk onto A:, once - the course as the repository holds it:
    * TOOLS, ENGINE, every lesson, the examples and the games, each with its
    * own MAKE.BAT. A file already on A: is left alone: it may be the
-   * student's. A newer disk (its version in course.json) adds what is new.
+   * student's. A newer disk (its version in course.json) adds what is new,
+   * and replaces the commander (TOOLS\KC).
    */
   async installDisk() {
     const disk = this.course?.disk;
@@ -562,7 +566,11 @@ export class CourseApp {
     await S.hush(async () => {
       for (const f of files) {
         const to = `${A}${f.path}`;
-        const there = await S.readBytes(to).then(() => true, () => false);
+        // The commander's own files are the course's, not the student's: a
+        // newer disk replaces them. Its setup, menu and extension table
+        // (KC.INI, KC.MNU, KC.EXT) are not on the disk and stay.
+        const ours = f.path.startsWith('TOOLS/KC/');
+        const there = !ours && await S.readBytes(to).then(() => true, () => false);
         if (!there) { await S.write(to, f.contents); added++; }
       }
     });

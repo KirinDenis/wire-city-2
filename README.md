@@ -168,6 +168,9 @@ docs/course/      the course page (a prototype): source, DOS PC and video.
 docs/owlosui/     a copy of OWLOSUI's web library, which the course page is
                   built on - its own project, github.com/KirinDenis/OWLOSUI;
                   refreshed by docs/pull-owlosui.ps1, never edited here
+TOOLS/KC/         Kirin Commander for DOS, the commander the DOS PC starts
+                  into - its own project, github.com/KirinDenis/Kirin_Commander;
+                  refreshed by docs/pull-kc.ps1, never edited here
 TOOLS/            the assembler, the DPMI host and the converters
                   - see THIRD-PARTY.md for what is whose
 TASM/             the Turbo Assembler originals of everything that has
@@ -288,6 +291,16 @@ Multiplayer over IPX tunneled through WebSocket is **live in OWL FLY II**
 Still cooking: in-game chat riding the same wire, real callsigns, relay
 bots keeping the skies alive, a NOW-PLAYING API — and, one day, the
 emulator streamed to an ESP32 screen.
+
+## Built with
+
+- **[OWLOSUI](https://github.com/KirinDenis/OWLOSUI)** - the text-mode UI
+  toolkit, one core in Rust: the site's and the course page's windows,
+  menus, editors and DOS PC are its web library (a copy in `docs/owlosui/`).
+- **[Kirin Commander](https://github.com/KirinDenis/Kirin_Commander)** - a
+  two-panel file manager in Rust on OWLOSUI, one program from DOS to the
+  browser: the DOS PC starts into it, and comes back to it after every game
+  and lesson (a copy in `TOOLS/KC/`).
 
 ## License
 
