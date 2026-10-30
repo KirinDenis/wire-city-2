@@ -2,9 +2,9 @@
     "playlist":  "PLYAv8-EdgIF8",
     "disk":  {
                  "url":  "disk.zip",
-                 "version":  "A6C6083A3068",
-                 "files":  682,
-                 "bytes":  15111350
+                 "version":  "BC21FF025B10",
+                 "files":  691,
+                 "bytes":  16072475
              },
     "lessons":  [
                     {
@@ -394,26 +394,26 @@
                     {
                         "id":  "L32",
                         "folder":  "L32",
-                        "lecture":  "",
+                        "lecture":  "20",
                         "title":  "The traffic: five aeroplanes in the sky, and F4 - the eye outside",
                         "about":  "Lesson 1E\u0027s aeroplanes fly in lesson 1D\u0027s sky. Each is five numbers - x, y, z, a heading and a type; a tick turns it a little and moves it on at the game\u0027s speed, and one that strays is leashed back in front of you. Each is drawn as the hangar drew it, with the stand where the aeroplane is: the ground\u0027s own turn takes it into the eye\u0027s space, its heading minus yours turns the model, and FACEFILL pitches and banks it with the world. A green square marks each one, the nozzles burn by the DAC, and F4 is OWL FLY III\u0027s orbit camera: the eye on a sphere round an aeroplane - the way round, the height, the distance - with the arrows and Z and X. A camera is six numbers, and nothing else",
                         "main":  "TRAFFIC.ASM",
                         "buildable":  true,
                         "size":  349543,
                         "video":  "HJ3OAfWvAhA",
-                        "length":  "5:34Lecture 20: The Traffic - DOS Game from Scratch (AI aircraft, the F4 orbit camera)"
+                        "length":  "5:34"
                     },
                     {
                         "id":  "L33",
                         "folder":  "L33",
-                        "lecture":  "",
+                        "lecture":  "21",
                         "title":  "The breakup: an aeroplane hit by a shell, and the laws its pieces obey",
                         "about":  "A test stand of its own, as the hangar was. An aeroplane is already its pieces - each face a centre, four corners from it, a velocity, a mass, a spin - all flying together. The shell changes the numbers: a piece\u0027s mass is its area (half the cross product of its diagonals, a square root by Newton on a double word); the blast pushes each piece away from the hit, harder the nearer, and the push is shared by mass, dv = J/m; the sum of all the pushes is taken out again, because a blast is the aeroplane pushing on itself; the shell brings the only momentum from outside; a push off a piece\u0027s centre spins it, slower the bigger it is; gravity, the air and the floor do the rest. The centre of mass flies on along a whole aeroplane\u0027s path until the floor touches a piece",
                         "main":  "BREAKUP.ASM",
                         "buildable":  true,
                         "size":  56604,
-                        "video":  null,
-                        "length":  null
+                        "video":  "zaOrBqYBAGM",
+                        "length":  "5:22"
                     },
                     {
                         "id":  "L34",
@@ -426,6 +426,18 @@
                         "size":  434842,
                         "video":  "V1oSJuXOmUc",
                         "length":  "7:39"
+                    },
+                    {
+                        "id":  "L35",
+                        "folder":  "L35",
+                        "lecture":  "23",
+                        "title":  "Multiplying without MUL: what a multiply costs, and where a table pays",
+                        "about":  "Two programs. MUL.ASM is lesson 22\u0027s flight with a meter in it: M sets the trap flag for one frame, and INT 1 - called after every instruction - counts the multiplies and divides by their opcode. Some eighty thousand a frame, near three seconds of an 8086 at 4.77 MHz, because the 8086 has no multiplier: a MUL is microcode shifting and adding once a bit. NOMUL.ASM takes them out of its busiest places: a divide by 256 is the middle two bytes of the product, and the ground\u0027s 2500 nodes are turned from tables built once a frame, because the sine and the grid\u0027s distances are known in advance. Two thirds of the divides gone, a third of the multiplies. And the famous table of squares, said honestly: on the 8086 it does not pay",
+                        "main":  "NOMUL.ASM",
+                        "buildable":  true,
+                        "size":  453483,
+                        "video":  "LkIHm8-bEns",
+                        "length":  "6:59"
                     }
                 ]
 }

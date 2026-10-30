@@ -1,0 +1,9028 @@
+; ============================================================================
+;  MUL.ASM - Lesson 23, the first of the two. LESSON 22'S GUNS.ASM, AS IT
+;  WAS, WITH A METER IN IT.
+;
+;      FASM MUL.ASM MUL.COM
+;
+;  Its partner is NOMUL.ASM, beside it: the same program with the costly
+;  instructions taken out of its busiest places. Two programs, not one
+;  with a switch: read this one, fly it, press M; read that one, fly it,
+;  press M; compare.
+;
+;      M             count the multiplies and divides of the next frame
+;      everything else as in lesson 22:
+;      SPACE         the gun, while it is held - and after a crash, another
+;                    aeroplane
+;      LEFT / RIGHT  roll                 (with F4: walk the eye round)
+;      DOWN / UP     pull / push          (with F4: the eye up and down)
+;      Z / X                              (with F4: the eye in and out)
+;      F4            the eye outside: each aeroplane in turn, then your own
+;      1 / 3         the pedals (and 7 / 9 on the number pad)
+;      W / S         throttle up / down
+;      A             the afterburner, while it is held
+;      B             a target to practise on
+;      T, N, F       the letters, night, the arithmetic
+;      ESC           land
+;
+;  WHAT IS NEW: ONLY THE METER. TRAP1, METER and DEC7, at the end of the
+;  code, and five short pieces where they are called: INT 1 taken at the
+;  start and given back at the end, METER at the top of every frame, M
+;  read with the other keys, the meter's line printed under the frame rate,
+;  and TRAP0 setting the trap flag again after a divide fault.
+;  Not one instruction of the flight is different - and one number of the
+;  start is: the island's seed is fixed, ISEED, so that this program and
+;  NOMUL.ASM fly over the same ground and their meters can be compared.
+;
+;  WHAT THE METER SAYS, over the town, the nose a little up: of the order
+;  of a hundred thousand multiplies and divides in ONE frame. An 8086
+;  spends 118 to 133 clocks on a MUL by a word, 128 to 154 on an IMUL,
+;  144 to 162 on a DIV and 165 to 184 on an IDIV - at 4.77 MHz that alone
+;  is about three seconds a frame. NOMUL.ASM is where they go.
+;
+;  WHAT IS BORROWED FROM THE GAME AND THE ENGINE:
+;
+;      ENGINE\E_8086.INC   keeps FASM inside the 8086 instruction set
+;      ENGINE\E_MATH.INC   RND16, the congruential draw of lesson 0x11
+;      ENGINE\E_TERR.INC   DSGEN, HGET and WORLDH - the island
+;      ENGINE\E_M3D.INC    SETTRIG, ROTXZ, PROJPT, APPLYROLL - the camera
+;      ENGINE\E_RAST.INC   PITCH4, CLIPNEAR, FACEFILL, SCANPOLY, LINE
+;
+;  Owlos - legacy software modernization - https://owlos.sk
+; ============================================================================
+format binary as 'com'
+        org  100h
+
+        ; .8086 in the TASM source. FASM has no such directive - without
+        ; this include it silently uses 386 jumps when a target is out of
+        ; range, and the lessons up to here did it by hand.
+        include '..\..\ENGINE\E_8086.INC'
+
+FOCAL   = 220                 ; the game's lens: ~72 degrees across
+NEARZ   = 40                  ; the game's near clip plane
+BIAS    = 8192                ; world->cell bias, keeps the cell shift unsigned
+; ---- HOW FAR YOU CAN SEE, and it is a measured number ---------------------
+;  Lesson 15 stopped at twelve nodes because a wireframe at thirteen
+;  missed the retrace and halved. A filled world is a different account
+;  altogether, and this is it, measured with the retrace wait off, a fixed
+;  island and the aeroplane parked so the picture holds still:
+;
+;      NR      squares    plain    with the side cull
+;      12        625        38            54
+;      16       1089        23            36
+;      20       1681        17            25
+;      24       2401        12            19
+;
+;  And then, at twenty four nodes, one change at a time, each measured on
+;  the same parked picture of the same island:
+;
+;      the square, as above                          19
+;      the CIRCLE - a quarter fewer squares          22
+;      + the outcode cull, an AND of four bytes      23
+;      + each edge drawn once, by its owner          26
+;      + the pitch taken out of the engine           27
+;
+;  THE THIRD LINE IS THE HONEST ONE. The outcode cull is five times
+;  cheaper per square than the test it replaced, and it bought ONE frame.
+;  The old test was already throwing away the same squares; all the new
+;  one saves is the cost of throwing them away, and that was never where
+;  the time went. The time is in the squares that are DRAWN - and the two
+;  lines under it are both about those: half the lines, and no pitch.
+;  Measure before you believe the instruction count.
+;
+;  READ THE FIRST TWO COLUMNS TOGETHER. Multiply them: 38 x 625 is about
+;  twenty four thousand, and so is 12 x 2401. THE COST IS THE NUMBER OF
+;  SQUARES, almost exactly, and it does not care how big they are on the
+;  screen. That is the opposite of what you would guess about a filler,
+;  and it is worth knowing why: a far square is a handful of pixels, but
+;  it still gets four corners lifted out of the cache, a near-plane clip,
+;  four perspective divides and a polygon walk. The fixed cost per square
+;  swamps its paint.
+;
+;  Which is why the FOURTH COLUMN is where the distance came from. Doubling
+;  the reach is FOUR times the squares, and the naive version pays all of
+;  it. The side cull throws away the ones that are in front of you but
+;  past the edge of the screen, and that is most of the corners of the
+;  block: it buys a third of the frame rate back at twelve nodes and more
+;  than half at twenty four. See the cull itself in DRAWQUAD.
+NR      = 24                  ; TWENTY FOUR NODES, twice lesson 15's reach...
+NSIDE   = 2*NR+1              ; ...so it is forty nine SQUARES across...
+TSIDE   = 2*NR+2              ; ...and fifty NODES, because every
+                              ;  square draws the edge to its neighbour and
+                              ;  the last one still needs a neighbour to
+                              ;  draw to. One more row, one more column.
+; ---- WHERE THE AEROPLANE APPEARS, and it is NOT a constant ---------------
+;  Lesson 15 wrote CAMY0 = 500 and that was fine, because flying into a
+;  hill only carried you up over it. The moment the ground can kill you,
+;  a fixed starting height is a bug with a fuse on it: the island is made
+;  fresh every run and the spot you appear on is whatever that run put
+;  there. Land on a peak and you are dead before the first frame.
+;
+;  Work out what 500 means and you see how small the margin was. Ordinary
+;  grass at map byte 130 is (130-88)*5, doubled by VEXAG, which is 420 -
+;  and the clearance is 96. At 500 you are a few seconds from a field.
+;
+;  So the program ASKS. TOPOFMAP reads all four thousand and ninety six
+;  bytes of the island once, at the boot, finds the tallest, and puts it
+;  through the same WORLDH the ground is drawn with. Everything below is
+;  measured from that, so it is right for an island nobody has seen yet.
+;
+;  A CONSTANT THAT HAS TO BE RIGHT FOR EVERY MAP CANNOT BE A CONSTANT.
+SPAWNUP = 150                 ; how far ABOVE the highest point of the whole
+                              ;  island the aeroplane appears, on an island
+                              ;  with no town to fly at. Not above the
+                              ;  ground under it - above the WORST ground
+                              ;  there is, so no run can start inside a
+                              ;  mountain however the dice fell
+TOWNUP  = 300                 ; ...but TOWNSPOT puts you this far above the
+                              ;  tallest ground on the way into a town...
+TOWNBACK = 5                  ; ...this many squares short of it
+CEILUP  = 1200                ; ...and how far above it the ceiling sits, so
+                              ;  there is somewhere to climb to
+
+; ---- THE SCALE. A whole block of sixteen houses stands in one square of
+;      the lattice, and the aeroplane is smaller than one house. So
+;      everything that the aeroplane is measured against - the houses,
+;      the storeys, the hills - is divided down, and the squares of the
+;      island are twice the size they were beside it.
+;
+;      Why not simply make the squares bigger? Because the map is 64
+;      squares of 1024 and that is 65536 - exactly one word. Squares of
+;      2048 need a seventeenth bit for every position on the island. So
+;      the island stays the size a word can hold, and everything ELSE -
+;      the aeroplane, the houses, the storeys, the heights of the hills -
+;      is halved. To the eye it is the same thing.
+CAMYCL  = 48                  ; HOW CLOSE TO THE GROUND you may get. Not a
+                              ;  height any more - a clearance, measured
+                              ;  from whatever happens to be underneath.
+                              ;  One and a half storeys
+
+; ---- THE FORCES. Out of OWLFLY3.ASM's "jet flight model" block, and every
+;      one is PER TICK of the BIOS clock - 18.2 a second - not per frame.
+;      What is not the game's number says so, and says why.
+;
+;      THE SPEED IS vel, AND IT IS NOT IN UNITS A TICK. The aeroplane moves
+;      vel/64 units a tick: vel is the speed in 64ths, so it can change by
+;      less than a unit and still change. CRUISE, 736, is eleven and a half
+;      units a tick - two hundred a second, which is lesson 17's eleven a
+;      frame at the frame rate lesson 17 had. The same aeroplane; this time
+;      the speed has a reason.
+THRUST  = 720                 ; the engine at full throttle in sea-level air,
+                              ;  in force units. The game's
+DRAGK   = 256                 ; drag = vel*rho/DRAGK. At sea level rho is 256,
+                              ;  so drag IS vel - and full throttle runs out
+                              ;  where they are equal: vel 720. The game's
+MEMPTY  = 4000                ; the empty aeroplane, in mass units. The game's
+FUELMAX = 12000               ; a full tank. One unit burns a tick: eleven
+                              ;  minutes. The game's
+CRUISE  = 736                 ; the speed a new aeroplane is handed. The game's
+VS1     = 250                 ; THE WING: the speed at which it gives exactly
+                              ;  one G at the critical angle, in sea-level
+                              ;  air - the 1G stall speed. Up high, faster
+ACRIT   = 85                  ; the critical angle of attack: 15 degrees,
+                              ;  in eighths of a step (85/8 = 10.6 of 256)
+VNE     = 2600                ; never exceed: the airframe's own top end, and
+                              ;  the clamp that keeps vel*4 inside a word.
+                              ;  The game's
+TURNDRG = 2                   ; what a turn costs, in vel, a tick. The game's
+ENERGYK = 12                  ; A CLIMB COSTS vel, AND THIS IS HOW MUCH: at a
+                              ;  nose angle a, ENERGYK*sin(a) a tick. The
+                              ;  game's is 24 - and this world moves the
+                              ;  aeroplane half as far for the same vel, so
+                              ;  half as much height is bought: 12
+ROLLV   = 3                   ; THE AILERONS: roll a tick, of 256 - a whole
+                              ;  barrel roll in 85 ticks, 4.7 seconds. The game's
+QRAMP   = 2                   ; THE STICK: how fast a held pull builds, in
+QMAX    = 16                  ;  eighths of a step a tick, and its full rate:
+                              ;  two steps a tick, 50 degrees a second. The game's
+RUDDV   = 8                   ; THE PEDALS: eighths a tick - one step, a whole
+                              ;  circle in fourteen seconds. The game's
+PSTALL  = -48                 ; how far down a stalled nose falls on its own,
+                              ;  of 256 - 67 degrees. The game's
+WINDX   = 2                   ; THE WIND, in units a tick, east and north, at
+WINDZ   = -1                  ;  WINDH above the ground and over. Below it
+WINDH   = 512                 ;  it dies away to nothing at the surface. All
+                              ;  three are the game's
+MAXSTEP = 6                   ; at most this many ticks of physics before the
+                              ;  next frame - a third of a second - so a
+                              ;  stall of the machine is not paid back as a
+                              ;  lurch. The game's
+
+; ---- THE ONE NUMBER IN THIS FILE THAT IS NOT THE GAME'S --------------------
+;  VEXAG - vertical exaggeration, as a shift count. 1 doubles every height.
+;
+;  WORLDH gives five units of height for one step of the map, and the nodes
+;  stand a thousand and twenty four apart. So the real landscape is gentle:
+;  a hundred and sixty units of climb across a thousand of ground, which is
+;  a slope of about nine degrees. The game gets away with that because it
+;  FILLS its quads, and a filled slope reads even when it is shallow. A
+;  wireframe does not - the lines simply look straight.
+;
+;  So the heights are doubled here, once, where TERRPREP writes them. It is
+;  a decision about the PICTURE and not about the world, every map that ever
+;  showed a mountain has made it, and it is written down here in one place
+;  with its reason - because a map that quietly lies about its own scale is
+;  a map that lies.
+RH      = 6                   ; THE TOWN'S REACH, in squares: the ones HOUSES4
+                              ;  looks at. The ground goes on to NR; past the
+                              ;  town it is a landscape without people
+HFULL   = 3072                ; a house nearer than this has all its storeys;
+HMAX    = 4096                ;  between the two it rises out of the ground,
+                              ;  and past HMAX it is not built. Three squares
+                              ;  of town and one of horizon
+FLOORH  = 32                  ; one storey, in world units. A house is two
+                              ;  sixteenths of a square wide, 128, so four
+                              ;  storeys make a cube
+FLATH   = 6                   ; a square is flat enough to build on if its
+                              ;  four corners differ by at most six map steps.
+                              ;  Gentle slopes get houses: their walls follow
+                              ;  the ground down - see HOUSES4
+WMINPX  = 3                   ; a wall narrower or lower than this many
+                              ;  pixels on the screen gets no windows
+OCOL    = 48                  ; THE RING'S COLOUR: a grey of its own, in DAYNIGHT
+HINK    = 49                  ; ...and the letters': an off-white, beside it
+SKY     = 16                  ; THE SKY'S COLOUR NUMBER. Every frame starts
+                              ;  as a sheet of it; the DAC says what it is
+BACKOFF = 64                 ; how far the camera steps back on a crash.
+                              ;  The game's is 100 on a 256-unit cell; ours
+                              ;  is a 1024-unit node, so four times it
+VEXAG   = 0                   ; 0: the game's own heights. Lesson 16
+                              ;  doubled them for the look of the thing;
+                              ;  with houses standing on the hills there is
+                              ;  a ruler in every picture now, and halving
+                              ;  the hills is part of halving everything
+                              ;  but the island - see THE SCALE
+
+; ---- scan codes. Not ASCII: these are what the keyboard hardware itself
+;      sends, and what KBINT stores. A released key arrives as the same
+;      number with bit 7 set.
+SC_ESC  = 01h
+SC_SP   = 39h
+SC_F    = 21h
+SC_N    = 31h
+SC_T    = 14h                 ; T: the next kind of letters
+SC_UP   = 48h                 ; THE UP AND DOWN ARROWS. Not PgUp and PgDn,
+SC_DN   = 50h                 ;  which are 49h and 51h - an easy hour to lose
+SC_LF   = 4Bh
+SC_RT   = 4Dh
+SC_W    = 11h                 ; throttle up
+SC_S    = 1Fh                 ; throttle down
+SC_A    = 1Eh                 ; the afterburner, while it is held
+SC_1    = 02h                 ; the left pedal (the top row's 1)
+SC_3    = 04h                 ; the right pedal (3)
+SC_NP7  = 47h                 ; ...and 7 and 9 on the number pad. Home and
+SC_NP9  = 49h                 ;  PgUp share these codes, and do the same
+SC_F4   = 3Eh                 ; F4: the eye outside - the game's key
+SC_Z    = 2Ch                 ; Z: the eye in, while F4 is on
+SC_X    = 2Dh                 ; X: the eye out
+
+; ---- THE TRAFFIC --------------------------------------------------------
+NPLANE  = 5                   ; five aeroplanes, one of each of 1E's types
+LEASH   = 9000                ; one further than this, east or north, comes
+                              ;  back in front of you - the game's leash
+TGRMIN  = 40                  ; F4: the eye no nearer than this...
+TGRMAX  = 2000                ; ...and no further
+PLIT    = 56                  ; THE AEROPLANES' COLOURS, set in DAYNIGHT: the
+PSHD    = 57                  ;  top in the sun, the belly in shade, the
+PSID    = 58                  ;  sides and the fin, the wings...
+PWNG    = 59
+PMARK   = 60                  ; ...the marker's green...
+PNOZ    = 94                  ; ...and the nozzle, which GLOW turns
+SC_B    = 30h                 ; B: a target to practise on
+SC_M    = 32h                 ; M: the meter counts the next frame
+PTRC    = 61                  ; your rounds: yellow
+ATRC    = 62                  ; theirs: red
+
+; ---- THE GUNS -----------------------------------------------------------
+NTRC    = 16                  ; rounds in the air at once: a ring
+TRLIFE  = 60                  ; ticks a round flies: 75*60, 4500 - the game's
+TGRAV   = 19                  ; gravity, 256ths of a unit a tick a tick: the
+                              ;  real 9.8 at 0.4 m a unit and 18.2 ticks a s
+AMMO    = 250                 ; the belt - the game's
+HULL    = 8                   ; the hits you take - the game's
+YOUR    = 14                  ; how near a round must pass you
+ROUNDM  = 4                   ; a round's mass, in squares of the paper
+KBLAST2 = 157500              ; lesson 21's blast, in the sky's units and ticks
+SPINMAX = 180                 ; the fastest a piece turns, 16ths a tick
+MAXP    = 12                  ; pieces in a wreck at most
+WKEEP   = 550                 ; ticks a wreck is kept: half a minute
+RESPAWNT = 360                ; ticks before a lost aeroplane is replaced
+
+RHOLD   = 20                  ; how many frames a key fed from outside is
+                              ;  held - about a third of a second, and the
+                              ;  bank needs ten frames in a row to build,
+                              ;  so one frame would show nothing at all
+
+ISEED   = 1                   ; the island's seed, fixed: see START
+CELLW   = 3                   ; the map view: 3x3 pixels a node
+ORGX    = 64
+ORGY    = 4
+
+;  In C, the boot is:
+;
+;      int main(void)
+;      {
+;          bufseg  = cs + 0x1000;                 /* the 64K above us        */
+;          rseed   = ISEED;                       /* the SAME island, always */
+;          dsgen();                               /* the island              */
+;          oldi0   = int_vector[0];               /* keep DOS's INT 0 ...    */
+;          int_vector[0] = trap0;                 /* ... and take it         */
+;          set_mode(0x13);  setpal();  settrig();
+;          camx = 32*1024;  camz = 26*1024;  camy = camy0;  heading = 0;
+;          ...the five stages...
+;      }
+START:  cld                     ; string ops count UP (STOSW, MOVSW, LODSB)
+        mov  ax,cs              ; AX = cs
+        add  ax,1000h           ; AX = cs + 1000h  - 64K above us, in
+        mov  [bufseg],ax        ; bufseg = AX        paragraphs of 16 bytes
+
+        mov  [rseed],ISEED      ; rseed = ISEED: THE SAME ISLAND EVERY RUN.
+                                ;  Lesson 22 took the seed from the clock, and
+                                ;  every flight had new ground. A meter has to
+                                ;  compare like with like: MUL and NOMUL fly
+                                ;  over the same island, or their numbers are
+                                ;  two different frames
+        call DSGEN              ; dsgen()     - the island, in one call
+        call ORDPREP            ; ordprep()   - the drawing order, once
+        ; ---- THE PITCH IS BACK IN THE ENGINE -----------------------------
+        ; Lessons 16 to 18 overwrote the first three bytes of CLIPNEAR - its
+        ; `call PITCH4` - with three NOPs at this point, because their eye
+        ; never pitched and the call multiplied every corner by 256 and
+        ; divided it back. This one pitches: a loop points the nose at the
+        ; sky and the picture has to follow it. So the patch is GONE, and
+        ; the engine is left exactly as the game has it. What it costs is
+        ; measured in the header: the patch bought lesson 16 one frame a
+        ; second, and that is what this gives back.
+        call TOPOFMAP           ; topofmap()  - and how high this island is,
+                                ;  which decides where the aeroplane appears.
+                                ;  AFTER dsgen, obviously: there is nothing
+                                ;  to measure until the island exists
+        call TOWNSPOT           ; townspot()  - and where its biggest town
+                                ;  is: that is where you will fly in
+
+        xor  ax,ax              ; AX = 0                ---- take INT 0 ----
+        mov  es,ax              ; ES = 0: the vector table is at 0000:0000
+        mov  ax,[es:0]          ; AX = low word of vector 0  (offset)
+        mov  [oldi0],ax         ; oldi0.offset = AX
+        mov  ax,[es:2]          ; AX = high word of vector 0 (segment)
+        mov  [oldi0+2],ax       ; oldi0.segment = AX
+        cli                     ; interrupts off: two words, and an interrupt
+        mov  word [es:0],TRAP0  ; vector[0].offset  = TRAP0    between them
+        mov  [es:2],cs          ; vector[0].segment = cs       would find
+        sti                     ; interrupts on               half a vector
+
+        xor  ax,ax              ; AX = 0                ---- and take INT 9
+        mov  es,ax              ; ES = 0: the vector table again
+        mov  ax,[es:9*4]        ; AX = low word of vector 9  (offset)
+        mov  [oldi9],ax         ; oldi9.offset = AX
+        mov  ax,[es:9*4+2]      ; AX = high word of vector 9 (segment)
+        mov  [oldi9+2],ax       ; oldi9.segment = AX
+        cli                     ; interrupts off - and this one matters more
+        mov  word [es:9*4],KBINT    ; vector[9].offset  = KBINT   than INT 0:
+        mov  [es:9*4+2],cs          ; vector[9].segment = cs      a keystroke
+        sti                     ; interrupts on              lands here now
+
+        xor  ax,ax              ; AX = 0                ---- and INT 1, THE
+        mov  es,ax              ; ES = 0                     METER'S: the
+        mov  ax,[es:1*4]        ; AX = vector 1's offset     trap flag calls
+        mov  [oldi1],ax         ; oldi1.offset = AX          it after every
+        mov  ax,[es:1*4+2]      ; AX = its segment           instruction
+        mov  [oldi1+2],ax       ; oldi1.segment = AX
+        cli                     ; interrupts off: two words at once
+        mov  word [es:1*4],TRAP1    ; vector[1].offset  = TRAP1
+        mov  [es:1*4+2],cs          ; vector[1].segment = cs
+        sti                     ; interrupts on
+
+        mov  ax,0013h           ; AX = 13h: VGA 320x200, 256 colours
+        int  10h                ; set_mode(0x13)
+        call DAYNIGHT           ; daynight() - the palette, day to start
+        call SETTRIG            ; settrig()  - hsin/hcos for heading 0
+
+        call AIRBORNE               ; airborne(): the camera, the bank and
+                                    ;  the crash flag, all in one place
+
+; ---- 1. the island from above, and SPACE to take off ---------------------
+;      The wait is on OUR key table, not the BIOS: from the moment INT 9 is
+;      taken, INT 16h never hears anything again.
+        call MAPVIEW            ; mapview()   - the island from above
+        call SHOW               ; show()      - onto the screen
+.wsp:   call REMOTE                 ; anything fed from outside?
+        cmp  byte [KEYS+SC_SP],0    ; is SPACE held?
+        je   .wsp                   ;   no: wait for it
+        mov  byte [KEYS+SC_SP],0    ; taken. Cleared by hand, or the flight
+        mov  byte [rkey],0          ;  would see the same press again - and
+        mov  byte [rhold],0         ;  SPACE does nothing once you are up
+
+        ; ---- AND THE CLOCK STARTS NOW. Not at the boot: the map may have
+        ;      been on the screen for a minute, and a first frame that owed a
+        ;      minute of physics would be clamped to MAXSTEP and lurch.
+        push es                 ; (borrow ES)
+        mov  ax,40h             ; AX = 0040h, the BIOS data segment
+        mov  es,ax              ; ES = 0040h
+        mov  ax,[es:6Ch]        ; AX = the tick, now
+        pop  es                 ; ES back
+        mov  [lasttk],ax        ; lasttk = now: nothing is owed yet
+
+; ---- 2. the flight. Both fences up, and they stay up ---------------------
+        call FLY                ; fly()  until escape
+
+;  In C:  int_vector[9] = oldi9;  int_vector[0] = oldi0;  set_mode(3);  exit(0);
+QUIT:   xor  ax,ax              ; AX = 0          ---- GIVE INT 9 BACK first:
+        mov  es,ax              ; ES = 0          until this runs, every key
+        cli                     ; interrupts off  on the machine is still
+        mov  ax,[oldi9]         ; AX = oldi9.offset      coming to a routine
+        mov  [es:9*4],ax        ; vector[9].offset = AX  that is about to
+        mov  ax,[oldi9+2]       ; AX = oldi9.segment     stop existing
+        mov  [es:9*4+2],ax      ; vector[9].segment = AX
+        sti                     ; interrupts on
+
+        xor  ax,ax              ; AX = 0          GIVE INT 0 BACK. A .COM
+        mov  es,ax              ; ES = 0          that keeps a vector pointing
+        cli                     ; interrupts off  into memory DOS is about to
+        mov  ax,[oldi0]         ; AX = oldi0.offset      hand to the next
+        mov  [es:0],ax          ; vector[0].offset = AX  program has not
+        mov  ax,[oldi0+2]       ; AX = oldi0.segment     finished: the next
+        mov  [es:2],ax          ; vector[0].segment = AX divide fault would
+        sti                     ; interrupts on          jump into whatever
+                                ;                        loads here next
+        cli                     ; interrupts off   ---- and INT 1 back
+        mov  ax,[oldi1]         ; AX = oldi1.offset     (ES is still 0)
+        mov  [es:1*4],ax        ; vector[1].offset = AX
+        mov  ax,[oldi1+2]       ; AX = oldi1.segment
+        mov  [es:1*4+2],ax      ; vector[1].segment = AX
+        sti                     ; interrupts on
+        mov  ax,0003h           ; AX = 3: text mode back, the state we
+        int  10h                ;  borrowed the machine in
+        mov  ax,4C00h           ; AH = 4Ch exit, AL = 0 the code
+        int  21h                ; exit(0)
+
+; ============================================================================
+;  FLY - the flight loop. It draws a frame, lets the CLOCK say how much time
+;  went by, and runs the physics that many times.
+;
+;  UP TO LESSON 17 the model ran once a frame. Count what that means: over
+;  bare ground the frame rate was 23, over a lit town 14, so the aeroplane
+;  flew at 23 paces a second over a field and at 14 over a town. Nobody
+;  noticed, because there was nothing to notice it against. The moment the
+;  model has a SPEED - a number in the HUD that says how fast you go - it
+;  is a lie: the number says 736 and the town crawls past.
+;
+;  SO THE PHYSICS RUNS ON THE CLOCK. 0040:006C is a word the BIOS adds one
+;  to on every tick of the timer chip, 18.2 times a second, whatever the
+;  program is doing. Read it once a frame, subtract the last reading, and
+;  that is how many steps of physics are owed. A slow frame owes two, a
+;  fast one may owe none at all - and the aeroplane covers the same ground
+;  in a second either way. This is GAMELOOP in GAMES\OWLFLY3\SRC\OWLFLY3.ASM,
+;  line 717, and it is all of it except one thing: the game also SMOOTHS
+;  the picture between two ticks (LERPSET), and this program does not. So
+;  at more than 18 frames a second, now and then a frame repeats the
+;  position of the one before. That is the honest cost of a coarse clock.
+;
+;  MAXSTEP caps the debt. If the machine stalls for a whole second - a disk,
+;  an emulator switching windows - the next frame would owe eighteen steps
+;  and fire them all at once. Six is a third of a second, and past that the
+;  time is simply forgotten.
+;
+;  SETTRIG AT THE TOP, once a frame: the picture wants the heading and the
+;  roll the way they are NOW, not the way they were six ticks ago.
+; ============================================================================
+;  In C:
+;
+;      void fly(void)
+;      {
+;          for (;;) {
+;              meter();                                 /* M: count a frame */
+;              settrig();                               /* heading AND roll */
+;              frame();
+;              fpsn++;                                  /* frames this second */
+;              unsigned tick = bios_tick();             /* 0040:006C          */
+;              unsigned steps = tick - lasttk;          /* ticks owed         */
+;              lasttk = tick;
+;              if (steps > MAXSTEP) steps = MAXSTEP;
+;              if (tick - fpst >= 18) {                 /* ~one second        */
+;                  fpst = tick;  fpsv = fpsn;  fpsn = 0;
+;              }
+;              while (steps-- && !dying) phys();        /* the forces         */
+;              if (KEYS[SC_F] && !fwas) { fastp ^= 1; }  /* on the way down   */
+;              fwas = KEYS[SC_F];
+;              if (KEYS[SC_M] && !mwas) marm = 1;       /* M: count the next */
+;              mwas = KEYS[SC_M];
+;              if (KEYS[SC_ESC]) return;
+;          }
+;      }
+FLY:    call METER              ; meter(): if M asked, this frame is counted
+        call NOSEIN             ; nosein(): the picture looks along the NOSE
+        call NOSEKEEP           ; nosekeep(): where the gun points
+        call CAMSET             ; camset(): with F4, the eye goes outside
+        call SETTRIG            ; settrig(): hsin/hcos from heading, and
+                                ;  rsin/rcos from roll - the bank
+        call FRAME              ; frame()
+        call CAMRST             ; camrst(): and comes back, before physics
+        call NOSEOUT            ; noseout(): and the physics flies the PATH
+        inc  word [fpsn]        ; fpsn++      ---- the frame counter ------
+        push es                 ; (ES is the buffer; borrow it for a moment)
+        mov  ax,40h             ; AX = 0040h, the BIOS data segment
+        mov  es,ax              ; ES = 0040h
+        mov  ax,[es:6Ch]        ; AX = tick, the timer count at 0040:006C
+        pop  es                 ; ES = the buffer again
+
+        ; ---- HOW MUCH TIME WENT BY ----------------------------------------
+        ; A plain SUB of two words, and it is right even when the count
+        ; wraps past 65535 back to 0: 2 - 65534 is 4 in sixteen bits, which
+        ; is exactly the four ticks between them. Unsigned arithmetic is
+        ; arithmetic on a circle, and the clock is a circle.
+        mov  bx,ax              ; BX = tick
+        sub  bx,[lasttk]        ; BX = tick - lasttk: the ticks owed
+        mov  [lasttk],ax        ; lasttk = tick
+        cmp  bx,MAXSTEP         ; more than MAXSTEP owed?  (JBE: unsigned -
+        jbe  .owed              ;   a debt is never negative)
+        mov  bx,MAXSTEP         ;   yes: the rest is forgotten
+.owed:  mov  [steps],bx         ; steps = BX
+
+        mov  bx,ax              ; BX = tick   (kept: fpst may take it)
+        sub  ax,[fpst]          ; AX = tick - fpst
+        cmp  ax,18              ; a second gone by? (18.2 ticks a second)
+        jb   .move              ;   no: on with the flight
+        mov  [fpst],bx          ; fpst = tick    - a new second starts
+        mov  ax,[fpsn]          ; AX = fpsn
+        mov  [fpsv],ax          ; fpsv = fpsn    - the number the HUD shows
+        mov  word [fpsn],0      ; fpsn = 0
+
+.move:  call REMOTE             ; remote(): anything fed from outside
+        call CAMKEYS            ; camkeys(): F4, and the eye's own keys
+
+        ; ---- N: day or night, ON THE WAY DOWN, like F ---------------------
+        ; Before the wreck test on purpose: night falls on a crash site too.
+        cmp  byte [KEYS+SC_N],0 ; is N held?
+        je   .nup               ;   no: remember that
+        cmp  byte [nwas],0      ; held last frame too?
+        jne  .nok               ;   yes: one press, one change
+        xor  byte [night],1     ; night ^= 1
+        call DAYNIGHT           ; daynight(): the DAC, and nothing else
+        mov  byte [nwas],1      ; nwas = 1
+        jmp  .nok
+.nup:   mov  byte [nwas],0      ; nwas = 0: the next press counts
+.nok:
+
+        ; ---- T: the next kind of letters, ON THE WAY DOWN, like N and F ---
+        cmp  byte [KEYS+SC_T],0 ; is T held?
+        je   .tup               ;   no: remember that
+        cmp  byte [twas],0      ; held last frame too?
+        jne  .tok               ;   yes: one press, one change
+        mov  al,[tmode]         ; AL = tmode
+        inc  al                 ; the next one
+        cmp  al,3               ; past the last?
+        jb   .tm                ;   no
+        xor  al,al              ;   yes: back to the first
+.tm:    mov  [tmode],al         ; tmode = AL
+        mov  byte [twas],1      ; twas = 1
+        jmp  .tok
+.tup:   mov  byte [twas],0      ; twas = 0: the next press counts
+.tok:
+
+        ; ---- M: THE METER counts the next frame, ON THE WAY DOWN --------
+        cmp  byte [KEYS+SC_M],0 ; is M held?
+        je   .mup               ;   no: remember that
+        cmp  byte [mwas],0      ; held last frame too?
+        jne  .mok               ;   yes: one press, one count
+        mov  byte [marm],1      ; marm = 1: METER counts the next frame
+        mov  byte [mwas],1      ; mwas = 1
+        jmp  .mok
+.mup:   mov  byte [mwas],0      ; mwas = 0: the next press counts
+.mok:
+
+        ; ---- A WRECK DOES NOT FLY -----------------------------------------
+        cmp  byte [dying],0     ; are we a wreck?
+        je   .live              ;   no: fly it
+        inc  word [dytick]      ; dytick++ - the message blinks on this
+        mov  cx,[steps]         ; THE WORLD GOES ON WITHOUT YOU: the traffic,
+        jcxz .dw                ;  the rounds, the wrecks - your own falling
+.dt:    push cx                 ;  among them, by the same laws. In C:
+        call PLANESUPD          ;    for (n = steps; n; n--) {
+        call GUNS               ;        planesupd();  guns();  }
+        pop  cx                 ; CX = the ticks still owed
+        loop .dt                ; CX--, and again while it is not nought
+.dw:    cmp  byte [KEYS+SC_SP],0    ; SPACE UP since the crash? Held, it is
+        jne  .dsp               ;  still the trigger: shot down with a
+        mov  byte [spup],1      ;  thumb on the gun, the pilot got a new
+.dsp:   cmp  byte [spup],0      ;  aeroplane at once and never saw the
+        je   .esc               ;  fall.     if (!KEYS[SC_SP]) spup = 1;
+                                ;             if (!spup) goto esc;
+        cmp  byte [KEYS+SC_SP],0    ; is SPACE held?
+        je   .esc                   ;   no: go on lying in the hill
+        mov  byte [KEYS+SC_SP],0    ; taken - cleared by hand, or the new
+        mov  byte [rkey],0          ;  aeroplane would see the same press
+        mov  byte [rhold],0         ;  again on its first frame
+        call AIRBORNE           ; airborne(): a new one, in the air
+        jmp  .esc               ; on to the escape test
+
+        ; ---- THE PHYSICS, AS MANY TIMES AS THE CLOCK SAYS ------------------
+        ; Often once, sometimes twice, now and then not at all. If a step
+        ; crashes the aeroplane, the steps still owed are not flown: a
+        ; wreck does not fly, not even for the rest of this frame.
+.live:  mov  cx,[steps]         ; CX = the ticks owed
+        jcxz .ffly              ; none: this frame shows the last position
+.tick:  push cx                 ; PHYS uses CX - keep the count
+        call PHYS               ; phys(): one tick of the forces
+        call PLANESUPD          ; planesupd(): one tick of the traffic
+        call GUNS               ; guns(): the rounds, the guns, the wrecks
+        pop  cx                 ; CX = the count again
+        cmp  byte [dying],0     ; did that tick end the flight?
+        jne  .ffly              ;   yes: no more ticks
+        loop .tick              ; CX--, and again while CX is not nought
+
+        ; ---- F flips the engine, ON THE WAY DOWN --------------------------
+.ffly:  cmp  byte [KEYS+SC_F],0 ; is F held?
+        je   .fup               ;   no: remember that
+        cmp  byte [fwas],0      ; was it held last frame too?
+        jne  .esc               ;   yes: nothing to do, it is one press
+        xor  byte [fastp],1     ; fastp ^= 1   THE SWITCH. One byte, read by
+        mov  byte [fwas],1      ; fwas = 1      ROTXZ and LINE in ENGINE\
+        jmp  .esc               ; on to the escape test
+.fup:   mov  byte [fwas],0      ; fwas = 0: F is up, the next press counts
+
+.esc:   cmp  byte [KEYS+SC_ESC],0   ; is ESC held?
+        je   FLY                    ;   no: another frame
+        ret                         ;   yes: land
+
+; ============================================================================
+;  PHYS - ONE TICK OF THE FORCES. Out of INPUT in GAMES\OWLFLY3\SRC\
+;  FLIGHT.INC, line 12, in its order, and with its numbers - see THE FORCES
+;  at the top for the four that are not.
+;
+;  ELEVEN STEPS, and every one of them is a short sum:
+;
+;      1  the air        rho = 256 - camy/8, never under 64
+;      2  the throttle   W and S move the lever, four sixty fourths a tick
+;      3  the engine     thrust = THRUST*(rho+256)/512 * throttle/64,
+;                        four times that with the burner; fuel burns
+;      4  the drag       drag = vel*rho/256
+;      5  Newton         vel += (thrust - drag)*64 / mass
+;      6  the ailerons   roll about the nose, the whole circle
+;      7  the stick      the nose towards the pilot's head: pitch and
+;                        heading, split by the bank - and over the top
+;      8  the energy     vel -= ENERGYK*sin(pitch): a climb is paid for
+;      9  the stall      too slow, and the nose falls on its own
+;     10  the advance    vel/64 units along the nose, split by its sine
+;                        and cosine into a climb and a run
+;     11  the wind       pushes the run sideways, less near the ground
+;
+;  THE DIVIDES. This routine runs eighteen times a second, not two thousand
+;  times a frame, so a DIV here costs nothing anybody could measure. There
+;  are still only two, and both are the kind that cannot be a shift: a
+;  mass is not a power of two, and neither is three. Everything that CAN be
+;  a shift is one - lesson 4 argued for it, and the series keeps its word.
+; ============================================================================
+;  In C:
+;
+;      void phys(void)
+;      {
+;          rho = 256 - camy/8;  if (rho < 64) rho = 64;          /* 1 */
+;          if (KEYS[SC_W]) throt = min(throt + 4, 64);             /* 2 */
+;          if (KEYS[SC_S]) throt = max(throt - 4, 0);
+;          thrust = 0;  abon = 0;                                  /* 3 */
+;          if (fuel) {
+;              fuel--;
+;              thrust = THRUST/2*(rho+256)/256 * throt/64;
+;              if (KEYS[SC_A] && fuel >= 7) { fuel -= 7; thrust *= 4; abon = 1; }
+;          }
+;          drag = vel*rho/256;                                     /* 4 */
+;          vel += (thrust - drag)*64 / (MEMPTY + fuel/3);          /* 5 */
+;          if (vel < 0) vel = 0;
+;          if (KEYS[SC_LF]) roll = (roll - ROLLV) & 255;           /* 6 */
+;          if (KEYS[SC_RT]) roll = (roll + ROLLV) & 255;
+;          q = stick * ramp;                       /* eighths    7 */
+;          if (q) { vel -= TURNDRG;
+;                   pitch   += q*cos(roll)/256 / 8;   /* + pfrac */
+;                   heading += q*sin(roll)/256 / 8; } /* + hfrac */
+;          if (pitch >  64) { pitch =  128 - pitch; heading += 128; roll += 128; }
+;          if (pitch < -64) { pitch = -128 - pitch; heading += 128; roll += 128; }
+;          nsin = sin(pitch)*256;  ncos = cos(pitch)*256;
+;          vel -= ENERGYK*nsin/256;                                /* 8 */
+;          vel = clamp(vel, 0, VNE);
+;          if (vel < VSTALL && pitch > PSTALL) pitch--;            /* 9 */
+;          step = vel*4;                         /* 256ths a tick  10 */
+;          wdy = step*nsin/256;  fwd = step*ncos/256;
+;          step_xz();                            /* fwd along the heading */
+;          agl = clamp(camy - ground, 0, WINDH);                  /* 11 */
+;          wdx += WINDX*agl/2;  wdz += WINDZ*agl/2;
+;          camy += wdy;  ...the ground, the ceiling...
+;          camx += wdx;  camz += wdz;            /* all three with ADC */
+;      }
+PHYS:
+        ; ---- 1. THE AIR -----------------------------------------------------
+        ; NOT HONEST, AND SAID SO: real air thins exponentially - half of it
+        ; is gone at five and a half kilometres. A straight line is one
+        ; shift and one SUB, and over the heights this island has it is
+        ; close enough that no pilot can tell. The floor at 64 stops thrust
+        ; and drag from vanishing altogether at the ceiling.
+        mov  ax,[camy]          ; AX = height above the sea
+        mov  cl,3               ; CL = 3
+        sar  ax,cl              ; AX = camy/8
+        mov  bx,256             ; BX = 256: sea-level air
+        sub  bx,ax              ; BX = 256 - camy/8: rho
+        cmp  bx,64              ; thinner than 64?
+        jge  .r1                ;   no
+        mov  bx,64              ;   yes: 64, and no thinner
+.r1:    mov  [rho],bx           ; rho = BX
+
+        ; ---- 2. THE THROTTLE ------------------------------------------------
+        ; A lever from 0 to 64, and a held key moves it four a tick: idle to
+        ; full in nine tenths of a second. The game's own rate, and its own
+        ; reason: a lever you count to while holding is not a throttle.
+        cmp  byte [KEYS+SC_W],0 ; is W held?
+        je   .nw                ;   no
+        mov  ax,[throt]         ; AX = throt
+        add  ax,4               ; AX = throt + 4
+        cmp  ax,64              ; past the stop?
+        jle  .tw                ;   no
+        mov  ax,64              ;   yes: at the stop
+.tw:    mov  [throt],ax         ; throt = AX
+.nw:    cmp  byte [KEYS+SC_S],0 ; is S held?
+        je   .ns                ;   no
+        mov  ax,[throt]         ; AX = throt
+        sub  ax,4               ; AX = throt - 4
+        jns  .ts                ; still nought or more?  (SUB set the sign)
+        xor  ax,ax              ;   no: idle, and no lower
+.ts:    mov  [throt],ax         ; throt = AX
+.ns:
+
+        ; ---- 3. THE ENGINE --------------------------------------------------
+        ; A jet breathes the air it flies in, so thin air is less thrust:
+        ; (rho+256)/512 is 1 at the sea and five eighths at the ceiling.
+        ; THE GAME DIVIDES BY 512, here THRUST is halved and the product
+        ; divided by 256 - the same number, and a divide by 256 is no divide
+        ; at all: MUL leaves 32 bits in DX:AX, and their middle two bytes are
+        ; the answer. Lesson 0x10's trick, and ROTXZ does it four times a
+        ; node.
+        xor  cx,cx              ; CX = thrust = 0: a dry tank is a glider
+        mov  byte [abon],0      ; and no burner, until it is lit below
+        mov  ax,[fuel]          ; AX = fuel
+        or   ax,ax              ; any left?
+        jz   .noth              ;   no: no thrust at all
+        dec  ax                 ; AX = fuel - 1: a unit a tick
+        mov  [fuel],ax          ; fuel = AX
+        mov  ax,[rho]           ; AX = rho
+        add  ax,256             ; AX = rho + 256: 320 up high, 512 at the sea
+        mov  bx,THRUST/2        ; BX = 360
+        mul  bx                 ; DX:AX = 360*(rho+256): up to 184320, past a
+                                ;  word - and MUL, not IMUL: both are positive
+        mov  al,ah              ; AX = DX:AX / 256 - the middle two bytes:
+        mov  ah,dl              ;  450 up high, 720 at the sea
+        mul  word [throt]       ; DX:AX = that * throttle: at most 720*64 =
+                                ;  46080, which fits a word, so DX is nought
+        mov  cl,6               ; CL = 6
+        shr  ax,cl              ; AX = /64: THE THRUST. SHR and not SAR,
+                                ;  because 46080 is past 32767 - read as
+                                ;  signed it is negative, and SAR would
+                                ;  keep that sign
+        mov  cx,ax              ; CX = thrust
+        cmp  byte [KEYS+SC_A],0 ; THE BURNER: is A held?
+        je   .noth              ;   no
+        cmp  word [fuel],7      ; seven more units to pour into it?
+        jb   .noth              ;   no: it does not light
+        sub  word [fuel],7      ; fuel -= 7: eight a tick in all
+        add  cx,cx              ; CX = thrust * 2
+        add  cx,cx              ; CX = thrust * 4 - the game's burner.
+                                ;  Two ADDs, not a multiply
+        mov  byte [abon],1      ; abon = 1: the HUD says so
+.noth:  mov  [thrust],cx        ; thrust = CX
+
+        ; ---- 4. THE DRAG ----------------------------------------------------
+        ; NOT HONEST, AND SAID SO: real drag grows with the SQUARE of the
+        ; speed. vel*vel at 2600 is six and three quarter million - two
+        ; words, and then a divide of two words, eighteen times a second,
+        ; for an air the pilot cannot see. Straight drag still does the one
+        ; thing drag is for: the faster you go, the harder the air pushes
+        ; back, until it pushes back as hard as the engine pulls - and
+        ; that is the top speed.
+        mov  ax,[vel]           ; AX = vel
+        mul  word [rho]         ; DX:AX = vel*rho: up to 2600*256 = 665600
+        mov  al,ah              ; AX = DX:AX / 256: the drag. The middle
+        mov  ah,dl              ;  bytes again
+        mov  [drag],ax          ; drag = AX
+
+        ; ---- 5. NEWTON ------------------------------------------------------
+        ; a = F/m. The force is what the engine has left after the air has
+        ; taken its share; the mass is the airframe and a third of the fuel,
+        ; so the aeroplane is livelier at the end of a sortie than at the
+        ; start.
+        ;
+        ; THE *64 IS THE GAME'S SCALE: a force of 64 on a mass of 64 is one
+        ; vel a tick. AND THE ANSWER IS SMALL. Cruising at full throttle the
+        ; engine and the air nearly cancel: a force of 58 on a mass of 8000
+        ; is 58*64/8000, not even half a vel a tick. In whole numbers that
+        ; is nought, every tick, for ever - and the aeroplane never speeds
+        ; up at all. The first build of this lesson did exactly that: SPD
+        ; 736, and it stayed 736.
+        ;
+        ; It is lesson 17's problem again, in another variable, and it gets
+        ; lesson 17's answer: vel gets a BYTE of 256ths beside it, velf.
+        ; The force is multiplied by 256 MORE before the divide - 64*256 is
+        ; 16384 - so the quotient comes out in 256ths of a vel; its low byte
+        ; goes into velf, its high byte into vel, and ADC carries the
+        ; overflow across. Half a vel a tick is 118 256ths, and nothing of
+        ; it is lost.
+        mov  ax,[thrust]        ; AX = thrust
+        sub  ax,[drag]          ; AX = thrust - drag: THE NET FORCE, + or -
+        mov  bx,16384           ; BX = 64*256: the game's scale, and 256ths
+        imul bx                 ; DX:AX = force*16384: up to 47 million -
+                                ;  still well inside 32 signed bits
+        push ax                 ; keep it: the mass needs DX and AX
+        push dx
+        mov  ax,[fuel]          ; AX = fuel
+        xor  dx,dx              ; DX:AX = fuel, for a 32-bit divide
+        mov  bx,3               ; BX = 3
+        div  bx                 ; AX = fuel/3 - THE FIRST DIVIDE
+        add  ax,MEMPTY          ; AX = MEMPTY + fuel/3: THE MASS, 4000..8000
+        mov  bx,ax              ; BX = mass
+        pop  dx                 ; DX:AX = force*16384 again
+        pop  ax
+        idiv bx                 ; AX = force*16384/mass - THE SECOND DIVIDE,
+                                ;  and IDIV, because the force can be
+                                ;  negative. The acceleration, in 256ths of
+                                ;  a vel a tick: at most 11796, a word
+        mov  bl,al              ; BL = its fraction
+        mov  al,ah              ; AL = its whole vels...
+        cbw                     ; AX = ...signed: slowing down is negative
+        add  [velf],bl          ; the fraction accumulates; past 255, CF
+        adc  [vel],ax           ; vel += whole + CF - and ADC sets the sign
+        jns  .v0                ; still nought or more?
+        mov  word [vel],0       ;   no: an aeroplane does not fly backwards
+        mov  byte [velf],0
+.v0:
+
+        ; ---- 6. THE AILERONS: a roll about the aeroplane's own nose ---------
+        ; Lesson 14 turned the heading with the arrows and leaned the picture
+        ; so it looked like a turn. That is not how an aeroplane turns. LEFT
+        ; and RIGHT ROLL it - ROLLV 256ths of a circle a tick, a whole barrel
+        ; roll in under five seconds - and nothing else. Let go and the bank
+        ; STAYS: in free air nothing rights the wings. GAMES\OWLFLY3\SRC\
+        ; FLIGHT.INC, ROLL, line 262.
+        ;
+        ; roll is a byte of circle, like heading: AND 255 and it goes round
+        ; and round, past upside down and back, and never out of range. The
+        ; game also rights the wings by itself near the ground (a "cushion");
+        ; this lesson leaves that out - low and inverted is the pilot's
+        ; business.
+        cmp  byte [cammode],0       ; F4 on? Then the arrows are the eye's,
+        jne  .nrr                   ;  and the hands are off the stick
+        cmp  byte [KEYS+SC_LF],0    ; is LEFT held?
+        je   .nrl                   ;   no
+        mov  ax,[roll]              ; AX = roll
+        sub  ax,ROLLV               ; AX = roll - ROLLV
+        and  ax,255                 ; AX &= 255: a byte IS the whole circle
+        mov  [roll],ax              ; roll = AX
+.nrl:   cmp  byte [KEYS+SC_RT],0    ; is RIGHT held?
+        je   .nrr                   ;   no
+        mov  ax,[roll]              ; AX = roll
+        add  ax,ROLLV               ; AX = roll + ROLLV
+        and  ax,255                 ; AX &= 255
+        mov  [roll],ax              ; roll = AX
+.nrr:
+
+        ; ---- 6b. THE RUDDER: the nose swings flat, about the canopy's axis --
+        ; The third axis gets its own control: the pedals, 1 and 3 (and 7 and
+        ; 9 on the number pad), the game's keys. Slow, as a real rudder is -
+        ; RUDDV eighths, one step a tick, a whole circle in fourteen seconds -
+        ; and good for lining the nose up on something without dropping a
+        ; wing. GAMES\OWLFLY3\SRC\FLIGHT.INC, RUDDER, line 316.
+        ;
+        ; And the pedals are in the aeroplane too, so they swing the nose
+        ; about the aeroplane's OWN vertical, which leans with the bank:
+        ;
+        ;     heading += r * cos(roll)       wings level: all of it is a yaw
+        ;     pitch   -= r * sin(roll)       on a wing: the top pedal lifts
+        ;                                    the nose
+        ;
+        ; Step 7's pair, with the sine and the cosine changing places. The
+        ; eighths left over join step 7's in hfrac and pfrac.
+        xor  cx,cx              ; CX = r: no pedal
+        cmp  byte [KEYS+SC_1],0     ; the left pedal: 1...
+        jne  .rl                    ;   held
+        cmp  byte [KEYS+SC_NP7],0   ; ...or 7 on the number pad
+        je   .rq                    ;   neither
+.rl:    sub  cx,RUDDV               ; r = -RUDDV: the nose to the left
+.rq:    cmp  byte [KEYS+SC_3],0     ; the right pedal: 3...
+        jne  .rr                    ;   held
+        cmp  byte [KEYS+SC_NP9],0   ; ...or 9
+        je   .rz                    ;   neither
+.rr:    add  cx,RUDDV               ; r += RUDDV (both pedals: nought)
+.rz:    jcxz .nrud              ; no pedal: on to the stick
+        mov  [rud],cx            ; rud = r, in eighths
+        mov  ax,[roll]          ; heading += r*cos(roll):
+        add  ax,64              ; AX = roll + a quarter
+        call SINQ               ; AX = cos(roll)*256
+        imul word [rud]          ; DX:AX = r*cos*256
+        mov  al,ah              ; AX = r*cos(roll), in eighths
+        mov  ah,dl
+        add  ax,[hfrac]         ; AX += the eighths waiting
+        mov  bx,ax              ; BX = AX
+        and  bx,7               ; BX = what does not make a step...
+        mov  [hfrac],bx         ;  ...waits
+        mov  cl,3               ; CL = 3
+        sar  ax,cl              ; AX = whole steps
+        add  ax,[heading]       ; AX = heading + them
+        and  ax,255             ; AX &= 255
+        mov  [heading],ax       ; heading = AX
+        mov  ax,[roll]          ; pitch -= r*sin(roll):
+        call SINQ               ; AX = sin(roll)*256
+        imul word [rud]          ; DX:AX = r*sin*256
+        mov  al,ah              ; AX = r*sin(roll), in eighths
+        mov  ah,dl
+        neg  ax                 ; AX = -it: the TOP pedal lifts the nose
+        add  ax,[pfrac]         ; AX += the eighths waiting
+        mov  bx,ax              ; BX = AX
+        and  bx,7               ; BX = the eighths left
+        mov  [pfrac],bx         ; pfrac = them
+        mov  cl,3               ; CL = 3
+        sar  ax,cl              ; AX = whole steps
+        add  [pitch],ax         ; pitch += them
+.nrud:
+
+        ; ---- 7. THE WING: the stick asks for G, the wing finds the angle -----
+        ; Up to lesson 1C the stick turned the nose and the aeroplane went
+        ; where the nose pointed. A real one does not: the nose points, and
+        ; the WING bends the path. From this lesson pitch and heading are the
+        ; PATH - where the aeroplane is going - and the nose is the path plus
+        ; the ANGLE OF ATTACK, alpha. See NOSEIN.
+        ;
+        ; THE STICK ASKS FOR A LOAD - the way a modern fighter's flight
+        ; computer reads it. Hands off holds the path: one G times the cosine
+        ; of the climb. A pull asks for more, by lesson 1B's G formula:
+        ;
+        ;     Ncmd = 10*cos(pitch) + q*vel/512         in tenths of a G
+        ;
+        ; THE WING FINDS THE ANGLE. Lift grows with the air, the square of the
+        ; speed and the angle: L = k * rho * vel^2 * alpha. At the critical
+        ; angle, ACRIT, the wing gives the most it can - Nmax - and a wing in
+        ; sea-level air gives exactly one G of it at VS1:
+        ;
+        ;     Nmax  = 10 * (vel/VS1)^2 * rho/256
+        ;     alpha = ACRIT * Ncmd / Nmax
+        ;
+        ; PAST ACRIT THE WING STALLS. The air comes off its top, and the lift
+        ; falls instead of rising: at twice ACRIT it is gone. Hold the pull
+        ; and the nose stays high while the aeroplane drops - lesson 18's
+        ; stall was a speed; this one is an ANGLE, and it comes at any speed
+        ; if you ask for more G than the wing has.
+        ;
+        ; AND THE LIFT BENDS THE PATH. Along the aeroplane's own vertical,
+        ; tilted by the bank, against the weight, which is always down:
+        ;
+        ;     dpitch   = 2 * (N*cos(roll) - 10*cos(pitch)) / vel
+        ;     dheading = 2 * N*sin(roll) / vel / cos(pitch)
+        ;
+        ; in eighths of a step a tick. The 2 is the game's scale: with the
+        ; wings level and the climb small, the pull q is exactly the eighths
+        ; the old stick gave - the feel of lessons 19 to 1C is kept. What is
+        ; NEW is the 10*cos(pitch), the weight: banked, the lift tilts away
+        ; and a hands-off turn sinks; upside down, one G pulls you at the
+        ; ground, and only a push holds the height - and the meter says -1.0.
+        xor  cx,cx              ; CX = the stick: 0 centred
+        cmp  byte [cammode],0   ; F4 on? Hands off: the stick stays centred
+        jne  .q2
+        cmp  byte [KEYS+SC_DN],0    ; is DOWN held?      (the stick, back)
+        je   .q1                    ;   no
+        mov  cx,1                   ;   yes: +1, a pull
+.q1:    cmp  byte [KEYS+SC_UP],0    ; is UP held?     (the stick, forward)
+        je   .q2                    ;   no
+        sub  cx,1                   ;   yes: -1, a push (both: nought)
+.q2:    jcxz .nostk             ; centred: no pull, and the ramp lets go
+        mov  ax,[qramp]         ; AX = the ramp
+        add  ax,QRAMP           ; AX += QRAMP: the hold builds
+        cmp  ax,QMAX            ; past full rate?
+        jle  .qr1               ;   no
+        mov  ax,QMAX            ;   yes: full rate
+.qr1:   mov  [qramp],ax         ; qramp = AX
+        or   cx,cx              ; a push?
+        jns  .qr2               ;   no: q = +ramp
+        neg  ax                 ;   yes: q = -ramp
+.qr2:   mov  [q],ax             ; q = the pull, signed, in eighths
+
+        mov  ax,[vel]           ; A PULL COSTS SPEED: the wing drags more air
+        sub  ax,TURNDRG         ;  pulling the aeroplane round than flying
+        jns  .td                ;  straight. TURNDRG a tick, the game's
+        xor  ax,ax              ;  charge - while the stick is anywhere but
+.td:    mov  [vel],ax           ;  in the middle
+        jmp  .wing
+
+.nostk: mov  word [qramp],0     ; stick centred: the ramp starts again
+        mov  word [q],0         ; ...and q is nought: one G asked for
+
+        ; ---- what the pilot asks for: Ncmd = 10*cos(pitch) + q*vel/512 -----
+        ; HANDS OFF HOLDS THE PATH. The first build asked for one G with the
+        ; stick centred - and in a climb only cos(pitch) of the weight is
+        ; across the path, so the spare lift kept bending it up: let go at
+        ; fifty degrees and the aeroplane looped by itself, over the top and
+        ; into the ground. A fly-by-wire fighter asks for one G TIMES the
+        ; cosine of the climb with the stick centred, and so does this one.
+        ; It does NOT allow for the bank: a hands-off turn still sinks.
+.wing:  mov  ax,[pitch]         ; AX = pitch: the PATH's
+        add  ax,64              ; cos IS sin a quarter on
+        call SINQ               ; AX = cos(pitch)*256
+        mov  [pcosw],ax         ; pcosw = it, for the bend below too
+        mov  cx,10              ; CX = 10
+        imul cx                 ; AX = 10*cos(pitch)*256: 2560 at most
+        mov  cl,8               ; CL = 8
+        sar  ax,cl              ; AX = /256: the weight across the path,
+        mov  bx,ax              ;  in tenths - BX = it
+        mov  ax,[q]             ; AX = q, signed
+        imul word [vel]         ; DX:AX = q*vel: past 32767 at speed
+        mov  cx,512             ; CX = 512
+        idiv cx                 ; AX = q*vel/512: tenths of a G more
+        add  ax,bx              ; AX += the weight's share: hands off
+        mov  [ncmd],ax          ; ncmd = AX
+
+        ; ---- what the wing has: Nmax = 10 * (vel/VS1)^2 * rho/256 ----------
+        ; Three steps, each kept inside a word: vel*vel is 32 bits, but over
+        ; VS1 it fits again; times rho is 32 bits, and its middle bytes are
+        ; the /256; and 10/VS1 is 1/25.
+        mov  ax,[vel]           ; AX = vel
+        mul  ax                 ; DX:AX = vel*vel: up to 6.8 million
+        mov  cx,VS1             ; CX = 250
+        div  cx                 ; AX = vel*vel/250: at most 27040, a word
+        mul  word [rho]         ; DX:AX = that * rho
+        mov  al,ah              ; AX = /256: the middle bytes
+        mov  ah,dl
+        xor  dx,dx              ; DX:AX = it
+        mov  cx,VS1/10          ; CX = 25
+        div  cx                 ; AX = NMAX in tenths: 10 at VS1 by the sea
+        cmp  ax,1               ; nought? (standing still)
+        jae  .nm
+        mov  ax,1               ;   one tenth: never divide by nought
+.nm:    mov  [nmax],ax          ; nmax = AX
+
+        ; ---- the angle it takes: alpha = ACRIT * Ncmd / Nmax ---------------
+        mov  ax,[ncmd]          ; AX = Ncmd, signed: a push asks for less
+        mov  bx,ACRIT           ; BX = ACRIT, eighths of a step
+        imul bx                 ; DX:AX = ACRIT*Ncmd: at most 91*85, a word
+        idiv word [nmax]        ; AX = ACRIT*Ncmd/Nmax: alpha, in eighths
+        mov  [alpha],ax         ; alpha = AX
+        mov  bx,[ncmd]          ; FLYING: the wing gives what was asked
+        mov  [nload],bx         ; nload = Ncmd
+        mov  byte [stalled],0   ; stalled = 0
+        or   ax,ax              ; AX = |alpha|
+        jns  .ap
+        neg  ax
+.ap:    cmp  ax,ACRIT           ; past the critical angle?
+        jle  .bend              ;   no: flying
+        ; ---- STALLED: the lift falls as the angle grows past ACRIT --------
+        mov  byte [stalled],1   ; stalled = 1: the HUD says so
+        cmp  ax,2*ACRIT         ; past twice ACRIT?
+        jle  .s1
+        mov  ax,2*ACRIT         ;   the angle stops there
+.s1:    mov  bx,2*ACRIT         ; BX = 2*ACRIT
+        sub  bx,ax              ; BX = 2*ACRIT - |alpha|: what lift is left,
+        mov  ax,[nmax]          ;  in ACRITs - AX = Nmax
+        mul  bx                 ; DX:AX = Nmax * that
+        mov  bx,ACRIT           ; BX = ACRIT
+        div  bx                 ; AX = N: Nmax at ACRIT, nought at twice it
+        cmp  word [alpha],0     ; the angle negative (pushed into it)?
+        jge  .s2
+        neg  ax                 ;   then so is the lift
+        cmp  word [alpha],-2*ACRIT  ; and the angle stops at -2*ACRIT too
+        jge  .s3
+        mov  word [alpha],-2*ACRIT
+        jmp  .s3
+.s2:    cmp  word [alpha],2*ACRIT
+        jle  .s3
+        mov  word [alpha],2*ACRIT
+.s3:    mov  [nload],ax         ; nload = the lift the wing has left
+
+        ; ---- THE LIFT BENDS THE PATH ----------------------------------------
+        ; dpitch = 2*(N*cos(roll) - 10*cos(pitch))/vel, in eighths a tick.
+        ; vel under 64 counts as 64: a wing that slow is no wing, and the
+        ; divide must not blow up.
+.bend:  mov  ax,[vel]           ; AX = vel
+        cmp  ax,64              ; under 64?
+        jae  .bv
+        mov  ax,64              ;   64
+.bv:    mov  [vdiv],ax          ; vdiv = the speed to divide by
+        mov  ax,[pitch]         ; AX = pitch: the PATH's
+        add  ax,64              ; cos IS sin a quarter on
+        call SINQ               ; AX = cos(pitch)*256
+        mov  [pcosw],ax         ; pcosw = it: the weight's share, and the
+                                ;  turn's divisor below
+        mov  ax,[roll]          ; AX = roll
+        add  ax,64
+        call SINQ               ; AX = cos(roll)*256
+        imul word [nload]       ; AX = N*cos(roll): at most 91*256, a word
+        mov  bx,ax              ; BX = it
+        mov  ax,[pcosw]         ; AX = cos(pitch)*256
+        mov  cx,10              ; CX = 10
+        imul cx                 ; AX = 10*cos(pitch): the weight's part
+        sub  bx,ax              ; BX = N*cos(roll) - 10*cos(pitch)
+        mov  ax,bx              ; AX = it
+        mov  cx,2               ; CX = 2: the game's scale
+        imul cx                 ; DX:AX = twice it - past a word, so 32 bits
+        idiv word [vdiv]        ; AX = /vel: eighths of a step, this tick
+        call CLAMP64            ; no more than eight steps a tick, ever
+        add  ax,[pfrac]         ; AX += the eighths left from last tick
+        mov  bx,ax              ; BX = AX
+        and  bx,7               ; BX = AX mod 8: what does not make a step...
+        mov  [pfrac],bx         ;  ...waits for the next tick
+        mov  cl,3               ; CL = 3
+        sar  ax,cl              ; AX = whole steps - SAR, it can be negative
+        add  [pitch],ax         ; pitch += them
+
+        ; dheading = 2*N*sin(roll)/vel/cos(pitch): the same lift, sideways.
+        ; Near the vertical the cosine runs to nought and the heading means
+        ; nothing - the flip below takes over - so under a quarter, skip it.
+        mov  ax,[pcosw]         ; AX = cos(pitch)*256
+        or   ax,ax
+        jns  .hc
+        neg  ax                 ; AX = |cos(pitch)|
+.hc:    cmp  ax,64              ; within fifteen degrees of the vertical?
+        jl   .flip              ;   yes: no turn this tick
+        mov  ax,[roll]          ; AX = roll
+        call SINQ               ; AX = sin(roll)*256
+        imul word [nload]       ; AX = N*sin(roll): a word
+        mov  cx,2               ; CX = 2
+        imul cx                 ; DX:AX = twice it
+        idiv word [vdiv]        ; AX = /vel
+        mov  cx,256             ; CX = 256
+        imul cx                 ; DX:AX = *256...
+        idiv word [pcosw]       ; AX = .../cos(pitch)*256: eighths a tick
+        call CLAMP64            ; no more than eight steps a tick
+        add  ax,[hfrac]         ; AX += the eighths left from last tick
+        mov  bx,ax              ; BX = AX
+        and  bx,7               ; BX = AX mod 8
+        mov  [hfrac],bx         ; hfrac = it
+        mov  cl,3               ; CL = 3
+        sar  ax,cl              ; AX = whole steps
+        add  ax,[heading]       ; AX = heading + them
+        and  ax,255             ; AX &= 255
+        mov  [heading],ax       ; heading = AX
+
+        ; ---- OVER THE TOP: the angles flip at the vertical ------------------
+        ; Pull through a loop and the nose passes straight up: pitch 64, a
+        ; quarter of a circle. One step further and pitch would be 65 - and a
+        ; pitch past 90 degrees means nothing: an aeroplane pointing 95
+        ; degrees up is pointing 85 degrees up, the other way, upside down.
+        ; So it is written that way: pitch = 128 - pitch, the heading turned
+        ; half a circle, the roll turned half a circle. The picture does not
+        ; jump - all three describe the same aeroplane - and pitch stays
+        ; inside a quarter circle either side, where its cosine is never
+        ; negative. THREE NUMBERS FOR A DIRECTION HAVE A SEAM, and this is
+        ; where it is. The game's (FLIGHT.INC, line 461), "the classic Euler
+        ; trick".
+.flip:  mov  ax,[pitch]         ; AX = pitch
+        cmp  ax,64              ; past straight up?
+        jle  .pf1               ;   no
+        mov  bx,128             ; BX = 128
+        sub  bx,ax              ; BX = 128 - pitch
+        mov  [pitch],bx         ; pitch = BX
+        jmp  .pflip             ; and the other two
+.pf1:   cmp  ax,-64             ; past straight down?
+        jge  .pok               ;   no: nothing to flip
+        mov  bx,-128            ; BX = -128
+        sub  bx,ax              ; BX = -128 - pitch
+        mov  [pitch],bx         ; pitch = BX
+.pflip: mov  ax,[heading]       ; AX = heading
+        add  ax,128             ; AX += half a circle
+        and  ax,255             ; AX &= 255
+        mov  [heading],ax       ; heading = AX
+        mov  ax,[roll]          ; AX = roll
+        add  ax,128             ; AX += half a circle
+        and  ax,255             ; AX &= 255
+        mov  [roll],ax          ; roll = AX
+.pok:   mov  ax,[pitch]         ; AX = pitch
+        call SINQ               ; AX = sin(pitch)*256 - for the energy and
+        mov  [nsin],ax          ;  the climb below
+        mov  ax,[pitch]         ; AX = pitch
+        add  ax,64              ; AX = pitch + a quarter
+        call SINQ               ; AX = cos(pitch)*256
+        mov  [ncos],ax          ; ncos = AX
+
+        ; ---- 8. THE ENERGY --------------------------------------------------
+        ; NOT HONEST, AND SAID SO: there is no wing in this model, so there
+        ; is no lift. A climb is paid for the way a ball thrown up pays for
+        ; it: out of its speed. Point the nose up and vel drains by
+        ; ENERGYK*sin(pitch) a tick; point it down and the same sum is
+        ; negative, and the dive gives the speed back. That one line is
+        ; what a pilot calls ENERGY - and it is why holding a steep climb
+        ; ends in a stall.
+        ;
+        ; The cost is small too - a nose one step up costs 72 256ths a tick -
+        ; so it comes off vel AND velf together, and the borrow goes across
+        ; with SBB.
+        ;
+        ;   +--------------------------------------------------------------+
+        ;   | SBB dest,src     SUBTRACT WITH BORROW: dest = dest - src - CF |
+        ;   |                                                              |
+        ;   |   the example   velf = 40, the cost's fraction BL = 72      |
+        ;   |                 sub [velf],bl   40-72 = -32: the byte keeps  |
+        ;   |                                 224, and CF = 1, a borrow    |
+        ;   |                 sbb [vel],ax    vel -= AX, and 1 more        |
+        ;   |                 224/256 - 1 whole = -32/256. Nothing lost.   |
+        ;   |   flags         sets CF, ZF, SF, OF exactly as SUB does -    |
+        ;   |                 and READS CF first. ADC's mirror             |
+        ;   |   touches       dest, and the carry flag, and nothing else   |
+        ;   |   the trap      the same as ADC's: nothing between SUB and   |
+        ;   |                 SBB may touch CF. And CF after a SUB means   |
+        ;   |                 BORROW - the subtraction went below nought   |
+        ;   +--------------------------------------------------------------+
+        mov  ax,[nsin]          ; AX = nsin: -256..256
+        mov  bx,ENERGYK         ; BX = 12
+        imul bx                 ; AX = 12*nsin: the cost in 256ths of a vel,
+                                ;  at most 2544 - one word
+        mov  bl,al              ; BL = its fraction
+        mov  al,ah              ; AL = its whole vels...
+        cbw                     ; AX = ...signed: a dive's cost is negative
+        sub  [velf],bl          ; the fraction; below nought it borrows, CF
+        sbb  [vel],ax           ; vel -= whole + CF
+        jns  .e1                ; still nought or more?
+        mov  word [vel],0       ;   no: nought
+        mov  byte [velf],0
+.e1:    cmp  word [vel],VNE     ; past the airframe's limit?
+        jle  .e2                ;   no
+        mov  word [vel],VNE     ;   yes: VNE - and vel*4 stays inside a word
+.e2:
+
+        ; ---- 9. THE STALL SPEED, for the tape ------------------------------
+        ; The stall is the wing's now, step 7: an angle, not a speed. But the
+        ; pilot reads speed, so the tape gets the speed at which THIS pull
+        ; would stall - where Nmax = Ncmd:
+        ;
+        ;     vstall = VS1 * sqrt(Ncmd/10 * 256/rho)
+        ;
+        ; faster in thin air, and faster the harder you pull. Lesson 1B's red
+        ; line moves now.
+        ;
+        ; THE SQUARE ROOT IS NEWTON'S. Square both sides: vstall^2 is T =
+        ; 6250*Ncmd*256/rho. Guess too big - 2048 - and replace the guess
+        ; with the average of it and T/guess, six times. From above it can
+        ; only come down onto the root, and T/guess never overflows a word.
+        ; In C:
+        ;
+        ;     long T = (6250L * max(ncmd, 10) / rho) << 8;
+        ;     unsigned x = 2048;
+        ;     for (int i = 0; i < 6; i++) x = (x + T/x) / 2;
+        ;     vstl = x;
+        mov  ax,[ncmd]          ; AX = Ncmd
+        cmp  ax,10              ; under one G (a push)? the 1G line stays
+        jge  .n1
+        mov  ax,10              ;   one G
+.n1:    mov  bx,VS1*VS1/10      ; BX = 6250
+        mul  bx                 ; DX:AX = 6250*Ncmd: at most 568750
+        div  word [rho]         ; AX = /rho: at most 8886
+        mov  bx,256             ; BX = 256
+        mul  bx                 ; DX:AX = T: the stall speed, squared
+        mov  [tlo],ax           ; keep T
+        mov  [thi],dx
+        mov  bx,2048            ; BX = x: the first guess, too big on purpose
+        mov  cx,6               ; CX = six rounds
+.nwt:   mov  ax,[tlo]           ; DX:AX = T
+        mov  dx,[thi]
+        div  bx                 ; AX = T/x
+        add  ax,bx              ; AX = x + T/x: both under 9200, no carry
+        shr  ax,1               ; AX = /2: the average
+        mov  bx,ax              ; x = it
+        loop .nwt               ; six times
+        mov  [vstl],bx          ; vstl = the stall speed for this pull
+        ; ---- 10. THE ADVANCE ------------------------------------------------
+        ; vel/64 units a tick, which is vel*4 in 256ths - the units lesson
+        ; 17's fractions are kept in. Then the nose splits it: sine of it
+        ; up, cosine of it along the ground. Both products are 32 bits and
+        ; both answers are their middle bytes.
+        mov  ax,[vel]           ; AX = vel
+        shl  ax,1               ; AX = vel*2
+        shl  ax,1               ; AX = vel*4: at most 10400, a word
+        mov  [step],ax          ; step = AX: 256ths of a unit, this tick
+        imul word [nsin]        ; DX:AX = step*nsin
+        mov  al,ah              ; AX = step*nsin/256: THE CLIMB, in 256ths
+        mov  ah,dl
+        mov  [wdy],ax           ; wdy = AX
+        mov  ax,[step]          ; AX = step
+        imul word [ncos]        ; DX:AX = step*ncos
+        mov  al,ah              ; AX = step*ncos/256: THE RUN along the
+        mov  ah,dl              ;  ground, in 256ths
+        mov  [fwd],ax           ; fwd = AX
+        call STEPXZ             ; wdx, wdz = fwd along the heading
+
+        ; ---- 11. THE WIND ---------------------------------------------------
+        ; WINDDRF in GAMES\OWLFLY3\SRC\UI.INC. The air is moving, and the
+        ; aeroplane is IN it: whatever it does, the air carries it WINDX east
+        ; and WINDZ north a tick. Down near the ground the wind dies - the
+        ; ground holds the air back - so it is scaled by the height above
+        ; the ground, full at WINDH and nothing at the surface.
+        ;
+        ; It is added to the step, so lesson 17's fractions carry it: a
+        ; quarter of a unit a tick is a whole unit every fourth tick, and
+        ; nothing is lost.
+        mov  si,(NR*TSIDE+NR)*2 ; SI = the node under the eye
+        mov  ax,[camy]          ; AX = camy
+        sub  ax,[TWY+si]        ; AX = height above the ground
+        jns  .w1                ; nought or more?
+        xor  ax,ax              ;   no: nought
+.w1:    cmp  ax,WINDH           ; above the layer the ground slows?
+        jle  .w2                ;   no
+        mov  ax,WINDH           ;   yes: the full wind
+.w2:    mov  [agl],ax           ; agl = AX: 0..512
+        mov  bx,WINDX           ; BX = WINDX
+        imul bx                 ; AX = WINDX*agl: 512ths of a unit
+        sar  ax,1               ; AX = /2: 256ths, the step's own units
+        add  [wdx],ax           ; wdx += the wind east
+        mov  ax,[agl]           ; AX = agl
+        mov  bx,WINDZ           ; BX = WINDZ
+        imul bx                 ; AX = WINDZ*agl
+        sar  ax,1               ; AX = /2
+        add  [wdz],ax           ; wdz += the wind north
+
+        ; ---- THE CLIMB, WITH A FRACTION ------------------------------------
+        ; Lesson 17 gave camx and camz a byte of 256ths each. The height
+        ; needs one now too: a gentle climb is a few 256ths a tick, and a
+        ; word alone would keep none of it.
+        mov  ax,[wdy]           ; AX = the climb, in 256ths
+        mov  bl,al              ; BL = its fraction
+        mov  al,ah              ; AL = its whole units...
+        cbw                     ; AX = ...signed: a descent is negative
+        add  [camyf],bl         ; the fraction accumulates; past 255 it sets CF
+        adc  [camy],ax          ; camy += whole units + CF
+
+        ; ---- and the floor is the GROUND, as in lesson 15 ------------------
+        mov  si,(NR*TSIDE+NR)*2 ; SI = the slot of the node under the eye
+        mov  bx,[TWY+si]        ; BX = the world height of the ground there
+        add  bx,CAMYCL          ; BX += the clearance: the lowest you may be
+        mov  ax,[camy]          ; AX = camy
+        cmp  ax,bx              ; camy >= ground + clearance ?
+        jge  .y1                ;   yes: you are clear of it
+        call CRASH              ;   NO - AND THAT IS THE END OF THE FLIGHT.
+        ret                     ;    BX is still the ground plus the clearance
+.y1:    cmp  ax,[camymax]       ; camy <= the ceiling ?
+        jle  .y2                ;   yes
+        mov  ax,[camymax]       ;   no: pinned
+.y2:    mov  [camy],ax          ; camy = AX
+
+        ; ---- THE POSITION HAS A FRACTION, AND IT IS ONE BYTE --------------
+        ; Lesson 17's ADC, and its box is in lesson 17. What is new is only
+        ; what goes INTO wdx and wdz: the run, and the wind on top of it.
+        mov  ax,[wdx]           ; AX = the step east, in 1/256ths
+        mov  bl,al              ; BL = its low byte: the fraction
+        mov  al,ah              ; AL = its high byte: the whole units...
+        cbw                     ; AX = ...with the sign carried up: wdx >> 8
+        add  [camxf],bl         ; the fraction accumulates; past 255 it sets CF
+        adc  [camx],ax          ; camx += whole units + CF
+        mov  ax,[wdz]           ; the same, north
+        mov  bl,al              ; BL = the fraction
+        mov  al,ah              ; AL = the whole units
+        cbw                     ; AX = wdz >> 8, signed
+        add  [camzf],bl         ; fraction += BL
+        adc  [camz],ax          ; camz += whole units + CF
+        ret                     ; return
+
+; ============================================================================
+;  TOPOFMAP - how high is the highest thing on this island?
+;
+;  Four thousand and ninety six bytes, one pass, once, at the boot. HMAP is
+;  64 by 64 and it is laid out as one flat run, so the scan needs no rows
+;  and no multiply: walk it with LODSB and keep the biggest.
+;
+;  Then put that byte through WORLDH and the VEXAG shift - the SAME two
+;  steps TERRPREP uses on every node - because the answer has to be in the
+;  units the flight model works in, not in map bytes. Ask the question in
+;  one set of units and answer it in another and you get a number that
+;  looks reasonable and is wrong by a factor of ten.
+;
+;  Everything that depends on the shape of the island is worked out here:
+;  where the aeroplane appears, and where the ceiling is.
+; ============================================================================
+;  In C:
+;
+;      void topofmap(void)
+;      {
+;          int top = 0;
+;          for (int i = 0; i < 4096; i++)
+;              if (HMAP[i] > top) top = HMAP[i];
+;          gtop    = worldh(top) << VEXAG;   /* in world units now */
+;          camy0   = gtop + SPAWNUP;
+;          camymax = gtop + CEILUP;
+;      }
+TOPOFMAP:
+        mov  si,HMAP            ; SI = &HMAP[0]. LODSB reads DS:SI and DS is
+                                ;  ours already - a .COM is one segment
+        mov  cx,4096            ; CX = 64*64, the whole island
+        xor  ah,ah              ; AH = 0: the tallest byte seen so far
+.l:     lodsb                   ; AL = *si++
+        cmp  al,ah              ; AL > AH ?
+        jbe  .n                 ;   no: leave the record standing
+        mov  ah,al              ;   yes: a new tallest
+.n:     loop .l                 ; while (--cx)
+
+        mov  al,ah              ; AL = the tallest map byte
+        xor  ah,ah              ; AX = it, 0..255
+        call WORLDH             ; AX = what that is in world units
+        mov  cl,VEXAG           ; CL = the exaggeration...
+        shl  ax,cl              ; AX <<= CL   ...the same one the ground got
+        mov  [gtop],ax          ; gtop = the highest ground on the island
+
+        add  ax,SPAWNUP         ; AX += SPAWNUP
+        mov  [camy0],ax         ; camy0 = above the worst of it
+        mov  ax,[gtop]          ; AX = gtop again
+        add  ax,CEILUP          ; AX += CEILUP
+        mov  [camymax],ax       ; camymax = and the ceiling over that
+        ret                     ; return
+
+; ============================================================================
+;  CRASH - one byte, and the flight is over.
+;
+;  THE GAME'S IS CRASHHANDLE, in GAMES\OWLFLY3\SRC\FLIGHT.INC. Read it
+;  next to this one, because the SHAPE is identical and everything the game
+;  does extra is cinema rather than logic:
+;
+;      ours                    the game's, on top of it
+;      dying = 1               a wreck model that breaks up and falls
+;      dytick = 0              the camera dollies back and watches it
+;                              the explosion, and its own recording
+;                              the flashback buffer starts replaying
+;                              the score counts him as a loss
+;
+;  And the first two lines are word for word: a wreck cannot crash twice.
+;  Without that test the aeroplane hits the hill sixty times a second, and
+;  every one of them resets the tick the message is blinking on.
+;
+;  WHY IT IS ONE BYTE AND NOT A JUMP. `dying` is read in exactly one place,
+;  at the top of the flight loop, and everything else carries on as it was:
+;  the frame is still drawn, the counter still counts, the keys still
+;  arrive. A crash is not the program stopping. It is the program in a
+;  different state, and that is why lesson 14's four rules can simply be
+;  skipped rather than unpicked.
+; ============================================================================
+;  In C:
+;
+;      void crash(void)
+;      {
+;          if (dying) return;           /* a wreck cannot crash twice */
+;          dying  = 1;
+;          dytick = 0;
+;      }
+CRASH:  cmp  byte [dying],0     ; already a wreck?
+        jne  .x                 ;   yes: nothing to do, and nothing to reset
+        mov  byte [dying],1     ; dying = 1
+        mov  byte [spup],0      ; spup = 0: SPACE must be let go first
+        mov  word [dytick],0    ; dytick = 0: the message starts blinking now
+        mov  [camy],bx          ; camy = the ground here plus the clearance,
+                                ;  which PHYS had in BX one instruction ago.
+                                ;  Without this the eye stays where the dive
+                                ;  put it - UNDER the surface - and the last
+                                ;  picture of the flight is one flat colour
+
+        ; ---- and step back, so you can see what you hit -------------------
+        ; The game dollies the camera a hundred units back along the
+        ; heading and watches the wreck fall. We have no wreck to watch, so
+        ; this is the half of it that carries the meaning: stand behind the
+        ; point of impact and look at the hillside. BACKOFF is the game's
+        ; hundred, in our units - its world is built on a 256-unit cell and
+        ; this one on a 1024-unit node, so the same distance is four times
+        ; the number.
+        mov  ax,[hsin]          ; AX = hsin  \  one step BACKWARDS along the
+        mov  bx,BACKOFF         ; BX = BACKOFF  way we were pointing: the
+        imul bx                 ; DX:AX = ...   same sum STEPXZ does, and
+        mov  bx,256             ; BX = 256      then SUBtracted instead of
+        idiv bx                 ; AX = hsin*BACKOFF/256   added
+        sub  [camx],ax          ; camx -= AX
+        mov  ax,[hcos]          ; AX = hcos
+        mov  bx,BACKOFF         ; BX = BACKOFF
+        imul bx                 ; DX:AX = hcos * BACKOFF
+        mov  bx,256             ; BX = 256
+        idiv bx                 ; AX = hcos * BACKOFF / 256
+        sub  [camz],ax          ; camz -= AX
+.x:     ret                     ; return
+
+; ============================================================================
+;  TOWNSPOT - where the aeroplane appears: looking at the biggest town.
+;
+;  Lesson 16 put you above the tallest point of the island, because the
+;  island was all there was to see. Now there are towns, and a town is
+;  where the lesson is - so the program FINDS one before you take off.
+;
+;  THREE QUESTIONS, THE SAME ONES HOUSES4 ASKS. A square gets houses when
+;  its tallest corner is sand or grass, its corners are within FLATH steps
+;  of each other, and its hash is not a park. BUILT asks them of one
+;  square, straight off the map, and the first pass writes the answer for
+;  all 4096 squares into TOWNB: a map of the town plan, one byte a square.
+;
+;  THE SECOND PASS counts, for every square, how many of the nine squares
+;  round it are built - and keeps the square with the most. That is the
+;  middle of the biggest town. Four thousand and ninety six times nine, and
+;  it runs once: at the boot, and never again.
+;
+;  THE SPOT. TOWNBACK squares south of it, facing north - heading nought -
+;  so the town is straight ahead and rises out of the ground as you come.
+;  And high enough: TOWNUP above the tallest ground anywhere on the way,
+;  from three squares behind the start to two past the town. Nothing on
+;  that line can reach you unless you dive.
+;
+;  An island with no town at all - they happen - falls back on lesson 16's
+;  rule: node 32, 26, above the tallest point.
+; ============================================================================
+;  In C:
+;
+;      void townspot(void)
+;      {
+;          for (gi = 0; gi < 64; gi++) for (gj = 0; gj < 64; gj++)
+;              TOWNB[gi*64 + gj] = built(gi, gj);
+;          tbest = 0;
+;          for every square (gi, gj):
+;              n = the sum of TOWNB over the nine round it, wrapping;
+;              if (n > tbest) { tbest = n; tgi = gi; tgj = gj; }
+;          if (tbest == 0) { townx = 32*1024; townz = 26*1024;
+;                            towny = camy0; return; }
+;          tmax = the tallest map byte on the way in;
+;          towny = (worldh(tmax) << VEXAG) + TOWNUP;
+;          townx = tgi * 1024 - BIAS + 512;                /* the middle  */
+;          townz = (tgj - TOWNBACK) * 1024 - BIAS + 512;   /*  of a square */
+;      }
+TOWNSPOT:
+        xor  di,di              ; DI = gi*64 + gj: the square's index
+        mov  word [gi],0        ; gi = 0
+.bi:    mov  word [gj],0        ; gj = 0
+.bj:    call BUILT              ; CF = 0: houses stand here
+        mov  al,0               ; AL = 0 (MOV leaves CF alone)
+        jc   .st                ;   not built: 0
+        mov  al,1               ;   built: 1
+.st:    mov  [TOWNB+di],al      ; TOWNB[index] = it
+        inc  di                 ; the next square: gj + 1 is index + 1
+        inc  word [gj]
+        cmp  word [gj],64
+        jb   .bj
+        inc  word [gi]
+        cmp  word [gi],64
+        jb   .bi
+
+        mov  word [tbest],0     ; ---- the second pass: the biggest town ---
+        mov  word [gi],0
+.ci:    mov  word [gj],0
+.cj:    mov  word [tcnt],0      ; tcnt = built squares round this one
+        mov  bx,-1              ; BX = -1, 0, +1: east-west
+.na:    mov  dx,-1              ; DX = -1, 0, +1: north-south
+.nb:    mov  ax,[gi]
+        add  ax,bx              ; AX = gi + BX...
+        and  ax,63              ; ...wrapped: the island is a torus
+        mov  cl,6
+        shl  ax,cl              ; AX = its row of TOWNB, 64 bytes a row
+        mov  si,[gj]
+        add  si,dx              ; SI = gj + DX...
+        and  si,63              ; ...wrapped
+        add  si,ax              ; SI = the neighbour's index
+        mov  al,[TOWNB+si]      ; AL = built or not
+        xor  ah,ah
+        add  [tcnt],ax          ; tcnt += it
+        inc  dx
+        cmp  dx,1
+        jle  .nb
+        inc  bx
+        cmp  bx,1
+        jle  .na
+        mov  ax,[tcnt]          ; AX = the count
+        cmp  ax,[tbest]         ; more than the best so far?
+        jle  .nx                ;   no
+        mov  [tbest],ax         ;   yes: the new biggest town
+        mov  ax,[gi]
+        mov  [tgi],ax
+        mov  ax,[gj]
+        mov  [tgj],ax
+.nx:    inc  word [gj]
+        cmp  word [gj],64
+        jb   .cj
+        inc  word [gi]
+        cmp  word [gi],64
+        jb   .ci
+
+        cmp  word [tbest],0     ; a town at all?
+        jne  .town
+        mov  word [townx],32*1024   ; no: lesson 16's spot
+        mov  word [townz],26*1024
+        mov  ax,[camy0]
+        mov  [towny],ax
+        ret
+
+.town:  mov  byte [tmax],0      ; ---- the tallest ground on the way in ----
+        mov  bx,-1              ; three squares wide...
+.ha:    mov  dx,-TOWNBACK-3     ; ...from behind the start to past the town
+.hb:    push bx
+        push dx
+        add  bx,[tgi]           ; BX = the square east-west
+        add  dx,[tgj]           ; DX = north-south; HGET wraps them both
+        call HGET               ; AL = its map byte
+        pop  dx
+        pop  bx
+        cmp  al,[tmax]          ; taller?
+        jbe  .hn
+        mov  [tmax],al          ;   yes: keep it
+.hn:    inc  dx
+        cmp  dx,2
+        jle  .hb
+        inc  bx
+        cmp  bx,1
+        jle  .ha
+        mov  al,[tmax]          ; AL = the tallest byte on the way
+        xor  ah,ah
+        call WORLDH             ; AX = in world units...
+        mov  cl,VEXAG
+        shl  ax,cl              ; ...the way the ground is drawn
+        add  ax,TOWNUP          ; AX += the room above it
+        mov  [towny],ax         ; towny = where you fly in
+
+        mov  ax,[tgi]           ; AX = the town's square, east-west
+        mov  cl,10
+        shl  ax,cl              ; AX = its node, in world units
+        sub  ax,BIAS-512        ; AX -= BIAS, and half a square on: the middle
+        mov  [townx],ax         ; townx = straight south of the town
+        mov  ax,[tgj]           ; AX = its square, north-south
+        sub  ax,TOWNBACK        ; AX = TOWNBACK squares south of it
+        mov  cl,10
+        shl  ax,cl              ; in world units - and a word wraps with the
+        sub  ax,BIAS-512        ;  island, so south of row 0 is row 63
+        mov  [townz],ax         ; townz = the start
+        ret
+
+; ---- BUILT: CF = 0 if square (gi, gj) gets houses. HOUSES4's three
+;      questions, asked of the map instead of the cache. Keeps DI.
+BUILT:  mov  bx,[gi]            ; BX = gi   \  HGET wants x in BX, y in DX,
+        mov  dx,[gj]            ; DX = gj   /  and wraps them itself
+        call HGET               ; AL = corner 0's map byte
+        mov  ah,al              ; AH = the highest so far
+        mov  ch,al              ; CH = the lowest (HGET only touches CL)
+        inc  bx                 ; corner 1: east
+        call HGET
+        call .mm
+        inc  dx                 ; corner 2: east and north
+        call HGET
+        call .mm
+        dec  bx                 ; corner 3: north
+        call HGET
+        call .mm
+        cmp  ah,88              ; the tallest corner in the sea?
+        jb   .no
+        cmp  ah,168             ; ...or above the grass?
+        jae  .no
+        sub  ah,ch              ; AH = how much it slopes
+        cmp  ah,FLATH           ; too steep?
+        ja   .no
+        mov  ax,[gi]            ; ---- and the hash: a park? ----
+        and  ax,63
+        mov  cl,6
+        shl  ax,cl              ; AX = gi*64
+        mov  bx,[gj]
+        and  bx,63
+        add  ax,bx              ; AX = the square's map index
+        mov  bx,25173           ; the generator, as in HOUSES4
+        mul  bx
+        add  ax,13849
+        test ah,0C0h            ; top two bits nought: a park
+        jz   .no
+        clc                     ; CF = 0: built
+        ret
+.no:    stc                     ; CF = 1: not
+        ret
+.mm:    cmp  al,ch              ; AL below the lowest?
+        jae  .m1
+        mov  ch,al
+.m1:    cmp  al,ah              ; above the highest?
+        jbe  .m2
+        mov  ah,al
+.m2:    ret
+
+; ============================================================================
+;  AIRBORNE - put an aeroplane in the air. Called at the boot, and again by
+;  every press of SPACE on the crash screen.
+;
+;  It exists because a reset that forgets ONE number is worse than no reset
+;  at all: put the camera back and leave the bank at forty degrees and the
+;  new aeroplane starts in a knife-edge turn. Everything the flight model
+;  touches is listed here, in one place, and that is the only way to keep
+;  the list honest as the model grows.
+; ============================================================================
+AIRBORNE:
+        mov  ax,[townx]             ; camx = south of the town  \  the same
+        mov  [camx],ax              ;                            > spot every
+        mov  ax,[townz]             ; camz = TOWNBACK squares    > time, so a
+        mov  [camz],ax              ;  short of it              /  crash is
+        mov  ax,[towny]             ; camy = above everything  /  about the
+        mov  [camy],ax              ;  on the way in          /   ground
+        mov  word [heading],0       ; heading = 0: north, at the town
+        mov  word [roll],0          ; roll = 0: wings level
+        mov  word [alpha],0         ; and the wing at rest:
+        mov  word [ncmd],10         ;  one G asked,
+        mov  word [nload],10        ;  one G carried,
+        mov  byte [stalled],0       ;  flying
+        mov  word [vstl],VS1
+        mov  word [turn],0          ; turn = 0: the stick is centred
+        mov  byte [dying],0         ; dying = 0: flying again
+        mov  byte [camxf],0         ; and the fractions: a reset that
+        mov  byte [camzf],0         ;  forgets one number is no reset
+        mov  byte [camyf],0         ;  - and the height has one now too
+        mov  word [vel],CRUISE      ; THE FORCES: handed over flying at
+        mov  byte [velf],0          ;  (and nought 256ths of a vel)
+        mov  word [throt],64        ;  CRUISE, the lever at the stop,
+        mov  word [fuel],FUELMAX    ;  a full tank,
+        mov  word [pitch],0         ;  the nose level,
+        mov  word [qramp],0         ;  the stick centred,
+        mov  word [pfrac],0         ;  and no eighths
+        mov  word [hfrac],0         ;  left over,
+        mov  byte [abon],0          ;  and the burner out
+        mov  word [dytick],0        ; dytick = 0
+        call PLANESINIT             ; and five more aeroplanes round you
+        ret                         ; return
+
+; ============================================================================
+;  KBINT - our own INT 9. Copied out of CITY.ASM line 259.
+;
+;  The keyboard raises this interrupt itself, on every press AND on every
+;  release. The scan code is waiting on port 60h: the key's number, with
+;  bit 7 set if it is coming up rather than going down. We write 1 or 0
+;  into our own table and tell the interrupt controller we are finished.
+;
+;  It does NOT chain to the handler it replaced, so the BIOS never learns
+;  that a key happened and INT 16h stays empty for as long as this program
+;  runs. That is the price of the table, it is what the game pays, and it
+;  is why the map screen above waits on KEYS and not on the BIOS.
+;
+;  A HANDLER OWNS NOTHING. It can fire between any two instructions of the
+;  program it interrupts, so every register it touches is pushed first -
+;  including DS, because the program it interrupted may have had its own.
+; ============================================================================
+;  In C:
+;
+;      void interrupt kbint(void)
+;      {
+;          unsigned char code = inp(0x60);
+;          KEYS[code & 0x7F] = (code & 0x80) ? 0 : 1;
+;          outp(0x20, 0x20);                    /* end of interrupt */
+;      }
+KBINT:  push ax                 ; save every register this touches...
+        push bx                 ; keep BX
+        push di                 ; keep DI
+        push ds                 ; ...DS included: whoever we interrupted
+        mov  ax,cs              ; AX = cs       had its own
+        mov  ds,ax              ; DS = cs: now KEYS means our KEYS
+        in   al,60h             ; AL = the scan code, straight off the port
+        mov  ah,al              ; AH = a copy, with bit 7 still on it
+        and  al,7Fh             ; AL = the key itself, bit 7 cleared
+        mov  bl,al              ; BL = the key
+        xor  bh,bh              ; BH = 0: BX = the key, as an index
+        mov  di,KEYS            ; DI = &KEYS[0]
+        add  di,bx              ; DI = &KEYS[key]
+        test ah,80h             ; bit 7 set = the key came UP
+        jnz  .brk               ;   yes: it was released
+        mov  byte [di],1        ; KEYS[key] = 1: held down
+        jmp  .eoi               ; and finish
+.brk:   mov  byte [di],0        ; KEYS[key] = 0: let go
+.eoi:   mov  al,20h             ; AL = 20h, "end of interrupt"
+        out  20h,al             ; tell the controller, or nothing fires again
+        pop  ds                 ; everything back, exactly as it was found
+        pop  di                 ; DI back
+        pop  bx                 ; BX back
+        pop  ax                 ; AX back
+        iret                    ; return from interrupt
+
+; ============================================================================
+;  REMOTE - the one window left in the BIOS door.
+;
+;  Taking INT 9 shut the BIOS keyboard off, and it shut it off for
+;  EVERYONE, not only for a person at the keyboard. Anything that drives
+;  this program from outside puts its keys in the BIOS buffer, because
+;  that is where a keystroke normally lands - and after INT 9 was taken,
+;  nothing in here would ever read them.
+;
+;  So once a frame we look. A scan code found there is written into the
+;  key table and HELD for RHOLD frames, as though a finger had been on
+;  it. Held, not tapped: the bank needs ten frames in a row to build, and
+;  a key that lasted one frame would move it three and let it fall
+;  straight back. Each new code refreshes the hold, so a stream of them
+;  is one long press.
+;
+;  The real keyboard never comes through here. KBINT does not pass a key
+;  on, so the BIOS buffer only ever holds what somebody else put in it.
+; ============================================================================
+;  In C:
+;
+;      void remote(void)
+;      {
+;          if (key_waiting()) { rkey = scan_of(get_key());  rhold = RHOLD; }
+;          if (rhold)     { rhold--;  KEYS[rkey] = 1; }
+;          else if (rkey) { KEYS[rkey] = 0;  rkey = 0; }
+;      }
+REMOTE: mov  ah,1               ; AH = 1: is anything in the BIOS buffer?
+        int  16h                ; ZF set = nothing there
+        jz   .hold              ;   nothing fed: on to the hold
+        mov  ah,0               ; AH = 0: take it out of the buffer
+        int  16h                ; AH = the scan code, AL the character
+        mov  [rkey],ah          ; rkey = the scan code
+        mov  byte [rhold],RHOLD ; rhold = RHOLD - a new one refreshes it
+.hold:  cmp  byte [rhold],0     ; still holding one?
+        je   .let               ;   no: let it go
+        dec  byte [rhold]       ; rhold--
+        mov  bl,[rkey]          ; BL = rkey
+        xor  bh,bh              ; BX = rkey, as an index into the table
+        mov  byte [KEYS+bx],1   ; KEYS[rkey] = 1: held, this frame too
+        ret                     ; return
+.let:   mov  bl,[rkey]          ; BL = rkey
+        or   bl,bl              ; was there one at all?
+        jz   .none              ;   no: nothing to let go of
+        xor  bh,bh              ; BX = rkey
+        mov  byte [KEYS+bx],0   ; KEYS[rkey] = 0: let go
+        mov  byte [rkey],0      ; rkey = 0: and forgotten
+.none:  ret                     ; return
+
+; ---- STEPXZ: one tick's run, along the way the camera is facing -----------
+;  The heading's own sine and cosine are already in hsin/hcos, put there by
+;  SETTRIG once a frame. Lesson 17 multiplied them by a constant, SPEEDV;
+;  now the run is fwd, worked out by PHYS from the speed and the nose, and
+;  it is in 256ths already - so the product is 256ths times 256, and its
+;  middle two bytes are the answer in 256ths.
+;  In C:
+;
+;      void step_xz(void)
+;      {
+;          wdx = fwd * hsin / 256;       /* hsin, hcos are sin/cos * 256 */
+;          wdz = fwd * hcos / 256;       /* fwd and both answers: 256ths */
+;      }
+STEPXZ: mov  ax,[hsin]          ; AX = hsin: the sine, times 256
+        imul word [fwd]         ; DX:AX = hsin * fwd: up to 256*10400, which
+                                ;  is two and a half million - 32 bits
+        mov  al,ah              ; AX = DX:AX / 256 - the middle bytes
+        mov  ah,dl
+        mov  [wdx],ax           ; wdx = AX: the run east, in 256ths
+        mov  ax,[hcos]          ; AX = hcos
+        imul word [fwd]         ; DX:AX = hcos * fwd
+        mov  al,ah              ; AX = / 256
+        mov  ah,dl
+        mov  [wdz],ax           ; wdz = AX: the run north, in 256ths
+        ret                     ; return
+
+; ============================================================================
+;  FRAME - clear, draw the lattice, show it.
+; ============================================================================
+; ============================================================================
+;  In C:
+;
+;      void frame(void)
+;      {
+;          bufseg = cs + 0x1000;            /* always: see below */
+;          memset(buf, 0, 64000);           /* clear   */
+;          faults = 0;  ground();  tally();  hud();
+;          wait_retrace();
+;          memcpy(screen, buf, 64000);      /* blit    */
+;      }
+;
+;  LESSON 13 CHOSE HERE, and it does not any more. With the screen clip
+;  switchable, a stage that took it down had to draw ON THE SCREEN instead
+;  of behind a buffer - a line walking four thousand pixels off the edge
+;  takes the best part of a minute, and behind a buffer that is a black
+;  screen and a mystery. There is no such stage now and no such switch:
+;  every frame is built in the back buffer and blitted whole.
+FRAME:  mov  ax,cs              ; AX = cs
+        add  ax,1000h           ; AX = cs + 1000h: the back buffer
+        mov  [bufseg],ax        ; bufseg = AX
+        mov  es,ax              ; ES = bufseg           \  memset(buf,SKY,64000):
+        xor  di,di              ; DI = 0                 > 32000 words of
+        mov  ax,SKY*257         ; AX = SKY in both bytes/  SKY, by STOSW. The
+                                ;  ground covers the bottom; what is left
+                                ;  showing at the top is the sky
+        mov  cx,32000           ; CX = 32000
+        rep  stosw              ; while (cx--) *es:di++ = ax
+                                ;
+                                ; AND NOTHING ELSE IS PAINTED. Lesson 13 drew
+                                ; a grey line across the middle here, to mark
+                                ; where a flat plane meets the eye's axis, and
+                                ; it was worth having while the camera stayed
+                                ; level. An aeroplane does not. The moment the
+                                ; world banks, a line pinned to row 100 says
+                                ; "the ground is tilted and you are not",
+                                ; which is exactly backwards.
+                                ;
+                                ; The game has no such line either. It fills
+                                ; the top half with sky and the bottom with
+                                ; ground - and if you look at its palette,
+                                ; those two colours are 6,9,22 and 4,6,16.
+                                ; The same dark blue twice. WIRE CITY has no
+                                ; visible horizon at all, and that is why its
+                                ; level split never argues with its bank.
+                                ;
+                                ; A sky that banks with the world is a filled
+                                ; polygon, and SCANPOLY in E_RAST.INC would
+                                ; draw it today. It belongs to the lesson that
+                                ; earns it.
+        mov  word [faults],0    ; faults = 0
+        call GROUND             ; ground()   - the land, filled
+        call PLANESDRAW         ; planesdraw() - the traffic, over it
+        call GLOW               ; glow()     - the nozzles, by the DAC
+        call WRKDRAW            ; wrkdraw()  - the wrecks, falling
+        call TRCDRAW            ; trcdraw()  - the rounds in the air
+        call TALLY              ; tally()    - the red pixels
+        call HUD                ; hud()      - the frame rate
+        call WAITVR             ; wait_retrace()
+        push ds                 ; keep DS
+        mov  ax,0A000h          ; AX = the screen segment
+        mov  es,ax              ; ES = screen           \  memcpy(screen,
+        mov  ds,[bufseg]        ; DS = bufseg            > buf, 64000) with
+        xor  si,si              ; SI = 0                /  MOVSW, 32000 words
+        xor  di,di              ; DI = 0
+        mov  cx,32000           ; CX = 32000
+        rep  movsw              ; while (cx--) *es:di++ = *ds:si++
+        pop  ds                 ; DS = ours again
+        ret
+
+; ---- TALLY: one red pixel along the top row for every caught divide -------
+;  Nothing to read on a good frame, because there is nothing to count. On
+;  stage 2 it is a red bar as wide as the trouble.
+;  In C:
+;
+;      void tally(void)
+;      {
+;          int n = faults;  if (n > 320) n = 320;
+;          for (int i = 0; i < n; i++) buf[i] = 12;      /* row 0, red */
+;      }
+TALLY:  mov  cx,[faults]        ; CX = n = faults
+        jcxz  .none             ; if (n == 0) return
+        cmp  cx,320             ; n > 320 ?
+        jbe  .fit               ;   no: n fits
+        mov  cx,320             ;   n = 320   (one row is all we have)
+.fit:   mov  ax,[bufseg]        ; AX = bufseg
+        mov  es,ax              ; ES = bufseg
+        xor  di,di              ; DI = 0      - row 0, column 0
+        mov  al,12              ; AL = 12, red out of the default palette:
+        rep  stosb              ; while (cx--) *es:di++ = al   instrumentation,
+.none:  ret                     ;                              not scenery
+
+; ---- HUD: the frame rate and which engine drew it, top left ---------------
+;  Two digits: one DIV, once a frame, on a number under a hundred. The
+;  lesson has nothing against dividing; it has something against dividing
+;  a hundred and sixty thousand times a second.
+;  In C:
+;
+;      void hud(void)
+;      {
+;          int n = fpsv;  if (n > 99) n = 99;
+;          char *s = fastp ? HUDF : HUDC;          /* "00 FPS   FAST  (F)" */
+;          s[0] = '0' + n / 10;
+;          s[1] = '0' + n % 10;
+;          txt(4, 8, s);                            /* row 4, column 8 */
+;          txt(12, 8, MSTR);                        /* the meter's line */
+;      }
+HUD:    mov  ax,[fpsv]          ; AX = n = fpsv
+        cmp  ax,99              ; n > 99 ?
+        jbe  .two               ;   no: n fits
+        mov  ax,99              ;   n = 99   (the corner holds two digits)
+.two:   mov  bl,10              ; BL = 10
+        div  bl                 ; AL = n / 10, AH = n % 10  (byte DIV: both)
+        add  ax,'00'            ; AL += '0', AH += '0'  - one ADD, both digits,
+                                ;  because '00' is 3030h and neither can carry
+        mov  si,HUDF            ; SI = HUDF
+        cmp  byte [fastp],0     ; fastp ?
+        jne  .put               ;   yes: FAST
+        mov  si,HUDC            ;   no: SI = HUDC
+.put:   mov  [si],al            ; s[0] = tens
+        mov  [si+1],ah          ; s[1] = units
+        mov  ax,4               ; AX = row 4: under the tally bar
+        mov  bx,8               ; BX = column 8
+        call TXT                ; txt(4, 8, s)
+        mov  si,MSTR            ; SI = the meter's line
+        mov  ax,12              ; AX = row 12: under the frame rate
+        mov  bx,8               ; BX = column 8
+        call TXT                ; txt(12, 8, MSTR)
+        cmp  byte [cammode],0   ; F4 on? Then no instruments: the eye is
+        je   .cock              ;  not in the cockpit to read them
+        jmp  CAMWORDS           ; camwords(), and its RET is ours
+.cock:  call GUNWORDS           ; the belt and the hull
+
+        ; ---- THE TAPES: speed, height, heading, climb and G -------------
+        ; Lesson 1A's numbers become SCALES - see TAPES below. With the ring
+        ; on (T, the third kind of letters) they are drawn twice: every
+        ; ring first, then every stroke of ink over them. Lesson 16's
+        ; painter's order again: a ring painted after its neighbour's ink
+        ; would bite a hole in it.
+        cld                     ; BAR's STOSB walks up, not down
+        cmp  byte [tmode],2     ; the ringed letters?
+        jne  .ink               ;   no: no rings, one pass
+        mov  byte [hpass],0     ; hpass = 0: THE RINGS
+        call TAPES              ; tapes()
+        call MIDHUD             ; midhud(): the gunsight, the horizon, the ladder
+.ink:   mov  byte [hpass],1     ; hpass = 1: THE INK
+        call TAPES              ; tapes()
+        call MIDHUD             ; midhud(): the gunsight, the horizon, the ladder
+
+        ; ---- THE THROTTLE, under the speed tape - still a number --------
+        ; THROTTLE IN PER CENT. The lever is 0..64, and 100/64 is 25/16:
+        ; one MUL by 25, one shift by 4. No divide, and exact at both ends.
+        mov  ax,[throt]         ; AX = throt, 0..64
+        mov  bx,25              ; BX = 25
+        mul  bx                 ; AX = throt*25: at most 1600
+        mov  cl,4               ; CL = 4
+        shr  ax,cl              ; AX = throt*25/16 = throt*100/64: per cent
+        mov  di,HTHR+6          ; DI = the place of its last digit
+        mov  cx,3               ; CX = three places
+        mov  byte [nfill],' '   ; blanks in front, like a person writes it
+        call NUMOUT             ; numout(): the digits into HTHR
+        mov  ax,'  '            ; AX = two blanks...
+        cmp  byte [abon],0      ; ...unless the burner is lit
+        je   .nab               ;   it is not
+        mov  ax,'AB'            ; AX = 'AB'. FASM puts the FIRST letter in
+                                ;  AL, so a word store lays them in order
+.nab:   mov  word [HTHR+9],ax   ; the two letters after the per cent sign
+        mov  ax,128             ; AX = row 128, under the speed tape
+        mov  bx,8               ; BX = column 8
+        mov  si,HTHR            ; SI = "THR 100%"
+        call TXT                ; txt(128, 8, s)
+
+        ; ---- PITCH AND BANK, under the height tape - numbers too, for now.
+        ; In degrees, WITH A SIGN, as lesson 19 made them. The pitch is a
+        ; quarter circle either side (the flip keeps it there) and the roll
+        ; is a whole one: CBW reads its low byte as -128..127, so a bank to
+        ; the left comes out negative. Both through 45/32, both through
+        ; SNUMOUT
+        mov  ax,[pitch]         ; AX = pitch, -64..64
+        mov  bx,45              ; BX = 45
+        imul bx                 ; AX = pitch*45 - signed, so IMUL
+        mov  cl,5               ; CL = 5
+        sar  ax,cl              ; AX = /32: degrees, -90..90. SAR keeps the sign
+        mov  di,HPIT+7          ; DI = the last digit's place
+        mov  cx,3               ; CX = three places
+        call SNUMOUT            ; the sign and the digits into HPIT
+        mov  ax,128             ; AX = row 128
+        mov  bx,248             ; BX = column 248
+        mov  si,HPIT            ; SI = "PIT +12"
+        call TXT                ; txt(128, 248, s)
+        mov  ax,[roll]          ; AX = roll, 0..255
+        cbw                     ; AX = it as a signed byte: -128..127
+        mov  bx,45              ; BX = 45
+        imul bx                 ; AX = roll*45
+        mov  cl,5               ; CL = 5
+        sar  ax,cl              ; AX = degrees, -180..178
+        mov  di,HBNK+7          ; DI = the last digit's place
+        mov  cx,3               ; CX = three places
+        call SNUMOUT            ; into HBNK
+        mov  ax,136             ; AX = row 136
+        mov  bx,248             ; BX = column 248
+        mov  si,HBNK            ; SI = "BNK -45"
+        call TXT                ; txt(136, 248, s)
+
+        ; THE STALL, in red, while it is true - a word the pilot cannot miss,
+        ; in the middle, under the nose
+        cmp  byte [stalled],0   ; is the wing stalled? (step 7, an ANGLE)
+        je   .nstl              ;   no: nothing to say
+        mov  byte [tcol],7      ; tcol = 7: red
+        mov  si,MSGSTALL        ; SI = "STALL"
+        mov  ax,120             ; AX = row 120
+        mov  bx,150             ; BX = column 150
+        call TXT                ; txt(120, 150, s)
+        mov  byte [tcol],HINK   ; tcol = the ink again
+.nstl:
+
+        ; WHICH LETTERS THESE ARE, at the bottom - so the T key says what it did
+        mov  bl,[tmode]         ; BL = tmode, 0..2
+        xor  bh,bh              ; BX = it
+        shl  bx,1               ; BX = tmode*2: a word a name
+        mov  si,[HTMODE+bx]     ; SI = its name
+        mov  ax,188             ; AX = row 188
+        mov  bx,8               ; BX = column 8
+        call TXT                ; txt(188, 8, name)
+
+        ; ---- and the crash screen, which is two lines of text -------------
+        ; The game has a falling wreck, an explosion and a flashback here.
+        ; What it also has is these two lines, and they are the part that
+        ; tells you what happened.
+        cmp  byte [dying],0     ; a wreck?
+        je   .out               ;   no: nothing more to say
+        test byte [dytick],8    ; bit 3 of the tick: on for eight frames,
+        jnz  .press             ;  off for eight. That is the blink, and it
+                                ;  costs one TEST - no timer, no counter
+        mov  byte [tcol],7      ; tcol = 7: red, and only for this line
+        mov  si,MSGCRASH        ; SI = *** CRASH ***
+        mov  ax,88              ; AX = row 88
+        mov  bx,120             ; BX = column 120
+        call TXT                ; txt(88, 120, s)
+        mov  byte [tcol],HINK   ; tcol = the ink again, for everyone else
+.press: mov  si,MSGSPACE        ; SI = PRESS SPACE
+        mov  ax,104             ; AX = row 104
+        mov  bx,116             ; BX = column 116
+        call TXT                ; txt(104, 116, s)
+.out:   ret                     ; return
+
+HUDF    db '00 FPS   FAST  (F)',0
+HUDC    db '00 FPS   CLASSIC  (F)',0
+MSGCRASH db '*** CRASH ***',0   ; the game's own words, DATA.INC line 2044
+MSGSPACE db 'PRESS SPACE',0
+HTHR    db 'THR 100%   ',0  ; the throttle: digits at 4..6, AB at 9 and 10
+HPIT    db 'PIT +  0',0     ; the pitch: the sign at 4, digits at 5..7
+HBNK    db 'BNK +  0',0     ; the bank: the same
+MSGSTALL db 'STALL',0
+HTMODE  dw HTM0,HTM1,HTM2      ; the names of the three kinds of letters
+HTM0    db 'T: ROM 8X8',0
+HTM1    db 'T: OUR 4X6',0
+HTM2    db 'T: OUR 4X6 RINGED',0
+
+; ============================================================================
+;  TAPES - THE HUD's SCALES. OWL FLY III's HUDBARS (GAMES\OWLFLY3\SRC\
+;  HUD.INC, line 864) in its F2 layout - the full screen, no cockpit, so
+;  nothing leans to follow a canopy bow. Five instruments:
+;
+;      the compass    top middle: the heading as a strip that slides past a
+;                     caret, forty steps either side of the nose
+;      the speed      left: vel on a vertical scale, the live value beside
+;                     the pointer, and the STALL as a red line on the scale
+;      the height     right: camy the same way, with two red lines - the
+;                     floor under you, and the ceiling over you
+;      the climb      the IVV, a cyan tick riding the height tape's spine:
+;                     up for a climb, down for a sink
+;      the G          under the speed: how hard the stick is pulling
+;
+;  EVERY TAPE IS THE SAME SUM. A scale is a number line seen through a
+;  window, and the window's middle is the value now:
+;
+;      y = 83 - (mark - value) / scale
+;
+;  Row 83 is the pointer. A mark above the value sits above it, a mark
+;  below sits below, and when the value grows the whole scale slides
+;  DOWN past the pointer - the way a real tape drum turns. Nothing is
+;  stored; the scale is drawn again from the value every frame.
+;
+;  WHERE TO START. The first mark is the first multiple of the step at or
+;  above the bottom of the window. DIV gives it in two instructions: divide
+;  and multiply back, and the remainder is thrown away. Add step-1 first,
+;  and it rounds UP instead of down:
+;
+;      first = (bottom + step - 1) / step * step
+;
+;  THE TWO PASSES. TAPES runs twice when the ring is on: [hpass] = 0 paints
+;  every bar a pixel bigger in the ring's grey (OCOL), [hpass] = 1 paints the
+;  bars themselves and the numbers. Lesson 1A's ring, for lines.
+;  In C, the speed tape:
+;
+;      void speedtape(void)
+;      {
+;          bar(68, 48, 1, 71);                              /* the spine  */
+;          int m = (max(vel - 140, 0) + 24) / 25 * 25;      /* first mark */
+;          for (; m - vel <= 140; m += 25) {
+;              int y = 83 - (m - vel) / 4;
+;              if (y < 48 || y > 118) continue;             /* the window */
+;              if (m % 100) bar(64, y, 4, 1);               /* minor      */
+;              else { bar(62, y, 6, 1);                     /* major...   */
+;                     if (abs(m - vel) > 25) lab(38, y-2, numk(m)); }
+;          }
+;          redbar(59, 83 - (VSTALL - vel) / 4, 9, 1);       /* the stall  */
+;          bar(65, 83, 10, 1);                              /* pointer    */
+;          lab(76, 80, num(vel));                           /* live value */
+;      }
+; ============================================================================
+SPX     = 68                  ; THE SPEED TAPE's spine, x
+SPLAB   = 38                  ; ...and where its numbers start
+ALX     = 252                 ; THE HEIGHT TAPE's spine, x
+ALLAB   = 263                 ; ...and its numbers, outboard of the ticks
+TAPEY0  = 48                  ; both tapes run from row 48...
+TAPEY1  = 118                 ; ...to row 118...
+TAPEMID = 83                  ; ...and row 83 is the pointer: the value now
+HCYAN   = 50                  ; the IVV's colour, set in DAYNIGHT
+
+TAPES:  mov  byte [bcol],HINK   ; bcol = the ink
+
+        ; ================= THE COMPASS: top middle =======================
+        ; heading is 0..255 for a circle. The tape shows forty steps either
+        ; side of the nose, a tick every four steps (5.6 degrees), a long
+        ; one with a number every 32 (45 degrees). On the screen a step is
+        ; a pixel and a half: x = 160 + off*3/2.
+        mov  ax,[heading]       ; AX = heading
+        add  ax,219             ; AX = heading - 40, +3 to round up to a
+                                ;  four, +256 so it is never below nought
+        and  ax,0FFFCh          ; AX &= 1111 1111 1111 1100b: a multiple of
+        mov  [tmark],ax           ;  four - the first tick. tmark = AX
+.cp:    mov  ax,[tmark]           ; AX = ctx
+        sub  ax,256             ; AX -= the 256 put on above
+        sub  ax,[heading]       ; AX = off: steps from the nose, signed
+        cmp  ax,40              ; past the right end?
+        jg   .cpd               ;   yes: the tape is done
+        mov  bx,ax              ; BX = off
+        add  ax,ax              ; AX = off*2
+        add  ax,bx              ; AX = off*3
+        sar  ax,1               ; AX = off*3/2 - SAR, off can be negative
+        add  ax,160             ; AX = 160 + off*3/2: x
+        mov  [tx],ax            ; tx = x
+        cmp  ax,102             ; left of the window?
+        jl   .cpn               ;   yes: not drawn
+        cmp  ax,218             ; right of it?
+        jg   .cpn               ;   yes: not drawn
+        mov  ax,[tmark]           ; AX = ctx
+        and  ax,31              ; AX = ctx mod 32
+        jnz  .cmin              ; not a multiple of 32: a short tick
+        mov  bx,[tx]            ; THE LONG TICK: BX = x
+        mov  ax,16              ; AX = row 16
+        mov  cx,1               ; CX = one wide
+        mov  dx,8               ; DX = eight tall
+        call BAR                ; bar(x, 16, 1, 8)
+        mov  ax,[tmark]           ; ...AND ITS NUMBER: AX = ctx
+        and  ax,255             ; AX = the heading of this tick, 0..255
+        mov  bx,45              ; BX = 45
+        mul  bx                 ; AX = heading*45
+        mov  cl,5               ; CL = 5
+        shr  ax,cl              ; AX = heading*45/32: degrees
+        mov  di,HCMP+2          ; DI = the last digit's place
+        mov  cx,3               ; CX = three places
+        mov  byte [nfill],'0'   ; a compass says 045, not 45
+        call NUMOUT             ; numout(): into HCMP
+        mov  si,HCMP            ; SI = "045"
+        mov  bx,[tx]            ; BX = x
+        sub  bx,6               ; BX = x - 6: three letters, centred on it
+        mov  ax,27              ; AX = row 27, under the tick
+        call TLAB               ; lab(27, x-6, "045")
+        jmp  .cpn
+.cmin:  mov  bx,[tx]            ; THE SHORT TICK: BX = x
+        mov  ax,20              ; AX = row 20, its foot level with the long
+        mov  cx,1               ;  one's - CX = one wide
+        mov  dx,4               ; DX = four tall
+        call BAR                ; bar(x, 20, 1, 4)
+.cpn:   add  word [tmark],4       ; ctx += 4: the next tick
+        jmp  .cp
+.cpd:   mov  bx,160             ; THE CARET under the middle, pointing up
+        mov  ax,35              ;  at the heading: BX = 160, AX = row 35
+        mov  cx,1               ; CX = one
+        mov  dx,1               ; DX = one
+        call BAR                ; its point
+        mov  bx,159             ; BX = 159
+        mov  ax,36              ; AX = row 36
+        mov  cx,3               ; CX = three wide
+        mov  dx,1               ; DX = one - set AGAIN: BAR counts DX down
+                                ;  to nought, and nought is 65536 rows
+        call BAR                ; its foot
+
+        ; ================= THE SPEED: left ==============================
+        ; vel on a scale of 4 to a pixel, a tick every 25, a number every
+        ; 100. The window is 140 either side of the pointer.
+        mov  bx,SPX             ; THE SPINE: BX = x
+        mov  ax,TAPEY0          ; AX = row 48
+        mov  cx,1               ; CX = one wide
+        mov  dx,TAPEY1-TAPEY0+1 ; DX = seventy one tall
+        call BAR                ; bar(68, 48, 1, 71)
+        mov  ax,[vel]           ; THE FIRST MARK: AX = vel
+        sub  ax,140             ; AX = vel - 140: the bottom of the window
+        jns  .s0                ; nought or more?
+        xor  ax,ax              ;   no: the scale starts at nought
+.s0:    add  ax,24              ; AX += step - 1: so the divide rounds UP
+        xor  dx,dx              ; DX:AX = it (DIV divides thirty two bits)
+        mov  bx,25              ; BX = 25, the step
+        div  bx                 ; AX = how many whole steps
+        mul  bx                 ; AX = that many times 25: the first mark
+        mov  [tmark],ax           ; tmark = it
+.sp:    mov  ax,[tmark]           ; AX = the mark
+        sub  ax,[vel]           ; AX = mark - vel: how far from the pointer
+        cmp  ax,140             ; past the top of the window?
+        jg   .spd               ;   yes: the scale is done
+        mov  [tdist],ax          ; tdist = mark - vel, for the label test
+        sar  ax,1               ; AX = /2
+        sar  ax,1               ; AX = /4 - SAR, both ways round nought
+        mov  bx,TAPEMID         ; BX = 83
+        sub  bx,ax              ; BX = 83 - (mark - vel)/4: THE ROW
+        mov  [trow],bx           ; trow = it
+        cmp  bx,TAPEY0          ; above the window?
+        jl   .spn               ;   yes: not drawn
+        cmp  bx,TAPEY1          ; below it?
+        jg   .spn               ;   yes: not drawn
+        mov  ax,[tmark]           ; AX = the mark
+        xor  dx,dx              ; DX:AX = it
+        mov  bx,100             ; BX = 100
+        div  bx                 ; DX = mark mod 100
+        or   dx,dx              ; a hundred exactly?
+        jnz  .smin              ;   no: a short tick
+        mov  bx,SPX-6           ; THE LONG TICK: BX = 62, flush with the
+        mov  ax,[trow]           ;  spine - AX = the row
+        mov  cx,6               ; CX = six long
+        mov  dx,1               ; DX = one tall
+        call BAR                ; bar(62, y, 6, 1)
+        mov  ax,[tdist]          ; ...and its number, unless it is so near the
+        cmp  ax,25              ;  pointer that it would sit on the live
+        jg   .slb               ;  value: more than 25 away?
+        cmp  ax,-25
+        jge  .spn               ;   no: no number
+.slb:   mov  ax,[tmark]           ; AX = the mark
+        call NUMK               ; SI = "800", or "1.2K"
+        mov  bx,SPLAB           ; BX = column 38
+        mov  ax,[trow]           ; AX = the row
+        sub  ax,2               ; AX -= 2: the letters centred on the tick
+        call TLAB               ; lab(y-2, 38, s)
+        jmp  .spn
+.smin:  mov  bx,SPX-4           ; THE SHORT TICK: BX = 64
+        mov  ax,[trow]           ; AX = the row
+        mov  cx,4               ; CX = four long
+        mov  dx,1               ; DX = one tall
+        call BAR                ; bar(64, y, 4, 1)
+.spn:   add  word [tmark],25      ; the next mark
+        jmp  .sp
+.spd:   mov  ax,[vstl]          ; THE STALL, a red line on the scale - since
+        sub  ax,[vel]           ;  lesson 1D it MOVES: AX = vstl - vel
+        cmp  ax,140             ; in the window?
+        jg   .snc               ;   above it: not drawn
+        cmp  ax,-140
+        jl   .snc               ;   below it: not drawn
+        sar  ax,1               ; AX = /2
+        sar  ax,1               ; AX = /4
+        mov  bx,TAPEMID         ; BX = 83
+        sub  bx,ax              ; BX = its row
+        cmp  bx,TAPEY0          ; inside the tape?
+        jl   .snc
+        cmp  bx,TAPEY1
+        jg   .snc
+        mov  ax,bx              ; AX = the row
+        mov  bx,SPX-9           ; BX = 59: across the ticks
+        mov  cx,9               ; CX = nine long
+        mov  dx,1               ; DX = one tall
+        mov  byte [bcol],7      ; bcol = red
+        call BAR                ; bar(59, y, 9, 1)
+        mov  byte [bcol],HINK   ; bcol = the ink again
+.snc:   mov  bx,SPX-3           ; THE POINTER: from the scale, across the
+        mov  ax,TAPEMID         ;  spine - BX = 65, AX = row 83
+        mov  cx,10              ; CX = ten long
+        mov  dx,1               ; DX = one tall
+        call BAR                ; bar(65, 83, 10, 1)
+        mov  ax,[vel]           ; ...AND THE VALUE: AX = vel
+        call NUMSTR             ; SI = its digits
+        mov  bx,SPX+8           ; BX = 76, just past the pointer's end
+        mov  ax,TAPEMID-3       ; AX = row 80: centred on it
+        call TLAB               ; lab(80, 76, s)
+
+        ; ================= THE HEIGHT: right ============================
+        ; camy on a scale of 8 to a pixel, a tick every 50, a number every
+        ; 100. The window is 280 either side.
+        mov  bx,ALX             ; THE SPINE: BX = 252
+        mov  ax,TAPEY0          ; AX = row 48
+        mov  cx,1               ; CX = one wide
+        mov  dx,TAPEY1-TAPEY0+1 ; DX = seventy one tall
+        call BAR                ; bar(252, 48, 1, 71)
+        mov  ax,[camy]          ; THE FIRST MARK: AX = camy
+        sub  ax,280             ; AX = the bottom of the window
+        jns  .a0                ; nought or more?
+        xor  ax,ax              ;   no: from the sea
+.a0:    add  ax,49              ; AX += step - 1: round UP
+        xor  dx,dx              ; DX:AX = it
+        mov  bx,50              ; BX = 50
+        div  bx                 ; AX = whole steps
+        mul  bx                 ; AX = the first mark
+        mov  [tmark],ax           ; tmark = it
+.ap:    mov  ax,[tmark]           ; AX = the mark
+        sub  ax,[camy]          ; AX = mark - camy
+        cmp  ax,280             ; past the top?
+        jg   .apd               ;   yes: done
+        mov  [tdist],ax          ; tdist = it
+        mov  cl,3               ; CL = 3
+        sar  ax,cl              ; AX = /8
+        mov  bx,TAPEMID         ; BX = 83
+        sub  bx,ax              ; BX = the row
+        mov  [trow],bx           ; trow = it
+        cmp  bx,TAPEY0          ; in the window?
+        jl   .apn
+        cmp  bx,TAPEY1
+        jg   .apn
+        mov  ax,[tmark]           ; AX = the mark
+        xor  dx,dx              ; DX:AX = it
+        mov  bx,100             ; BX = 100
+        div  bx                 ; DX = mark mod 100
+        or   dx,dx              ; a hundred exactly?
+        jnz  .amin              ;   no: a short tick
+        mov  bx,ALX+1           ; THE LONG TICK, out from the spine: BX =
+        mov  ax,[trow]           ;  253, AX = the row
+        mov  cx,6               ; CX = six long
+        mov  dx,1               ; DX = one tall
+        call BAR                ; bar(253, y, 6, 1)
+        mov  ax,[tdist]          ; ...and its number, unless it is within
+        cmp  ax,70              ;  70 of the pointer
+        jg   .alb
+        cmp  ax,-70
+        jge  .apn
+.alb:   mov  ax,[tmark]           ; AX = the mark
+        call NUMK               ; SI = "900", or "1.5K"
+        mov  bx,ALLAB           ; BX = column 263
+        mov  ax,[trow]           ; AX = the row
+        sub  ax,2               ; centred on the tick
+        call TLAB               ; lab(y-2, 263, s)
+        jmp  .apn
+.amin:  mov  bx,ALX+1           ; THE SHORT TICK: BX = 253
+        mov  ax,[trow]           ; AX = the row
+        mov  cx,4               ; CX = four long
+        mov  dx,1               ; DX = one tall
+        call BAR                ; bar(253, y, 4, 1)
+.apn:   add  word [tmark],50      ; the next mark
+        jmp  .ap
+
+        ; THE FLOOR, red: the ground under you, plus the clearance - the
+        ; height at which PHYS calls CRASH. Not where the grass is: where
+        ; the flight ENDS
+.apd:   mov  si,(NR*TSIDE+NR)*2 ; SI = the node under the eye
+        mov  ax,[TWY+si]        ; AX = the ground's height there
+        add  ax,CAMYCL          ; AX += the clearance: the floor
+        call REDALT             ; a red line there, if it is on the tape
+        mov  ax,[camymax]       ; THE CEILING, red: AX = camymax
+        call REDALT             ; the same
+
+        mov  bx,ALX-12          ; THE POINTER: BX = 240, AX = row 83
+        mov  ax,TAPEMID
+        mov  cx,16              ; CX = sixteen long: across the spine
+        mov  dx,1               ; DX = one tall
+        call BAR                ; bar(240, 83, 16, 1)
+        mov  ax,[camy]          ; ...AND THE VALUE, RIGHT-ALIGNED to the
+        call NUMSTR             ;  pointer's start: SI = its digits
+        mov  bx,NBUF+5          ; BX = the end of the digits
+        sub  bx,si              ; BX = how many there are
+        shl  bx,1               ; BX = *2
+        shl  bx,1               ; BX = *4: four pixels a letter
+        neg  bx                 ; BX = -(width)
+        add  bx,ALX-14          ; BX = 238 - width: it ends at 237
+        mov  ax,TAPEMID-3       ; AX = row 80
+        call TLAB               ; lab(80, 238 - width, s)
+
+        ; ================= THE CLIMB: the IVV ===========================
+        ; A cyan tick on the height tape's spine, as far up or down from
+        ; the pointer as the aeroplane is climbing or sinking. wdy is the
+        ; last tick's climb in 256ths of a unit; SAR 7 makes it 2 pixels a
+        ; unit a tick, and 33 pixels either way is the end of the tape.
+        mov  ax,[wdy]           ; AX = the climb, 256ths a tick
+        mov  cl,7               ; CL = 7
+        sar  ax,cl              ; AX = /128: two pixels a unit
+        cmp  ax,33              ; past the top of the tape?
+        jle  .iv1
+        mov  ax,33              ;   pinned
+.iv1:   cmp  ax,-33             ; past the bottom?
+        jge  .iv2
+        mov  ax,-33             ;   pinned
+.iv2:   neg  ax                 ; AX = -climb: a climb goes UP the screen
+        add  ax,TAPEMID         ; AX = 83 - climb: the row
+        mov  bx,ALX+1           ; BX = 253, on the spine's outside
+        mov  cx,3               ; CX = three long
+        mov  dx,1               ; DX = one tall
+        mov  byte [bcol],HCYAN  ; bcol = cyan
+        call BAR                ; bar(253, y, 3, 1)
+        mov  byte [bcol],HINK   ; bcol = the ink again
+
+        ; ================= THE G ========================================
+        ; THIS MODEL HAS NO ACCELEROMETER - and no wing. So the G meter
+        ; reads what the pilot is DOING, the game's own formula:
+        ;
+        ;     G = 1 + q*vel/512
+        ;
+        ; q is the stick in eighths, -16..16, vel the speed. Hands off,
+        ; 1.0: one G, the weight of the pilot on the seat. A full pull at
+        ; cruise, 736: 16*736/512 = 23 tenths more, 3.3. A push goes below
+        ; one, and a hard one below nought - the pilot hangs in the straps.
+        ; In tenths, so it is an integer: G*10 = 10 + q*vel/512.
+        mov  ax,[nload]         ; AX = THE LOAD THE WING CARRIES, in tenths:
+                                ;  since lesson 1D the meter reads PHYS's
+                                ;  step 7, not the stick - honest upside
+                                ;  down, and short of the ask in a stall
+        mov  byte [GBUF],' '    ; a blank for the sign...
+        or   ax,ax              ; negative?
+        jns  .gpos              ;   no
+        neg  ax                 ;   yes: AX = its size...
+        mov  byte [GBUF],'-'    ;   ...and the sign is a minus
+.gpos:  cmp  ax,99              ; more than 9.9?
+        jle  .gclp
+        mov  ax,99              ;   the meter stops at 9.9
+.gclp:  mov  bl,10              ; BL = 10
+        div  bl                 ; AL = whole G, AH = the tenth
+        add  ax,'00'            ; both to digits in one ADD
+        mov  [GBUF+1],al        ; " 3"
+        mov  [GBUF+3],ah        ; " 3.3"  - and 'G' is already there
+        mov  si,GBUF            ; SI = " 3.3G"
+        mov  bx,SPX+4           ; BX = column 72, beside the spine's foot -
+        mov  ax,TAPEY1+4        ;  AX = row 122: under the tape, out of the
+        call TLAB               ;  ladder's way (lesson 1B had it at row 101)
+        ret
+
+; ---- REDALT: AX = a height -> a red line on the height tape, if it is in
+;      the window. The floor and the ceiling both come through here.
+REDALT: sub  ax,[camy]          ; AX = height - camy
+        cmp  ax,280             ; above the window?
+        jg   .no
+        cmp  ax,-280            ; below it?
+        jl   .no
+        mov  cl,3               ; CL = 3
+        sar  ax,cl              ; AX = /8
+        mov  bx,TAPEMID         ; BX = 83
+        sub  bx,ax              ; BX = the row
+        cmp  bx,TAPEY0          ; inside the tape?
+        jl   .no
+        cmp  bx,TAPEY1
+        jg   .no
+        mov  ax,bx              ; AX = the row
+        mov  bx,ALX+1           ; BX = 253
+        mov  cx,9               ; CX = nine long, longer than any tick
+        mov  dx,1               ; DX = one tall
+        mov  byte [bcol],7      ; bcol = red
+        call BAR                ; bar(253, y, 9, 1)
+        mov  byte [bcol],HINK   ; bcol = the ink again
+.no:    ret
+
+; ============================================================================
+;  MIDHUD - THE MIDDLE OF THE DISPLAY: the gunsight, the horizon line and
+;  the pitch ladder. OWL FLY III's CROSS (GAMES\OWLFLY3\SRC\RASTER.INC, line
+;  15) and LADR (HUD.INC, line 60), on the full screen, with one sum put
+;  right - see THE LADDER below.
+;
+;      the gunsight   at the middle of the screen, (160,100): where the NOSE
+;                     points. A bar that stays level with the horizon, and a
+;                     tick that points at the sky - upside down too
+;      the horizon    a long line where the horizon IS, with a gap for the
+;                     gunsight. The edge of the island is not the horizon:
+;                     it is twenty four squares away and below the eye
+;      the ladder     a rung every ten degrees, solid above the horizon,
+;                     dashed below, with its number. ONLY when the horizon
+;                     has left the middle of the screen - the game's rule,
+;                     learned in NEWTON: while the real horizon is there to
+;                     see, the rungs stay out of the way
+;
+;  EVERYTHING HERE IS DRAWN IN THE HORIZON'S OWN FRAME and turned onto the
+;  screen by the bank, the same turn APPLYROLL gives every corner of the
+;  world: a point t along the horizon's direction and f across it lands on
+;
+;      x = 160 + (t*rcos - f*rsin) / 256
+;      y = 100 + (t*rsin + f*rcos) / 256
+;
+;  f grows DOWN the screen, so the sky is negative f.
+;
+;  THE LADDER IS CONFORMAL: drawn with the world's own lens, FOCAL, so a
+;  rung marked 30 lies over the sky thirty degrees up. A rung at angle a,
+;  seen from a nose at pitch p, is p - a below the nose, and the lens puts
+;  that at
+;
+;      f = FOCAL * tan(p - a)
+;
+;  THE GAME DOES IT DIFFERENTLY, and the difference is worth a minute. LADR
+;  measures every rung from the HORIZON: f = FOCAL*tan(p) - FOCAL*tan(a).
+;  Level, the two agree. But the rungs only show when the nose is up or
+;  down a long way, and there they do not: nose up 60, the 50 rung is ten
+;  degrees under it - FOCAL*tan(10) = 39 pixels. The game's sum says
+;  220*(1.73 - 1.19) = 119. A tangent of a difference is not a difference
+;  of tangents. Here the sum is the honest one.
+;
+;  A RUNG IS WALKED, NOT MULTIPLIED. Its centre is two products; after that
+;  each pixel is one step along (rcos, rsin), and the step is in 256ths -
+;  lesson 17's byte of fraction again, kept as an 8.8 number: add, and SAR
+;  by 8 to plot. Two ADDs a pixel instead of four IMULs.
+; ============================================================================
+LADK    = 7                   ; a rung every 7 steps of 256: 9.84 degrees,
+                              ;  near enough the 10 its number says
+LADHALF = 60                  ; a rung is 120 pixels long...
+LADGAP  = 16                  ; ...with 32 of gap in the middle
+HORHALF = 56                  ; the horizon line is 112 long, same gap -
+                              ;  longer, and it ran into the tapes and the G
+LADSHOW = 92                  ; the rungs light when the horizon is this far
+                              ;  from the middle - the game's number
+GLX0    = 84                  ; THE GLASS: the ladder and the horizon line are
+GLX1    = 236                 ;  drawn only between the tapes and under the
+GLY0    = 40                  ;  compass. Banked, a rung reaches right across
+GLY1    = 172                 ;  the screen, and it ran over every instrument
+
+MIDHUD: mov  byte [bcol],HINK   ; bcol = the ink
+
+        ; ================= THE GUNSIGHT =================================
+        ; The bar: from 4 to 14 pixels out each side, along the horizon's
+        ; direction - so it stays level with the horizon while the world
+        ; banks round it. The tick: 6 to 10 pixels towards the sky.
+        mov  word [rlen],14     ; RUNG with f = 0: the bar through the nose,
+        mov  word [rgap],4      ;  14 long each side, the middle 4 empty
+        mov  byte [rdash],0
+        xor  bx,bx              ; BX = f = 0: through the middle
+        call RUNG               ; rung(0)
+        mov  cx,6               ; THE SKY TICK: from 6...
+.tk:    push cx
+        xor  ax,ax              ; AX = t = 0
+        mov  bx,cx              ; BX = f = 6..10...
+        neg  bx                 ; ...negative: towards the sky
+        call HPT                ; AX, DX = where (0, -s) lands
+        call PLOT               ; plot it
+        pop  cx
+        inc  cx                 ; ...to 10
+        cmp  cx,10
+        jbe  .tk
+        call FPM                ; THE FLIGHT PATH MARKER: alpha below it
+
+        ; ================= THE HORIZON ==================================
+        ; Where is it? The nose is pitch above it, so it is pitch BELOW
+        ; the nose: f0 = FOCAL*tan(pitch). Nose near the vertical and the
+        ; tangent runs away - then the horizon is off the screen anyway.
+        mov  ax,[pitch]         ; AX = pitch
+        call FTAN               ; AX = FOCAL*tan(pitch), or CF = 1: far off
+        jc   .hoff              ;   off: no line, and the ladder is on
+        mov  [f0],ax            ; f0 = it
+        mov  bx,ax              ; BX = f0
+        mov  word [rlen],HORHALF ; long
+        mov  word [rgap],LADGAP  ; with the gunsight's gap
+        mov  byte [rdash],0     ; solid
+        call RUNG               ; the horizon line
+        mov  ax,[f0]            ; IS THE HORIZON NEAR THE MIDDLE?
+        or   ax,ax
+        jns  .hp
+        neg  ax                 ; AX = |f0|
+.hp:    cmp  ax,LADSHOW         ; within 92 pixels?
+        jle  .done              ;   yes: you can see it - no ladder
+.hoff:
+
+        ; ================= THE LADDER ===================================
+        ; The rung nearest the nose is k0 = pitch/7, rounded; draw two
+        ; either side of it, and never the horizon's own (k = 0) or past
+        ; the vertical (|k| > 9).
+        mov  ax,[pitch]         ; AX = pitch
+        add  ax,64+3            ; +3 to round, +64 so IDIV meets no sign
+        mov  bl,LADK            ; BL = 7
+        div  bl                 ; AL = (pitch + 67) / 7
+        xor  ah,ah              ; AX = it
+        sub  ax,9+2             ; AX = k0 - 2   (64/7 = 9 put back, and 2)
+        mov  [lk],ax            ; lk = the first rung
+        add  ax,4
+        mov  [lke],ax           ; lke = the last
+.rg:    mov  ax,[lk]            ; AX = k
+        or   ax,ax              ; the horizon's own?
+        jz   .rn                ;   yes: the line above drew it
+        cmp  ax,-9              ; past the vertical?
+        jl   .rn
+        cmp  ax,9
+        jg   .rn
+        mov  bx,LADK            ; BX = 7
+        imul bx                 ; AX = a = 7k: the rung's angle
+        mov  bx,[pitch]         ; BX = pitch
+        sub  bx,ax              ; BX = pitch - a: how far the rung is below
+        mov  ax,bx              ;  the nose - AX = it
+        call FTAN               ; AX = FOCAL*tan(pitch - a)
+        jc   .rn                ;   (never, two rungs from the nose)
+        mov  bx,ax              ; BX = f
+        mov  word [rlen],LADHALF ; 60 each side
+        mov  word [rgap],LADGAP  ; the gunsight's gap
+        mov  byte [rdash],0     ; above the horizon: solid...
+        cmp  word [lk],0
+        jg   .sol
+        mov  byte [rdash],1     ; ...below it: dashed
+.sol:   push bx                 ; keep f
+        call RUNG               ; the rung
+        pop  bx                 ; BX = f
+        ; ITS NUMBER, upright, at the rung's left end ON THE SCREEN: k*10,
+        ; with a minus below the horizon. The letters do not turn - neither
+        ; did the era's HUDs, and a 4x6 font cannot.
+        mov  ax,-LADHALF-16     ; AX = t: sixteen past the left end...
+        cmp  word [rcos],0      ; ...unless the aeroplane is upside down: then
+        jge  .lt                ;  that end is on the RIGHT of the screen, off
+        neg  ax                 ;  the glass, and the number goes at the other
+.lt:
+        call HPT                ; AX, DX = where that is
+        sub  dx,2               ; centred on the rung
+        mov  [tlx],ax           ; keep x
+        mov  [tly],dx           ;  and y
+        mov  ax,[lk]            ; AX = k
+        mov  byte [LBUF],' '    ; a blank for the sign...
+        or   ax,ax
+        jns  .lp
+        neg  ax                 ; ...AX = |k|
+        mov  byte [LBUF],'-'    ; ...and a minus below the horizon
+.lp:    add  al,'0'             ; AL = the digit: 1..9
+        mov  [LBUF+1],al        ; "-3", and LBUF+2 is already '0': "-30"
+        mov  ax,[tlx]           ; on the glass?
+        cmp  ax,GLX0
+        jl   .rn
+        cmp  ax,GLX1-12
+        jg   .rn
+        mov  ax,[tly]
+        cmp  ax,GLY0
+        jl   .rn
+        cmp  ax,GLY1-6
+        jg   .rn
+        mov  si,LBUF            ; SI = "-30"
+        mov  ax,[tly]           ; AX = y
+        mov  bx,[tlx]           ; BX = x
+        call TLAB               ; lab(y, x, s) - the ink pass only
+.rn:    inc  word [lk]          ; the next rung
+        mov  ax,[lk]
+        cmp  ax,[lke]
+        jle  .rg
+.done:  ret
+
+; ---- FTAN: AX = an angle (256 a circle) -> AX = FOCAL*tan(it), CF = 0 ------
+;  ...or CF = 1 when the angle is so near the vertical that the tangent
+;  would run off any screen: the cosine under 48, about 79 degrees.
+FTAN:   push ax                 ; keep the angle
+        add  ax,64              ; the cosine is the sine a quarter on
+        call SINQ               ; AX = cos*256
+        mov  cx,ax              ; CX = it
+        pop  ax                 ; AX = the angle
+        cmp  cx,48              ; near the vertical?
+        jl   .far               ;   yes
+        push cx
+        call SINQ               ; AX = sin*256
+        pop  cx
+        mov  bx,FOCAL           ; BX = 220
+        imul bx                 ; DX:AX = 220*sin*256
+        idiv cx                 ; AX = 220*sin/cos: FOCAL*tan
+        clc                     ; CF = 0: here it is
+        ret
+.far:   stc                     ; CF = 1: off the screen
+        ret
+
+; ---- HPT: AX = t, BX = f, in the horizon's frame -> AX = x, DX = y ---------
+;      x = 160 + (t*rcos - f*rsin)/256,  y = 100 + (t*rsin + f*rcos)/256
+;  Each product is thirty two bits - f runs past a thousand when the horizon
+;  is far below - and each /256 is its middle two bytes, ROTXZ's trick.
+HPT:    push si
+        push di
+        mov  si,ax              ; SI = t
+        imul word [rcos]        ; DX:AX = t*rcos
+        mov  al,ah              ; AX = t*rcos/256: the middle bytes
+        mov  ah,dl
+        mov  di,ax              ; DI = it
+        mov  ax,bx              ; AX = f
+        imul word [rsin]        ; DX:AX = f*rsin
+        mov  al,ah              ; AX = f*rsin/256
+        mov  ah,dl
+        sub  di,ax              ; DI = (t*rcos - f*rsin)/256
+        add  di,160             ; DI = x
+        mov  ax,si              ; AX = t
+        imul word [rsin]        ; DX:AX = t*rsin
+        mov  al,ah              ; AX = t*rsin/256
+        mov  ah,dl
+        mov  si,ax              ; SI = it
+        mov  ax,bx              ; AX = f
+        imul word [rcos]        ; DX:AX = f*rcos
+        mov  al,ah              ; AX = f*rcos/256
+        mov  ah,dl
+        add  ax,si              ; AX = (t*rsin + f*rcos)/256
+        add  ax,[horiz]         ; AX = 100 + it
+        mov  dx,ax              ; DX = y
+        mov  ax,di              ; AX = x
+        pop  di
+        pop  si
+        ret
+
+; ---- RUNG: BX = f -> a line across the screen, f below the nose ------------
+;  [rlen] pixels each side, the middle [rgap] left empty, dashed if [rdash].
+;  The centre is HPT(0, f); from there the line is WALKED: an 8.8 offset
+;  starting at -rlen*(rcos, rsin) and growing by (rcos, rsin) a pixel.
+;  In C:
+;
+;      void rung(int f)
+;      {
+;          int cx, cy;  hpt(0, f, &cx, &cy);
+;          int x8 = -rlen * rcos, y8 = -rlen * rsin;     /* 8.8 offsets */
+;          for (int t = -rlen; t < rlen; t++, x8 += rcos, y8 += rsin) {
+;              if (abs(t) < rgap) continue;              /* the gap     */
+;              if (rdash && (t & 1)) continue;           /* dashed      */
+;              plot(cx + (x8 >> 8), cy + (y8 >> 8));
+;          }
+;      }
+RUNG:   xor  ax,ax              ; AX = t = 0
+        call HPT                ; AX, DX = the centre
+        mov  [lnx],ax           ; lnx = its x
+        mov  [lny],dx           ; lny = its y
+        cmp  dx,-60             ; the whole line far above the screen?
+        jl   .x
+        cmp  dx,260             ; ...or below it?
+        jg   .x
+        cmp  ax,-120            ; ...or far off to the left?
+        jl   .x
+        cmp  ax,440             ; ...or to the right?
+        jg   .x
+        mov  ax,[rlen]          ; AX = rlen
+        neg  ax                 ; AX = -rlen: t, at the start
+        mov  [lnt],ax            ; lnt = it
+        imul word [rcos]        ; AX = -rlen*rcos: the 8.8 offset, x
+        mov  [rx8],ax           ;  (|rlen| <= 100: at most 25600, a word)
+        mov  ax,[lnt]
+        imul word [rsin]        ; AX = -rlen*rsin: y
+        mov  [ry8],ax
+.p:     mov  ax,[lnt]            ; AX = t
+        or   ax,ax
+        jns  .a
+        neg  ax                 ; AX = |t|
+.a:     cmp  ax,[rgap]          ; in the gap?
+        jl   .s                 ;   yes: nothing
+        cmp  byte [rdash],0     ; dashed?
+        je   .d                 ;   no
+        test byte [lnt],1        ; an odd t?
+        jnz  .s                 ;   yes: a hole in the dash
+.d:     mov  ax,[rx8]           ; AX = the x offset, 8.8
+        mov  cl,8               ; CL = 8
+        sar  ax,cl              ; AX = its whole pixels
+        add  ax,[lnx]           ; AX = x
+        mov  dx,[ry8]           ; DX = the y offset
+        sar  dx,cl              ; whole pixels
+        add  dx,[lny]           ; DX = y
+        cmp  ax,GLX0            ; on the glass?
+        jl   .s                 ;   no: left of it
+        cmp  ax,GLX1
+        jg   .s                 ;   right of it
+        cmp  dx,GLY0
+        jl   .s                 ;   over the compass
+        cmp  dx,GLY1
+        jg   .s                 ;   under the glass
+        call PLOT               ; plot(x, y)
+.s:     mov  ax,[rcos]          ; one pixel on: x8 += rcos...
+        add  [rx8],ax
+        mov  ax,[rsin]          ; ...y8 += rsin
+        add  [ry8],ax
+        inc  word [lnt]          ; t++
+        mov  ax,[lnt]
+        cmp  ax,[rlen]          ; t < rlen?
+        jl   .p
+.x:     ret
+
+; ---- PLOT: AX = x, DX = y -> one pixel of [bcol], or on the ring pass its
+;      ring: the nine pixels round it in grey. Off the screen: nothing.
+;      Keeps every register.
+PLOT:   cmp  ax,1               ; inside, with a pixel to spare for the ring?
+        jl   .no
+        cmp  ax,318
+        jg   .no
+        cmp  dx,1
+        jl   .no
+        cmp  dx,198
+        jg   .no
+        push ax
+        push cx
+        push dx
+        push di
+        push es
+        mov  di,ax              ; DI = x
+        mov  ax,dx              ; AX = y
+        mov  cx,320             ; CX = 320
+        mul  cx                 ; AX = y*320
+        add  di,ax              ; DI = y*320 + x
+        mov  ax,[bufseg]
+        mov  es,ax              ; ES = the back buffer
+        cmp  byte [hpass],0     ; the ring pass?
+        jne  .ink
+        mov  al,OCOL            ;   yes: AL = grey, all round
+        mov  [es:di-321],al
+        mov  [es:di-320],al
+        mov  [es:di-319],al
+        mov  [es:di-1],al
+        mov  [es:di],al
+        mov  [es:di+1],al
+        mov  [es:di+319],al
+        mov  [es:di+320],al
+        mov  [es:di+321],al
+        jmp  .out
+.ink:   mov  al,[bcol]          ;   no: AL = the ink
+        mov  [es:di],al         ; one pixel
+.out:   pop  es
+        pop  di
+        pop  dx
+        pop  cx
+        pop  ax
+.no:    ret
+
+
+; ============================================================================
+;  NOSEIN / NOSEOUT - the picture is seen from the NOSE, the physics flies
+;  the PATH. Since lesson 1D pitch and heading are where the aeroplane is
+;  going; the eye looks alpha further along the aeroplane's own vertical:
+;
+;      nose pitch   = pitch   + alpha * cos(roll)
+;      nose heading = heading + alpha * sin(roll)
+;
+;  (alpha in eighths, so /8 for steps.) For one frame - SETTRIG, the ground,
+;  the houses, the HUD - pitch, heading and roll are swapped for the nose's,
+;  and swapped back before the next tick of PHYS. Every routine that draws
+;  stays as it was, and every one of them now looks along the nose. Past
+;  the vertical the nose's angles flip as the path's do (step 7).
+;  In C:
+;
+;      void nosein(void)
+;      {
+;          ppath = pitch;  hpath = heading;  rpath = roll;
+;          pitch   += alpha * cos(roll) / 256 / 8;
+;          heading += alpha * sin(roll) / 256 / 8;
+;          if (pitch > 64)  { pitch = 128 - pitch;  heading += 128;  roll += 128; }
+;          if (pitch < -64) { pitch = -128 - pitch; heading += 128;  roll += 128; }
+;      }
+; ============================================================================
+NOSEIN: mov  ax,[pitch]         ; keep the path
+        mov  [ppath],ax
+        mov  ax,[heading]
+        mov  [hpath],ax
+        mov  ax,[roll]
+        mov  [rpath],ax
+        mov  ax,[roll]          ; AX = roll
+        add  ax,64              ; a quarter on: the cosine
+        call SINQ               ; AX = cos(roll)*256
+        imul word [alpha]       ; DX:AX = alpha*cos*256
+        mov  al,ah              ; AX = alpha*cos(roll): the middle bytes,
+        mov  ah,dl              ;  in eighths of a step
+        mov  si,noffp           ; SI = the pitch offset's step, kept
+        call NSTEP              ; AX = whole steps, steadied
+        add  [pitch],ax         ; pitch += them: the nose is above the path
+        mov  ax,[roll]          ; AX = roll
+        call SINQ               ; AX = sin(roll)*256
+        imul word [alpha]       ; DX:AX = alpha*sin*256
+        mov  al,ah              ; AX = alpha*sin(roll), eighths
+        mov  ah,dl
+        mov  si,noffh           ; SI = the heading offset's step, kept
+        call NSTEP              ; AX = whole steps, steadied
+        add  ax,[heading]       ; AX = heading + them
+        and  ax,255
+        mov  [heading],ax       ; heading = the nose's
+        mov  ax,[pitch]         ; past the vertical?
+        cmp  ax,64
+        jle  .n1
+        mov  bx,128             ;   pitch = 128 - pitch
+        sub  bx,ax
+        mov  [pitch],bx
+        jmp  .nf
+.n1:    cmp  ax,-64
+        jge  .nx
+        mov  bx,-128            ;   pitch = -128 - pitch
+        sub  bx,ax
+        mov  [pitch],bx
+.nf:    add  word [heading],128 ; and the other two half a circle
+        and  word [heading],255
+        add  word [roll],128
+        and  word [roll],255
+.nx:    ret
+
+; ---- NSTEP: AX = an offset in eighths of a step, SI -> the whole steps it
+;      was last drawn at -> AX = the whole steps to draw it at now.
+;  THE CAMERA TURNS IN WHOLE STEPS - 256 to the circle, 1.4 degrees, five
+;  pixels on the screen - and the nose's offset is a fraction of one. The
+;  first build cut it with SAR 3, and two things shook the picture: SAR
+;  rounds DOWN, so a third of a step to the left was a whole step and a
+;  third to the right was none; and alpha moves a little every tick, so the
+;  offset sat on a threshold and flicked across it - with a touch of bank,
+;  the island jumped left and right five pixels at a time (the pilot saw
+;  it, 2026-10-16). Now it ROUNDS, and it only moves when the true offset
+;  has gone three quarters of a step from where it is drawn: a little
+;  stickiness, and the flicker is gone. A thermostat does the same - it is
+;  called hysteresis.
+;  In C:
+;
+;      int nstep(int e, int *kept)              /* e in eighths */
+;      {
+;          if (abs(e - *kept * 8) > 6) *kept = (e + 4) >> 3;
+;          return *kept;
+;      }
+NSTEP:  mov  bx,[si]            ; BX = the steps it is drawn at
+        mov  cl,3               ; CL = 3
+        shl  bx,cl              ; BX = them in eighths
+        mov  dx,ax              ; DX = e
+        sub  dx,bx              ; DX = e - drawn: how far it has gone
+        jns  .p
+        neg  dx                 ; DX = |it|
+.p:     cmp  dx,6               ; more than three quarters of a step?
+        jle  .k                 ;   no: stay where it is
+        add  ax,4               ;   yes: round - a half step on...
+        sar  ax,cl              ;   ...and /8: the nearest whole step
+        mov  [si],ax            ;   kept for next time
+.k:     mov  ax,[si]            ; AX = the steps to draw it at
+        ret
+
+NOSEOUT:
+        mov  ax,[ppath]         ; the path back, for PHYS
+        mov  [pitch],ax
+        mov  ax,[hpath]
+        mov  [heading],ax
+        mov  ax,[rpath]
+        mov  [roll],ax
+        ret
+
+; ---- CLAMP64: AX = AX, no further than 64 either side of nought -----------
+CLAMP64:
+        cmp  ax,64
+        jle  .c1
+        mov  ax,64
+.c1:    cmp  ax,-64
+        jge  .c2
+        mov  ax,-64
+.c2:    ret
+
+; ---- FPM: THE FLIGHT PATH MARKER - where the aeroplane is GOING ----------
+;  The gunsight is the nose; the path is alpha below it, along the
+;  aeroplane's own vertical - and the screen IS the aeroplane's frame, so
+;  that is straight down the screen, whatever the bank. For the small
+;  angles a wing flies at the tangent is the angle itself:
+;
+;      y = 100 + FOCAL * alpha        alpha in radians
+;        = 100 + alpha * 173 / 256    alpha in eighths of a step
+;
+;  (220 * 2pi / 2048 = 0.675 = 173/256.) Thirty degrees is 10% short of the
+;  tangent - and the gap from the gunsight, read on lesson 1C's ladder, IS
+;  the angle of attack. A circle, two wings and a fin.
+FPM:    mov  ax,[alpha]         ; AX = alpha, eighths of a step
+        mov  bx,173             ; BX = 173
+        imul bx                 ; DX:AX = alpha*173
+        mov  al,ah              ; AX = /256: pixels below the gunsight
+        mov  ah,dl
+        add  ax,[horiz]         ; AX = 100 + it: the marker's row
+        cmp  ax,GLY0            ; on the glass?
+        jl   .x
+        cmp  ax,GLY1-8
+        jg   .x
+        mov  [fpy],ax           ; fpy = its row
+        mov  si,FPMPTS          ; SI = the marker's points, dx,dy pairs
+.p:     mov  al,[si]            ; AL = dx
+        cmp  al,80h             ; the end?
+        je   .x
+        cbw
+        add  ax,160             ; AX = 160 + dx
+        mov  dl,[si+1]          ; DL = dy
+        push ax
+        mov  al,dl
+        cbw
+        mov  dx,ax              ; DX = dy
+        pop  ax
+        add  dx,[fpy]           ; DX = fpy + dy
+        call PLOT               ; plot(x, y)
+        add  si,2               ; the next point
+        jmp  .p
+.x:     ret
+
+FPMPTS  db  3,0, -3,0, 0,3, 0,-3, 2,2, 2,-2, -2,2, -2,-2   ; the circle
+        db  4,0, 5,0, 6,0, 7,0, -4,0, -5,0, -6,0, -7,0      ; the wings
+        db  0,-4, 0,-5, 0,-6                                ; the fin
+        db  80h                                             ; the end
+
+; ---- BAR: BX = x, AX = y, CX = width, DX = height, [bcol] = the colour ----
+;  A filled rectangle - every tick, spine and pointer on the HUD is one.
+;  On the ring pass ([hpass] = 0) it grows a pixel all round and is painted
+;  in the ring's grey instead: lesson 1A's ring, without the masks, because
+;  a rectangle grown by one is already its own ring.
+;  IT USES UP CX AND DX: DX comes back nought. Set both before every call -
+;  a second BAR that trusted DX drew 65536 rows, and they wrapped round the
+;  buffer as stripes down the whole screen.
+;  In C:
+;
+;      void bar(int x, int y, int w, int h)
+;      {
+;          if (hpass == 0) { x--; y--; w += 2; h += 2; }
+;          unsigned char c = hpass ? bcol : OCOL;
+;          for (int r = 0; r < h; r++)
+;              memset(buf + (y + r)*320 + x, c, w);
+;      }
+BAR:    cmp  byte [hpass],0     ; the ring pass?
+        jne  .go                ;   no: the bar as it is
+        dec  bx                 ;   yes: x - 1...
+        dec  ax                 ;   ...y - 1...
+        add  cx,2               ;   ...two wider...
+        add  dx,2               ;   ...two taller
+.go:    push es
+        push dx                 ; keep h: MUL writes DX
+        mov  di,320             ; DI = 320
+        mul  di                 ; AX = y*320 (DX = 0: y is under 200)
+        add  ax,bx              ; AX = y*320 + x
+        mov  di,ax              ; DI = the top-left corner
+        pop  dx                 ; DX = h
+        mov  ax,[bufseg]        ; AX = bufseg
+        mov  es,ax              ; ES = the back buffer
+        mov  al,[bcol]          ; AL = the ink...
+        cmp  byte [hpass],0     ; ...unless this is the ring pass
+        jne  .row
+        mov  al,OCOL            ; AL = the ring's grey
+.row:   push cx                 ; keep w
+        push di                 ; keep the row's start
+        rep  stosb              ; w pixels of AL
+        pop  di                 ; DI = the row's start
+        pop  cx                 ; CX = w
+        add  di,320             ; DI = the next row's start
+        dec  dx                 ; one row fewer
+        jnz  .row
+        pop  es
+        ret
+
+; ---- TLAB: AX = y, BX = x, SI = a string: TXT, on the ink pass only ------
+;  The letters carry their own ring (TXT46O), so the ring pass leaves them.
+TLAB:   cmp  byte [hpass],0     ; the ring pass?
+        je   .no                ;   yes: nothing
+        call TXT                ;   no: txt(y, x, s)
+.no:    ret
+
+; ---- NUMSTR: AX = n -> SI = its digits, no blanks in front, in NBUF ------
+;  NUMOUT's loop without the places: DIV by ten until nothing is left, the
+;  digits written right to left, and SI ends up on the first of them.
+NUMSTR: mov  di,NBUF+5          ; DI = just past the last digit (the 0 ends it)
+        mov  bx,10              ; BX = 10
+.d:     xor  dx,dx              ; DX:AX = n
+        div  bx                 ; AX = n/10, DX = the last digit
+        add  dl,'0'             ; DL = its character
+        dec  di                 ; one place left
+        mov  [di],dl            ; the digit there
+        or   ax,ax              ; anything left?
+        jnz  .d                 ;   yes: the next digit
+        mov  si,di              ; SI = the first digit
+        ret
+
+; ---- NUMK: AX = n -> SI = "n", or past 999 "1.4K" / "2K" -----------------
+;  The scale numbers wear it, the game's FNUMK: four digits will not fit
+;  beside a tick. The live values keep all their digits.
+NUMK:   cmp  ax,1000            ; four digits?
+        jb   NUMSTR             ;   no: as it is
+        xor  dx,dx              ; DX:AX = n
+        mov  bx,100             ; BX = 100
+        div  bx                 ; AX = n/100: hundreds, 10..99
+        mov  bl,10              ; BL = 10
+        div  bl                 ; AL = thousands, AH = the odd hundred
+        mov  si,NBUF            ; SI = the buffer
+        add  al,'0'             ; AL = the thousands' digit
+        mov  [si],al            ; "1"
+        mov  di,NBUF+1          ; DI = the next place
+        or   ah,ah              ; an odd hundred?
+        jz   .k                 ;   no: "2K"
+        mov  byte [di],'.'      ;   yes: "1."
+        add  ah,'0'             ; AH = its digit
+        mov  [di+1],ah          ; "1.4"
+        add  di,2               ; two places on
+.k:     mov  word [di],'K'      ; "K", and the 0 after it (a word store)
+        ret
+
+
+; ---- NUMOUT: AX = a number, DI = where its LAST digit goes, CX = places ----
+;  DIV by ten hands the digits over last first - the remainder is the units,
+;  the quotient is what is left - so they are written right to left, and
+;  the places in front of the number get [nfill]: a blank, or a nought. A
+;  number with more digits than places keeps only the last ones; every
+;  number this HUD shows fits.
+;
+;  DIV IS 16 BITS INTO 32. `div bx` divides DX:AX, not AX - so DX must be
+;  nought first, or the leftover of the last digit is read as the top half
+;  of the number and the quotient overflows: a divide fault, which lesson
+;  16's TRAP0 would catch and count as a red pixel on the top row.
+;  In C:
+;
+;      void numout(unsigned n, char *last, int places)
+;      {
+;          do { *last-- = '0' + n % 10;  n /= 10; } while (--places && n);
+;          while (places--) *last-- = nfill;
+;      }
+NUMOUT: mov  bx,10              ; BX = 10
+.d:     xor  dx,dx              ; DX:AX = n - DX nought, see above
+        div  bx                 ; AX = n/10, DX = n%10: the last digit
+        add  dl,'0'             ; DL = its character
+        mov  [di],dl            ; *di = DL
+        dec  di                 ; di--: one place to the left
+        dec  cx                 ; places--
+        jz   .x                 ; none left: done
+        or   ax,ax              ; is anything left of the number?
+        jnz  .d                 ;   yes: the next digit
+        mov  al,[nfill]         ; AL = the filler
+.f:     mov  [di],al            ; *di = AL
+        dec  di                 ; di--
+        loop .f                 ; for every place still empty
+.x:     ret                     ; return
+
+; ---- SNUMOUT: the same, with a sign in front --------------------------
+;  AX = a SIGNED number, DI and CX as for NUMOUT. The sign goes in the place
+;  just left of the digits, and the digits are the number's size: NEG makes
+;  a negative positive, and NUMOUT never knows there was a sign.
+;  In C:
+;
+;      void snumout(int n, char *last, int places)
+;      {
+;          last[-places] = n < 0 ? '-' : '+';
+;          numout(n < 0 ? -n : n, last, places);     /* blanks in front */
+;      }
+SNUMOUT:
+        mov  bl,'+'             ; BL = the sign, + until it is not
+        or   ax,ax              ; negative?
+        jns  .pos               ;   no
+        neg  ax                 ;   yes: AX = -AX, its size
+        mov  bl,'-'             ;   and the sign is -
+.pos:   push di                 ; keep DI: NUMOUT wants the last place
+        sub  di,cx              ; DI = the place just left of the digits
+        mov  [di],bl            ; the sign there
+        pop  di                 ; DI = the last place again
+        mov  byte [nfill],' '   ; blanks between the sign and the digits
+        jmp  NUMOUT             ; numout() - its RET is ours
+
+; ============================================================================
+;  TXT - AX = y, BX = x, SI = the string, [tcol] = the colour. THREE WAYS,
+;  and T switches between them in flight (tmode):
+;
+;      0  TXTROM   the PC's own 8x8 letters, out of the BIOS ROM - lessons
+;                  17 to 19
+;      1  TXT46    the game's own 4x6 letters, out of FONT46 below - half
+;                  the width, three quarters of the height
+;      2  TXT46O   the same letters with a dark ring round them, made of
+;                  bit masks, so they read on any background
+; ============================================================================
+TXT:    cmp  byte [tmode],1     ; which letters?
+        jb   TXTROM             ;   0: the ROM's
+        je   TXT46              ;   1: ours, plain
+        jmp  TXT46O             ;   2: ours, ringed
+
+; ---- GLYPH: AL = a character -> SI = its six rows in FONT46, CF = 0 --------
+;  ...or CF = 1 for a character the font has no picture for (a space, or
+;  anything it does not know): the caller just moves on four pixels.
+;
+;  THE ORDER IS THE GAME'S: 0-9 are glyphs 0 to 9, A-Z are 10 to 35, then
+;  + - : % . and this lesson's own three, ( ) and *. Six bytes a glyph, so
+;  glyph i is at FONT46 + i*6 - and i*6 is i*4 + i*2: two shifts and an
+;  ADD, no MUL.
+;
+;  LOWER CASE COSTS ONE AND. ASCII puts every small letter exactly 32 above
+;  its capital: 'a' is 61h, 'A' is 41h, and 32 is bit 5. AND AL,0DFh -
+;  1101 1111b, every bit but bit 5 - turns 'a' into 'A' and leaves 'A'
+;  alone. The people who laid out ASCII did that on purpose.
+GLYPH:  cmp  al,'a'             ; a small letter?
+        jb   .up                ;   no
+        cmp  al,'z'
+        ja   .up                ;   no
+        and  al,0DFh            ;   yes: AL &= 1101 1111b - bit 5 off, a capital
+.up:    cmp  al,'0'             ; a digit?
+        jb   .pun               ;   below '0': punctuation, or nothing
+        cmp  al,'9'
+        ja   .alp               ;   above '9': a letter, or nothing
+        sub  al,'0'             ; AL = 0..9
+        jmp  .got
+.alp:   cmp  al,'A'             ; a capital?
+        jb   .pun
+        cmp  al,'Z'
+        ja   .none              ;   past 'Z': no picture
+        sub  al,'A'-10          ; AL = 10..35
+        jmp  .got
+.pun:   mov  si,PUNCT           ; SI = the punctuation this font has
+        mov  ah,36              ; AH = the glyph the first of them is
+.pl:    cmp  byte [si],0        ; the end of the list?
+        je   .none              ;   yes: no picture
+        cmp  al,[si]            ; this one?
+        je   .pf                ;   yes
+        inc  si                 ; the next one
+        inc  ah                 ;  and the next glyph
+        jmp  .pl
+.pf:    mov  al,ah              ; AL = its glyph
+.got:   xor  ah,ah              ; AX = i
+        mov  si,ax              ; SI = i
+        shl  si,1               ; SI = i*2
+        shl  ax,1               ; AX = i*2
+        shl  ax,1               ; AX = i*4
+        add  si,ax              ; SI = i*6
+        add  si,FONT46          ; SI = &FONT46[i*6]
+        clc                     ; CF = 0: here it is
+        ret
+.none:  stc                     ; CF = 1: nothing to draw
+        ret
+PUNCT   db '+-:%.()*',0         ; glyphs 36, 37, ... in this order
+
+; ---- TXT46: the game's letters, plain ------------------------------------
+;  The game's FDRAW (GAMES\OWLFLY3\SRC\HUD.INC, line 232) with lesson 17's
+;  loop inside: each row is a byte whose top three bits are the pixels, so
+;  SHL drops the left one into the carry flag, then the next, then the
+;  next. Four pixels across a character: three of letter, one of gap.
+;  In C:
+;
+;      void txt46(int y, int x, char *s)
+;      {
+;          for (int at = y*320 + x; *s; s++, at += 4) {
+;              unsigned char *g = glyph(*s);
+;              if (!g) continue;                     /* a space */
+;              for (int r = 0; r < 6; r++)
+;                  for (int c = 0, b = g[r]; c < 3; c++, b <<= 1)
+;                      if (b & 0x80) buf[at + r*320 + c] = tcol;
+;          }
+;      }
+TXT46:  push es                 ; keep ES and DX for the caller
+        push dx
+        call TXTAT              ; ES = the buffer, DI = y*320 + x
+.ch:    lodsb                   ; AL = *s++
+        or   al,al              ; the end?
+        jz   .done              ;   yes
+        push si                 ; keep s
+        call GLYPH              ; SI = its rows, or CF = 1
+        jc   .adv               ; no picture: just move on
+        push di                 ; keep the cell's top-left
+        mov  cx,6               ; CX = six rows
+.row:   mov  ah,[si]            ; AH = this row: the pixels are bits 7, 6, 5
+        inc  si                 ; the next row, next time
+        mov  dx,3               ; DX = three columns
+.px:    shl  ah,1               ; CF = the left pixel, and the rest move up
+        jnc  .np                ;   0: leave the picture
+        mov  al,[tcol]          ;   1: AL = the ink...
+        mov  [es:di],al         ;   ...on the picture
+.np:    inc  di                 ; the next column
+        dec  dx                 ; one column fewer
+        jnz  .px
+        add  di,320-3           ; the next row down, back to the left
+        loop .row               ; six rows
+        pop  di                 ; DI = the cell's top-left again
+.adv:   pop  si                 ; SI = s
+        add  di,4               ; the next cell: four pixels on
+        jmp  .ch
+.done:  pop  dx
+        pop  es
+        ret
+
+; ---- TXT46O: the game's letters, with a ring -----------------------------
+;  WHITE LETTERS VANISH ON A WHITE SKY, and any colour vanishes on its own
+;  colour somewhere on this island. So each letter gets a dark ring, one
+;  pixel all round, and then it reads on anything. The ring is made of the
+;  letter's own bits, three operations a row:
+;
+;      o  = up | here | down          the rows above and below, ORed in:
+;                                     the letter grown one pixel taller
+;      o |= (o << 1) | (o >> 1)        and one pixel either side: wider
+;      o &= ~here                     and the letter itself taken back out
+;
+;  What is left is exactly the pixels next to the letter that are not the
+;  letter: the ring. OR grows, AND NOT carves - the two operations every
+;  mask in graphics is made of. The ring is painted OCOL, the letter tcol.
+;
+;  THE CELL GROWS BY ONE ALL ROUND: the rows are shifted right one bit
+;  first, so the ring has a column to the left of the letter, and there are
+;  eight rows, one above and one below the six. The letter itself lands
+;  where TXT46 would have put it.
+;  In C:
+;
+;      void txt46o(int y, int x, char *s)
+;      {
+;          for (int at = (y-1)*320 + x-1; *s; s++, at += 4) {
+;              unsigned char *g = glyph(*s), q[10] = {0};
+;              if (!g) continue;
+;              for (int r = 0; r < 6; r++) q[r + 2] = g[r] >> 1;
+;              for (int y = 0; y < 8; y++) {
+;                  unsigned char here = q[y+1];
+;                  unsigned char o = q[y] | here | q[y+2];
+;                  o = (o | o << 1 | o >> 1) & ~here;
+;                  for (int c = 0; c < 5; c++, o <<= 1, here <<= 1) {
+;                      if (o    & 0x80) buf[at + y*320 + c] = OCOL;
+;                      if (here & 0x80) buf[at + y*320 + c] = tcol;
+;                  }
+;              }
+;          }
+;      }
+TXT46O: push es                 ; keep ES and DX for the caller
+        push dx
+        dec  ax                 ; y - 1: a row for the ring above
+        dec  bx                 ; x - 1: a column for the ring to the left
+        call TXTAT              ; ES = the buffer, DI = (y-1)*320 + x-1
+.ch:    lodsb                   ; AL = *s++
+        or   al,al              ; the end?
+        jz   .done              ;   yes
+        push si                 ; keep s
+        call GLYPH              ; SI = its rows, or CF = 1
+        jc   .adv               ; no picture: just move on
+        mov  word [gq],0        ; q[0], q[1] = 0: two empty rows on top
+        mov  word [gq+8],0      ; q[8], q[9] = 0: and two below
+        xor  bx,bx              ; BX = r = 0
+.cp:    mov  al,[si+bx]         ; AL = g[r]
+        shr  al,1               ; AL >>= 1: a column for the ring on the left
+        mov  [gq+2+bx],al       ; q[r+2] = AL
+        inc  bx                 ; r++
+        cmp  bx,6               ; six rows?
+        jb   .cp
+        push di                 ; keep the cell's top-left
+        xor  bx,bx              ; BX = y = 0, the row above the letter
+.row:   mov  al,[gq+bx]         ; AL = up
+        or   al,[gq+bx+1]       ; AL |= here
+        or   al,[gq+bx+2]       ; AL |= down: the letter, one row taller
+        mov  ah,al              ; AH = o
+        shl  ah,1               ; AH = o << 1
+        or   ah,al              ; AH = o | o << 1
+        shr  al,1               ; AL = o >> 1
+        or   ah,al              ; AH = o | o << 1 | o >> 1: one pixel wider
+        mov  al,[gq+bx+1]       ; AL = here: the letter's own row
+        mov  dl,al              ; DL = here
+        not  dl                 ; DL = ~here: every bit that is NOT letter
+        and  ah,dl              ; AH = the ring: grown, with the letter carved out
+        mov  cx,5               ; CX = five columns: ring, three, ring
+.px:    shl  ah,1               ; CF = a ring pixel?
+        jnc  .nr                ;   no
+        mov  byte [es:di],OCOL  ;   yes: the ring's dark colour
+.nr:    shl  al,1               ; CF = a letter pixel?
+        jnc  .nl                ;   no
+        mov  dl,[tcol]          ;   yes: DL = the ink
+        mov  [es:di],dl         ;   on the picture
+.nl:    inc  di                 ; the next column
+        loop .px                ; five
+        add  di,320-5           ; the next row down, back to the left
+        inc  bx                 ; y++
+        cmp  bx,8               ; eight rows: ring, six, ring
+        jb   .row
+        pop  di                 ; DI = the cell's top-left again
+.adv:   pop  si                 ; SI = s
+        add  di,4               ; the next cell: four on, and the rings of two
+        jmp  .ch                ;  neighbours share the gap between them
+.done:  pop  dx
+        pop  es
+        ret
+
+; ---- TXTAT: AX = y, BX = x -> ES = the back buffer, DI = y*320 + x ---------
+TXTAT:  mov  cx,ax              ; CX = y      (AX is needed for MUL)
+        mov  ax,[bufseg]        ; AX = bufseg
+        mov  es,ax              ; ES = bufseg
+        mov  ax,cx              ; AX = y
+        mov  cx,320             ; CX = 320
+        mul  cx                 ; AX = y * 320
+        add  ax,bx              ; AX = y * 320 + x
+        mov  di,ax              ; DI = it
+        ret
+
+; ---- FONT46: the game's letters, and three of our own ---------------------
+;  GAMES\OWLFLY3\SRC\RESDAT.ASM, resource 1, byte for byte: forty one
+;  glyphs, six rows each, the top three bits of each row the pixels. READ
+;  THE ONES: the binary numbers ARE the letters. The game keeps them in a
+;  file, CITY.DAT, and loads it at the start; a .COM can simply carry them.
+;
+;  And the last three are NEW, drawn for this lesson - the game never
+;  needed brackets or a star. Adding a letter to a font is writing six
+;  numbers in binary.
+FONT46: db 11100000b,10100000b,10100000b,10100000b,11100000b,00000000b ; 0
+        db 01000000b,11000000b,01000000b,01000000b,11100000b,00000000b ; 1
+        db 11100000b,00100000b,11100000b,10000000b,11100000b,00000000b ; 2
+        db 11100000b,00100000b,11100000b,00100000b,11100000b,00000000b ; 3
+        db 10100000b,10100000b,11100000b,00100000b,00100000b,00000000b ; 4
+        db 11100000b,10000000b,11100000b,00100000b,11100000b,00000000b ; 5
+        db 11100000b,10000000b,11100000b,10100000b,11100000b,00000000b ; 6
+        db 11100000b,00100000b,01000000b,01000000b,01000000b,00000000b ; 7
+        db 11100000b,10100000b,11100000b,10100000b,11100000b,00000000b ; 8
+        db 11100000b,10100000b,11100000b,00100000b,11100000b,00000000b ; 9
+        db 01000000b,10100000b,11100000b,10100000b,10100000b,00000000b ; A
+        db 11000000b,10100000b,11000000b,10100000b,11000000b,00000000b ; B
+        db 01100000b,10000000b,10000000b,10000000b,01100000b,00000000b ; C
+        db 11000000b,10100000b,10100000b,10100000b,11000000b,00000000b ; D
+        db 11100000b,10000000b,11000000b,10000000b,11100000b,00000000b ; E
+        db 11100000b,10000000b,11000000b,10000000b,10000000b,00000000b ; F
+        db 01100000b,10000000b,10100000b,10100000b,01100000b,00000000b ; G
+        db 10100000b,10100000b,11100000b,10100000b,10100000b,00000000b ; H
+        db 11100000b,01000000b,01000000b,01000000b,11100000b,00000000b ; I
+        db 00100000b,00100000b,00100000b,10100000b,01000000b,00000000b ; J
+        db 10100000b,11000000b,10000000b,11000000b,10100000b,00000000b ; K
+        db 10000000b,10000000b,10000000b,10000000b,11100000b,00000000b ; L
+        db 10100000b,11100000b,10100000b,10100000b,10100000b,00000000b ; M
+        db 11100000b,10100000b,10100000b,10100000b,10100000b,00000000b ; N
+        db 11100000b,10100000b,10100000b,10100000b,11100000b,00000000b ; O
+        db 11100000b,10100000b,11100000b,10000000b,10000000b,00000000b ; P
+        db 11100000b,10100000b,10100000b,11100000b,00100000b,00000000b ; Q
+        db 11000000b,10100000b,11000000b,10100000b,10100000b,00000000b ; R
+        db 11100000b,10000000b,11100000b,00100000b,11100000b,00000000b ; S
+        db 11100000b,01000000b,01000000b,01000000b,01000000b,00000000b ; T
+        db 10100000b,10100000b,10100000b,10100000b,11100000b,00000000b ; U
+        db 10100000b,10100000b,10100000b,10100000b,01000000b,00000000b ; V
+        db 10100000b,10100000b,10100000b,11100000b,10100000b,00000000b ; W
+        db 10100000b,10100000b,01000000b,10100000b,10100000b,00000000b ; X
+        db 10100000b,10100000b,01000000b,01000000b,01000000b,00000000b ; Y
+        db 11100000b,00100000b,01000000b,10000000b,11100000b,00000000b ; Z
+        db 00000000b,01000000b,11100000b,01000000b,00000000b,00000000b ; +
+        db 00000000b,00000000b,11100000b,00000000b,00000000b,00000000b ; -
+        db 00000000b,01000000b,00000000b,01000000b,00000000b,00000000b ; :
+        db 10100000b,00100000b,01000000b,10000000b,10100000b,00000000b ; %
+        db 00000000b,00000000b,00000000b,00000000b,01000000b,00000000b ; .
+        db 00100000b,01000000b,01000000b,01000000b,00100000b,00000000b ; ( - NEW
+        db 10000000b,01000000b,01000000b,01000000b,10000000b,00000000b ; ) - NEW
+        db 00000000b,10100000b,01000000b,10100000b,00000000b,00000000b ; * - NEW
+
+; ---- TXTROM: AX = y, BX = x, SI = the string; the PC's own 8x8 font ------
+;  Straight from EXAMPLES\JET.ASM. The glyphs live at F000:FA6E in every
+;  PC's ROM - the same ones the BIOS boots with - so a program that wants
+;  to write a number needs no font of its own.
+;  In C:
+;
+;      void txt(int y, int x, char *s)
+;      {
+;          unsigned char *rom = (unsigned char far *)0xF000FA6E;  /* 8x8 glyphs */
+;          int at = y * 320 + x;
+;          for (; *s; s++, at += 8) {                  /* one character cell */
+;              unsigned char *g = rom + *s * 8;        /* its eight rows     */
+;              for (int r = 0; r < 8; r++) {
+;                  unsigned char bits = g[r];
+;                  for (int c = 0; c < 8; c++, bits <<= 1)
+;                      if (bits & 0x80) buf[at + r * 320 + c] = tcol;
+;              }
+;          }
+;      }
+TXTROM: push es                 ; keep ES and DX for the caller
+        push dx                 ; keep DX
+        mov  cx,ax              ; CX = y      (AX is needed for MUL)
+        mov  ax,[bufseg]        ; AX = bufseg
+        mov  es,ax              ; ES = bufseg
+        mov  ax,cx              ; AX = y
+        mov  cx,320             ; CX = 320
+        mul  cx                 ; AX = y * 320
+        add  ax,bx              ; AX = y * 320 + x
+        mov  di,ax              ; DI = at      - the top-left of the first cell
+.ch:    lodsb                   ; AL = *s++
+        or   al,al              ; end of string?
+        jz   .done              ;   yes: return
+        push si                 ; keep s
+        xor  ah,ah              ; AX = the character
+        mov  cl,3               ; CL = 3   (shift count: * 8)
+        shl  ax,cl              ; AX = char * 8     - offset of its glyph
+        mov  si,0FA6Eh          ; SI = FA6Eh        \  g = rom + char*8
+        add  si,ax              ; SI = FA6Eh + char*8 /
+        push ds                 ; keep DS
+        mov  ax,0F000h          ; AX = F000h
+        mov  ds,ax              ; DS = F000h        - now DS:SI is the ROM
+        mov  cx,8               ; CX = 8 rows
+        push di                 ; keep at
+.row:   lodsb                   ; AL = bits = g[r]  - MSB is the left pixel
+        mov  ah,al              ; AH = bits
+        push cx                 ; keep the row count
+        mov  cx,8               ; CX = 8 columns
+.px:    shl  ah,1               ; bits <<= 1; CF = the pixel that fell off
+        jnc  .np                ; if (bit was 0) skip
+        mov  al,[cs:tcol]       ; AL = tcol   ([cs:] because DS is the ROM)
+        mov  [es:di],al         ; buf[at] = tcol
+.np:    inc  di                 ; at++  (next column)
+        loop .px                ; 8 columns
+        add  di,320-8           ; at += 320 - 8   (next row, same column)
+        pop  cx                 ; the row count again
+        loop .row               ; 8 rows
+        pop  di                 ; DI = at, the cell's top-left again
+        pop  ds                 ; DS = ours again
+        pop  si                 ; SI = s
+        add  di,8               ; at += 8   - the next character cell
+        jmp  .ch                ; next character
+.done:  pop  dx
+        pop  es                 ; ES back
+        ret                     ; return
+
+
+; ============================================================================
+;  GROUND - the landscape, FILLED, and drawn FAR TO NEAR.
+;
+;  THIS IS THE GAME'S TERRAIN ROUTINE. It is in GAMES\OWLFLY3\SRC\TERRAIN.INC
+;  and it draws sixteen hundred quads where this draws six hundred and
+;  twenty five; the level-of-detail start point and the buildings are the
+;  only things left out. Everything else below is copied.
+;
+;  THE PAINTER'S ALGORITHM, and it is not an algorithm so much as an order.
+;  Draw the farthest square first and the nearest last, and every square
+;  paints over whatever was behind it. Nothing is tested, nothing is
+;  compared, nothing is remembered. Lesson 15's skyline needed an array of
+;  320 bytes and a compare for every pixel; this needs neither, because a
+;  filled polygon already covers what is behind it. You do not pay for
+;  hiding - you get it with the colour.
+;
+;  AND IT IS THE SAME TABLE. TORD was built nearest-first for the skyline.
+;  Here it is read from the END backwards, and that is the entire change:
+;  one `dec` where lesson 15 had an `inc`. The table did not move.
+;
+;  WHAT THE PAINTER CANNOT DO, said now rather than later: it is an order,
+;  so it is only right when an order exists. Two long quads that overlap
+;  each other cannot be sorted, and no amount of care fixes it - the answer
+;  is to cut them, which costs more than everything above. A height field
+;  never has that problem, because the squares are laid out on a grid and
+;  the grid IS the order.
+; ============================================================================
+;  In C:
+;
+;      void ground(void)
+;      {
+;          terrprep();                           /* every node, rotated once */
+;          for (ordk = NSIDE*NSIDE - 1; ordk >= 0; ordk--) {
+;              si = TORD[ordk];                  /* FARTHEST SQUARE FIRST    */
+;              /* the four corners, straight out of the cache */
+;              IX[0] = TRX[si];  IZ[0] = TRZ[si];  IY[0] = TWY[si] - camy;
+;              ...and the same for si+TSIDE, si+TSIDE+1, si+1
+;              if (max_z_of_the_four < NEARZ) continue;      /* behind you */
+;              qband(max_H_of_the_four);                     /* the colour */
+;              draw_quad();                      /* and it is a CALL: see */
+;          }                                     /*  the banner on it     */
+;      }
+GROUND: call TERRPREP           ; terrprep(): every node rotated ONCE, and
+                                ;  its height looked up once, into the cache
+        call HPREP              ; hprep(): a sixteenth of a square, turned, and
+                                ;  where the eye is inside its own square
+
+        mov  ax,[orddisk]       ; AX = how many squares are in the CIRCLE
+        dec  ax                 ; AX = the last of them: the farthest square
+        mov  [ordk],ax          ;  inside radius NR. Lesson 15 started at
+                                ;  nought and ran to the corner of the block.
+
+        ; ---- WHY A CIRCLE, and why it had to be one -----------------------
+        ; The block of squares is a SQUARE, and a square turned forty five
+        ; degrees pokes its corners out 41 per cent further than its sides.
+        ; At twelve nodes nobody noticed: the corner is 12 x 1024 x 1.41,
+        ; seventeen thousand, and a word holds thirty two thousand. At
+        ; TWENTY FOUR nodes the corner is thirty four thousand seven hundred
+        ; - and ROTXZ adds its two products with a sixteen-bit ADD.
+        ;
+        ;     heading 0     x' = x*cos - z*sin = 24576 - 0      fits
+        ;     heading 45    x' = 17378 + 17378 = 34756          does NOT
+        ;
+        ; 34756 in a signed word is -30780. The corner of the block is
+        ; flung to the far side of the world, the squares hanging off it
+        ; become slabs floating over the horizon, and the ones you saw sat
+        ; in exactly the directions a diagonal heading points them. That is
+        ; why TURNING found them: at 0, 90, 180 and 270 degrees one of the
+        ; two products is nought and nothing overflows.
+        ;
+        ; The fix is not a bigger register. It is the right shape. A view
+        ; distance is the same in every direction, and TORD is ALREADY
+        ; sorted by distance - so the circle of radius NR is simply the
+        ; first `orddisk` entries of it, and GROUND starts there instead of
+        ; at the end. The farthest node any drawn square touches is then
+        ; NR plus one diagonal step, about twenty six thousand. A turn
+        ; cannot make a length longer, so no heading can overflow it.
+        ;
+        ; And it is a quarter less work: 1793 of the 2401 squares.
+
+.rx:    call DRAWQUAD           ; draw_quad(): one square of the lattice
+        dec  word [ordk]        ; ordk--      - and NEARER, which is the
+        jns  .rx                ;  whole of the painter's algorithm
+        ret                     ; return
+
+; ============================================================================
+;  DRAWQUAD - one square. It is a ROUTINE and not the body of the loop
+;  above, and that is deliberate: TRAP0 works by putting the stack pointer
+;  back to `savesp` and doing a plain RET, so whatever is on top of the
+;  stack at `savesp` is where a faulting quad resumes. Inside a routine
+;  that is the return address into the loop, and the trap costs one square.
+;  Written inline it would be the loop's OWN return address, and a single
+;  bad divide would abandon the whole landscape. Lesson 13 learned this
+;  with DRAWEDGE3D; the shape is the same and so is the reason.
+; ============================================================================
+DRAWQUAD:
+        mov  [savesp],sp        ; savesp = sp - WHERE THE DIVIDE TRAP COMES
+                                ;  BACK TO. At this instant the top of the
+                                ;  stack is the return into GROUND's loop
+        mov  bx,[ordk]          ; BX = ordk
+        add  bx,bx              ; BX = ordk*2: a word to an entry
+        mov  si,[TORD+bx]       ; SI = the slot of this square's first corner
+        ; ---- THE CULL, and it is four bytes and an AND ---------------------
+        ; TERRPREP gave every node three bits: behind, off the right, off
+        ; the left. If some plane has ALL FOUR corners outside it, the whole
+        ; square is outside it - a convex square with every corner on one
+        ; side of a plane lies entirely on that side - and not one pixel of
+        ; it can reach the screen. AND the four codes together and any bit
+        ; that survives is such a plane.
+        ;
+        ; This used to be seventy instructions a square, AFTER twelve words
+        ; had been loaded to feed them. Now it is thirteen, and a square
+        ; that fails it never loads a corner at all. Behind you and off to
+        ; the sides is where most of the lattice is, so most squares end
+        ; right here.
+        ;
+        ; And the OR comes free with it: bit 0 of the OR says the near
+        ; plane cuts through this square, which the stroke below needs.
+        mov  di,si              ; DI = the slot
+        shr  di,1               ; DI /= 2: TOUT is bytes
+        mov  al,[TOUT+di]       ; AL = corner 0's code
+        mov  ah,al              ; AH = the same: the OR starts here too
+        mov  bl,[TOUT+di+TSIDE] ; BL = corner 1's
+        and  al,bl              ; AL &= it
+        or   ah,bl              ; AH |= it
+        mov  bl,[TOUT+di+TSIDE+1]   ; BL = corner 2's
+        and  al,bl              ; AL &= it
+        or   ah,bl              ; AH |= it
+        mov  bl,[TOUT+di+1]     ; BL = corner 3's
+        and  al,bl              ; AL &= it
+        or   ah,bl              ; AH |= it
+        or   al,al              ; a plane all four are outside?
+        jnz  .skip              ;   yes: gone, and not a corner loaded
+        mov  [qor],ah           ; qor = the OR, for the stroke
+
+
+
+        ; ---- the four corners, and every number is already worked out -----
+        ; The square hangs off node (ta,tb); its other three are one row on,
+        ; one row and one node on, and one node on. TSIDE*2 is a whole row
+        ; of the cache in bytes, and the assembler works it out.
+        mov  ax,[TRX+si]        ; corner 0 = (ta, tb)
+        mov  [IX],ax            ; IX[0] = AX          - ALREADY ROTATED
+        mov  ax,[TRZ+si]        ; AX = TRZ[slot]
+        mov  [IZ],ax            ; IZ[0] = AX
+        mov  ax,[TWY+si]        ; AX = the node's world height
+        sub  ax,[camy]          ; AX -= camy: how far below the eye it is
+        mov  [IY],ax            ; IY[0] = AX
+        mov  ax,[TRX+si+TSIDE*2]        ; corner 1 = (ta+1, tb)
+        mov  [IX+2],ax          ; IX[1] = AX
+        mov  ax,[TRZ+si+TSIDE*2]        ; AX = its z
+        mov  [IZ+2],ax          ; IZ[1] = AX
+        mov  ax,[TWY+si+TSIDE*2]        ; AX = its height
+        sub  ax,[camy]          ; AX -= camy
+        mov  [IY+2],ax          ; IY[1] = AX
+        mov  ax,[TRX+si+TSIDE*2+2]      ; corner 2 = (ta+1, tb+1)
+        mov  [IX+4],ax          ; IX[2] = AX
+        mov  ax,[TRZ+si+TSIDE*2+2]      ; AX = its z
+        mov  [IZ+4],ax          ; IZ[2] = AX
+        mov  ax,[TWY+si+TSIDE*2+2]      ; AX = its height
+        sub  ax,[camy]          ; AX -= camy
+        mov  [IY+4],ax          ; IY[2] = AX
+        mov  ax,[TRX+si+2]              ; corner 3 = (ta, tb+1)
+        mov  [IX+6],ax          ; IX[3] = AX
+        mov  ax,[TRZ+si+2]      ; AX = its z
+        mov  [IZ+6],ax          ; IZ[3] = AX
+        mov  ax,[TWY+si+2]      ; AX = its height
+        sub  ax,[camy]          ; AX -= camy
+        mov  [IY+6],ax          ; IY[3] = AX
+
+        ; ---- the colour: the HIGHEST of the four corners -------------------
+        ; A square is one colour, and it is decided by its tallest corner.
+        ; Take the lowest instead and a snow cap grows a ring of rock.
+        mov  di,si              ; DI = the slot
+        shr  di,1               ; DI /= 2: TH is bytes
+        mov  al,[TH+di]         ; AL = corner 0's raw height
+        mov  ah,[TH+di+TSIDE]   ; AH = corner 1's
+        cmp  al,ah              ; AL >= AH ?
+        jae  .c1
+        mov  al,ah              ; AL = the taller
+.c1:    mov  ah,[TH+di+TSIDE+1] ; AH = corner 2's
+        cmp  al,ah              ; AL >= AH ?
+        jae  .c2
+        mov  al,ah              ; AL = the taller
+.c2:    mov  ah,[TH+di+1]       ; AH = corner 3's
+        cmp  al,ah              ; AL >= AH ?
+        jae  .c3
+        mov  al,ah              ; AL = the tallest of the four
+.c3:    call QBAND              ; COLOR = the band that height falls in
+        mov  al,[COLOR]         ; AL = it
+        mov  [qband],al         ; qband = it, before the fold below changes
+                                ;  COLOR: the houses ask sand or grass
+
+        ; ---- and paint it --------------------------------------------------
+        mov  ax,[bufseg]        ; ES = the buffer the polygon goes into
+        mov  es,ax              ; ES = bufseg
+        call FACEFILL           ; facefill(): clip to the near plane, project
+                                ;  what survives, and run the scanline filler
+
+        ; ---- and the seams: each edge ONCE, by the square on top ----------
+        ; ORDPREP gave every square the edges it OWNS - the ones it shares
+        ; with farther neighbours, which were painted before it. So its own
+        ; fill cannot cover them and nothing painted later touches them.
+        ; Half the lines of stroking every side, and every line still lands
+        ; on top.
+        ;
+        ; It reads PX and PY, which FACEFILL has just projected - the
+        ; outline costs no projection of its own. That only works while PX
+        ; and PY ARE the square's four corners, in order, and they are
+        ; exactly when the near-plane clip had nothing to cut. When it did
+        ; cut, the polygon it left is a different shape with a different
+        ; number of corners, and that square is outlined whole, as before.
+        ; Those are the few squares right beside you.
+        cmp  word [NPOLY],3     ; did the clip leave a polygon at all?
+        jl   .skip              ;   no: FACEFILL drew nothing
+        add  byte [COLOR],8     ; COLOR += 8: the same band, folded
+        test byte [qor],1       ; did the near plane cut this square?
+        jz   .own               ;   no: PX/PY are its four corners, in order
+        call STROKEPOLY         ;   yes: outline whatever the clip left
+        jmp  .house             ; and on to its houses
+
+.own:   mov  bx,[ordk]          ; BX = ordk
+        mov  al,[TEDGE+bx]      ; AL = the edges this square owns, one bit each
+        mov  [qedge],al         ; qedge = them
+        mov  word [qe],0        ; qe = 0: edge 0, which starts at corner 0
+.e:     shr  byte [qedge],1     ; CF = does it own this edge?
+        jnc  .en                ;   no: its nearer neighbour draws it
+        mov  si,[qe]            ; SI = this corner, in bytes
+        mov  ax,[PX+si]         ; AX = its screen x
+        mov  [sx0],ax           ; sx0 = AX
+        mov  ax,[PY+si]         ; AX = its screen y
+        mov  [sy0],ax           ; sy0 = AX
+        add  si,2               ; SI = the next corner round...
+        and  si,7               ; ...and 8 AND 7 is 0: corner 3 goes to 0
+        mov  ax,[PX+si]         ; AX = its x
+        mov  [sx1],ax           ; sx1 = AX
+        mov  ax,[PY+si]         ; AX = its y
+        mov  [sy1],ax           ; sy1 = AX
+        call CLIPLINE           ; clip_line(): on the screen at all?
+        jc   .en                ;   no
+        call LINE               ; line()
+.en:    add  word [qe],2        ; the next edge
+        cmp  word [qe],8        ; all four looked at?
+        jl   .e                 ;   no
+
+
+        ; ---- AND ITS HOUSES, straight after its own ground -----------------
+        ; This is the whole of how the houses join the painter. A square's
+        ; houses stand ON it, so they go down after its ground and its
+        ; seams, and before every square nearer the eye - which will paint
+        ; over them exactly where the nearer ground is really in front.
+        ; Nothing is sorted that was not sorted already.
+.house: mov  ax,[ordk]          ; AX = this square's place in the order
+        cmp  ax,[ordhouse]      ; inside the town's circle, RH?
+        jae  .skip              ;   no: bare ground
+        call HOUSES4            ; houses4(): up to sixteen, far ones first
+
+.skip:  ret                     ; return - to the loop, one square on
+
+; ============================================================================
+;  HPREP - the two things every house on the screen needs, once a frame.
+;
+;  A SIXTEENTH OF A SQUARE, TURNED. A square holds a block of four by four
+;  houses, and their corners lie at sixteenths of its sides: the first
+;  house from 1/16 to 3/16, the next from 5/16 to 7/16, and so on. The
+;  square's own corner is in the cache already, turned by the heading. And
+;  rotating is LINEAR - turn a step and add, or add and turn, the answer is
+;  the same - so "k sixteenths along" is corner 0 plus k times one turned
+;  sixteenth. One ROTXZ for the whole east side of a square, one for the
+;  north side, and every house corner on the screen after that is two
+;  table reads and two adds. Not one rotation per house.
+;
+;      HAX[k], HAZ[k]   k/16 of a square EAST,  turned: its x and its z
+;      HBX[k], HBZ[k]   k/16 of a square NORTH, turned
+;
+;  WHERE THE EYE IS IN ITS SQUARE. The walls a house shows you depend on
+;  which side of it you are, and that is decided in the WORLD, before any
+;  turning: west of its west wall, you see the west wall. OWL FLY III's
+;  VISFILL compares camx with the wall's world x. Here the world is sixty
+;  four squares of 1024 - exactly the 65536 a word counts - so a world x
+;  WRAPS, and the same comparison on either side of the seam comes out
+;  backwards. So everything is measured from the square's own corner
+;  instead: hfx is how far into its square the eye stands, 0..1023, and a
+;  square da squares east of that is fx - da*1024 away. Small numbers, and
+;  no seam anywhere.
+; ============================================================================
+;  In C:
+;
+;      void hprep(void)
+;      {
+;          hfx = (camx + BIAS) & 1023;       /* the eye, inside its square */
+;          hfz = (camz + BIAS) & 1023;
+;          rotxz(1024, 0);  for (k = 0; k <= 16; k++) HAX[k] = k*rc_x >> 4,
+;                                                     HAZ[k] = k*rc_z >> 4;
+;          rotxz(0, 1024);  for (k = 0; k <= 16; k++) HBX[k] = k*rc_x >> 4,
+;                                                     HBZ[k] = k*rc_z >> 4;
+;      }
+HPREP:  mov  ax,[camx]          ; AX = camx
+        add  ax,BIAS            ; AX = camx + BIAS: the same count TERRPREP
+        and  ax,1023            ;  shifted by ten - and the ten bits it threw
+        mov  [hfx],ax           ;  away are where in the square the eye is
+        mov  ax,[camz]          ; AX = camz
+        add  ax,BIAS            ; AX = camz + BIAS
+        and  ax,1023            ; AX &= 1023
+        mov  [hfz],ax           ; hfz = AX
+
+        mov  word [wdx],1024    ; one whole square east...
+        mov  word [wdz],0
+        call ROTXZ              ; ...turned by the heading
+        mov  ax,[rc_x]          ; AX = its x
+        mov  di,HAX             ; DI = the table for it
+        call HMUL               ; HAX[k] = k/16 of it
+        mov  ax,[rc_z]          ; AX = its z
+        mov  di,HAZ
+        call HMUL               ; HAZ[k] = k/16 of it
+        mov  word [wdx],0       ; one whole square north...
+        mov  word [wdz],1024
+        call ROTXZ              ; ...turned
+        mov  ax,[rc_x]
+        mov  di,HBX
+        call HMUL               ; HBX[k]
+        mov  ax,[rc_z]
+        mov  di,HBZ
+        call HMUL               ; HBZ[k]
+        ret                     ; return
+
+; ---- HMUL: DI = seventeen words, AX = a whole square's step. DI[k] = k*AX/16
+;  Multiplying by counting up: add the step each time round, and divide
+;  the running total by sixteen - four SARs, sign kept. Sixteen times a
+;  square is 16384, still inside a word. Seventeen entries: k runs 0..16.
+HMUL:   mov  bx,ax              ; BX = the step
+        xor  ax,ax              ; AX = 0: the running total, k*step
+        mov  cx,17              ; CX = seventeen entries
+.k:     mov  dx,ax              ; DX = k*step
+        sar  dx,1               ; DX /= 2
+        sar  dx,1               ; DX /= 4
+        sar  dx,1               ; DX /= 8
+        sar  dx,1               ; DX /= 16, and SAR keeps the sign
+        mov  [di],dx            ; DI[k] = k*step/16
+        add  di,2               ; the next word
+        add  ax,bx              ; AX += step: (k+1)*step
+        loop .k                 ; seventeen times
+        ret                     ; return
+
+; ============================================================================
+;  HOUSES4 - the block of houses on one square, if it has one.
+;
+;  THE SCALE. A whole block - four streets by four, sixteen houses - stands
+;  in ONE square of the lattice: the square is 1024, a house is 128 with
+;  128 of street round it. Lesson 16's hills are drawn with squares that
+;  size; a town drawn with them would be one house to a hill. That is why
+;  the aeroplane shrank in this lesson - the island did not grow, the town
+;  is small, and the eye is down among it.
+;
+;  WHICH SQUARES. Nobody builds in the sea or up a mountain, and not on
+;  a cliff: a square gets houses when its band is sand or grass and its
+;  four corners are within FLATH map steps of each other. And then not
+;  always - a quarter of the squares are left empty, parks, by a HASH.
+;
+;  THE HASH. The same square must look the same every frame, and the map
+;  has no room for a town plan. So the square's own coordinates are
+;  shuffled into a number: gi*64 + gj is its index in the map, and one
+;  step of the generator lesson 0x11 grew the island with - times 25173,
+;  plus 13849 - scrambles it. The top two bits say park or not; every
+;  house then shuffles its own number out of this one - see HOUSE. No
+;  storage, no flicker: the town is a function of where you are.
+;
+;  THE ORDER. Sixteen houses on a square are still a painter's problem,
+;  and it is solved one axis at a time. The four columns are put in order
+;  of how far their middles are from the eye east-west, farthest first;
+;  the four rows the same north-south; and the houses are drawn column by
+;  column, row by row. It works because the houses stand in a GRID: two
+;  houses in different columns have a wall of empty street between them,
+;  and the one on the far side of that street can never cover the one on
+;  the near side. If the eye stands between two columns, they are on
+;  opposite sides of it and cannot cover each other at all.
+; ============================================================================
+;  In C:
+;
+;      void houses4(void)
+;      {
+;          if (qband != 2 && qband != 3) return;          /* sand, grass */
+;          slot = TORD[ordk];
+;          if (max(TH[4 corners]) - min(TH[4 corners]) > FLATH) return;
+;          ground_lattice();                              /* GY[8][8]    */
+;          hc0x = TRX[slot];  hc0z = TRZ[slot];           /* corner 0    */
+;          hrx = hfx - TDA[ordk]*1024;                    /* the eye, from */
+;          hrz = hfz - TDB[ordk]*1024;                    /*  that corner  */
+;          hh = ((camgi+da)&63)*64 + ((camgj+db)&63);
+;          hh = hh * 25173 + 13849;
+;          if ((hh >> 14) == 0) return;                   /* a park      */
+;          hord(hrx, HCOL);  hord(hrz, HROW);             /* far first   */
+;          for (i = 0; i < 4; i++) for (j = 0; j < 4; j++)
+;              { hc = HCOL[i]; hr = HROW[j]; house(); }
+;      }
+HOUSES4:
+        mov  al,[qband]         ; AL = the square's band
+        cmp  al,2               ; sand?
+        jb   .x                 ;   below it: the sea. No houses
+        cmp  al,3               ; grass?
+        ja   .x                 ;   above it: woods, rock, snow. No houses
+
+        mov  bx,[ordk]          ; BX = ordk
+        add  bx,bx              ; BX = ordk*2
+        mov  si,[TORD+bx]       ; SI = the slot of corner 0
+        mov  di,si              ; DI = the slot
+        shr  di,1               ; DI /= 2: TH is bytes
+        mov  al,[TH+di]         ; AL = the lowest so far
+        mov  ah,al              ; AH = the highest so far
+        mov  bl,[TH+di+TSIDE]   ; BL = corner 1
+        call .mm                ; AL = min, AH = max
+        mov  bl,[TH+di+TSIDE+1] ; BL = corner 2
+        call .mm
+        mov  bl,[TH+di+1]       ; BL = corner 3
+        call .mm
+        sub  ah,al              ; AH = how much the square slopes
+        cmp  ah,FLATH           ; gentle enough to build on?
+        ja   .x                 ;   no: a hillside. No houses
+
+        ; ---- THE GROUND UNDER THE HOUSES --------------------------------
+        ; A square on a slope is not flat, and one floor for every house
+        ; leaves the downhill ones standing on air. So every house corner
+        ; gets the height of the ground AT it: the square's four corner
+        ; heights, blended by how far along each side the point is. That is
+        ; BILINEAR interpolation, and on a lattice of evenly spaced points
+        ; it needs no multiply at all - it is linear along each side, and a
+        ; linear thing on even steps is a start and a constant step.
+        ;
+        ; The house corners stand at 1, 3, 5 ... 15 sixteenths each way: an
+        ; eight by eight lattice, GY. Heights are taken from corner 0's, so
+        ; the numbers stay small, and kept in 256ths - sixteenths of
+        ; sixteenths - until the last shift:
+        ;
+        ;     down the west side    L(b) = d3*b          (in sixteenths)
+        ;     down the east side    R(b) = d1*16 + (d2-d1)*b
+        ;     across at row b       G(a,b) = (L*16 + (R-L)*a) / 256
+        ;
+        ; with d1, d2, d3 the other three corners minus corner 0. Every
+        ; step of b is two sixteenths, and so is every step of a.
+        mov  ax,[TWY+si]        ; AX = corner 0's world height
+        mov  bx,[TWY+si+TSIDE*2]    ; BX = corner 1's: east
+        sub  bx,ax              ; BX = d1
+        mov  cx,[TWY+si+TSIDE*2+2]  ; CX = corner 2's
+        sub  cx,ax              ; CX = d2
+        mov  dx,[TWY+si+2]      ; DX = corner 3's: north
+        sub  dx,ax              ; DX = d3
+        sub  ax,[camy]          ; AX = corner 0 from the eye
+        mov  [hy0],ax           ; hy0 = it: added back at the end
+        mov  [gl],dx            ; L = d3*1: the west side at b = 1
+        add  dx,dx              ; DX = 2*d3
+        mov  [gls],dx           ; gls = its step
+        sub  cx,bx              ; CX = d2 - d1
+        mov  ax,bx              ; AX = d1
+        shl  ax,1               ; AX = d1*2   \
+        shl  ax,1               ; AX = d1*4    \  four single shifts: CL is
+        shl  ax,1               ; AX = d1*8    /  busy holding d2 - d1
+        shl  ax,1               ; AX = d1*16  /
+        add  ax,cx              ; AX = d1*16 + (d2-d1): the east side at b = 1
+        mov  [gr],ax            ; R = it
+        add  cx,cx              ; CX = 2*(d2-d1)
+        mov  [grs],cx           ; grs = its step
+        xor  di,di              ; DI = 0: GY's first entry
+.gb:    mov  bx,[gr]            ; BX = R
+        sub  bx,[gl]            ; BX = R - L
+        mov  ax,[gl]            ; AX = L
+        mov  cl,4
+        shl  ax,cl              ; AX = L*16
+        add  ax,bx              ; AX = L*16 + (R-L)*1: a = 1
+        add  bx,bx              ; BX = 2*(R-L): the step to a = 3
+.ga:    mov  dx,ax              ; DX = the height, in 256ths
+        mov  cl,8
+        sar  dx,cl              ; DX /= 256, sign kept
+        add  dx,[hy0]           ; DX += corner 0: from the eye now
+        mov  [GY+di],dx         ; GY[b][a] = DX
+        add  ax,bx              ; two sixteenths east
+        add  di,2               ; the next entry
+        test di,15              ; the end of a row of eight?
+        jnz  .ga                ;   no
+        mov  ax,[gls]           ; two sixteenths north: both sides step
+        add  [gl],ax
+        mov  ax,[grs]
+        add  [gr],ax
+        cmp  di,128             ; eight rows?
+        jb   .gb                ;   no
+
+        mov  ax,[TRX+si]        ; AX = corner 0, turned: x
+        mov  [hc0x],ax          ; hc0x = it
+        mov  ax,[TRZ+si]        ; AX = z
+        mov  [hc0z],ax          ; hc0z = it
+
+        ; ---- where the eye is, measured from this square's corner --------
+        mov  bx,[ordk]          ; BX = ordk: TDA is bytes
+        mov  al,[TDA+bx]        ; AL = da, how many squares east of the eye's
+        cbw                     ; AX = da, signed
+        mov  dx,ax              ; DX = da
+        add  ax,[camgi]         ; AX = the square's map column...
+        and  ax,63              ; ...wrapped, like the map
+        mov  [hgi],ax           ; hgi = it
+        mov  al,dl              ; AL = da
+        shl  al,1               ; AL = da*2   \  da*1024 WITHOUT a multiply:
+        shl  al,1               ; AL = da*4    > times four in the low byte,
+        mov  ah,al              ; AH = da*4    > then move it up a byte, which
+        xor  al,al              ; AX = da*1024/ is times 256. |da| < 32 fits
+        neg  ax                 ; AX = -da*1024
+        add  ax,[hfx]           ; AX = hfx - da*1024
+        mov  [hrx],ax           ; hrx = the eye, east of this square's corner
+        mov  al,[TDB+bx]        ; the same, north
+        cbw
+        mov  dx,ax              ; DX = db
+        add  ax,[camgj]         ; AX = the square's map row
+        and  ax,63
+        mov  [hgj],ax           ; hgj = it
+        mov  al,dl
+        shl  al,1
+        shl  al,1
+        mov  ah,al
+        xor  al,al              ; AX = db*1024
+        neg  ax
+        add  ax,[hfz]
+        mov  [hrz],ax           ; hrz = the eye, north of the corner
+
+        ; ---- the whole square past the town's edge? ----------------------
+        ; The circle ORDPREP counted is measured between NODES, and the eye
+        ; is not on a node - so the real edge of the town is measured here,
+        ; from the eye to the square's middle, less half a diagonal.
+        mov  ax,512             ; AX = the middle, east of the corner...
+        sub  ax,[hrx]           ; ...less the eye: how far east of the eye
+        mov  bx,512
+        sub  bx,[hrz]           ; BX = how far north
+        call ODIST              ; AX = the distance, near enough
+        sub  ax,724             ; less half the square's diagonal
+        cmp  ax,HMAX            ; every house on it past the edge?
+        jge  .x                 ;   yes: bare ground
+
+        ; ---- the hash: the town plan, worked out on the spot --------------
+        mov  ax,[hgi]           ; AX = gi
+        mov  cl,6               ; CL = 6
+        shl  ax,cl              ; AX = gi*64
+        add  ax,[hgj]           ; AX = gi*64 + gj: the square's map index
+        mov  bx,25173           ; BX = the generator's multiplier
+        mul  bx                 ; AX = index * 25173 (the low word is all
+        add  ax,13849           ; AX += 13849  - we keep; DX is thrown away)
+        mov  [hh],ax            ; hh = the square's own shuffled number
+        test ah,0C0h            ; its top two bits both nought?
+        jz   .x                 ;   yes: one square in four is a park
+
+        ; ---- far houses first, one axis at a time -------------------------
+        mov  ax,[hrx]           ; AX = the eye, east-west
+        mov  di,HCOL            ; DI = the list of columns
+        call HORD               ; HCOL = the four columns, farthest first
+        mov  ax,[hrz]           ; AX = the eye, north-south
+        mov  di,HROW
+        call HORD               ; HROW = the four rows, farthest first
+
+        mov  byte [hci],0       ; hci = 0: the farthest column
+.cl:    mov  byte [hri],0       ; hri = 0: the farthest row
+.rl:    mov  bl,[hci]           ; BL = hci
+        xor  bh,bh              ; BX = hci
+        mov  al,[HCOL+bx]       ; AL = which column that is
+        mov  [hc],al            ; hc = it
+        mov  bl,[hri]           ; BX = hri
+        mov  al,[HROW+bx]       ; AL = which row
+        mov  [hr],al            ; hr = it
+        call HOUSE              ; house()
+        inc  byte [hri]         ; hri++
+        cmp  byte [hri],4       ; all four rows?
+        jb   .rl                ;   no
+        inc  byte [hci]         ; hci++
+        cmp  byte [hci],4       ; all four columns?
+        jb   .cl                ;   no
+.x:     ret                     ; return
+
+.mm:    cmp  bl,al              ; BL below the lowest?
+        jae  .m1
+        mov  al,bl              ;   yes: AL = BL
+.m1:    cmp  bl,ah              ; BL above the highest?
+        jbe  .m2
+        mov  ah,bl              ;   yes: AH = BL
+.m2:    ret
+
+; ---- ODIST: AX = east, BX = north -> AX = the distance, near enough -------
+;  The true distance wants a square root. The octagon does without: the
+;  longer of the two plus three eighths of the shorter, never more than
+;  about four per cent out - and it only has to say how tall a house far
+;  away is, which nobody can measure by eye.
+ODIST:  or   ax,ax              ; AX = |east|
+        jns  .a
+        neg  ax
+.a:     or   bx,bx              ; BX = |north|
+        jns  .b
+        neg  bx
+.b:     cmp  ax,bx              ; AX the longer?
+        jae  .c
+        xchg ax,bx              ;   no: swap them
+.c:     shr  bx,1               ; BX = the shorter / 2
+        shr  bx,1               ;          / 4
+        add  ax,bx              ; AX += a quarter of it
+        shr  bx,1               ;          / 8
+        add  ax,bx              ; AX += an eighth: three eighths in all
+        ret
+
+; ---- HORD: AX = the eye along one axis, from the square's corner; DI = four
+;      bytes out: the columns 0..3 in order of distance, FARTHEST FIRST.
+;  Column c's middle is at c*256 + 128. The distances along a row of
+;  columns go down and then up again - a V, with the eye at the bottom - so
+;  the farthest is always one of the two ENDS still left. Take it, and
+;  step that end inward. Four steps, no sort.
+HORD:   mov  [oeye],ax          ; oeye = the eye
+        mov  byte [olo],0       ; olo = the west (or south) end
+        mov  byte [ohi],3       ; ohi = the east (or north) end
+        mov  cx,4               ; CX = four to place
+.o:     mov  al,[olo]           ; AL = the low end
+        call .dist              ; AX = how far its middle is from the eye
+        mov  bx,ax              ; BX = it
+        mov  al,[ohi]           ; AL = the high end
+        call .dist              ; AX = its distance
+        cmp  ax,bx              ; the high end nearer?
+        jb   .lo                ;   yes: the low end goes next
+        mov  al,[ohi]           ;   no: the high end
+        mov  [di],al            ; out = it
+        dec  byte [ohi]         ; and that end steps in
+        jmp  .n
+.lo:    mov  al,[olo]           ; the low end
+        mov  [di],al            ; out = it
+        inc  byte [olo]         ; and that end steps in
+.n:     inc  di                 ; the next place in the list
+        loop .o                 ; four times
+        ret                     ; return
+.dist:  mov  ah,al              ; AX = c*256 + ...
+        mov  al,128             ; ...128: the column's middle
+        sub  ax,[oeye]          ; AX = middle - eye
+        jns  .d1                ; negative?
+        neg  ax                 ;   yes: AX = |it|
+.d1:    ret
+
+; ============================================================================
+;  HOUSE - one box: four walls, a roof, the windows.
+;
+;  ITS OWN NUMBER. The square's hash is one word, and sixteen houses need
+;  more than a word of choices. So each house mixes its place in the block,
+;  hn = column*4 + row, into the square's number and shuffles THAT with
+;  the same generator: hs. The top two bits are its storeys, 1 to 4; three
+;  more leave one plot in eight empty, a gap in the street.
+;
+;  THE CORNERS. In the order OWL FLY III's ROTCUL keeps them, so its
+;  FACEV and FACETOPC work unchanged:
+;
+;      3 (a0,b1) ---- 2 (a1,b1)          north up, east right
+;        |              |
+;      0 (a0,b0) ---- 1 (a1,b0)
+;
+;  each one corner 0 of the square plus two table reads - see HPREP.
+;
+;  THE WALLS YOU CAN SEE are decided in the world, not on the screen, and
+;  it is four comparisons: west of the west wall, you see the west wall.
+;  A box shows you at most two walls and never three, the walls it shows
+;  never overlap each other on the screen, and the ones it hides are
+;  never drawn at all. No depth sorting inside a box: a CONVEX thing has
+;  no inside to get wrong. This is VISFILL, from WORLD.INC, with camx
+;  swapped for hrx - see HPREP for why.
+;
+;  THE ROOF, when the eye is above it: bry1 below nought.
+;
+;  THE COLOURS. Walls facing east or west are 33, a shade darker than
+;  32, the ones facing north and south; so a corner of a house is always
+;  two tones and reads as a corner. The roof is 34. And the outline is
+;  the same colour folded, +8, like the ground's seams.
+; ============================================================================
+;  In C:
+;
+;      void house(void)
+;      {
+;          hn = hc*4 + hr;
+;          hs = (hh + hn*40503) * 25173 + 13849;       /* this house's own */
+;          if ((hs & 0x3800) == 0) return;             /* an empty plot    */
+;          floors = (hs >> 14) + 1;
+;          a0 = hc*4+1; a1 = a0+2; b0 = hr*4+1; b1 = b0+2;   /* sixteenths */
+;          FRX[0] = hc0x + HAX[a0] + HBX[b0];  FRZ[0] = ... HAZ, HBZ
+;          FRY[0] = GY[b0][a0];   ...and (a1,b0), (a1,b1), (a0,b1)
+;          bry0 = max(FRY);  bry1 = bry0 + floors * FLOORH;
+;          if (hrx < a0*64) wall(3, 0, 33);                  /* west  */
+;          if (hrx > a1*64) wall(1, 2, 33);                  /* east  */
+;          if (hrz < b0*64) wall(0, 1, 32);                  /* south */
+;          if (hrz > b1*64) wall(2, 3, 32);                  /* north */
+;          if (bry1 < 0) { facetopc(); COLOR = 34; facefill(); stroke(); }
+;      }
+HOUSE:  mov  al,[hc]            ; AL = the column, 0..3
+        shl  al,1
+        shl  al,1               ; AL = column*4
+        add  al,[hr]            ; AL = column*4 + row: 0..15
+        mov  [hn],al            ; hn = the house's place in the block
+        xor  ah,ah              ; AX = hn
+        mov  bx,40503           ; BX = a big odd number, to spread them
+        mul  bx                 ; AX = hn * 40503
+        add  ax,[hh]            ; AX += the square's number
+        mov  bx,25173           ; ...and one step of the generator
+        mul  bx
+        add  ax,13849
+        mov  [hs],ax            ; hs = this house's own number
+        test ah,38h             ; three bits, all nought?
+        jz   .x                 ;   one plot in eight: nobody built here
+        mov  al,ah              ; AL = the top byte
+        mov  cl,6               ; CL = 6
+        shr  al,cl              ; AL = its top two bits: 0..3
+        xor  ah,ah              ; AX = them
+        inc  ax                 ; AX = 1..4 storeys
+        mov  [hfl],ax           ; hfl = storeys
+
+        mov  al,[hc]            ; AL = the column
+        shl  al,1
+        shl  al,1               ; AL = column*4
+        inc  al                 ; AL = a0, in sixteenths
+        xor  ah,ah              ; AX = a0
+        add  ax,ax              ; AX = a0*2: a word to a table entry
+        mov  [ha0],ax           ; ha0 = it
+        add  ax,4               ; two sixteenths on
+        mov  [ha1],ax           ; ha1 = a1*2
+        mov  al,[hr]            ; the same for the row
+        shl  al,1
+        shl  al,1
+        inc  al
+        xor  ah,ah
+        add  ax,ax
+        mov  [hb0],ax           ; hb0 = b0*2
+        add  ax,4
+        mov  [hb1],ax           ; hb1 = b1*2
+
+        ; ---- HOW FAR, and THE TOWN'S EDGE -----------------------------------
+        ; A town that stops at a radius APPEARS at that radius: fly towards
+        ; it and a whole block of houses is suddenly there. So the edge is
+        ; soft. Nearer than HFULL a house has all its storeys; between
+        ; HFULL and HMAX it has that fraction of them, and at HMAX nothing -
+        ; so a house on the horizon rises out of the ground as you come,
+        ; over the whole of the last square, and never pops.
+        mov  ax,[ha0]           ; AX = a0*2
+        mov  cl,5
+        shl  ax,cl              ; AX = a0*64: the west wall
+        add  ax,64              ; AX = the house's middle, east of the corner
+        sub  ax,[hrx]           ; AX = how far east of the eye
+        mov  bx,[hb0]
+        shl  bx,cl
+        add  bx,64
+        sub  bx,[hrz]           ; BX = how far north
+        call ODIST              ; AX = the distance
+        mov  [hd],ax            ; hd = it
+        cmp  ax,HMAX            ; past the edge?
+        jge  .x                 ;   yes: not built yet
+
+        mov  si,[ha0]           ; corner 0 = (a0, b0)
+        mov  bx,[hb0]
+        xor  di,di
+        call HCORN
+        mov  si,[ha1]           ; corner 1 = (a1, b0)
+        mov  bx,[hb0]
+        mov  di,2
+        call HCORN
+        mov  si,[ha1]           ; corner 2 = (a1, b1)
+        mov  bx,[hb1]
+        mov  di,4
+        call HCORN
+        mov  si,[ha0]           ; corner 3 = (a0, b1)
+        mov  bx,[hb1]
+        mov  di,6
+        call HCORN
+
+        ; ---- THE HOUSE'S OWN CULL - the ground's, one size smaller --------
+        ; The square passed DRAWQUAD's test, but a square that is half on
+        ; the screen has half its sixteen houses off it. Same three bits
+        ; as TERRPREP's - behind, off the right, off the left - for the
+        ; four corners of the footprint, and the same AND. The side planes
+        ; stand upright, so the footprint decides for the whole house.
+        ;
+        ; ...WITH THE WINGS LEVEL AND THE NOSE LEVEL. Upright planes and a
+        ; footprint on the ground are the level eye's picture; pitched or
+        ; banked the screen is not upright any more, and this test would
+        ; throw away houses that show. So then it is skipped: the square's
+        ; own code (TERRPREP) already treats every node as a column up to
+        ; the tallest roof, and only the houses of squares that can show
+        ; get this far.
+        mov  ax,[pitch]         ; AX = pitch
+        or   ax,[roll]          ; AX = pitch OR roll: nought only if both are
+        jnz  .hcok              ; pitched or banked: no cull of its own
+        mov  dl,7               ; DL = every plane, until a corner is inside
+        xor  di,di              ; DI = corner 0
+.oc:    xor  al,al              ; AL = this corner's code
+        mov  bx,[FRZ+di]        ; BX = z
+        cmp  bx,NEARZ           ; behind the near plane?
+        jge  .o0
+        or   al,1
+.o0:    mov  cx,bx              ; CX = z
+        sar  cx,1
+        sar  cx,1               ; CX = z/4
+        sub  bx,cx              ; BX = 3z/4
+        mov  cx,[FRX+di]        ; CX = x
+        cmp  cx,bx              ; off the right?
+        jle  .o1
+        or   al,2
+.o1:    neg  bx                 ; BX = -3z/4
+        cmp  cx,bx              ; off the left?
+        jge  .o2
+        or   al,4
+.o2:    and  dl,al              ; DL &= it
+        add  di,2               ; the next corner
+        cmp  di,8
+        jb   .oc
+        or   dl,dl              ; a plane all four are outside?
+        jnz  .x                 ;   yes: not one pixel of it can show
+.hcok:
+
+        ; ---- the floor is the HIGHEST of the four; the roof is on that ----
+        ; The walls go down to the ground at each corner - FACEV takes their
+        ; bottoms from FRY - but the storeys are counted from the top of
+        ; the slope, so the house on a hillside gets a taller wall on its
+        ; downhill side, and the windows stay out of the grass.
+        mov  ax,[FRY]           ; AX = corner 0's ground
+        cmp  ax,[FRY+2]
+        jge  .f1
+        mov  ax,[FRY+2]
+.f1:    cmp  ax,[FRY+4]
+        jge  .f2
+        mov  ax,[FRY+4]
+.f2:    cmp  ax,[FRY+6]
+        jge  .f3
+        mov  ax,[FRY+6]
+.f3:    mov  [bry0],ax          ; bry0 = the floor
+        mov  ax,[hfl]           ; AX = storeys
+        mov  cl,5               ; CL = 5
+        shl  ax,cl              ; AX = storeys * FLOORH, which is 32
+        mov  bx,HMAX            ; BX = the edge
+        sub  bx,[hd]            ; BX = how far inside it this house is
+        cmp  bx,HMAX-HFULL      ; the whole last square or more?
+        jge  .tall              ;   yes: every storey
+        shr  bx,1               ; BX /= 4: 0..255, so that the product
+        shr  bx,1               ;  below fits a word - 128 * 255
+        mul  bx                 ; AX = the height * how far in, /4
+        mov  al,ah              ; AX /= 256: altogether / 1024, which is
+        xor  ah,ah              ;  HMAX - HFULL. The height, risen this far
+.tall:  add  ax,[bry0]          ; AX += the floor
+        mov  [bry1],ax          ; bry1 = the roof, from the eye
+
+        ; ---- VISFILL: the walls this side of the house --------------------
+        mov  ax,[ha0]           ; AX = a0*2
+        mov  cl,5               ; CL = 5
+        shl  ax,cl              ; AX = a0*64: the west wall, from the corner
+        cmp  [hrx],ax           ; the eye west of it?
+        jge  .e                 ;   no
+        mov  byte [COLOR],33    ; west: the shaded pair
+        mov  word [fa],3        ; corners 3 and 0
+        mov  word [fb],0
+        call HWALL
+.e:     mov  ax,[ha1]
+        mov  cl,5
+        shl  ax,cl              ; AX = a1*64: the east wall
+        cmp  [hrx],ax           ; the eye east of it?
+        jle  .s
+        mov  byte [COLOR],33    ; east
+        mov  word [fa],1
+        mov  word [fb],2
+        call HWALL
+.s:     mov  ax,[hb0]
+        mov  cl,5
+        shl  ax,cl              ; AX = b0*64: the south wall
+        cmp  [hrz],ax
+        jge  .n
+        mov  byte [COLOR],32    ; south: the lit pair
+        mov  word [fa],0
+        mov  word [fb],1
+        call HWALL
+.n:     mov  ax,[hb1]
+        mov  cl,5
+        shl  ax,cl              ; AX = b1*64: the north wall
+        cmp  [hrz],ax
+        jle  .r
+        mov  byte [COLOR],32    ; north
+        mov  word [fa],2
+        mov  word [fb],3
+        call HWALL
+
+.r:     cmp  word [bry1],0      ; the roof below the eye?
+        jge  .x                 ;   no: it cannot be seen
+        call FACETOPC           ; IX/IY/IZ = the roof
+        mov  byte [COLOR],34    ; COLOR = the roof
+        call FACEFILL           ; fill it
+        cmp  word [NPOLY],3     ; anything left of it?
+        jl   .x
+        add  byte [COLOR],8     ; COLOR = the roof, folded
+        call STROKEPOLY         ; its outline
+.x:     ret                     ; return
+
+; ---- HCORN: FRX/FRZ[DI] = corner 0 + SI sixteenths east + BX north --------
+;      ...and FRY[DI] = the ground at that point. SI = a*2, BX = b*2
+HCORN:  mov  ax,[HAX+si]        ; AX = so many sixteenths east, turned: x
+        add  ax,[HBX+bx]        ; AX += so many north, turned: x
+        add  ax,[hc0x]          ; AX += the square's corner
+        mov  [FRX+di],ax        ; FRX[corner] = AX
+        mov  ax,[HAZ+si]        ; the same for z
+        add  ax,[HBZ+bx]
+        add  ax,[hc0z]
+        mov  [FRZ+di],ax        ; FRZ[corner] = AX
+        shl  bx,1               ; ---- and the ground under it, from GY:
+        shl  bx,1               ; BX = b*8
+        sub  bx,8               ; BX = (b-1)*8: row (b-1)/2, sixteen bytes
+        shr  si,1               ; SI = a
+        dec  si                 ; SI = a-1: column (a-1)/2, two bytes each
+        add  bx,si              ; BX = the entry
+        mov  ax,[GY+bx]         ; AX = the ground there, from the eye
+        mov  [FRY+di],ax        ; FRY[corner] = AX
+        ret                     ; return
+
+; ============================================================================
+;  FACEV and FACETOPC - out of GAMES\OWLFLY3\SRC\WORLD2.INC, and ONE
+;  change: the game's FACEV puts both bottoms at bry0, a flat floor. Here
+;  each bottom is the ground at its own corner, FRY - so the wall's lower
+;  edge runs down the slope and the roof stays level.
+;  FACEV builds a wall from footprint corners [fa] and [fb], in the order
+;  A bottom, A top, B top, B bottom.
+;  FACETOPC builds the roof from all four corners at bry1.
+; ============================================================================
+FACEV:  mov  si,[fa]            ; SI = corner A
+        add  si,si              ; SI *= 2: a word
+        mov  ax,[FRX+si]        ; AX = A's x
+        mov  [IX],ax            ; A bottom and A top share it
+        mov  [IX+2],ax
+        mov  ax,[FRZ+si]        ; AX = A's z
+        mov  [IZ],ax
+        mov  [IZ+2],ax
+        mov  ax,[FRY+si]        ; A bottom: the ground at A
+        mov  [IY],ax
+        mov  si,[fb]            ; SI = corner B
+        add  si,si
+        mov  ax,[FRX+si]
+        mov  [IX+4],ax          ; B top and B bottom
+        mov  [IX+6],ax
+        mov  ax,[FRZ+si]
+        mov  [IZ+4],ax
+        mov  [IZ+6],ax
+        mov  ax,[FRY+si]        ; B bottom: the ground at B
+        mov  [IY+6],ax
+        mov  ax,[bry1]          ; the tops
+        mov  [IY+2],ax
+        mov  [IY+4],ax
+        ret
+
+FACETOPC:
+        mov  ax,[FRX]
+        mov  [IX],ax
+        mov  ax,[FRZ]
+        mov  [IZ],ax
+        mov  ax,[FRX+2]
+        mov  [IX+2],ax
+        mov  ax,[FRZ+2]
+        mov  [IZ+2],ax
+        mov  ax,[FRX+4]
+        mov  [IX+4],ax
+        mov  ax,[FRZ+4]
+        mov  [IZ+4],ax
+        mov  ax,[FRX+6]
+        mov  [IX+6],ax
+        mov  ax,[FRZ+6]
+        mov  [IZ+6],ax
+        mov  ax,[bry1]
+        mov  [IY],ax
+        mov  [IY+2],ax
+        mov  [IY+4],ax
+        mov  [IY+6],ax
+        ret
+
+; ============================================================================
+;  HWALL - one wall: fill, outline, and its windows.
+;
+;  THE WINDOWS ARE ON THE WALL, not stamped on the screen. OWL FLY III's
+;  WINFACEF learned that the hard way: a square of fixed size does not
+;  foreshorten, and look along a street and the glass floats off the
+;  brick. Two panes to a storey, at 1/8..3/8 and 5/8..7/8 of the wall's
+;  width, from a quarter of a storey up to three quarters.
+;
+;  AND THEY ARE ALWAYS THE RIGHT SIZE. A pane is drawn as big as it
+;  really is on the screen, however far away - so a house far off has
+;  panes of one pixel, and as you close in they grow into rectangles a
+;  pixel at a time. Nothing switches at a distance. A pane too thin to
+;  cover a single row of pixels is given that one row, so no pane ever
+;  vanishes: far off it is a dot, and the dot simply grows.
+;
+;  TWO WAYS TO GET THE SAME PANES. A wall the near plane has cut is right
+;  beside you, and its panes go through FACEFILL one by one, as quads in
+;  the world. Every other wall is still WHOLE on the screen - its four
+;  corners are in PX/PY - and its panes are measured there instead, in
+;  WSCREEN, for a fraction of the price. Both are exact, so the change
+;  from one to the other shows nothing.
+;
+;  LIT OR DARK. Two colours, 35 and 36, and they are THE SAME by day:
+;  dark glass. By night 35 is a lit room and 36 stays dark. Which pane
+;  gets which is a hash of the house, the wall, the storey and the pane,
+;  so it never changes - and the night is still nothing but the DAC. The
+;  frame buffer does not know what time it is.
+; ============================================================================
+HWALL:  call FACEV              ; IX/IY/IZ = the wall
+        ; ---- KEEP THE CORNERS: PITCH4 TURNS THEM WHERE THEY LIE ----------
+        ; FACEFILL's near clip starts with PITCH4, and PITCH4 writes the
+        ; pitched y and z back into IY and IZ. Lessons 16 to 18 never saw it:
+        ; their pitch was nought and the patch at the boot took the call out.
+        ; Now it pitches, and the glass below (WSCREEN, WFLOOR) reads IY and
+        ; IZ as the wall the heading turned - so it got them turned TWICE,
+        ; and the panes floated off the houses (the pilot saw it, nose down
+        ; over a town, 2026-10-07). The game met this first - "stash them",
+        ; GAMESOWLFLY3SRCTERRAIN.INC line 229 - and so do we: copied out
+        ; before the fill, copied back after it.
+        mov  si,6               ; SI = the last corner, in bytes
+.keep:  mov  ax,[IY+si]         ; AX = its y
+        mov  [WIY+si],ax        ; kept
+        mov  ax,[IZ+si]         ; AX = its z
+        mov  [WIZ+si],ax        ; kept
+        sub  si,2               ; the corner before
+        jns  .keep              ; down to corner 0
+        call FACEFILL           ; fill it - and IY, IZ are pitched now
+        mov  si,6               ; SI = the last corner
+.back:  mov  ax,[WIY+si]        ; AX = its y, as it was
+        mov  [IY+si],ax         ; back
+        mov  ax,[WIZ+si]        ; AX = its z, as it was
+        mov  [IZ+si],ax         ; back
+        sub  si,2               ; the corner before
+        jns  .back              ; down to corner 0
+        cmp  word [NPOLY],3     ; did anything of it reach the screen?
+        jl   .x                 ;   no
+        add  byte [COLOR],8     ; COLOR = the wall, folded
+        call STROKEPOLY         ; its outline, from the same PX/PY
+
+        ; ---- the wall's box on the screen ---------------------------------
+        mov  cx,[NPOLY]         ; CX = how many corners
+        mov  ax,[PX]            ; start the box at corner 0
+        mov  [fbx0],ax
+        mov  [fbx1],ax
+        mov  ax,[PY]
+        mov  [fby0],ax
+        mov  [fby1],ax
+        dec  cx                 ; the rest of them
+        mov  si,2
+.bb:    mov  ax,[PX+si]         ; AX = this corner's x
+        cmp  ax,[fbx0]
+        jge  .b1
+        mov  [fbx0],ax          ; the leftmost so far
+.b1:    cmp  ax,[fbx1]
+        jle  .b2
+        mov  [fbx1],ax          ; the rightmost
+.b2:    mov  ax,[PY+si]
+        cmp  ax,[fby0]
+        jge  .b3
+        mov  [fby0],ax          ; the top
+.b3:    cmp  ax,[fby1]
+        jle  .b4
+        mov  [fby1],ax          ; the bottom
+.b4:    add  si,2
+        loop .bb
+        cmp  word [fbx1],0      ; wholly off the glass? nothing to glaze
+        jl   .x
+        cmp  word [fbx0],319
+        jg   .x
+        cmp  word [fby1],0
+        jl   .x
+        cmp  word [fby0],199
+        jg   .x
+        mov  ax,[fbx1]          ; AX = right - left
+        sub  ax,[fbx0]
+        cmp  ax,WMINPX          ; a sliver?
+        jl   .x                 ;   yes: nothing at all
+        mov  ax,[fby1]          ; AX = bottom - top
+        sub  ax,[fby0]
+        cmp  ax,WMINPX
+        jl   .x
+
+        cmp  word [IZ],NEARZ    ; did the near plane cut this wall?
+        jl   .near              ;   A is behind it
+        cmp  word [IZ+4],NEARZ
+        jl   .near              ;   B is
+        jmp  WSCREEN            ; no: the wall is whole on the screen
+
+        ; ---- the near way: every pane a quad in the world -----------------
+        ; FACEFILL has not touched IX/IZ: CLIPNEAR reads them and writes
+        ; OX/OZ. So A is still IX[0], IZ[0], and B is IX[4], IZ[4].
+.near:  mov  ax,[IX+4]          ; AX = B - A, x
+        sub  ax,[IX]
+        sar  ax,1
+        sar  ax,1
+        sar  ax,1               ; AX = an eighth of it
+        mov  [wux],ax           ; wux = it
+        mov  ax,[IZ+4]          ; and z
+        sub  ax,[IZ]
+        sar  ax,1
+        sar  ax,1
+        sar  ax,1
+        mov  [wuz],ax           ; wuz = an eighth, z
+        mov  ax,[IX]            ; AX = A + one eighth: x
+        add  ax,[wux]
+        mov  [HWX],ax           ; HWX[0] = 1/8
+        add  ax,[wux]
+        add  ax,[wux]
+        mov  [HWX+2],ax         ; HWX[1] = 3/8
+        add  ax,[wux]
+        add  ax,[wux]
+        mov  [HWX+4],ax         ; HWX[2] = 5/8
+        add  ax,[wux]
+        add  ax,[wux]
+        mov  [HWX+6],ax         ; HWX[3] = 7/8
+        mov  ax,[IZ]            ; the same for z
+        add  ax,[wuz]
+        mov  [HWZ],ax
+        add  ax,[wuz]
+        add  ax,[wuz]
+        mov  [HWZ+2],ax
+        add  ax,[wuz]
+        add  ax,[wuz]
+        mov  [HWZ+4],ax
+        add  ax,[wuz]
+        add  ax,[wuz]
+        mov  [HWZ+6],ax
+
+        mov  ax,[bry0]          ; AX = the floor
+        add  ax,FLOORH/4        ; AX = a quarter of a storey up
+        mov  [wy],ax            ; wy = the bottom of the first row of glass
+        mov  ax,[hfl]           ; AX = storeys
+        mov  [wf],ax            ; wf = rows still to do
+.fl:    xor  si,si              ; SI = 0: the left pane, points 0 and 1
+.pn:    mov  ax,[HWX+si]        ; AX = its left edge, x
+        mov  [IX],ax            ; bottom left and top left
+        mov  [IX+2],ax
+        mov  ax,[HWZ+si]
+        mov  [IZ],ax
+        mov  [IZ+2],ax
+        mov  ax,[HWX+si+2]      ; its right edge
+        mov  [IX+4],ax
+        mov  [IX+6],ax
+        mov  ax,[HWZ+si+2]
+        mov  [IZ+4],ax
+        mov  [IZ+6],ax
+        mov  ax,[wy]            ; AX = the bottom of the glass
+        mov  [IY],ax
+        mov  [IY+6],ax
+        add  ax,FLOORH/2        ; half a storey tall
+        mov  [IY+2],ax
+        mov  [IY+4],ax
+        call HLIT               ; COLOR = 35 or 36: lit tonight, or not
+        push si                 ; FACEFILL eats SI
+        call FACEFILL           ; the pane
+        pop  si
+        add  si,4               ; the right pane: points 2 and 3
+        cmp  si,8
+        jb   .pn
+        add  word [wy],FLOORH   ; up a storey
+        dec  word [wf]          ; one row fewer
+        jnz  .fl
+.x:     ret                     ; return
+
+; ---- HLIT: COLOR = 35 or 36 for pane SI (0 or 4) of row [wf] --------------
+;  A hash of the house, the wall, the storey and the pane, so it never
+;  changes - and both ways of drawing a pane ask it the same question, so
+;  a window that is a lit dot from a mile away is a lit pane close to.
+HLIT:   mov  ax,[hs]            ; AX = the house's number
+        mov  al,ah              ; AL = its high byte
+        add  al,[hn]            ; + where it stands in the block
+        add  al,byte [fa]       ; + which wall
+        mov  bl,byte [wf]       ; + which storey, three times
+        add  al,bl
+        add  al,bl
+        add  al,bl
+        mov  bx,si              ; + which pane, five times
+        add  al,bl
+        add  al,bl
+        add  al,bl
+        add  al,bl
+        add  al,bl
+        and  al,3               ; AL = 0..3
+        mov  byte [COLOR],35    ; three in four: a room with the light on
+        jnz  .lit
+        mov  byte [COLOR],36    ; one in four: dark all night
+.lit:   ret
+
+; ============================================================================
+;  WSCREEN - the panes of a whole wall, measured on the screen.
+;
+;  The wall's four corners are projected already: PX/PY hold A bottom,
+;  A top, B top, B bottom. Every pane corner lies on the wall, so every
+;  pane corner is somewhere BETWEEN those four points - and finding
+;  "somewhere between" is a blend, not a projection. No divide by z per
+;  point: two blends a coordinate.
+;
+;  ONE CATCH, AND IT IS THE WHOLE OF PERSPECTIVE. Halfway along the wall
+;  is NOT halfway between A and B on the screen: the far half of a wall
+;  looks shorter than the near half. Blend on the screen with the plain
+;  fraction and the windows slide towards the far end as you turn, and
+;  jump when the near way takes over. The fraction has to be corrected by
+;  the two depths:
+;
+;                 u * zB                  u  - how far along the WALL
+;      t  =  -----------------            t  - how far along the SCREEN
+;             (1-u)*zA + u*zB             zA, zB - the depths of A and B
+;
+;  One divide per column of panes, four a wall. Up the wall there is no
+;  such catch: a column stands at one depth, so its screen line is even.
+;
+;  THE FLOOR IS NOT THE BOTTOM. The bottom corners stand on the ground,
+;  and on a slope that is below the floor the storeys count from (see
+;  HOUSE). So first the floor line is found on the two edges, A and B:
+;  the fraction of the way down from the roof at which bry0 lies - one
+;  divide an edge, and none at all on flat ground.
+;
+;  THE LATTICE. Columns at 1, 3, 5, 7 eighths along the wall; rows at
+;  1/4 and 3/4 of every storey, which over F storeys is (2i+1)/4F of the
+;  way from the floor to the roof - HLEVQ has them in 256ths. The points
+;  go into LX/LY, eight bytes a row, and the panes are read straight out
+;  of them.
+; ============================================================================
+WSCREEN:
+        mov  ax,[PX+2]          ; ---- the roof line: A top, B top ----
+        mov  [wta],ax
+        mov  ax,[PY+2]
+        mov  [wta+2],ax
+        mov  ax,[PX+4]
+        mov  [wtb],ax
+        mov  ax,[PY+4]
+        mov  [wtb+2],ax
+        mov  ax,[IY]            ; ---- the floor line, on edge A ----
+        xor  si,si              ; SI = A bottom, in PX/PY
+        mov  di,2               ; DI = A top
+        mov  bx,wfa             ; out: wfa
+        call WFLOOR
+        mov  ax,[IY+6]          ; ...and on edge B
+        mov  si,6               ; B bottom
+        mov  di,4               ; B top
+        mov  bx,wfb
+        call WFLOOR
+
+        ; ---- the lattice, then the panes out of it ------------------------
+        mov  ax,[hfl]           ; AX = storeys
+        mov  [wf],ax            ; (HLIT counts them down, bottom first)
+        dec  ax                 ; AX = storeys - 1
+        mov  cl,3
+        shl  ax,cl              ; AX = (storeys-1)*8: this house's row of
+        add  ax,HLEVQ           ;  HLEVQ, eight bytes a row
+        mov  [wll],ax           ; wll = the rows' levels
+        mov  ax,[hfl]
+        add  ax,ax
+        mov  [wnl],ax           ; two rows a storey
+        mov  word [wkl],HKQ     ; four columns
+        mov  word [wnk],4
+        call WLAT               ; LX/LY = the lattice
+
+        mov  word [wrow],0      ; wrow = 0: the bottom storey's glass
+.fl:    xor  si,si              ; SI = 0: the left pane
+.pn:    mov  bx,[wrow]          ; BX = storey*16: two rows of eight bytes
+        add  bx,si              ; + pane*4: two columns of two bytes
+        mov  ax,[LX+bx]         ; its four corners, round the quad:
+        mov  [PX],ax            ;  bottom left
+        mov  ax,[LY+bx]
+        mov  [PY],ax
+        mov  ax,[LX+bx+8]       ;  top left: the next row up
+        mov  [PX+2],ax
+        mov  ax,[LY+bx+8]
+        mov  [PY+2],ax
+        mov  ax,[LX+bx+10]      ;  top right
+        mov  [PX+4],ax
+        mov  ax,[LY+bx+10]
+        mov  [PY+4],ax
+        mov  ax,[LX+bx+2]       ;  bottom right
+        mov  [PX+6],ax
+        mov  ax,[LY+bx+2]
+        mov  [PY+6],ax
+
+        ; ---- NO PANE VANISHES -------------------------------------------
+        ; SCANPOLY fills the rows from the top of a polygon down to, but
+        ; not including, its bottom - so a pane whose top and bottom came
+        ; out on the SAME row fills nothing at all, and a far facade would
+        ; lose its windows at random, one here and one there, as you fly.
+        ; So a side of the pane with no height is given one row. Far off
+        ; that is a single pixel: the lit dot of a window across the town.
+        ;
+        ; ON THE SAME ROW: EQUAL, NOT "NOT ABOVE". Until this lesson the test
+        ; was "is the top not above the bottom?" - the same thing while the
+        ; aeroplane flew upright. Since lesson 19 it flies upside down, and
+        ; then the top of every pane is BELOW its bottom on the screen: every
+        ; pane was flattened to one row along its foot. The houses and the
+        ; horizon were right, and the glass slid off them (the pilot saw it,
+        ; inverted over a town, 2026-10-12). JNE, not JL.
+        mov  ax,[PY]            ; left side: top on the bottom's row?
+        cmp  [PY+2],ax
+        jne  .h1                ;   no - above it OR below it: it has height
+        dec  ax                 ;   yes: the top one row up
+        mov  [PY+2],ax
+.h1:    mov  ax,[PY+6]          ; right side, the same
+        cmp  [PY+4],ax
+        jne  .h2
+        dec  ax
+        mov  [PY+4],ax
+.h2:    mov  word [NPOLY],4
+        call HLIT               ; COLOR = lit or dark
+        push si                 ; SCANPOLY eats SI
+        call SCANPOLY           ; the pane, straight into the buffer
+        pop  si
+        add  si,4               ; the right pane
+        cmp  si,8
+        jb   .pn
+        add  word [wrow],16     ; up a storey
+        dec  word [wf]
+        jnz  .fl
+        ret
+
+; ---- WFLOOR: where the floor bry0 crosses one edge of the wall ------------
+;  AX = the ground at this edge, from the eye. SI = the edge's bottom in
+;  PX/PY, DI = its top. BX = two words out: the point's x and y.
+;  The edge is a vertical line at one depth, so its screen line is even:
+;  the floor is (bry1 - bry0) / (bry1 - ground) of the way down from the top.
+WFLOOR: mov  cx,[bry1]          ; CX = bry1
+        sub  cx,ax              ; CX = bry1 - ground: the whole edge
+        mov  ax,[bry1]
+        sub  ax,[bry0]          ; AX = bry1 - bry0: the storeys
+        cmp  ax,cx              ; the same? the floor IS the ground here
+        jne  .r
+        mov  ax,[PX+si]         ; the bottom corner itself
+        mov  [bx],ax
+        mov  ax,[PY+si]
+        mov  [bx+2],ax
+        ret
+.r:     push bx
+        mov  bx,256             ; AX = storeys * 256 / edge: a fraction,
+        imul bx                 ;  in 256ths, of the way down
+        idiv cx
+        mov  [wr],ax            ; wr = it
+        pop  bx
+        mov  ax,[PX+si]         ; x = top + (bottom - top) * wr / 256
+        sub  ax,[PX+di]
+        imul word [wr]          ; DX:AX = the difference * wr
+        mov  al,ah              ; the middle two bytes of the product ARE
+        mov  ah,dl              ;  the product over 256 - ROTXZ's trick
+        add  ax,[PX+di]
+        mov  [bx],ax
+        mov  ax,[PY+si]         ; y the same
+        sub  ax,[PY+di]
+        imul word [wr]
+        mov  al,ah
+        mov  ah,dl
+        add  ax,[PY+di]
+        mov  [bx+2],ax
+        ret
+
+; ---- WLAT: the lattice. [wkl]/[wnk] = the columns, in eighths along the
+;      wall; [wll]/[wnl] = the rows, in 256ths from floor to roof.
+;      LX/LY[row*8 + column*2] = each point on the screen.
+WLAT:   mov  ax,[IZ]            ; AX = zA
+        sar  ax,1
+        sar  ax,1               ; /4: small enough that k*z fits a word
+        mov  [wza],ax
+        mov  ax,[IZ+4]          ; zB, the same
+        sar  ax,1
+        sar  ax,1
+        mov  [wzb],ax
+        mov  word [wci],0       ; the first column
+.c:     mov  si,[wkl]           ; ---- t for this column ----
+        add  si,[wci]
+        mov  al,[si]            ; AL = k: eighths along the wall
+        xor  ah,ah
+        mov  [wk],ax
+        mul  word [wzb]         ; AX = k*zB
+        mov  [wnum],ax          ; the top of the fraction
+        mov  ax,8
+        sub  ax,[wk]            ; AX = 8 - k
+        mul  word [wza]         ; AX = (8-k)*zA
+        add  ax,[wnum]          ; AX = (8-k)*zA + k*zB
+        mov  cx,ax              ; CX = the bottom of it
+        mov  ax,[wnum]          ; AX = k*zB
+        mov  bx,256
+        mul  bx                 ; DX:AX = k*zB*256
+        div  cx                 ; AX = t, in 256ths: 0..256
+        mov  cx,ax              ; CX = t
+        mov  ax,[wfa]           ; ---- the column's floor point ----
+        mov  bx,[wfb]
+        call LERP8
+        mov  [cfx],ax
+        mov  ax,[wfa+2]
+        mov  bx,[wfb+2]
+        call LERP8
+        mov  [cfy],ax
+        mov  ax,[wta]           ; ---- and its roof point ----
+        mov  bx,[wtb]
+        call LERP8
+        mov  [ctx],ax
+        mov  ax,[wta+2]
+        mov  bx,[wtb+2]
+        call LERP8
+        mov  [cty],ax
+        mov  word [wli],0       ; ---- up the column, row by row ----
+.l:     mov  si,[wll]
+        add  si,[wli]
+        mov  cl,[si]            ; CL = the row's level, in 256ths
+        xor  ch,ch              ; CX = it
+        mov  ax,[cfx]           ; x = floor + (roof - floor) * level
+        mov  bx,[ctx]
+        call LERP8
+        mov  di,[wli]           ; DI = row*8 + column*2
+        shl  di,1
+        shl  di,1
+        shl  di,1
+        add  di,[wci]
+        add  di,[wci]
+        mov  [LX+di],ax
+        mov  ax,[cfy]           ; y the same
+        mov  bx,[cty]
+        call LERP8
+        mov  [LY+di],ax
+        inc  word [wli]
+        mov  ax,[wli]
+        cmp  ax,[wnl]           ; every row?
+        jb   .l
+        inc  word [wci]
+        mov  ax,[wci]
+        cmp  ax,[wnk]           ; every column?
+        jb   .c
+        ret
+
+; ---- LERP8: AX = a + (b - a) * CX / 256. AX = a, BX = b, CX = the blend ----
+LERP8:  sub  bx,ax              ; BX = b - a
+        push ax                 ; keep a
+        mov  ax,bx              ; AX = b - a
+        imul cx                 ; DX:AX = (b - a) * blend
+        mov  al,ah              ; /256: the middle two bytes
+        mov  ah,dl
+        pop  bx                 ; BX = a
+        add  ax,bx              ; AX = a + that
+        ret
+
+;  The columns, in eighths along the wall: the edges of the panes.
+HKQ     db 1, 3, 5, 7
+;  The rows, in 256ths from floor to roof. HLEVQ: the bottom and top of the
+;  glass, (2i+1)/4F.
+HLEVQ   db  64,192,  0,  0,  0,  0,  0,  0   ; one storey
+        db  32, 96,160,224,  0,  0,  0,  0   ; two
+        db  21, 64,107,149,192,235,  0,  0   ; three
+        db  16, 48, 80,112,144,176,208,240   ; four
+
+; ============================================================================
+;  ORDPREP - the drawing order, worked out ONCE at the boot.
+;
+;  A wireframe does not care what order its lines go down in. The thing
+;  coming next does: hidden-line removal only works if everything NEARER
+;  has already been drawn, so the squares have to be walked from the eye
+;  outwards.
+;
+;  The order never changes, because it is a property of the block of
+;  squares and not of where the aeroplane is: the eye is always in the
+;  middle of it. So it is worked out once, into TORD, and after that the
+;  drawing loop just reads a list.
+;
+;  Sorted by the SQUARE of the distance in squares, which is
+;  (ta - NR)^2 + (tb - NR)^2 - no square root, because comparing distances
+;  and comparing their squares put things in the same order. The largest
+;  is 2*NR^2, so the outer loop runs that many times and each pass picks
+;  up everything at exactly that distance. Slow, and it runs once.
+;
+;  THE GAME HAS THIS TABLE TOO, in TERRAIN.INC, and calls it TORD - only
+;  its copy runs the other way, far to near, because a painter works back
+;  to front. Same table, read backwards. That is the next lesson.
+; ============================================================================
+;  In C:
+;
+;      void ordprep(void)
+;      {
+;          int n = 0;
+;          for (int d = 0; d <= 2*NR*NR; d++)
+;              for (int ta = 0; ta < NSIDE; ta++)
+;                  for (int tb = 0; tb < NSIDE; tb++)
+;                      if ((ta-NR)*(ta-NR) + (tb-NR)*(tb-NR) == d)
+;                          TORD[n++] = (ta * TSIDE + tb) * 2;
+;      }
+ORDPREP:
+        mov  word [ordn],0      ; ordn = 0: nothing in the list yet
+        mov  word [ordd],0      ; ordd = 0: start with the nearest
+.dl:    mov  word [ta],0        ; ta = 0
+.al:    mov  word [tb],0        ; tb = 0
+.bl:    mov  ax,[ta]            ; AX = ta
+        sub  ax,NR              ; AX = ta - NR: how far east of the middle
+        imul ax                 ; DX:AX = that, squared  (small: fits AX)
+        mov  bx,ax              ; BX = the square of it
+        mov  ax,[tb]            ; AX = tb
+        sub  ax,NR              ; AX = tb - NR
+        imul ax                 ; AX = that, squared
+        add  ax,bx              ; AX = the square of the distance
+        cmp  ax,[ordd]          ; is it exactly the distance we are on?
+        jne  .nx                ;   no: leave it for a later pass
+
+        mov  ax,[ta]            ; AX = ta     \  the slot, the only place
+        mov  bx,TSIDE           ; BX = TSIDE   > in the program that has to
+        mul  bx                 ; AX = ta*TSIDE   multiply - and it runs
+        add  ax,[tb]            ; AX += tb        once, at the boot
+        add  ax,ax              ; AX *= 2: a word to a slot
+        mov  bx,[ordn]          ; BX = ordn
+        add  bx,bx              ; BX = ordn*2: a word to an entry
+        mov  [TORD+bx],ax       ; TORD[ordn] = the slot
+
+        ; ---- and which of its four edges this square OWNS ----------------
+        ; Every inner edge of the lattice is shared by two squares, and
+        ; stroking all four sides of every square draws each of them twice.
+        ; So each edge gets ONE owner, and the owner has to be the square
+        ; painted LATER - the painter goes far to near, and a line drawn by
+        ; the earlier square would be half covered by the fill of the later.
+        ; Later is nearer, so: a square owns the edges it shares with
+        ; FARTHER neighbours. Its neighbour across the high-a side is at
+        ; (da+1)^2 + db^2, farther exactly when da >= 0 - and so on round:
+        ;
+        ;     edge 0   corner 0 -> 1   the low-b side    owned if db <= 0
+        ;     edge 1   corner 1 -> 2   the high-a side   owned if da >= 0
+        ;     edge 2   corner 2 -> 3   the high-b side   owned if db >= 0
+        ;     edge 3   corner 3 -> 0   the low-a side    owned if da <= 0
+        ;
+        ; Two edges for almost every square, three along the two axes, all
+        ; four for the one in the middle. Two neighbours are never the same
+        ; distance away - their squares differ by 2d+1, which is odd - so
+        ; every edge has exactly one owner and nothing is left undrawn.
+        mov  si,[ordn]          ; SI = ordn: TEDGE has one BYTE an entry
+        xor  al,al              ; AL = 0: owns nothing yet
+        mov  bx,[tb]            ; BX = tb
+        sub  bx,NR              ; BX = db
+        cmp  bx,0               ; db > 0 ?
+        jg   .e0                ;   yes: the low-b neighbour is nearer
+        or   al,1               ;   no: owns edge 0
+.e0:    cmp  bx,0               ; db < 0 ?
+        jl   .e2                ;   yes: the high-b neighbour is nearer
+        or   al,4               ;   no: owns edge 2
+.e2:    mov  bx,[ta]            ; BX = ta
+        sub  bx,NR              ; BX = da
+        cmp  bx,0               ; da < 0 ?
+        jl   .e1                ;   yes
+        or   al,2               ;   no: owns edge 1
+.e1:    cmp  bx,0               ; da > 0 ?
+        jg   .e3                ;   yes
+        or   al,8               ;   no: owns edge 3
+.e3:    mov  [TEDGE+si],al      ; TEDGE[ordn] = the four bits
+        mov  al,byte [ta]       ; AL = ta
+        sub  al,NR              ; AL = da: squares east of the eye's
+        mov  [TDA+si],al        ; TDA[ordn] = da - HOUSES4 needs to know
+        mov  al,byte [tb]       ;  WHERE a square is, and the slot alone
+        sub  al,NR              ;  would take a divide to say it
+        mov  [TDB+si],al        ; TDB[ordn] = db
+        inc  word [ordn]        ; ordn++
+
+.nx:    inc  word [tb]          ; tb++
+        cmp  word [tb],NSIDE    ; tb < NSIDE ?
+        jl   .bl                ;   yes
+        inc  word [ta]          ; ta++
+        cmp  word [ta],NSIDE    ; ta < NSIDE ?
+        jl   .al                ;   yes
+        cmp  word [ordd],RH*RH  ; did that pass finish the TOWN's circle?
+        jne  .nh
+        mov  ax,[ordn]          ; AX = how many squares that is
+        mov  [ordhouse],ax      ; ordhouse = it. HOUSES4 builds on these
+.nh:    cmp  word [ordd],NR*NR  ; did that pass finish THE CIRCLE of radius
+        jne  .nd                ;  NR? Everything so far is inside it...
+        mov  ax,[ordn]          ; AX = how many squares that is
+        mov  [orddisk],ax       ; orddisk = it. GROUND draws only these
+.nd:    inc  word [ordd]        ; ordd++: the next distance out
+        cmp  word [ordd],2*NR*NR+1  ; past the far corner?
+        jl   .dl                ;   no: another pass
+        ret                     ; return
+
+; ============================================================================
+;  TERRPREP - out of GAMES\OWLFLY3\SRC\TERRAIN.INC, and it is the answer to
+;  a cost lesson 13 owned up to and could not pay.
+;
+;  Up to here every corner went through ROTXZ FOUR times: once as the start
+;  of its own east edge, once as the start of its own north edge, once as
+;  the end of its west neighbour's edge, once as the end of its south
+;  neighbour's. Four rotations of the same point, every frame, because a
+;  square knew nothing about the square next to it.
+;
+;  So rotate every node ONCE, into a table, and let the squares read it.
+;  Four hundred and eighty four nodes, one rotation each, and the drawing
+;  loop then does no arithmetic at all beyond an index.
+;
+;  The height comes with it. HGET does the wrapping, WORLDH turns a map
+;  byte into a world height - sea level at 88, land at five units a step,
+;  mountains above 200 climbing twice as fast - and both are looked up
+;  once per node here instead of once per edge down there.
+; ============================================================================
+;  In C:
+;
+;      void terrprep(void)
+;      {
+;          camgi = (camx + BIAS) >> 10;
+;          camgj = (camz + BIAS) >> 10;
+;          for (ta = 0; ta < TSIDE; ta++)
+;            for (tb = 0; tb < TSIDE; tb++) {
+;              gi = camgi + ta - NR;   gj = camgj + tb - NR;
+;              wdx = gi * 1024 - BIAS - camx;
+;              wdz = gj * 1024 - BIAS - camz;
+;              rotxz();                      /* by the heading, once */
+;              /* the slot walks: not one multiply in either loop */
+;              TRX[ta][tb] = rc_x;
+;              TRZ[ta][tb] = rc_z;
+;              TWY[ta][tb] = worldh(hget(gi, gj)) << VEXAG;
+;            }
+;      }
+TERRPREP:
+        mov  ax,[camx]          ; AX = camx
+        add  ax,BIAS            ; AX = camx + BIAS
+        mov  cl,2               ; CL = 2   \  >> 10 in two goes: the 8086
+        shr  ax,cl              ; AX >>= 2  > shifts by 1 or by CL, and CL
+        mov  cl,8               ; CL = 8   /  cannot be 10 in one go
+        shr  ax,cl              ; AX >>= 8
+        mov  [camgi],ax         ; camgi = the node the eye is over
+        mov  ax,[camz]          ; AX = camz
+        add  ax,BIAS            ; AX = camz + BIAS
+        mov  cl,2               ; CL = 2
+        shr  ax,cl              ; AX >>= 2
+        mov  cl,8               ; CL = 8
+        shr  ax,cl              ; AX >>= 8
+        mov  [camgj],ax         ; camgj = ...and the other axis
+
+        mov  word [tsi],0       ; tsi = 0: the first slot, and it walks
+        mov  word [ta],0        ; ta = 0
+.al:    mov  word [tb],0        ; tb = 0
+.bl:    mov  ax,[camgi]         ; AX = camgi    \  which node this slot is
+        add  ax,[ta]            ; AX += ta       > in map coordinates
+        sub  ax,NR              ; AX -= NR      /
+        mov  [gi],ax            ; gi = camgi + ta - NR
+        mov  ax,[camgj]         ; AX = camgj
+        add  ax,[tb]            ; AX += tb
+        sub  ax,NR              ; AX -= NR
+        mov  [gj],ax            ; gj = camgj + tb - NR
+
+        mov  ax,[gi]            ; AX = gi       \  its world position, as an
+        mov  cl,2               ; CL = 2         > offset from the camera
+        shl  ax,cl              ; AX = gi << 2  /
+        mov  cl,8               ; CL = 8
+        shl  ax,cl              ; AX = gi * 1024
+        sub  ax,BIAS            ; AX -= BIAS
+        sub  ax,[camx]          ; AX -= camx
+        mov  [wdx],ax           ; wdx = how far east of the eye
+        mov  ax,[gj]            ; AX = gj
+        mov  cl,2               ; CL = 2
+        shl  ax,cl              ; AX = gj << 2
+        mov  cl,8               ; CL = 8
+        shl  ax,cl              ; AX = gj * 1024
+        sub  ax,BIAS            ; AX -= BIAS
+        sub  ax,[camz]          ; AX -= camz
+        mov  [wdz],ax           ; wdz = how far north of it
+        call ROTXZ              ; rc_x, rc_z = that, turned by the heading
+
+        mov  si,[tsi]           ; SI = this node's slot
+        mov  ax,[rc_x]          ; AX = rc_x
+        mov  [TRX+si],ax        ; TRX[slot] = AX
+        mov  ax,[rc_z]          ; AX = rc_z
+        mov  [TRZ+si],ax        ; TRZ[slot] = AX
+
+        push si                 ; keep the slot: HGET and WORLDH are free to
+        mov  bx,[gi]            ; BX = gi   \  eat SI, and one of them does
+        mov  dx,[gj]            ; DX = gj   /  HGET wants x in BX, y in DX
+        call HGET               ; AL = the raw map height, 0..255, wrapped
+        mov  [rawh],al          ; rawh = it, IN MEMORY, and not in a register.
+                                ;  WORLDH uses BX as scratch - `mov bx,5` is
+                                ;  its second instruction - and it promises
+                                ;  nothing about what it leaves behind. This
+                                ;  line was `mov bl,al` for an afternoon, and
+                                ;  the sea came out in waves: every node
+                                ;  ABOVE sea level had its raw height eaten,
+                                ;  so the colour ladder read 5 and called the
+                                ;  hills water, while the heights beside them
+                                ;  stayed right. A caller may assume what a
+                                ;  routine RETURNS. Never what it spares
+        xor  ah,ah              ; AX = AL
+        call WORLDH             ; AX = the world height of that
+        mov  cl,VEXAG           ; CL = the exaggeration, from the top of
+        shl  ax,cl              ; AX <<= CL   this file. Doubled, and said
+                                ;  out loud there rather than hidden here
+        pop  si                 ; SI = the slot again
+        mov  [TWY+si],ax        ; TWY[slot] = AX
+
+        mov  si,[tsi]           ; SI = the slot again
+        shr  si,1               ; SI /= 2: TH is bytes, not words
+        mov  al,[rawh]          ; AL = the raw byte, off the shelf
+        mov  [TH+si],al         ; TH[slot] = the RAW map byte. Not a colour:
+                                ;  a SQUARE has four corners and the game
+                                ;  colours it by the HIGHEST of them, so the
+                                ;  raw number has to survive to the quad
+
+        ; ---- and the node's OUTCODE, while its numbers are in hand --------
+        ; Five bits, one for each plane the picture is bounded by:
+        ;
+        ;     bit 0   behind the near plane       z < NEARZ
+        ;     bit 1   outside the right plane     x >  kx * z
+        ;     bit 2   outside the left plane      x < -kx * z
+        ;     bit 3   above the top plane         y >  ky * z
+        ;     bit 4   below the bottom plane      y < -ky * z
+        ;
+        ; A square is invisible FOR CERTAIN when all four of its corners
+        ; are outside the SAME plane, and that is an AND of four bytes -
+        ; see DRAWQUAD. Lesson 13's line clipper does exactly this for the
+        ; two ends of a line, and calls the bits by the same name.
+        ;
+        ; LESSONS 16 TO 18 HAD THREE BITS, AND A LEVEL EYE. Their x and z
+        ; were the node turned by the heading and nothing else, because
+        ; that was all the camera ever did. This camera also PITCHES, so the
+        ; numbers the planes are tested on are the node as the camera sees
+        ; it after the pitch too - PITCH4's own sums, done here once a node:
+        ;
+        ;     z' = (z * pcos + y * psin) / 256      how far in front
+        ;     y' = (y * pcos - z * psin) / 256      how far above the middle
+        ;
+        ; Four multiplies, and each one's answer is its middle two bytes.
+        ; With the nose level psin is 0 and pcos 256, and all four are
+        ; skipped: a level eye pays nothing for this.
+        ;
+        ; THE PLANES, and the roll decides how wide. Level wings: the screen
+        ; is 160 pixels each side of the middle and 100 above and below, at
+        ; FOCAL 220 - so kx = 3/4 and ky = 1/2, each a shade outside the
+        ; screen. Banked, the screen is turned, and its CORNERS are what
+        ; reach furthest: sqrt(160^2 + 100^2) = 189 pixels, 0.86 of FOCAL,
+        ; in whatever direction the roll has put them. So banked, BOTH are
+        ; 7/8: a square of planes round the circle the turned screen sweeps.
+        ; Lesson 18 found the first half of that the hard way - the sky
+        ; showing through the corners of a banked turn.
+        ;
+        ; AND A NODE IS A COLUMN, NOT A POINT. Houses stand on the squares,
+        ; up to four storeys, 128 units. A square whose GROUND is below the
+        ; bottom of the screen can still have a roof in it, and culling the
+        ; square culls its houses. So the code is worked out twice - for
+        ; the ground, and for the ground plus 128 - and a plane counts only
+        ; when BOTH are outside it: everything between two points outside a
+        ; plane is outside it too. Raising a point by 128 is cheap in the
+        ; camera's frame: y' grows by 128*pcos/256 = pcos/2, z' by psin/2.
+        ;
+        ; SAR, not SHR, throughout: z' can be negative, and these are planes
+        ; through the eye - a point is on one side or the other whatever z'
+        ; is.
+        mov  bx,[tsi]           ; BX = the slot, in words
+        mov  ax,[TWY+bx]        ; AX = the ground's height there
+        sub  ax,[camy]          ; AX = y: how far above the eye (negative:
+        mov  [ty],ax            ;  below it, which is the usual)
+        mov  ax,[rc_z]          ; AX = z
+        mov  [tz],ax            ; tz = z: the level eye's answers, so far
+        cmp  word [pitch],0     ; is the nose level?
+        je   .lvl               ;   yes: z and y ARE the camera's
+        mov  ax,[rc_z]          ; AX = z
+        imul word [pcos]        ; DX:AX = z * pcos
+        mov  al,ah              ; AX = z * pcos / 256 - the middle bytes
+        mov  ah,dl
+        mov  cx,ax              ; CX = it
+        mov  ax,[ty]            ; AX = y
+        imul word [psin]        ; DX:AX = y * psin
+        mov  al,ah              ; AX = y * psin / 256
+        mov  ah,dl
+        add  cx,ax              ; CX = z' = (z*pcos + y*psin) / 256
+        mov  ax,[ty]            ; AX = y
+        imul word [pcos]        ; DX:AX = y * pcos
+        mov  al,ah              ; AX = y * pcos / 256
+        mov  ah,dl
+        mov  bx,ax              ; BX = it
+        mov  ax,[rc_z]          ; AX = z
+        imul word [psin]        ; DX:AX = z * psin
+        mov  al,ah              ; AX = z * psin / 256
+        mov  ah,dl
+        sub  bx,ax              ; BX = y' = (y*pcos - z*psin) / 256
+        mov  [ty],bx            ; ty = y'
+        mov  [tz],cx            ; tz = z'
+.lvl:   mov  bx,[tz]            ; BX = z'
+        mov  dx,[ty]            ; DX = y'
+        call NODECODE           ; AL = the ground point's five bits
+        mov  [tcode],al         ; tcode = them
+        mov  ax,[psin]          ; AX = psin          ---- the roof of the column
+        sar  ax,1               ; AX = psin / 2: what 128 up adds to z'
+        add  ax,[tz]            ; AX = z' + psin/2
+        mov  bx,ax              ; BX = the roof's z'
+        mov  ax,[pcos]          ; AX = pcos
+        sar  ax,1               ; AX = pcos / 2: what 128 up adds to y'
+        add  ax,[ty]            ; AX = y' + pcos/2
+        mov  dx,ax              ; DX = the roof's y'
+        call NODECODE           ; AL = the roof's five bits
+        and  al,[tcode]         ; AL = the planes BOTH are outside
+        mov  si,[tsi]           ; SI = the slot, in words
+        shr  si,1               ; SI = in bytes: TOUT is bytes
+        mov  [TOUT+si],al       ; TOUT[slot] = the five bits
+
+        add  word [tsi],2       ; tsi += a word. The nodes are written in
+                                ;  the order they lie in memory, so the
+                                ;  slot is never worked out - it walks
+        inc  word [tb]          ; tb++
+        cmp  word [tb],TSIDE    ; tb < TSIDE ?
+        jl   .bl                ;   yes: the next node along
+        inc  word [ta]          ; ta++
+        cmp  word [ta],TSIDE    ; ta < TSIDE ?
+        jl   .al                ;   yes: the next row of nodes
+        ret                     ; return
+
+; ---- NODECODE: BX = z', DX = y', [rc_x] = x  ->  AL = the five plane bits --
+;  See the OUTCODE note in TERRPREP. kx and ky are 3/4 and 1/2 with the
+;  wings level, 7/8 and 7/8 banked; each is the z' it scales minus a shift
+;  of it, so no multiply.
+;  In C:
+;
+;      int nodecode(int z, int y)
+;      {
+;          int c = 0;
+;          if (z < NEARZ) c |= 1;
+;          int kx = roll ? z - z/8 : z - z/4;
+;          int ky = roll ? z - z/8 : z/2;
+;          if (x >  kx) c |= 2;   if (x < -kx) c |= 4;
+;          if (y >  ky) c |= 8;   if (y < -ky) c |= 16;
+;          return c;
+;      }
+NODECODE:
+        push di                 ; keep DI: the caller's
+        xor  al,al              ; AL = 0: inside all five, so far
+        cmp  bx,NEARZ           ; z' < NEARZ ?
+        jge  .n0                ;   no
+        or   al,1               ;   yes: bit 0, behind
+.n0:    mov  cx,bx              ; CX = z'
+        sar  cx,1               ; CX = z'/2
+        sar  cx,1               ; CX = z'/4
+        cmp  word [roll],0      ; banked?
+        je   .kx                ;   no: z'/4
+        sar  cx,1               ;   yes: z'/8
+.kx:    neg  cx                 ; CX = -(z'/4) or -(z'/8)
+        add  cx,bx              ; CX = kx: 3z'/4 level, 7z'/8 banked
+        mov  di,[rc_x]          ; DI = x
+        cmp  di,cx              ; x > kx ?
+        jle  .n1                ;   no
+        or   al,2               ;   yes: bit 1, off the right
+.n1:    neg  cx                 ; CX = -kx
+        cmp  di,cx              ; x < -kx ?
+        jge  .n2                ;   no
+        or   al,4               ;   yes: bit 2, off the left
+.n2:    mov  cx,bx              ; CX = z'
+        sar  cx,1               ; CX = z'/2: ky with the wings level
+        cmp  word [roll],0      ; banked?
+        je   .ky                ;   no: z'/2
+        sar  cx,1               ;   yes: CX = z'/4...
+        sar  cx,1               ;   ...z'/8
+        neg  cx                 ;   CX = -z'/8
+        add  cx,bx              ;   CX = 7z'/8
+.ky:    cmp  dx,cx              ; y' > ky ?
+        jle  .n3                ;   no
+        or   al,8               ;   yes: bit 3, above the top
+.n3:    neg  cx                 ; CX = -ky
+        cmp  dx,cx              ; y' < -ky ?
+        jge  .n4                ;   no
+        or   al,16              ;   yes: bit 4, below the bottom
+.n4:    pop  di                 ; DI back
+        ret                     ; return
+
+; ---- BAND: COLOR from the height at node (AX = gi, BX = gj) ---------------
+;  The boundaries are lesson 0x11's and the engine's - the same numbers
+;  GETZONE sorts the world by. The six colours are the island's, so a
+;  square here is the colour that square was on the map in stage 1.
+;  In C:
+;
+;      void band(int gi, int gj)
+;      {
+;          int h = hget(gi & 63, gj & 63);      /* HGET does the & 63 itself */
+;          if      (h <  88) COLOR = 1;         /* sea   */
+;          else if (h < 120) COLOR = 2;         /* sand  */
+;          else if (h < 168) COLOR = 3;         /* grass */
+;          else if (h < 200) COLOR = 4;         /* woods */
+;          else if (h < 230) COLOR = 5;         /* rock  */
+;          else              COLOR = 6;         /* snow  */
+;      }
+;
+;  The assembly keeps the answer in AH and OVERWRITES it on the way down:
+;  every `mov ah,n` is "the answer so far", and the first `jb .set` that
+;  fires is the `else if` that won.
+BAND:   mov  dx,bx              ; DX = gj   \  HGET wants x in BX, y in DX
+        mov  bx,ax              ; BX = gi   /
+        call HGET               ; AL = h, 0..255; HGET does the wrapping
+                                ;  ...and fall straight into the ladder
+
+; ---- QBAND: the ladder on its own. AL = a raw map height, in. ------------
+;      Split out of BAND because the FILLED ground already HAS the number
+;      and must not look it up again: a square is coloured by the highest
+;      of its four corners, and all four are in the cache.
+QBAND:  mov  ah,1               ; AH = 1 (sea)      - if nothing below fires
+        cmp  al,88              ; h < 88 ?
+        jb   .set               ;   yes: sea
+        mov  ah,2               ; AH = 2 (sand)
+        cmp  al,120             ; h < 120 ?
+        jb   .set               ;   yes: sand
+        mov  ah,3               ; AH = 3 (grass)
+        cmp  al,168             ; h < 168 ?
+        jb   .set               ;   yes: grass
+        mov  ah,4               ; AH = 4 (woods)
+        cmp  al,200             ; h < 200 ?
+        jb   .set               ;   yes: woods
+        mov  ah,5               ; AH = 5 (rock)
+        cmp  al,230             ; h < 230 ?
+        jb   .set               ;   yes: rock
+        mov  ah,6               ; AH = 6 (snow)     - the else
+.set:   mov  [COLOR],ah         ; COLOR = AH
+        ret                     ; return
+
+; ============================================================================
+;  TRAP0 - INT 0, and lesson 0x0F is the reason this program can be filmed.
+;
+;  Take NEARCLIP away and a node behind your eye reaches PROJPT with z at or
+;  below nought. `idiv cx` with cx = 0 is a divide fault; `idiv cx` with a
+;  quotient too big for AX is ALSO a divide fault, because on the 8086 INT 0
+;  is both. DOS's own handler prints a line and takes the program away, and
+;  stage 2 is a black screen and nothing to teach with.
+;
+;  So we take the vector. The handler throws away whatever PROJPT had pushed,
+;  puts the stack back to where DRAWEDGE3D started, counts the fault, and
+;  RETURNS - into GRIDC, at the instruction after the call, as though that
+;  edge had simply been drawn. STI because an INT clears the flag on its way
+;  in and nothing else will put it back.
+;
+;  Every red pixel along the top of stage 2 is one of these. That is not a
+;  wrong picture - it is a machine that stopped, caught.
+; ============================================================================
+;  There is no C for this one, and that is worth saying: C has no way to
+;  say "abandon the function that is running and continue from the caller
+;  of the function that called it". The nearest is setjmp/longjmp, and this
+;  is exactly what longjmp does under the hood - restore the stack pointer
+;  and jump.
+;
+;      void trap0(void)             /* entered by the CPU, not by a call */
+;      {
+;          sp = savesp;             /* everything PROJPT pushed: gone      */
+;          faults++;
+;          enable_interrupts();     /* INT turned them off on the way in   */
+;          return;                  /* ...to GRIDC, after `call DRAWEDGE3D` */
+;      }
+TRAP0:  mov  ax,cs              ; AX = our segment
+        mov  ds,ax              ; DS = AX: data is ours again, whatever the
+                                ;  faulting code had it set to. SS is ours
+                                ;  already: a .COM is one segment
+        mov  sp,[savesp]        ; sp = savesp: back to the top of DRAWEDGE3D
+        inc  word [faults]      ; faults++
+        sti                     ; interrupts back on
+        cmp  byte [marm],2      ; THE METER: was it counting? The INT that
+        jne  .tf                ;  brought us here cleared TF, and this
+        pushf                   ;  handler never IRETs - nothing would put
+        pop  ax                 ;  it back, and the count would stop half
+        or   ah,1               ;  way through the frame. So: TF = 1 again
+        push ax
+        popf
+.tf:    ret                     ; return - into GRIDC
+
+; ============================================================================
+;  Stage 1: the island from above, and where you are about to stand.
+;  Lesson 0x11's picture, redrawn from the same map the flight reads.
+; ============================================================================
+;  In C:
+;
+;      void mapview(void)
+;      {
+;          memset(buf, 0, 64000);
+;          for (gj = 63; gj >= 0; gj--)                /* top row = highest z: */
+;              for (gi = 0; gi < 64; gi++) {           /*  north up            */
+;                  band(gi, gj);
+;                  int at = (ORGY + (63 - gj) * 3) * 320 + ORGX + gi * 3;
+;                  for (int r = 0; r < 3; r++)         /* a 3x3 block a node   */
+;                      buf[at + r*320] = buf[at + r*320 + 1]
+;                                      = buf[at + r*320 + 2] = COLOR;
+;              }
+;          int mx = ((camx + BIAS) >> 10) & 63,  mz = ((camz + BIAS) >> 10) & 63;
+;          sx0 = sx1 = ORGX + mx * 3;                  /* the mark: a line   */
+;          sy0 = ORGY + (63 - mz) * 3;  sy1 = sy0 - 24; /*  eight nodes long, */
+;          COLOR = 15;  line();                        /*  pointing north    */
+;      }
+MAPVIEW:
+        mov  ax,[bufseg]        ; AX = bufseg
+        mov  es,ax              ; ES = bufseg           \  memset(buf,0,64000)
+        xor  di,di              ; DI = 0                 >
+        xor  ax,ax              ; AX = 0                /
+        mov  cx,32000           ; CX = 32000 words
+        rep  stosw              ; while (cx--) *es:di++ = ax
+        mov  word [gj],63       ; gj = 63     - the TOP row is the HIGHEST z:
+.row:   mov  word [gi],0        ; gi = 0        north up, like every map printed
+.col:   mov  ax,[gi]            ; AX = gi   \  band(gi, gj)
+        mov  bx,[gj]            ; BX = gj   /
+        call BAND               ; COLOR = the band
+        mov  ax,[gj]            ; AX = gj
+        mov  bx,63              ; BX = 63
+        sub  bx,ax              ; BX = 63 - gj      - rows count down from top
+        mov  ax,bx              ; AX = 63 - gj
+        mov  bx,320*CELLW       ; BX = 960: one node-row of the picture
+        mul  bx                 ; AX = (63 - gj) * 960
+        add  ax,ORGY*320        ; AX += ORGY * 320  - the map's top margin
+        mov  di,ax              ; DI = the row's start
+        mov  ax,[gi]            ; AX = gi
+        mov  bx,CELLW           ; BX = 3
+        mul  bx                 ; AX = gi * 3
+        add  di,ax              ; DI += gi * 3
+        add  di,ORGX            ; DI += ORGX        - now DI = at
+        mov  al,[COLOR]         ; AL = COLOR
+        mov  cx,CELLW           ; CX = 3 rows
+.r3:    mov  [es:di],al         ; buf[at]   = COLOR  \  a 3x3 block a node,
+        mov  [es:di+1],al       ; buf[at+1] = COLOR   > the way lesson 0x11
+        mov  [es:di+2],al       ; buf[at+2] = COLOR  /  painted it
+        add  di,320             ; at += 320  (next pixel row)
+        loop .r3                ; 3 rows
+        inc  word [gi]          ; gi++
+        cmp  word [gi],64       ; gi < 64 ?
+        jb   .col               ;   yes: next node
+        dec  word [gj]          ; gj--
+        jns  .row               ; gj >= 0 ? next row  (JNS: -1 sets the sign)
+
+        ; ---- THE WHITE MARK. The bottom end is where you are standing,
+        ; and it runs eight nodes toward the top of the map, which is
+        ; north. So it is both "you are here" and "this is the way you
+        ; will be facing" - the flight starts on heading nought, and
+        ; nought is north.
+        ;
+        ; It is drawn straight up rather than along the heading, and that
+        ; is only honest because this screen is shown ONCE, at the boot,
+        ; before anything has turned. Show the map again in mid-flight and
+        ; the mark would be lying to you.
+        mov  ax,[camx]          ; AX = camx             ---- the mark ----
+        add  ax,BIAS            ; AX = camx + BIAS
+        mov  cl,2               ; CL = 2   (shift count)
+        shr  ax,cl              ; AX >>= 2   \  >> 10
+        mov  cl,8               ;             >
+        shr  ax,cl              ; AX >>= 8   /
+        and  ax,63              ; AX &= 63          - mx, the node's column
+        mov  bx,CELLW           ; BX = 3
+        mul  bx                 ; AX = mx * 3
+        add  ax,ORGX            ; AX = ORGX + mx * 3
+        mov  [sx0],ax           ; sx0 = AX   \  a vertical line
+        mov  [sx1],ax           ; sx1 = AX   /
+        mov  ax,[camz]          ; AX = camz
+        add  ax,BIAS            ; AX = camz + BIAS
+        mov  cl,2               ; CL = 2
+        shr  ax,cl              ; AX >>= 2
+        mov  cl,8               ; CL = 8
+        shr  ax,cl              ; AX >>= 8
+        and  ax,63              ; AX &= 63          - mz, the node's row
+        mov  bx,63              ; BX = 63
+        sub  bx,ax              ; BX = 63 - mz
+        mov  ax,bx              ; AX = 63 - mz
+        mov  bx,CELLW           ; BX = 3
+        mul  bx                 ; AX = (63 - mz) * 3
+        add  ax,ORGY            ; AX = ORGY + (63 - mz) * 3
+        mov  [sy0],ax           ; sy0 = AX          - where you stand
+        sub  ax,8*CELLW         ; AX -= 24
+        mov  [sy1],ax           ; sy1 = sy0 - 24    - eight nodes north
+        mov  byte [COLOR],15    ; COLOR = 15, white
+        call LINE               ; line()
+        ret                     ; return
+
+; ---- SHOW: the back buffer onto the screen --------------------------------
+;  In C:  wait_retrace();  memcpy(screen, buf, 64000);
+SHOW:   call WAITVR             ; wait_retrace()
+        push ds                 ; keep DS
+        mov  ax,0A000h          ; AX = A000h
+        mov  es,ax              ; ES = the screen     \  memcpy(screen, buf,
+        mov  ds,[bufseg]        ; DS = bufseg          > 64000): 32000 words
+        xor  si,si              ; SI = 0              /  through MOVSW
+        xor  di,di              ; DI = 0
+        mov  cx,32000           ; CX = 32000
+        rep  movsw              ; while (cx--) *es:di++ = *ds:si++
+        pop  ds                 ; DS = ours again
+        ret                     ; return
+
+; ---- WAITVR: wait for the beam to fly home --------------------------------
+;  Port 3DAh, bit 3: the VERTICAL RETRACE. Wait OUT any retrace already
+;  running, then wait for the next one to begin - a whole frame, every time.
+;  In C:
+;
+;      void wait_retrace(void)
+;      {
+;          while ( inp(0x3DA) & 8) ;     /* wait OUT any retrace running */
+;          while (!(inp(0x3DA) & 8)) ;   /* wait for the next to begin   */
+;      }
+WAITVR: push ax                 ; keep AX and DX for the caller
+        push dx                 ; keep DX
+        mov  dx,3DAh            ; DX = 3DAh, the VGA status port
+.o:     in   al,dx              ; AL = inp(0x3DA)
+        test al,8               ; bit 3 = the beam is in vertical retrace
+        jnz  .o                 ; while (retrace) ;   - wait it out
+.i:     in   al,dx              ; AL = inp(0x3DA)
+        test al,8               ; bit 3 again
+        jz   .i                 ; while (!retrace) ;  - wait for the next
+        pop  dx                 ; DX back
+        pop  ax                 ; AX back
+        ret                     ; return
+
+; ---- SETPAL: the island's six colours, written into the VGA DAC -----------
+;  Port 3C8h takes the colour NUMBER to start at, then 3C9h takes red,
+;  green and blue - 0..63 each, and the index steps on by itself after
+;  every third write. Lesson 0x11's ramp, unchanged, so a square in the
+;  air is the colour it was on the map.
+;  In C:
+;
+;      void setpal(void)
+;      {
+;          outp(0x3C8, 1);                        /* start at colour 1   */
+;          for (int i = 0; i < 6 * 3; i++)
+;              outp(0x3C9, PAL[i]);               /* r, g, b, r, g, b... */
+;      }
+SETPAL: mov  dx,3C8h            ; DX = 3C8h, the DAC index port. SI = the
+                                ;  table: runs of [first, count, r g b ...]
+.rec:   lodsb                   ; AL = the first colour of this run
+        mov  bl,al              ; BL = it
+        lodsb                   ; AL = how many colours in the run
+        or   al,al              ; nought?
+        jz   .done              ;   the end of the table
+        mov  cl,al              ; CL = count
+        xor  ch,ch              ; CX = count
+        mov  ax,cx              ; AX = count
+        add  cx,cx              ; CX = count*2
+        add  cx,ax              ; CX = count*3: an r, a g and a b each
+        mov  al,bl              ; AL = the first colour
+        out  dx,al              ; outp(0x3C8, first): where writing starts
+        inc  dx                 ; DX = 3C9h, the data port
+.p:     lodsb                   ; AL = *si++
+        out  dx,al              ; outp(0x3C9, AL) - the index steps on by
+        loop .p                 ;  itself after every third write
+        dec  dx                 ; DX = 3C8h again, for the next run
+        jmp  .rec               ; the next run
+.done:  ret                     ; return
+
+; ============================================================================
+;  DAYNIGHT - load the palette the clock says, day or night.
+;
+;  THIS IS THE WHOLE NIGHT. Nothing on the screen is redrawn to make it:
+;  every pixel keeps its number, and the DAC - the chip between the frame
+;  buffer and the monitor - is told that the numbers mean different
+;  colours now. Colour 35 is dark glass by day and a lit room by night; the
+;  frame buffer never finds out. Sixty-odd bytes down two ports, and the
+;  whole world changes in one retrace. The game does exactly this, on N,
+;  with a bank per card.
+; ============================================================================
+DAYNIGHT:
+        mov  si,PALDAY          ; SI = the day bank
+        cmp  byte [night],0     ; night?
+        je   .s                 ;   no
+        mov  si,PALNIGHT        ;   yes: SI = the night bank
+.s:     jmp  SETPAL             ; setpal(si), and its RET is ours
+
+; ---- THE PALETTE IS IN TWO HALVES, EIGHT APART, AND NOW IN TWO BANKS ---
+;  1 to 6 are the ground and 9 to 14 are the same six a fifth darker, so
+;  a fold is colour + 8 - one ADD. A fifth and not a half: a seam is there
+;  to show where one square meets the next, and it should be the square's
+;  own colour, only just darker - not a black net thrown over the island. The houses follow the same rule at 32:
+;  32 to 36 are the walls, the roof and two windows, 40 to 42 the folds.
+;  Colour 15 is left alone on purpose: it is the BIOS white the frame
+;  counter is written in, day or night.
+;
+;  Each bank is a list of RUNS - first colour, how many, then r g b for
+;  each - ending with a run of nought. Two runs a bank.
+PALDAY  db 1, 14                ; ---- the ground, by day ----
+        db  4,10,28             ; 1 sea
+        db 46,42,26             ; 2 sand
+        db 16,38,10             ; 3 grass
+        db 10,26, 8             ; 4 woods
+        db 26,24,22             ; 5 rock
+        db 46,48,50             ; 6 snow
+        db 60,12, 8             ; 7 the crash message - its own entry,
+                                ;  because this is not the BIOS palette
+        db  0, 0, 0             ; 8 empty: the gap that makes the ADD free
+        db  3, 8,22             ; 9  sea, folded: four fifths of 1
+        db 37,34,21             ; 10 sand
+        db 13,30, 8             ; 11 grass
+        db  8,21, 6             ; 12 woods
+        db 21,19,18             ; 13 rock
+        db 37,38,40             ; 14 snow
+        db 16, 1                ; ---- the sky, by day ----
+        db 32,46,60             ; 16 a plain blue sheet
+        db 32, 12               ; ---- the houses, by day ----
+        db 46,44,40             ; 32 a wall facing north or south
+        db 32,31,29             ; 33 a wall facing east or west: shaded
+        db 30,16,12             ; 34 the roof
+        db 12,18,28             ; 35 the window: dark glass
+        db 12,18,28             ; 36 ANOTHER window, and the same glass: by
+                                ;  day nobody can tell 35 and 36 apart
+        db  0, 0, 0, 0,0,0, 0,0,0          ; 37-39 empty
+        db 37,35,32             ; 40 the folds, eight up, a fifth darker
+        db 26,25,23             ; 41
+        db 24,13,10             ; 42
+        db  6, 9,14             ; 43
+        db 48, 3                ; ---- THE HUD'S OWN THREE ----
+        db 22,23,25             ; 48 the ring: a grey, not black - black
+                                ;  shouted louder than the game
+        db 54,54,52             ; 49 the ink: a warm off-white
+        db 20,52,60             ; 50 the IVV: a cyan
+        db 56, 7                ; ---- THE AEROPLANES, by day ----
+        db 52,52,56             ; 56 the top, in the sun
+        db 20,20,22             ; 57 the belly, in shade
+        db 34,34,38             ; 58 the sides and the fin
+        db 44,44,46             ; 59 the wings
+        db 16,56,16             ; 60 the marker: green
+        db 63,60,20             ; 61 your rounds: yellow
+        db 63,16, 8             ; 62 theirs: red
+        db 0, 0                 ; end
+
+PALNIGHT db 1, 14               ; ---- the ground, by night: a third, and
+        db  1, 2, 8             ; 1 sea                 bluer - moonlight
+        db 11,10, 9             ; 2 sand
+        db  3, 8, 4             ; 3 grass
+        db  2, 5, 3             ; 4 woods
+        db  7, 7, 8             ; 5 rock
+        db 14,15,18             ; 6 snow
+        db 60,12, 8             ; 7 the crash red, the same by night
+        db  0, 0, 0             ; 8
+        db  1, 1, 6             ; 9  folds, a fifth darker
+        db  9, 8, 7             ; 10
+        db  2, 6, 3             ; 11
+        db  1, 4, 2             ; 12
+        db  5, 5, 6             ; 13
+        db 11,12,14             ; 14
+        db 16, 1                ; ---- the sky, by night ----
+        db  1, 2, 9             ; 16 not black: a very dark blue
+        db 32, 12               ; ---- the houses, by night ----
+        db  6, 6, 8             ; 32 walls, nearly gone
+        db  4, 4, 6             ; 33
+        db  3, 3, 4             ; 34 roof
+        db 34,52,63             ; 35 THE WINDOW: a lit room, and blue -
+                                ;  the television, perhaps
+        db  3, 4, 7             ; 36 ...and here they part: nobody home
+        db  0, 0, 0, 0,0,0, 0,0,0          ; 37-39 empty
+        db  5, 5, 6             ; 40 a fifth darker, as by day
+        db  3, 3, 5             ; 41
+        db  2, 2, 3             ; 42
+        db 40,30, 8             ; 43 a lit window's frame
+        db 48, 3                ; ---- the HUD, by night ----
+        db 12,12,14             ; 48 the ring: dimmer, as everything is
+        db 44,44,42             ; 49 the ink: dimmer too, or it glares
+        db 10,28,34             ; 50 the IVV: a dim cyan
+        db 56, 7                ; ---- the aeroplanes, by night ----
+        db 16,16,20             ; 56
+        db  5, 5, 7             ; 57
+        db 10,10,13             ; 58
+        db 13,13,16             ; 59
+        db  8,36, 8             ; 60 the marker, dimmer
+        db 63,60,20             ; 61 rounds glow by night too
+        db 63,16, 8             ; 62
+        db 0, 0                 ; end
+
+; ============================================================================
+;  THE TRAFFIC - lesson 1E's hangar, in the sky. GAMES\OWLFLY3\SRC\PLANES.INC
+;  in four parts, each cut down to what this lesson shows:
+;
+;      PLANESINIT   five aeroplanes round you, one of each type
+;      PLANESUPD    one tick of each: a gentle circle, at the type's speed
+;      PLANESDRAW   each one as the hangar drew it - turned, sorted, filled
+;      CAMSET       F4: the eye leaves the cockpit and circles one of them
+;
+;  AN AEROPLANE IN THE SKY IS FIVE NUMBERS: where it is - x, y, z - which
+;  way it is going, and what it is. The two tables of lesson 1E say what
+;  it looks like; these five say where to draw that. Everything else is
+;  the hangar again, with one change: the stand was 300 in front of a
+;  still eye, and now the aeroplane is wherever it is, and the eye too.
+; ============================================================================
+
+; ---- PLANESINIT: five aeroplanes round the new one, one of each type -------
+;  Where each starts is a table, measured from you: east, up, north. North
+;  is the way you face at the start, so all five are in front of you.
+;  In C:
+;      for (i = 0; i < 5; i++) {
+;          pax[i] = camx + SPAX[i];  pay[i] = camy + SPAY[i];
+;          paz[i] = camz + SPAZ[i];  pah[i] = SPAH[i];
+;      }
+PLANESINIT:
+        xor  si,si              ; SI = the slot, 2 bytes each
+.i:     mov  ax,[camx]          ; AX = where you are, east
+        add  ax,[SPAX+si]       ; AX += the slot's start, east of you
+        mov  [pax+si],ax        ; pax[i] = it
+        mov  ax,[camy]          ; AX = your height
+        add  ax,[SPAY+si]       ; AX += the slot's start, above you
+        mov  [pay+si],ax        ; pay[i] = it
+        mov  ax,[camz]          ; AX = where you are, north
+        add  ax,[SPAZ+si]       ; AX += the slot's start, ahead of you
+        mov  [paz+si],ax        ; paz[i] = it
+        mov  ax,[SPAH+si]       ; AX = the slot's heading
+        mov  [pah+si],ax        ; pah[i] = it
+        add  si,2               ; the next slot
+        cmp  si,NPLANE*2        ; all five?
+        jb   .i
+        call GUNINIT            ; full belt, whole hull, no wrecks
+        mov  byte [cammode],0   ; and the eye in the cockpit
+        ret
+SPAX    dw  -600,  900, -1500,  400, 1600   ; east of you
+SPAY    dw    60,  200,   120,   40,  260   ; above you
+SPAZ    dw  1500, 2600,  3200, 4200, 5200   ; north: ahead of you
+SPAH    dw    64,  192,     0,  128,   32   ; a fighter crossing east, the
+                                            ;  bomber west, the radar picket
+                                            ;  away, the transport at you
+SPEEDS  dw    15,   10,    10,   10,   10, 12   ; units a tick: the game's - its
+                                            ;  fighters 15, the big ones 10
+
+; ---- PLANESUPD: one tick of the traffic -------------------------------------
+;  Every fourth tick each heading turns one step - a circle of 256 steps,
+;  a minute and a bit round - half of them one way, half the other. Then
+;  each goes forward at its speed, split by its heading into east and north:
+;  STEPXZ's sine and cosine, again. One that strays too far comes back in
+;  front of you - the game's leash.
+;  In C:
+;      if (++ptick % 4 == 0) for each i: pah[i] += (i & 1) ? -1 : 1;
+;      for each i: pax[i] += sin(pah[i]) * SPEEDS[i] / 256;
+;                  paz[i] += cos(pah[i]) * SPEEDS[i] / 256;
+;                  if (far(i)) respawn(i);
+PLANESUPD:
+        inc  word [ptick]       ; ptick++: the traffic's own clock
+        xor  si,si              ; SI = the slot
+.p:     mov  bx,si
+        shr  bx,1               ; BX = the slot, a byte each
+        cmp  byte [pst+bx],0    ; a wreck?
+        je   .alive
+        jmp  .nx                ;   a wreck does not fly
+.alive: cmp  byte [pursue+bx],0 ; chasing you? AIM turns it, not the circle
+        jne  .mv
+        test word [ptick],3     ; every fourth tick?
+        jnz  .mv                ;   no: straight on
+        mov  ax,[pah+si]        ; AX = the heading
+        test si,2               ; an odd slot?
+        jnz  .ccw
+        inc  ax                 ;   even: one step right
+        jmp  .tn
+.ccw:   dec  ax                 ;   odd: one step left
+.tn:    and  ax,255             ; AX &= 255: a byte is the whole circle
+        mov  [pah+si],ax        ; pah[i] = it
+.mv:    mov  ax,[pah+si]        ; AX = the heading
+        push si                 ; (SINQ clobbers SI)
+        call SINQ               ; AX = sin(heading)*256
+        pop  si
+        imul word [SPEEDS+si]   ; DX:AX = sin*256*speed
+        mov  al,ah              ; AX = /256: the middle two bytes of the
+        mov  ah,dl              ;  product - ROTXZ's trick
+        add  [pax+si],ax        ; pax[i] += it: east
+        mov  ax,[pah+si]        ; AX = the heading
+        add  ax,64              ; a quarter on: the cosine
+        push si
+        call SINQ               ; AX = cos(heading)*256
+        pop  si
+        imul word [SPEEDS+si]   ; DX:AX = cos*256*speed
+        mov  al,ah              ; AX = /256
+        mov  ah,dl
+        add  [paz+si],ax        ; paz[i] += it: north
+        add  word [pax+si],WINDX    ; THE AIR CARRIES THEM TOO, as it carries
+        add  word [paz+si],WINDZ    ;  you above WINDH. Without it a target
+                                    ;  dead ahead slides off sideways
+        mov  ax,[pax+si]        ; ---- the leash: too far east or west? ----
+        sub  ax,[camx]          ; AX = how far east of you
+        jns  .l1
+        neg  ax                 ; AX = |it|
+.l1:    cmp  ax,LEASH           ; past the leash?
+        ja   .far
+        mov  ax,[paz+si]        ; ...or too far north or south?
+        sub  ax,[camz]          ; AX = how far north of you
+        jns  .l2
+        neg  ax                 ; AX = |it|
+.l2:    cmp  ax,LEASH
+        jbe  .nx
+.far:   call RESPAWN            ; back in front of you
+.nx:    add  si,2               ; the next slot
+        cmp  si,NPLANE*2
+        jb   .p
+        ret
+
+; ---- RESPAWN: slot SI comes back 3000 in front of you, flying at you -------
+;  hsin and hcos are where you are looking, times 256: times 12 is 3072
+;  ahead. RND16 scatters it a little, so five strays do not come back in one
+;  place.
+RESPAWN:
+        call RND16              ; AX = a random word
+        and  ax,2047            ; AX = 0..2047
+        sub  ax,1024            ; AX = -1024..1023: the scatter
+        mov  bx,ax              ; BX = it
+        mov  ax,[hsin]          ; AX = sin(where you look)*256
+        mov  cx,12              ; CX = 12
+        imul cx                 ; AX = *12: 3072 ahead, east part
+        add  ax,bx              ; AX += the scatter
+        add  ax,[camx]          ; AX += where you are
+        mov  [pax+si],ax        ; pax[i] = it
+        mov  ax,[hcos]          ; AX = cos(where you look)*256
+        imul cx                 ; AX = *12: north part (CX is still 12)
+        add  ax,bx              ; AX += the scatter
+        add  ax,[camz]          ; AX += where you are
+        mov  [paz+si],ax        ; paz[i] = it
+        and  bx,255             ; BX = 0..255
+        mov  ax,[camy]          ; AX = your height
+        add  ax,bx              ; AX += 0..255: a little above you
+        mov  [pay+si],ax        ; pay[i] = it
+        mov  ax,[heading]       ; AX = where you look
+        add  ax,128             ; AX += half a circle: towards you
+        and  ax,255
+        mov  [pah+si],ax        ; pah[i] = it
+        ret
+
+; ---- PLANESDRAW: every aeroplane, after the ground --------------------------
+;  After the ground on purpose: they are in the sky, so painting them over
+;  the land is the painter's order we want. The game does the same, and the
+;  same thing goes wrong with it: one behind a hill is drawn on the hill.
+;
+;  FOR EACH ONE, THE HANGAR WITH TWO CHANGES:
+;
+;      the stand   is where it is: the eye's turn (ROTXZ, the ground's own)
+;                  takes (x - camx, z - camz) into the eye's space, and its
+;                  height is y - camy
+;      the spin    is its heading MINUS yours: an aeroplane flying the way
+;                  you look shows you its tail, whatever both headings are
+;
+;  The pitch and the bank are not here at all. FACEFILL pitches every face
+;  (PITCH4) and PROJPT banks every corner - the aeroplanes are tilted with
+;  the world for nothing.
+;  In C:
+;      for (i = 0; i < (cammode ? 6 : 5); i++) {
+;          rotxz(pax[i] - camx, paz[i] - camz);     /* -> rc_x, rc_z */
+;          if (rc_z < -100 || rc_z >= 12500) continue;
+;          pdx = rc_x;  pdy = pay[i] - camy;  pdz = rc_z;
+;          yaw = pah[i] - heading;  modeldraw(type(i));  marker();
+;      }
+PLANESDRAW:
+        mov  ax,NPLANE*2        ; five slots...
+        cmp  byte [cammode],0   ; ...unless the eye is outside:
+        je   .n
+        mov  ax,(NPLANE+1)*2    ;  then our own aeroplane is the sixth
+.n:     mov  [plim],ax          ; plim = how many bytes of slots
+        mov  word [pidx],0      ; pidx = the slot
+.pd:    mov  si,[pidx]          ; SI = it
+        mov  bx,si
+        shr  bx,1
+        cmp  byte [pst+bx],0    ; a wreck? WRKDRAW draws that
+        je   .alv
+        jmp  .skip
+.alv:
+        mov  ax,[pax+si]        ; AX = its x
+        sub  ax,[camx]          ; AX -= yours: east of the eye
+        mov  [wdx],ax           ; wdx = it
+        jns  .q1
+        neg  ax                 ; AX = |it|
+.q1:    cmp  ax,13000           ; out of sight east or west?
+        jae  .skip
+        mov  ax,[paz+si]        ; AX = its z
+        sub  ax,[camz]          ; AX -= yours: north of the eye
+        mov  [wdz],ax           ; wdz = it
+        jns  .q2
+        neg  ax
+.q2:    cmp  ax,13000           ; out of sight north or south?
+        jae  .skip
+        call ROTXZ              ; rc_x, rc_z = it, in the eye's space
+        mov  ax,[rc_z]          ; AX = how far in front
+        cmp  ax,-100            ; behind you?
+        jl   .skip
+        cmp  ax,12500           ; past the end of the world you can see?
+        jge  .skip
+        mov  [pdz],ax           ; pdz = in front
+        mov  ax,[rc_x]
+        mov  [pdx],ax           ; pdx = right
+        mov  si,[pidx]
+        mov  ax,[pay+si]        ; AX = its height
+        sub  ax,[camy]          ; AX -= yours
+        mov  [pdy],ax           ; pdy = above
+        mov  bx,si              ; BX = the slot, which IS the type...
+        cmp  bx,NPLANE*2        ; ...except our own, the sixth:
+        jb   .ty
+        xor  bx,bx              ;  a fighter
+.ty:    mov  ax,[MVTAB+bx]      ; the type's two tables, as SETM in 1E
+        mov  [mvb],ax
+        mov  ax,[MVNTAB+bx]
+        mov  [mvn],ax
+        mov  ax,[MFTAB+bx]
+        mov  [mfb],ax
+        mov  ax,[NFCTAB+bx]
+        mov  [nfc],ax
+        mov  ax,[pah+si]        ; AX = its heading
+        sub  ax,[heading]       ; AX -= yours: how it is turned to the eye
+        and  ax,255
+        mov  [myaw],ax          ; myaw = it
+        call SINQ               ; AX = sin(myaw)*256
+        mov  [msin],ax
+        mov  ax,[myaw]
+        add  ax,64              ; a quarter on
+        call SINQ               ; AX = cos(myaw)*256
+        mov  [mcos],ax
+        call MODELDRAW          ; turned, sorted, filled
+        cmp  byte [cammode],0   ; outside, the picture is clean:
+        jne  .skip              ;  no markers
+        call MARKER             ; a green square round it
+.skip:  add  word [pidx],2      ; the next slot
+        mov  ax,[pidx]
+        cmp  ax,[plim]          ; all of them?
+        jb   .pd
+        ret
+
+; ---- MODELDRAW: the model mvb/mfb at pdx/pdy/pdz, turned by msin/mcos ------
+;  Lesson 1E's frame, in one routine - GAMES\OWLFLY3\SRC\PLANES.INC's own,
+;  line 837. ONE THING IS NOT THE HANGAR'S: no times eight. The hangar
+;  blew the table up to fill the screen; in the sky a cell of the squared
+;  paper is one unit of the world, as in the game - the fighter is 26 wide,
+;  a fifth of a house.
+;  In C:
+;      for each vertex v:  pvx = (x*mcos + z*msin)/256 + pdx;
+;                          pvy =  y + pdy;
+;                          pvz = (z*mcos - x*msin)/256 + pdz;
+;      depth of each face = average pvz of its four corners;
+;      bubble the faces far to near;  facefill() each in that order;
+MODELDRAW:
+        xor  si,si              ; SI = the vertex in the table, 6 bytes each
+        xor  di,di              ; DI = the vertex in the cache, 2 bytes each
+.tv:    mov  bx,[mvb]           ; BX = the vertex table
+        mov  ax,[bx+si]         ; AX = x
+        imul word [mcos]        ; AX = x*cos  (a word: |x| < 32)
+        mov  cx,ax              ; CX = it
+        mov  ax,[bx+si+4]       ; AX = z
+        imul word [msin]        ; AX = z*sin
+        add  ax,cx              ; AX = x cos + z sin
+        cwd                     ; DX:AX = it, for IDIV
+        mov  cx,256
+        idiv cx                 ; AX = /256
+        add  ax,[pdx]           ; AX += where it is, right of the eye
+        mov  [PVX+di],ax        ; kept
+        mov  ax,[bx+si+2]       ; AX = y
+        add  ax,[pdy]           ; AX += how high it is over the eye
+        mov  [PVY+di],ax        ; kept
+        mov  ax,[bx+si]         ; AX = x
+        imul word [msin]        ; AX = x*sin
+        mov  cx,ax
+        mov  ax,[bx+si+4]       ; AX = z
+        imul word [mcos]        ; AX = z*cos
+        sub  ax,cx              ; AX = z cos - x sin
+        cwd
+        mov  cx,256
+        idiv cx                 ; AX = /256
+        add  ax,[pdz]           ; AX += how far in front it is
+        mov  [PVZ+di],ax        ; kept
+        add  si,6               ; the next vertex
+        add  di,2
+        cmp  si,[mvn]           ; all of them?
+        jb   .tv
+        xor  si,si              ; ---- each face's depth: halves of halves ----
+.fd:    mov  bx,si
+        shl  bx,1
+        shl  bx,1               ; BX = f*4
+        add  bx,si              ; BX = f*5: five bytes a face
+        add  bx,[mfb]           ; BX = &faces[f]
+        push si
+        mov  al,[bx]            ; corner a
+        call PVZOF              ; AX = its depth
+        mov  cx,ax
+        mov  al,[bx+1]          ; corner b
+        call PVZOF
+        add  cx,ax              ; CX = a + b
+        sar  cx,1               ; CX = /2
+        mov  al,[bx+2]          ; corner c
+        call PVZOF
+        mov  dx,ax
+        mov  al,[bx+3]          ; corner d
+        call PVZOF
+        add  dx,ax              ; DX = c + d
+        sar  dx,1               ; DX = /2
+        add  cx,dx              ; CX = both halves
+        sar  cx,1               ; CX = /2: the average of four
+        pop  si
+        mov  bx,si
+        add  bx,bx              ; BX = f*2
+        mov  [FCD+bx],cx        ; depth[f] = it
+        mov  ax,si
+        mov  [FCO+si],al        ; order[f] = f
+        inc  si
+        cmp  si,[nfc]
+        jb   .fd
+        mov  cx,[nfc]           ; ---- the bubble, far to near ----
+        dec  cx                 ; CX = n-1 passes
+.bs:    push cx
+        xor  si,si              ; SI = i
+.bi:    mov  bx,si
+        add  bx,bx              ; BX = i*2
+        mov  ax,[FCD+bx]        ; AX = depth[i]
+        cmp  ax,[FCD+bx+2]      ; nearer than depth[i+1]?
+        jge  .nsw               ;   no
+        xchg ax,[FCD+bx+2]      ;   yes: swap the depths...
+        mov  [FCD+bx],ax
+        mov  al,[FCO+si]        ;   ...and the faces
+        xchg al,[FCO+si+1]
+        mov  [FCO+si],al
+.nsw:   inc  si
+        mov  bx,[nfc]
+        dec  bx                 ; BX = n-1
+        cmp  si,bx
+        jb   .bi
+        pop  cx
+        loop .bs
+        mov  word [pfc],0       ; ---- the faces, far to near ----
+.df:    mov  si,[pfc]
+        mov  al,[FCO+si]        ; AL = the face in this place
+        xor  ah,ah
+        mov  bx,ax
+        shl  bx,1
+        shl  bx,1               ; BX = f*4
+        add  bx,ax              ; BX = f*5
+        add  bx,[mfb]           ; BX = &faces[f]
+        mov  al,[bx+4]          ; its colour
+        mov  [COLOR],al
+        xor  di,di              ; DI = the corner in IX/IY/IZ
+.dc:    mov  al,[bx]            ; AL = the corner's vertex
+        xor  ah,ah
+        add  ax,ax              ; AX = *2: a word a vertex in the cache
+        mov  si,ax
+        mov  ax,[PVX+si]        ; into FACEFILL's input
+        mov  [IX+di],ax
+        mov  ax,[PVY+si]
+        mov  [IY+di],ax
+        mov  ax,[PVZ+si]
+        mov  [IZ+di],ax
+        inc  bx                 ; the next corner
+        add  di,2
+        cmp  di,8
+        jb   .dc
+        call FACEFILL           ; pitch, clip, project, bank, fill
+        inc  word [pfc]
+        mov  ax,[nfc]
+        cmp  [pfc],ax
+        jb   .df
+        ret
+
+; ---- PVZOF: AL = a vertex number -> AX = its depth in the cache ------------
+PVZOF:  xor  ah,ah
+        add  ax,ax              ; AX = *2
+        mov  si,ax
+        mov  ax,[PVZ+si]        ; AX = pvz[v]
+        ret
+
+; ---- MARKER: a green square round an aeroplane, as the game draws --------
+;  A fighter a mile off is a few pixels. The game boxes every aeroplane in
+;  sight; the box is 2860/z + 3 pixels either side, never more than 24, and
+;  a far one is not boxed at all. Its centre goes through the same pitch
+;  as the faces (PPOINT) and the same lens and bank (PROJPT).
+MARKER: mov  ax,[pdz]           ; AX = how far in front
+        cmp  ax,8500            ; past the game's visual range?
+        jg   .x                 ;   then no box
+        mov  ax,[pdx]           ; the centre, in the eye's space
+        mov  dx,[pdy]
+        mov  cx,[pdz]
+        call PPOINT             ; AX, DX = on the screen; CF = behind
+        jc   .x
+        mov  [msx],ax           ; kept
+        mov  [msy],dx
+        mov  ax,2860            ; AX = 2860
+        cwd
+        idiv word [pdz2]        ; AX = 2860/z  (pdz2 >= NEARZ: no fault)
+        add  ax,3               ; AX += 3
+        cmp  ax,24              ; never more than 24
+        jle  .s
+        mov  ax,24
+.s:     mov  [mhalf],ax         ; the half size
+        mov  byte [COLOR],PMARK ; green
+        mov  ax,[msx]           ; ---- top ----
+        sub  ax,[mhalf]
+        mov  [sx0],ax
+        mov  ax,[msx]
+        add  ax,[mhalf]
+        mov  [sx1],ax
+        mov  ax,[msy]
+        sub  ax,[mhalf]
+        mov  [sy0],ax
+        mov  [sy1],ax
+        call MLINE
+        mov  ax,[msy]           ; ---- bottom: the same, lower ----
+        add  ax,[mhalf]
+        mov  [sy0],ax
+        mov  [sy1],ax
+        mov  ax,[msx]
+        sub  ax,[mhalf]
+        mov  [sx0],ax
+        mov  ax,[msx]
+        add  ax,[mhalf]
+        mov  [sx1],ax
+        call MLINE
+        mov  ax,[msx]           ; ---- left ----
+        sub  ax,[mhalf]
+        mov  [sx0],ax
+        mov  [sx1],ax
+        mov  ax,[msy]
+        sub  ax,[mhalf]
+        mov  [sy0],ax
+        mov  ax,[msy]
+        add  ax,[mhalf]
+        mov  [sy1],ax
+        call MLINE
+        mov  ax,[msx]           ; ---- right ----
+        add  ax,[mhalf]
+        mov  [sx0],ax
+        mov  [sx1],ax
+        mov  ax,[msy]
+        sub  ax,[mhalf]
+        mov  [sy0],ax
+        mov  ax,[msy]
+        add  ax,[mhalf]
+        mov  [sy1],ax
+        call MLINE
+.x:     ret
+MLINE:  call CLIPLINE           ; on the screen at all?
+        jc   .n
+        call LINE
+.n:     ret
+
+; ---- PPOINT: one point of the eye's space through the pitch and the lens --
+;  in: AX = x, DX = y, CX = z (turned by the heading, not yet pitched)
+;  out: AX, DX = the screen; CF = 1 if it is behind the near plane.
+;  PITCH4's two lines, for one point:
+;      y' = (y*pcos - z*psin)/256       z' = (y*psin + z*pcos)/256
+PPOINT: mov  [ppx],ax           ; keep x
+        mov  [ppy],dx           ; keep y
+        mov  [ppz],cx           ; keep z
+        mov  ax,[ppy]           ; ---- y' ----
+        imul word [pcos]        ; DX:AX = y*pcos
+        mov  bx,256
+        idiv bx                 ; AX = /256
+        mov  cx,ax              ; CX = y*pcos/256
+        mov  ax,[ppz]
+        imul word [psin]        ; DX:AX = z*psin
+        idiv bx                 ; AX = /256
+        sub  cx,ax              ; CX = y'
+        mov  [ppy2],cx
+        mov  ax,[ppy]           ; ---- z' ----
+        imul word [psin]        ; DX:AX = y*psin
+        idiv bx
+        mov  cx,ax              ; CX = y*psin/256
+        mov  ax,[ppz]
+        imul word [pcos]        ; DX:AX = z*pcos
+        idiv bx
+        add  ax,cx              ; AX = z'
+        cmp  ax,NEARZ           ; in front of the near plane?
+        jl   .behind
+        mov  [pdz2],ax          ; kept: MARKER divides by it
+        mov  cx,ax              ; CX = z'
+        mov  ax,[ppx]           ; AX = x
+        mov  dx,[ppy2]          ; DX = y'
+        call PROJPT             ; AX, DX = the screen (with the bank)
+        clc                     ; CF = 0: on the screen side
+        ret
+.behind:
+        stc                     ; CF = 1: behind
+        ret
+
+; ---- GLOW: the nozzles burn - lesson 1F, one DAC entry, no pixel touched --
+GLOW:   inc  word [gcnt]        ; gcnt++
+        test word [gcnt],3      ; every fourth frame
+        jnz  .ng
+        mov  bx,[gph]           ; BX = the phase
+        mov  ax,bx
+        add  bx,bx
+        add  bx,ax              ; BX = phase*3: three bytes a colour
+        mov  dx,3C8h            ; the DAC's write index
+        mov  al,PNOZ            ; colour 94, the nozzle
+        out  dx,al
+        inc  dx                 ; the DAC's data
+        mov  al,[GLOWT+bx]      ; red
+        out  dx,al
+        mov  al,[GLOWT+bx+1]    ; green
+        out  dx,al
+        mov  al,[GLOWT+bx+2]    ; blue
+        out  dx,al
+        inc  word [gph]         ; the next phase
+        cmp  word [gph],3
+        jb   .ng
+        mov  word [gph],0
+.ng:    ret
+GLOWT   db 63,52,12             ; yellow
+        db 63,34, 6             ; orange
+        db 56,14, 4             ; red
+
+; ============================================================================
+;  F4 - THE EYE LEAVES THE COCKPIT. OWL FLY III's orbit camera, GAMES\
+;  OWLFLY3\SRC\FLIGHT.INC line 1320 and PLANES.INC line 3585. The game
+;  orbits the target you have locked; this lesson has no lock yet, so F4
+;  simply steps through the sky: each of the five, then your own aeroplane,
+;  then back into the cockpit.
+;
+;  THE CAMERA STANDS ON A SPHERE round the aeroplane. Three numbers place
+;  it: tgaz, the way round (a byte of circle, like a heading); tgel, how
+;  high (-30 to 56 of 256, down to up); tgrad, how far. Then:
+;
+;      h   = sin(tgel) * tgrad          above the aeroplane
+;      r   = cos(tgel) * tgrad          out, along the ground
+;      cam = aeroplane - (sin tgaz, 0, cos tgaz) * r + (0, h, 0)
+;
+;  and it LOOKS at the aeroplane: its heading is tgaz, its pitch -tgel - up
+;  on the sphere means looking down. No new arithmetic: the eye is moved
+;  and turned, and the whole world - ground, houses, traffic - is drawn
+;  from there by the code that already draws it.
+;
+;  THE KEYS, the game's: LEFT and RIGHT walk round, UP and DOWN climb and
+;  dive the eye, Z and X pull it in and push it out - held, a sixteenth at
+;  a time, so it is smooth near and far. And while the eye is outside, the
+;  arrows are the camera's: the stick is let go, and your aeroplane flies
+;  on hands off, as the game's does.
+; ============================================================================
+
+; ---- CAMKEYS: F4 on the way down, and the camera's own keys ----------------
+CAMKEYS:
+        cmp  byte [dying],0     ; a wreck has no camera to play with:
+        je   .alive
+        mov  byte [cammode],0   ;  back in the cockpit
+.alive: cmp  byte [KEYS+SC_F4],0    ; is F4 held?
+        je   .f4up                  ;   no: remember that
+        cmp  byte [f4was],0         ; held last frame too?
+        jne  .keys                  ;   yes: one press, one step
+        mov  byte [f4was],1
+        inc  byte [cammode]         ; the next aeroplane
+        cmp  byte [cammode],NPLANE+1    ; past our own?
+        jbe  .on
+        mov  byte [cammode],0       ;   back in the cockpit
+        jmp  .keys
+.on:    mov  ax,[camx]          ; our own aeroplane into the sixth slot,
+        mov  [pax+NPLANE*2],ax  ;  where it is now - so F4 can find it
+        mov  ax,[camy]
+        mov  [pay+NPLANE*2],ax
+        mov  ax,[camz]
+        mov  [paz+NPLANE*2],ax
+        mov  ax,[heading]
+        mov  [pah+NPLANE*2],ax
+        mov  bl,[cammode]       ; BX = the slot: cammode - 1...
+        xor  bh,bh
+        dec  bx
+        add  bx,bx              ; ...times 2
+        mov  ax,[pah+bx]        ; start right behind it:
+        mov  [tgaz],ax          ;  the way round = its heading
+        mov  word [tgel],12     ; a little above
+        mov  ax,[TGRADS+bx]     ; and as far as its size wants
+        mov  [tgrad],ax
+        jmp  .keys
+.f4up:  mov  byte [f4was],0     ; F4 is up: the next press counts
+.keys:  cmp  byte [cammode],0   ; outside?
+        je   .r                 ;   no: the arrows are the stick's
+        cmp  byte [KEYS+SC_LF],0    ; LEFT: walk round one way
+        je   .c1
+        sub  word [tgaz],2      ; tgaz -= 2
+        and  word [tgaz],255
+.c1:    cmp  byte [KEYS+SC_RT],0    ; RIGHT: the other way
+        je   .c2
+        add  word [tgaz],2      ; tgaz += 2
+        and  word [tgaz],255
+.c2:    cmp  byte [KEYS+SC_UP],0    ; UP: climb the eye
+        je   .c3
+        cmp  word [tgel],56     ; not past 56 - almost overhead
+        jge  .c3
+        inc  word [tgel]
+.c3:    cmp  byte [KEYS+SC_DN],0    ; DOWN: drop it
+        je   .c4
+        cmp  word [tgel],-30    ; not past -30 - from below
+        jle  .c4
+        dec  word [tgel]
+.c4:    mov  ax,[tgrad]         ; AX = the distance
+        mov  bx,ax
+        mov  cl,4
+        shr  bx,cl              ; BX = a sixteenth of it...
+        inc  bx                 ; ...and one more, so it never stops
+        cmp  byte [KEYS+SC_Z],0     ; Z: in
+        je   .c5
+        sub  ax,bx              ; AX -= the step
+        cmp  ax,TGRMIN          ; not into the aeroplane
+        jge  .c5
+        mov  ax,TGRMIN
+.c5:    cmp  byte [KEYS+SC_X],0     ; X: out
+        je   .c6
+        add  ax,bx              ; AX += the step
+        cmp  ax,TGRMAX          ; not out of sight
+        jle  .c6
+        mov  ax,TGRMAX
+.c6:    mov  [tgrad],ax         ; tgrad = it
+.r:     ret
+TGRADS  dw 100,200,140,150,160,100  ; how far F4 starts from each: a jet is
+                                    ;  small, the game's 100; the big ones
+                                    ;  further, so they fit the screen
+
+; ---- CAMSET: the eye onto the sphere, for this frame's picture only --------
+;  The pilot's eye is put aside first and given back by CAMRST, before the
+;  physics runs: the aeroplane must not fly from where the camera is.
+;  In C:
+;      sv = eye;  c = plane[cammode-1];
+;      h = sin(tgel)*tgrad/256;  r = cos(tgel)*tgrad/256;
+;      camx = c.x - sin(tgaz)*r/256;  camz = c.z - cos(tgaz)*r/256;
+;      camy = c.y + h;  heading = tgaz;  pitch = -tgel;  roll = 0;
+CAMSET: cmp  byte [cammode],0   ; in the cockpit?
+        je   .r                 ;   nothing to do
+        mov  ax,[camx]          ; ---- the pilot's eye, put aside ----
+        mov  [svx],ax
+        mov  ax,[camy]
+        mov  [svy],ax
+        mov  ax,[camz]
+        mov  [svz],ax
+        mov  ax,[heading]
+        mov  [svh],ax
+        mov  ax,[pitch]
+        mov  [svp],ax
+        mov  ax,[roll]
+        mov  [svr],ax
+        mov  ax,[camx]          ; ---- our own aeroplane, for the picture ----
+        mov  [pax+NPLANE*2],ax
+        mov  ax,[camy]
+        mov  [pay+NPLANE*2],ax
+        mov  ax,[camz]
+        mov  [paz+NPLANE*2],ax
+        mov  ax,[heading]
+        mov  [pah+NPLANE*2],ax
+        mov  bl,[cammode]       ; BX = the slot being watched
+        xor  bh,bh
+        dec  bx
+        add  bx,bx
+        mov  [tslot],bx
+        mov  ax,[tgel]          ; ---- h = sin(tgel)*tgrad/256 ----
+        and  ax,255             ; (a negative angle as a byte of circle)
+        call SINQ               ; AX = sin(tgel)*256
+        imul word [tgrad]       ; DX:AX = *tgrad
+        mov  bx,256
+        idiv bx                 ; AX = /256
+        mov  [cth],ax           ; cth = h
+        mov  ax,[tgel]          ; ---- r = cos(tgel)*tgrad/256 ----
+        add  ax,64              ; a quarter on: the cosine
+        and  ax,255
+        call SINQ
+        imul word [tgrad]
+        mov  bx,256
+        idiv bx
+        mov  [ctr],ax           ; ctr = r
+        mov  ax,[tgaz]          ; ---- camx = x - sin(tgaz)*r/256 ----
+        call SINQ
+        imul word [ctr]
+        mov  bx,256
+        idiv bx                 ; AX = sin(tgaz)*r/256
+        mov  si,[tslot]
+        mov  bx,[pax+si]        ; BX = the aeroplane's x
+        sub  bx,ax              ; BX -= it: behind, along tgaz
+        mov  [camx],bx
+        mov  ax,[tgaz]          ; ---- camz = z - cos(tgaz)*r/256 ----
+        add  ax,64
+        call SINQ
+        imul word [ctr]
+        mov  bx,256
+        idiv bx
+        mov  si,[tslot]
+        mov  bx,[paz+si]
+        sub  bx,ax
+        mov  [camz],bx
+        mov  ax,[pay+si]        ; ---- camy = y + h ----
+        add  ax,[cth]
+        mov  [camy],ax
+        mov  ax,[tgaz]          ; ---- and look at it ----
+        mov  [heading],ax       ; heading = tgaz
+        mov  ax,[tgel]
+        neg  ax                 ; pitch = -tgel: above it, looking down
+        mov  [pitch],ax
+        mov  word [roll],0      ; wings of the camera level
+.r:     ret
+
+; ---- CAMRST: the pilot's eye back, before the physics flies it -------------
+CAMRST: cmp  byte [cammode],0
+        je   .r
+        mov  ax,[svx]
+        mov  [camx],ax
+        mov  ax,[svy]
+        mov  [camy],ax
+        mov  ax,[svz]
+        mov  [camz],ax
+        mov  ax,[svh]
+        mov  [heading],ax
+        mov  ax,[svp]
+        mov  [pitch],ax
+        mov  ax,[svr]
+        mov  [roll],ax
+        call SETTRIG            ; and its sines: the physics steps with them
+.r:     ret
+
+; ---- CAMWORDS: what the HUD says outside, instead of the instruments ------
+CAMWORDS:
+        mov  bl,[cammode]       ; BX = the slot's name
+        xor  bh,bh
+        dec  bx
+        add  bx,bx
+        mov  si,[CAMNAMES+bx]
+        mov  ax,14              ; row 14
+        mov  bx,8               ; column 8
+        call TXT
+        mov  si,MSGCAMK         ; and the keys
+        mov  ax,188             ; row 188
+        mov  bx,8
+        call TXT
+        ret
+CAMNAMES dw CN0,CN1,CN2,CN3,CN4,CN5
+CN0     db 'F4: FIGHTER',0
+CN1     db 'F4: BOMBER',0
+CN2     db 'F4: RADAR PICKET',0
+CN3     db 'F4: TRANSPORT',0
+CN4     db 'F4: TANKER',0
+CN5     db 'F4: YOU',0
+MSGCAMK db 'ARROWS TURN  Z X ZOOM  F4 NEXT',0
+
+; ---- THE AIR FORCE: lesson 1E's tables, coloured for this palette ---------
+;  The hangar's numbers, every one. The colours are this program's own:
+;  56 to 59 are the aeroplanes' four greys, set in DAYNIGHT, and 94 is the
+;  nozzle GLOW turns.
+MVTAB   dw MVERT,MVERT1,MVERT2,MVERT3,MVERT4
+MVNTAB  dw 13*6,25*6,19*6,13*6,19*6
+MFTAB   dw MFACE,MFACE1,MFACE2,MFACE3,MFACE4
+NFCTAB  dw 8,12,10,8,10
+MVERT   dw   0,  1, 16          ; FIGHTER
+        dw  -2,  2,-11
+        dw   2,  2,-11
+        dw  -2, -2,-11
+        dw   2, -2,-11
+        dw -13,  1, -8
+        dw  13,  1, -8
+        dw   0,  1,  6
+        dw  -2,  1,-11
+        dw   2,  1,-11
+        dw   0,  2, -5
+        dw   0,  7,-13
+        dw   0,  2,-11
+MFACE   db 0,1,2,0, PLIT        ; the top
+        db 0,3,4,0, PSHD        ; the belly
+        db 0,1,3,0, PSID        ; the left side
+        db 0,2,4,0, PSID        ; the right side
+        db 7,5,8,7, PWNG        ; the left wing
+        db 7,6,9,7, PWNG        ; the right wing
+        db 10,11,12,10, PSID    ; the fin
+        db 1,2,4,3, PNOZ        ; the nozzle
+MVERT1  dw   0,  1, 34          ; BOMBER
+        dw  -5,  5,-22
+        dw   5,  5,-22
+        dw  -5, -4,-22
+        dw   5, -4,-22
+        dw -28,  1, -6
+        dw  28,  1, -6
+        dw   0,  1, 10
+        dw  -5,  1,-20
+        dw   5,  1,-20
+        dw   0,  5,-10
+        dw   0, 13,-26
+        dw   0,  5,-22
+        dw -10,  0,  6
+        dw -10,  0, -2
+        dw -10, -4,  2
+        dw -19,  0,  2
+        dw -19,  0, -6
+        dw -19, -4, -2
+        dw  10,  0,  6
+        dw  10,  0, -2
+        dw  10, -4,  2
+        dw  19,  0,  2
+        dw  19,  0, -6
+        dw  19, -4, -2
+MFACE1  db 0,1,2,0, PLIT
+        db 0,3,4,0, PSHD
+        db 0,1,3,0, PSID
+        db 0,2,4,0, PSID
+        db 7,5,8,7, PWNG
+        db 7,6,9,7, PWNG
+        db 10,11,12,10, PSID
+        db 1,2,4,3, PNOZ
+        db 13,14,15,13, PSHD    ; the four engines
+        db 16,17,18,16, PSHD
+        db 19,20,21,19, PSHD
+        db 22,23,24,22, PSHD
+MVERT2  dw   0,  2, 20          ; RADAR PICKET
+        dw  -4,  5,-14
+        dw   4,  5,-14
+        dw  -4, -3,-14
+        dw   4, -3,-14
+        dw -18,  2, -2
+        dw  18,  2, -2
+        dw   0,  2,  6
+        dw  -4,  2,-12
+        dw   4,  2,-12
+        dw   0,  5, -6
+        dw   0,  9,-14
+        dw   0,  5,-14
+        dw   0, 10,  2
+        dw   4, 10, -4
+        dw   0, 10,-10
+        dw  -4, 10, -4
+        dw   0, 12, -4
+        dw   0,  8, -4
+MFACE2  db 0,1,2,0, PLIT
+        db 0,3,4,0, PSHD
+        db 0,1,3,0, PSID
+        db 0,2,4,0, PSID
+        db 7,5,8,7, PWNG
+        db 7,6,9,7, PWNG
+        db 10,11,12,10, PSID
+        db 1,2,4,3, PNOZ
+        db 13,14,15,16, PLIT    ; the dome
+        db 13,17,15,18, PSHD
+MVERT3  dw   0,  2, 18          ; TRANSPORT
+        dw  -5,  6,-14
+        dw   5,  6,-14
+        dw  -5, -4,-14
+        dw   5, -4,-14
+        dw -20,  3, -2
+        dw  20,  3, -2
+        dw   0,  3,  6
+        dw  -5,  3,-12
+        dw   5,  3,-12
+        dw   0,  6, -6
+        dw   0, 12,-16
+        dw   0,  6,-14
+MFACE3  db 0,1,2,0, PLIT
+        db 0,3,4,0, PSHD
+        db 0,1,3,0, PSID
+        db 0,2,4,0, PSID
+        db 7,5,8,7, PWNG
+        db 7,6,9,7, PWNG
+        db 10,11,12,10, PSID
+        db 1,2,4,3, PNOZ
+MVERT4  dw   0,  2, 26          ; TANKER
+        dw  -7,  7,-18
+        dw   7,  7,-18
+        dw  -7, -5,-18
+        dw   7, -5,-18
+        dw -22,  2, -4
+        dw  22,  2, -4
+        dw   0,  2,  8
+        dw  -7,  2,-16
+        dw   7,  2,-16
+        dw   0,  7, -8
+        dw   0, 13,-20
+        dw   0,  7,-18
+        dw -11,  1,  6
+        dw -11,  1, -2
+        dw -11, -4,  2
+        dw  11,  1,  6
+        dw  11,  1, -2
+        dw  11, -4,  2
+MFACE4  db 0,1,2,0, PLIT
+        db 0,3,4,0, PSHD
+        db 0,1,3,0, PSID
+        db 0,2,4,0, PSID
+        db 7,5,8,7, PWNG
+        db 7,6,9,7, PWNG
+        db 10,11,12,10, PSID
+        db 1,2,4,3, PNOZ
+        db 13,14,15,13, PSHD    ; the two engines
+        db 16,17,18,16, PSHD
+
+; ============================================================================
+;  THE GUNS - yours and theirs, and lesson 21's breakup in the sky.
+;
+;  A ROUND IS A PIECE TOO. Lesson 21's laws, with nothing left out: it
+;  leaves the muzzle at 75 units a tick along the nose PLUS the speed of
+;  the aeroplane that fired it - a gun is carried by its aeroplane - and
+;  gravity pulls it down a little every tick. It hits only if it really
+;  gets to an aeroplane: no aiming circle, no dice. So where it strikes
+;  and which way it was going are real, and the breakup uses both.
+;
+;      GUNINIT    the belt, the hull, five live aeroplanes, no wrecks
+;      DRILL      B: the bomber 500 ahead, a target to practise on
+;      GUNS       one tick: your trigger, their guns, every round, every
+;                 wreck - called from the flight loop's tick, beside PHYS
+;      AIM        where you are from an aeroplane's seat; the fighter chases
+;      FIRE1      one round from SI's aeroplane, or from yours
+;      TRCMOVE    a round in four short steps, each tested for a hit -
+;                 75 a tick would step clean over a 28-wide fighter
+;      SHATTER    lesson 21's FIRE, on an aeroplane in the sky
+;      WRKUPD     lesson 21's STEP, with the island's ground for a floor
+;      WRKDRAW    the pieces, through the eye: ROTXZ, then FACEFILL
+;      TRCDRAW    each round a short streak, yellow yours, red theirs
+;
+;  THE ARRAYS, in C. A slot of the traffic is i = 0..4; the byte arrays
+;  are indexed by i, the word arrays by i*2 (SI), as lesson 20's are:
+;      char pst[6];   0 flying, 1 a wreck - the sixth is yours, for F4
+;      char php[5];   hits left in it
+;      char pursue[5];  1: it does not circle (the fighter chasing, B's
+;                       target flying straight)
+;      int  pcool[5];   ticks till its gun may fire again
+;      int  pdead[5];   ticks till a wreck is replaced
+;  and a round is t = 0..15, in a ring - the 17th takes the oldest's place:
+;      char tact[16];   0 none, 1 yours, 2 theirs
+;      char tlife[16];  ticks it has left
+;      int  gtx[16], gty[16], gtz[16];   where, units...
+;      char tfx[16], tfy[16], tfz[16];   ...and 256ths of a unit
+;      int  tvx[16], tvy[16], tvz[16];   velocity, 256ths of a unit a tick
+; ============================================================================
+
+; ---- GUNINIT: a fresh sky -------------------------------------------------
+;  In C:
+;      for (i = 0; i < 5; i++) {
+;          pst[i] = 0;  php[i] = HULLT[i];  pursue[i] = 0;  pcool[i] = 0;
+;      }
+;      pst[5] = 0;
+;      for (t = 0; t < 16; t++) tact[t] = 0;
+;      wact[0] = wact[1] = 0;
+;      ammo = AMMO;  hull = HULL;
+;      if (pflash) { pflash = 0;  daynight(); }       /* the sky blue again */
+GUNINIT:
+        xor  bx,bx              ; BX = i = 0: the byte index
+.p:     mov  byte [pst+bx],0    ; pst[i] = 0: alive
+        mov  al,[HULLT+bx]        ; its hull: the fighter 3, the big ones 5
+        mov  [php+bx],al        ; php[i] = it
+        mov  byte [pursue+bx],0 ; pursue[i] = 0: circling
+        mov  si,bx              ; SI = i...
+        add  si,si              ; SI = BX*2: the word arrays
+        mov  word [pcool+si],0  ; pcool[i] = 0: its gun ready
+        inc  bx                 ; i++
+        cmp  bx,NPLANE          ; all five?
+        jb   .p                 ;   no: the next
+        mov  byte [pst+NPLANE],0    ; your own, for F4
+        xor  bx,bx              ; BX = t = 0
+.t:     mov  byte [tact+bx],0   ; no rounds in the air
+        inc  bx                 ; t++
+        cmp  bx,NTRC            ; all sixteen?
+        jb   .t                 ;   no: the next
+        mov  byte [wact],0      ; no wrecks
+        mov  byte [wact+1],0    ;  in either slot
+        mov  word [ammo],AMMO   ; a full belt
+        mov  byte [hull],HULL   ; and a whole aeroplane
+        cmp  byte [pflash],0    ; AND A BLUE SKY. A red one may be left over
+        je   .blue              ;  from the hit that ended the last flight:
+        mov  byte [pflash],0    ;  zeroing the count alone would leave the
+        push ax                 ;  DAC red for good - the sky stayed red in
+        push bx                 ;  the pilot's first flight. Put it back
+        push cx
+        push dx
+        push si
+        call DAYNIGHT           ; daynight(): the sky's own colour
+        pop  si
+        pop  dx
+        pop  cx
+        pop  bx
+        pop  ax
+.blue:  ret
+HULLT     db 3,5,5,5,5            ; hits each type takes: the game's 2..5
+
+; ---- DRILL: B puts the bomber 500 in front of you, flying your way --------
+;  A target to practise on, as a towed sleeve is: the bomber, whole again,
+;  500 ahead along your heading, 20 above you, flying straight. It flies 10
+;  a tick and you 11.5, so you close on it slowly - hold SPACE. In C:
+;      if (KEYS[SC_B] && !bwas && !dying) {
+;          pax[1] = camx + hsin*500/256;  paz[1] = camz + hcos*500/256;
+;          pay[1] = camy + 20;  pah[1] = heading;
+;          pst[1] = 0;  pursue[1] = 1;  php[1] = HULLT[1];  pcool[1] = 0;
+;      }
+;      bwas = KEYS[SC_B];
+DRILL:  cmp  byte [KEYS+SC_B],0 ; is B held?
+        jne  .h                 ;   yes
+        mov  byte [bwas],0      ;   no: remember that
+        ret
+.h:     cmp  byte [bwas],0      ; held last tick too?
+        jne  .x                 ;   yes: one press, one target
+        mov  byte [bwas],1      ; bwas = 1: this press is taken
+        cmp  byte [dying],0     ; a wreck has no gun to practise with
+        jne  .x
+        mov  cx,500             ; CX = how far ahead
+        mov  bx,256             ; BX = hsin and hcos are *256
+        mov  ax,[hsin]          ; AX = sin(heading)*256
+        imul cx                 ; DX:AX = sin*256*500
+        idiv bx                 ; AX = sin*500: east of you
+        add  ax,[camx]          ; AX += where you are
+        mov  [pax+2],ax         ; pax[1] = it
+        mov  ax,[hcos]          ; AX = cos(heading)*256
+        imul cx                 ; DX:AX = cos*256*500
+        idiv bx                 ; AX = cos*500: north of you
+        add  ax,[camz]          ; AX += where you are
+        mov  [paz+2],ax         ; paz[1] = it
+        mov  ax,[camy]          ; AX = your height
+        add  ax,20              ; AX += 20: a little above the path
+        mov  [pay+2],ax         ; pay[1] = it
+        mov  ax,[heading]       ; AX = your heading: it flies your way
+        mov  [pah+2],ax         ; pah[1] = it
+        mov  byte [pst+1],0     ; whole again: flying...
+        mov  byte [pursue+1],1  ; ...straight - PLANESUPD skips the circle
+        mov  al,[HULLT+1]       ;  for a "pursuer", and only AIM turns one,
+        mov  [php+1],al         ;  and AIM turns only the fighter. Five hits
+        mov  word [pcool+2],0   ; pcool[1] = 0
+.x:     ret
+
+; ============================================================================
+;  GUNS - one tick of the shooting. In C:
+;      drill();
+;      if (!dying && cammode == 0 && KEYS[SC_SP] && ammo && !(ptick & 1)) {
+;          ammo--;  fire1(YOU);                 /* nine rounds a second */
+;      }
+;      for (i = 0; i < 5; i++) {
+;          if (pst[i]) {                        /* a wreck */
+;              if (--pdead[i] == 0) {           /* time for a new one */
+;                  respawn(i);  pst[i] = 0;  pursue[i] = 0;  php[i] = HULLT[i];
+;              }
+;          } else aim(i);                       /* chase, maybe fire */
+;      }
+;      for (t = 0; t < 16; t++) if (tact[t]) trcmove(t);
+;      wrkupd(0);  wrkupd(1);
+; ============================================================================
+GUNS:   call DRILL              ; B: a target to practise on
+        cmp  byte [dying],0     ; ---- YOUR TRIGGER: SPACE, held ----
+        jne  .ai                ;   a wreck does not shoot
+        cmp  byte [cammode],0   ; the eye outside: the hands are off
+        jne  .ai
+        cmp  byte [KEYS+SC_SP],0    ; SPACE held?
+        je   .ai                ;   no
+        cmp  word [ammo],0      ; the belt empty?
+        je   .ai
+        test word [ptick],1     ; a round every second tick: nine a second
+        jnz  .ai                ;   an odd tick: not this one
+        dec  word [ammo]        ; ammo--
+        mov  si,NPLANE*2        ; SI = the sixth slot: you
+        call FIRE1              ; fire1(you)
+.ai:    xor  si,si              ; ---- THEIR GUNS ----  SI = i*2 = 0
+.a:     mov  bx,si              ; BX = i*2...
+        shr  bx,1               ; ...BX = i, for the byte arrays
+        cmp  byte [pst+bx],0    ; dead?
+        je   .live              ;   no
+        dec  word [pdead+si]    ; a wreck's countdown to a new aeroplane
+        jnz  .an                ;   not yet
+        call RESPAWN            ; back, in front of you
+        mov  bx,si              ; BX = i*2...
+        shr  bx,1               ; ...BX = i
+        mov  byte [pst+bx],0    ; pst[i] = 0: flying again
+        mov  byte [pursue+bx],0 ; circling again, if it was B's target
+        mov  al,[HULLT+bx]      ; AL = its type's hits
+        mov  [php+bx],al        ; php[i] = them
+        jmp  .an
+.live:  call AIM                ; chase, and maybe fire
+.an:    add  si,2               ; the next slot
+        cmp  si,NPLANE*2        ; all five?
+        jb   .a                 ;   no
+        xor  bx,bx              ; ---- EVERY ROUND ----  BX = t = 0
+.r:     cmp  byte [tact+bx],0   ; in the air?
+        je   .rn                ;   no: the next
+        push bx                 ; (TRCMOVE uses BX)
+        call TRCMOVE            ; trcmove(t)
+        pop  bx
+.rn:    inc  bx                 ; t++
+        cmp  bx,NTRC            ; all sixteen?
+        jb   .r                 ;   no
+        mov  bx,0               ; ---- EVERY WRECK ----
+        call WRKUPD             ; wrkupd(0)
+        mov  bx,1
+        call WRKUPD             ; wrkupd(1)
+        ret
+
+; ---- AIM: aeroplane SI chases (the fighter) and shoots when you are in its
+;  sights. Two products say where you are from its point of view:
+;      ahead = sin h * dx + cos h * dz      (how far in front)
+;      side  = sin h * dz - cos h * dx      (negative: you are to its right)
+;  In its sights is ahead > 0, |side| < ahead/4 (about 14 degrees), and
+;  nearer than 1800. Products of a sine and a distance: double words.
+;  In C (sin and cos are *256, so ahead and side are *256 too):
+;      dx = camx - pax[i];  dz = camz - paz[i];
+;      if (abs(dx) > 5000 || abs(dz) > 5000) {      /* out of reach */
+;          if (i == 0) pursue[0] = 0;  return;
+;      }
+;      long ahead = (long)sin(h)*dx + (long)cos(h)*dz;
+;      long side  = (long)sin(h)*dz - (long)cos(h)*dx;
+;      if (i == 0) {                                /* the fighter */
+;          pursue[0] = 1;
+;          if (!(ptick & 1)) pah[0] = (pah[0] + (side < 0 ? 1 : -1)) & 255;
+;      }
+;      if (pcool[i]) { pcool[i]--; return; }
+;      if (ahead < 0) return;
+;      ahd = ahead / 256;   if (ahd > 1800 || ahd < 60) return;
+;      if (abs(side / 256) > ahd / 4) return;      /* not in its sights */
+;      dy = camy - pay[i];  if (abs(dy) >= ahd) return;
+;      fire1(i);  pcool[i] = 3;                     /* every fourth tick */
+AIM:    mov  ax,[camx]          ; dx, dz: you, from it
+        sub  ax,[pax+si]        ; AX = camx - pax[i]
+        mov  [adx],ax           ; dx = it
+        mov  ax,[camz]          ; AX = camz...
+        sub  ax,[paz+si]        ; ...- paz[i]
+        mov  [adz],ax           ; dz = it
+        mov  ax,[adx]           ; far away? (|dx| or |dz| past 5000)
+        call ABS                ; AX = |dx|
+        cmp  ax,5000            ; past 5000?
+        ja   .calm              ;   yes: out of reach
+        mov  ax,[adz]           ; AX = dz
+        call ABS                ; AX = |dz|
+        cmp  ax,5000
+        ja   .calm
+        mov  ax,[pah+si]        ; its heading's sine and cosine
+        push si                 ; (SINQ clobbers SI)
+        call SINQ               ; AX = sin(h)*256
+        pop  si
+        mov  [ash],ax           ; ash = it
+        mov  ax,[pah+si]        ; AX = h...
+        add  ax,64              ; ...+ a quarter circle: the cosine
+        push si
+        call SINQ               ; AX = cos(h)*256
+        pop  si
+        mov  [ach],ax           ; ach = it
+        mov  ax,[ash]           ; ---- ahead, a double word ----
+        imul word [adx]         ; DX:AX = sin*dx
+        mov  [ahead32],ax            ; ahead = it: the low word...
+        mov  [ahead32+2],dx          ; ...and the high
+        mov  ax,[ach]           ; AX = cos
+        imul word [adz]         ; DX:AX = cos*dz
+        add  [ahead32],ax            ; + : the low words...
+        adc  [ahead32+2],dx          ; ...and the high, with the carry
+        mov  ax,[ash]           ; ---- side ----
+        imul word [adz]         ; DX:AX = sin*dz
+        mov  [side32],ax            ; side = it: low...
+        mov  [side32+2],dx          ; ...and high
+        mov  ax,[ach]           ; AX = cos
+        imul word [adx]         ; DX:AX = cos*dx
+        sub  [side32],ax            ; - : the low words...
+        sbb  [side32+2],dx          ; ...and the high, with the borrow
+        cmp  si,0               ; ---- THE FIGHTER CHASES ----
+        jne  .sights            ;   the others only shoot
+        mov  byte [pursue],1    ; pursue[0] = 1: PLANESUPD stops its circle
+        test word [ptick],1     ; a step every second tick
+        jnz  .sights
+        mov  ax,[pah]           ; AX = pah[0]
+        cmp  word [side32+2],0      ; side < 0: you are to its right
+        jl   .rt                ;   (the high word's sign is the sign)
+        dec  ax                 ;   to its left: turn left
+        jmp  .tn
+.rt:    inc  ax                 ;   turn right
+.tn:    and  ax,255             ; a byte is the whole circle
+        mov  [pah],ax           ; pah[0] = it
+.sights:
+        mov  bx,si              ; BX = i*2: pcool is words
+        cmp  word [pcool+bx],0  ; ---- the gun's own pace ----
+        je   .cool              ;   ready
+        dec  word [pcool+bx]    ; pcool[i]--
+        ret
+.cool:  cmp  word [ahead32+2],0      ; behind it?
+        jl   .x                 ;   ahead < 0: yes
+        mov  ax,[ahead32]            ; ahead/256: units in front
+        mov  dx,[ahead32+2]          ; DX:AX = ahead
+        mov  al,ah              ; AL = its second byte...
+        mov  ah,dl              ; AX = ahead in units (the middle bytes)
+        cmp  ax,1800            ; too far for a gun
+        ja   .x
+        cmp  ax,60              ; too close to bother
+        jb   .x
+        mov  [ahd],ax           ; ahd = ahead, units
+        mov  ax,[side32]            ; |side|/256
+        mov  dx,[side32+2]          ; DX:AX = side
+        mov  al,ah              ; the middle two bytes...
+        mov  ah,dl              ; ...AX = side/256
+        call ABS                ; AX = |side|
+        mov  bx,[ahd]           ; BX = ahead
+        shr  bx,1               ; /2
+        shr  bx,1               ; BX = ahead/4
+        cmp  ax,bx              ; in its sights?
+        ja   .x                 ;   |side| > ahead/4: no
+        mov  ax,[camy]          ; and not too steep: |dy| < ahead
+        sub  ax,[pay+si]        ; AX = camy - pay[i]
+        mov  [ady],ax           ; dy = it - FIRE1 aims up or down by it
+        call ABS                ; AX = |dy|
+        cmp  ax,[ahd]           ; |dy| < ahead?
+        jae  .x                 ;   no: too steep
+        call FIRE1              ; fire
+        mov  bx,si              ; BX = i*2
+        mov  word [pcool+bx],3  ; a round every fourth tick
+.x:     ret
+.calm:  cmp  si,0               ; the fighter?
+        jne  .x                 ;   no: nothing to undo
+        mov  byte [pursue],0    ; out of reach: the fighter circles again
+        ret
+
+; ---- NOSEKEEP: where the nose points this frame, for the gun -------------
+;  Called right after NOSEIN, which has just turned pitch and heading to the
+;  nose; the physics gets the path back from NOSEOUT before it runs.
+;  In C:   npit = pitch;  nhdg = heading;
+NOSEKEEP:
+        mov  ax,[pitch]         ; AX = the nose's pitch, this frame
+        mov  [npit],ax          ; npit = it
+        mov  ax,[heading]       ; AX = the nose's heading
+        mov  [nhdg],ax          ; nhdg = it
+        ret
+
+; ---- ABS: AX = |AX| ---------------------------------------------------------
+;  In C:   if (ax < 0) ax = -ax;
+ABS:    or   ax,ax              ; sets the sign flag, changes nothing
+        jns  .p                 ;   not negative: as it is
+        neg  ax                 ; AX = -AX
+.p:     ret
+
+; ============================================================================
+;  FIRE1 - one round from slot SI: NPLANE*2 is you, 0..8 the traffic.
+;
+;  The velocity is the gun's and the aeroplane's, added:
+;      yours:   75 along the nose (pitch and heading)    + wdx, wdy, wdz
+;      theirs:  75 along the heading, aimed up or down at you by
+;               dy/ahead, + their own speed along the heading + the wind
+;  in 256ths of a unit a tick, so 75 is 19200 and a word still holds it.
+;  In C (sin and cos are *256):
+;      t = trnext;  trnext = (trnext + 1) & 15;      /* the ring */
+;      tlife[t] = TRLIFE;  tfx[t] = tfy[t] = tfz[t] = 0;
+;      if (you) {
+;          tact[t] = 1;  gtx[t] = camx;  gty[t] = camy - 3;  gtz[t] = camz;
+;          flat = cos(npit) * 75;                     /* 256ths */
+;          tvx[t] = sin(nhdg) * flat / 256 + wdx;
+;          tvz[t] = cos(nhdg) * flat / 256 + wdz;
+;          tvy[t] = sin(npit) * 75 + wdy;
+;      } else {
+;          tact[t] = 2;  gtx[t] = pax[i];  gty[t] = pay[i];  gtz[t] = paz[i];
+;          m = 75 + SPEEDS[i];
+;          tvx[t] = sin(h) * m + WINDX*256;
+;          tvz[t] = cos(h) * m + WINDZ*256;
+;          tvy[t] = 19200 * dy / ahd;                 /* at you */
+;      }
+; ============================================================================
+FIRE1:  mov  bx,[trnext]        ; the next slot of the ring - the oldest
+        inc  word [trnext]      ;  round in the air gives way
+        and  word [trnext],NTRC-1   ; 16 wraps to 0: the ring
+        mov  di,bx              ; DI = t...
+        add  di,di              ; DI = its word index
+        mov  byte [tlife+bx],TRLIFE ; tlife[t] = 60 ticks
+        mov  byte [tfx+bx],0    ; no fractions yet
+        mov  byte [tfy+bx],0
+        mov  byte [tfz+bx],0
+        cmp  si,NPLANE*2        ; you?
+        jne  .them              ;   no: theirs
+        mov  byte [tact+bx],1   ; ---- yours ----
+        mov  ax,[camx]          ; AX = where you are, east
+        mov  [gtx+di],ax        ; gtx[t] = it
+        mov  ax,[camy]          ; AX = your height
+        sub  ax,3               ; under the eye, where a gun would be
+        mov  [gty+di],ax        ; gty[t] = it
+        mov  ax,[camz]          ; AX = where you are, north
+        mov  [gtz+di],ax        ; gtz[t] = it
+        mov  ax,[npit]          ; THE NOSE, not the path: the gun is bolted
+        push di                 ;  to the airframe, and the nose is the path
+        push si                 ;  plus alpha (lesson 1D). NOSEKEEP kept it
+        call SINQ               ; AX = sin(nose pitch)*256
+        mov  [fps],ax           ; fps = sin(nose pitch)*256
+        mov  ax,[npit]          ; AX = the pitch...
+        add  ax,64              ; ...+ a quarter circle
+        call SINQ               ; AX = cos(nose pitch)*256
+        mov  [fpc],ax           ; fpc = cos(nose pitch)*256
+        mov  ax,[nhdg]          ; ...and the nose's heading
+        call SINQ               ; AX = sin(nose heading)*256
+        mov  [fhs],ax           ; fhs = it
+        mov  ax,[nhdg]          ; AX = the heading...
+        add  ax,64              ; ...+ a quarter
+        call SINQ               ; AX = cos(nose heading)*256
+        mov  [fhc],ax           ; fhc = it
+        pop  si
+        pop  di
+        mov  ax,[fpc]           ; the flat part of 75: cos(pitch)*75
+        mov  cx,75              ; CX = the muzzle's speed
+        imul cx                 ; AX = cos*75 (a word: < 19200)
+        mov  [fhm],ax           ; fhm = it, in 256ths
+        mov  ax,[fhs]           ; vx = sin(h) * that / 256 + yours
+        imul word [fhm]         ; DX:AX = sin*256 * fhm
+        mov  al,ah              ; /256: the middle two bytes -
+        mov  ah,dl              ;  AX = sin*fhm, still in 256ths
+        add  ax,[wdx]           ; + your own step east: the gun is carried
+        mov  [tvx+di],ax        ; tvx[t] = it
+        mov  ax,[fhc]           ; vz = cos(h) * that / 256 + yours
+        imul word [fhm]         ; DX:AX = cos*256 * fhm
+        mov  al,ah              ; /256
+        mov  ah,dl
+        add  ax,[wdz]           ; + your own step north
+        mov  [tvz+di],ax        ; tvz[t] = it
+        mov  ax,[fps]           ; vy = sin(pitch)*75 + yours
+        mov  cx,75              ; CX = 75
+        imul cx                 ; AX = sin*256*75: 75*sin, in 256ths
+        add  ax,[wdy]           ; + your own climb
+        mov  [tvy+di],ax        ; tvy[t] = it
+        ret
+.them:  mov  byte [tact+bx],2   ; ---- theirs ----
+        mov  ax,[pax+si]        ; AX = where it is, east
+        mov  [gtx+di],ax        ; gtx[t] = it
+        mov  ax,[pay+si]        ; ...up
+        mov  [gty+di],ax        ; gty[t] = it
+        mov  ax,[paz+si]        ; ...north
+        mov  [gtz+di],ax        ; gtz[t] = it
+        mov  ax,[SPEEDS+si]     ; 75 + its own speed, along its heading
+        add  ax,75              ; AX = m = 75 + speed
+        mov  [fhm],ax           ; fhm = m
+        mov  ax,[ash]           ; vx = sin(h) * (75 + speed)
+        imul word [fhm]         ; AX = sin*256*m: 256ths already
+        add  ax,WINDX*256       ;  + the wind that carries it (PLANESUPD)
+        mov  [tvx+di],ax        ; tvx[t] = it
+        mov  ax,[ach]           ; vz = cos(h) * (75 + speed)
+        imul word [fhm]         ; AX = cos*256*m
+        add  ax,WINDZ*256       ;  + the wind
+        mov  [tvz+di],ax        ; tvz[t] = it
+        mov  ax,[ady]           ; vy = 19200 * dy / ahead: up or down at you
+        mov  cx,19200           ; CX = 75 in 256ths
+        imul cx                 ; DX:AX = 19200*dy
+        idiv word [ahd]         ; AX = / ahead  (|dy| < ahead: it fits)
+        mov  [tvy+di],ax        ; tvy[t] = it
+        ret
+
+; ============================================================================
+;  TRCMOVE - round BX, one tick: gravity, then four quarter steps, each
+;  one tested against what it may hit. Yours hit the traffic; theirs hit
+;  you. A quarter of 75 is 19 - less than any aeroplane is wide.
+;  In C:
+;      if (--tlife[t] == 0) { tact[t] = 0; return; }   /* burned out */
+;      tvy[t] -= TGRAV;                                /* gravity */
+;      for (q = 0; q < 4; q++) {
+;          adv(&gtx[t], &tfx[t], tvx[t] / 4);           /* a quarter step */
+;          adv(&gty[t], &tfy[t], tvy[t] / 4);
+;          adv(&gtz[t], &tfz[t], tvz[t] / 4);
+;          if (tact[t] == 1) {                         /* yours */
+;              for (i = 0; i < 5; i++) if (!pst[i]) {
+;                  r = RADT[i];
+;                  if (abs(gtx[t]-pax[i]) < r && abs(gty[t]-pay[i]) < r
+;                   && abs(gtz[t]-paz[i]) < r) {
+;                      hitplane(i, t);  tact[t] = 0;  return;
+;                  }
+;              }
+;          } else if (abs(gtx[t]-camx) < YOUR && abs(gty[t]-camy) < YOUR
+;                  && abs(gtz[t]-camz) < YOUR) {      /* theirs, on you */
+;              tact[t] = 0;
+;              if (dying) return;
+;              pflash = 5;  dac(SKY, 44, 4, 4);        /* the sky red */
+;              if (--hull == 0) {                      /* the last one */
+;                  slot 5 = you;  shatter(5, t);  crash(camy);
+;              }
+;              return;
+;          }
+;      }
+; ============================================================================
+TRCMOVE:
+        dec  byte [tlife+bx]    ; burned out?
+        jnz  .go                ;   not yet
+        mov  byte [tact+bx],0   ; tact[t] = 0: gone
+        ret
+.go:    mov  di,bx              ; DI = t...
+        add  di,di              ; ...*2, for the word arrays
+        sub  word [tvy+di],TGRAV    ; gravity, on a round too
+        mov  byte [tstep],4     ; four quarter steps
+.q:     mov  ax,[tvx+di]        ; a quarter step: v/4, by SAR 2
+        sar  ax,1               ; /2, keeping the sign
+        sar  ax,1               ; /4
+        lea  si,[gtx+di]        ; SI = &gtx[t]: the units
+        lea  dx,[tfx+bx]        ; DX = &tfx[t]: the fraction
+        call ADV                ; gtx.tfx += vx/4
+        mov  ax,[tvy+di]        ; the same, up
+        sar  ax,1               ; /2, keeping the sign
+        sar  ax,1               ; AX = vy/4
+        lea  si,[gty+di]
+        lea  dx,[tfy+bx]
+        call ADV                ; gty.tfy += vy/4
+        mov  ax,[tvz+di]        ; ...and north
+        sar  ax,1               ; /2, keeping the sign
+        sar  ax,1               ; AX = vz/4
+        lea  si,[gtz+di]
+        lea  dx,[tfz+bx]
+        call ADV                ; gtz.tfz += vz/4
+        cmp  byte [tact+bx],1   ; whose?
+        jne  .you               ;   theirs: it looks for you
+        xor  si,si              ; ---- yours: against each live aeroplane
+.p:     push si                 ; SI = i*2; keep it...
+        shr  si,1               ; ...SI = i, for the byte array
+        cmp  byte [pst+si],0    ; a wreck?
+        pop  si
+        jne  .pn                ;   yes: rounds pass through what is left
+        mov  cx,[RADT+si]       ; CX = how near is a hit, for its type
+        mov  ax,[gtx+di]        ; AX = the round, east...
+        sub  ax,[pax+si]        ; ...- the aeroplane
+        call ABS                ; AX = |dx|
+        cmp  ax,cx              ; inside the box, east and west?
+        jae  .pn                ;   no: a miss
+        mov  ax,[gty+di]        ; up and down
+        sub  ax,[pay+si]        ; AX = dy
+        call ABS                ; AX = |dy|
+        cmp  ax,cx
+        jae  .pn
+        mov  ax,[gtz+di]        ; north and south
+        sub  ax,[paz+si]        ; AX = dz
+        call ABS                ; AX = |dz|
+        cmp  ax,cx
+        jae  .pn
+        call HITPLANE           ; a hit
+        mov  byte [tact+bx],0   ; the round is spent
+        ret
+.pn:    add  si,2               ; the next aeroplane
+        cmp  si,NPLANE*2        ; all five?
+        jb   .p                 ;   no
+        jmp  .nq                ; the next quarter step
+.you:   mov  ax,[gtx+di]         ; ---- theirs: against you ----
+        sub  ax,[camx]          ; AX = the round - you, east
+        call ABS                ; AX = |dx|
+        cmp  ax,YOUR            ; nearer than YOUR?
+        jae  .nq                ;   no: a miss
+        mov  ax,[gty+di]        ; up
+        sub  ax,[camy]          ; AX = the round - you, up
+        call ABS                ; AX = |dy|
+        cmp  ax,YOUR
+        jae  .nq
+        mov  ax,[gtz+di]        ; north
+        sub  ax,[camz]          ; AX = the round - you, north
+        call ABS                ; AX = |dz|
+        cmp  ax,YOUR
+        jae  .nq
+        mov  byte [tact+bx],0   ; it is spent on you
+        cmp  byte [dying],0     ; already a wreck?
+        je   .hurt              ;   no: it hurts
+        ret
+.hurt:
+        mov  byte [pflash],5    ; THE HIT: the sky red for five frames -
+        mov  dx,3C8h            ;  lesson 1F, one DAC entry
+        mov  al,SKY             ; AL = the sky's colour number
+        out  dx,al              ; the DAC: write that entry next
+        inc  dx                 ; DX = 3C9h: its red, green, blue
+        mov  al,44              ; red 44 of 63
+        out  dx,al
+        mov  al,4               ; green 4...
+        out  dx,al
+        out  dx,al              ; ...and blue 4
+        dec  byte [hull]        ; hull--
+        jnz  .x                 ;   something left: fly on
+        mov  ax,[camx]          ; THE LAST ONE: your own aeroplane comes
+        mov  [pax+NPLANE*2],ax  ;  apart by the same laws - put where you
+        mov  ax,[camy]          ;  are into the sixth slot, and break it
+        mov  [pay+NPLANE*2],ax  ;  pay[5] = camy
+        mov  ax,[camz]          ; AX = camz
+        mov  [paz+NPLANE*2],ax  ; paz[5] = it
+        mov  ax,[heading]       ; AX = your heading
+        mov  [pah+NPLANE*2],ax  ; pah[5] = it
+        push bx                 ; keep t...
+        push di                 ; ...and t*2: SHATTER reads the round
+        mov  si,NPLANE*2        ; SI = slot 5: you
+        call SHATTER            ; shatter(5, t)
+        pop  di
+        pop  bx
+        push bx
+        mov  bx,[camy]          ; then the crash screen, the eye stepping
+        call CRASH              ;  back to watch the pieces fall
+        pop  bx
+.x:     ret
+.nq:    dec  byte [tstep]       ; one quarter step done
+        jnz  .q                 ;   more to go
+        ret
+RADT    dw 14,28,18,20,22       ; how near a round must pass, by type: about
+                                ;  half the wingspan, and the height the same
+
+; ---- ADV: a 16.8 position at SI (units) and DX (its fraction byte) moves
+;  by AX, 256ths of a unit. Lesson 21's three lines. Keeps BX, DI.
+;  In C:   (units:fraction) += ax;   - a 24-bit add, carried by hand
+ADV:    push di
+        mov  di,dx              ; DI = the fraction's address
+        add  [di],al            ; the fraction takes the low byte...
+        mov  al,ah              ; AL = the whole units...
+        cbw                     ; ...the high byte, signed,
+        adc  [si],ax            ; ...goes to the units with the carry
+        pop  di
+        ret
+
+; ---- HITPLANE: your round DI/BX has hit aeroplane SI --------------------
+;  In C:
+;      hp2 = the round's place;  spark = 6;           /* a flash, 6 frames */
+;      if (--php[i] == 0) {                           /* the last hit */
+;          shatter(i, t);  pst[i] = 1;  pdead[i] = RESPAWNT;
+;          if (i == 0) pursue[0] = 0;
+;      }
+HITPLANE:
+        mov  ax,[gtx+di]         ; the spark, where it struck
+        mov  [hpx2],ax          ; hpx2 = the round, east
+        mov  ax,[gty+di]
+        mov  [hpy2],ax          ; ...up
+        mov  ax,[gtz+di]
+        mov  [hpz2],ax          ; ...north
+        mov  byte [spark],6     ; six frames of spark
+        push bx                 ; keep t
+        mov  bx,si              ; BX = i*2...
+        shr  bx,1               ; ...BX = i
+        dec  byte [php+bx]      ; one hit off its hull
+        pop  bx                 ; (POP keeps the flags)
+        jnz  .x                 ;   hits left: it flies on
+        push bx                 ; the last one: it comes apart
+        push di
+        push si
+        call SHATTER            ; shatter(i, t)
+        pop  si
+        pop  di
+        pop  bx
+        push bx
+        mov  bx,si              ; BX = i*2...
+        shr  bx,1               ; ...BX = i
+        mov  byte [pst+bx],1    ; dead...
+        pop  bx
+        mov  word [pdead+si],RESPAWNT   ; ...until a new one comes
+        cmp  si,0               ; the fighter?
+        jne  .x
+        mov  byte [pursue],0    ; it chases no more
+.x:     ret
+
+; ============================================================================
+;  SHATTER - aeroplane SI, struck by round DI, comes apart. Lesson 21's FIRE,
+;  with three differences:
+;
+;      the model  is turned by the aeroplane's heading and stands where it
+;                 is - one unit a cell, as in the sky
+;      the hit    is where the round really is, and its push is the
+;                 round's own momentum, mass ROUNDM, at its speed against
+;                 the aeroplane's
+;      the clock  is the BIOS tick, not the frame: a tick is nearly four
+;                 frames, so the blast's strength is KBLAST2, lesson 21's
+;                 times four and over eight
+;
+;  The wreck goes into one of two slots, the older if both are busy.
+;  In C:
+;      w = wnext;  wnext ^= 1;  wact[w] = 1;  wtime[w] = 0;
+;      base = w * MAXP;  n = the type's number of faces;
+;      bc = (pax[i], pay[i], paz[i]);                    /* where it is */
+;      bv = (sin h * SPEEDS[i], 0, cos h * SPEEDS[i]);   /* how fast */
+;      P  = round - bc;                                  /* where it struck */
+;      R  = round velocity - bv;                         /* how hard */
+;      M = 0;
+;      for (f = 0; f < n; f++) {                         /* NEWPLANE */
+;          corners turned by h;  cen = their mean;
+;          WO[p][k] = corner k - cen;                    /* the shape */
+;          WM[p] = max(area(f), 8);  M += WM[p];  WSZ[p] = isqrt(WM[p]);
+;          W[p] = bc + cen;  WR[p] = cen;  WV[p] = bv;   /* flying whole */
+;          angles, fractions, landed = 0;  WCOL[p] = the face's colour;
+;      }
+;      for each piece: d = WR - P;                       /* PASS 1 */
+;          s = KBLAST2 / (d*d + 64);  DJ = s * d;  SJ += DJ;
+;      cj = SJ / M;  sh = ROUNDM * R / M;               /* no net push */
+;      for each piece:                                   /* PASS 2 */
+;          WV += DJ / WM - cj + sh;
+;          WWA = spinof(DJz, WM*WSZ);  WWB = spinof(DJx, WM*WSZ);
+; ============================================================================
+SHATTER:  mov  al,[wnext]         ; the slot
+        xor  byte [wnext],1     ; wnext ^= 1: the other one next time
+        xor  ah,ah              ; AX = w
+        mov  [wslot],ax         ; wslot = w
+        mov  bx,ax              ; BX = w
+        mov  byte [wact+bx],1   ; wact[w] = 1: in use
+        push si
+        mov  si,bx              ; SI = w...
+        add  si,si              ; ...*2: wtime is words
+        mov  word [wtime+si],0  ; its clock
+        pop  si
+        mov  ax,MAXP*2          ; the slot's first piece, in words
+        mul  bx                 ; AX = w * MAXP*2
+        mov  [wbase],ax         ; wbase = slot*MAXP*2
+        mov  bx,si              ; the type's tables - your own is a fighter
+        cmp  bx,NPLANE*2        ; slot 5, you?
+        jb   .gty               ;   no: its own type
+        xor  bx,bx              ;   yes: type 0, the fighter
+.gty:    mov  ax,[MVTAB+bx]     ; AX = the type's corners table
+        mov  [mvb],ax           ; mvb = it
+        mov  ax,[MFTAB+bx]      ; AX = the type's faces table
+        mov  [mfb],ax           ; mfb = it
+        mov  ax,[NFCTAB+bx]     ; AX = how many faces
+        mov  bx,[wslot]         ; BX = w
+        mov  [wn+bx],al         ; how many pieces
+        mov  [wcnt],ax          ; wcnt = n
+        mov  ax,[pah+si]        ; its heading, to turn the model
+        push si
+        call SINQ               ; AX = sin(h)*256
+        mov  [msin],ax          ; msin = it
+        pop  si
+        mov  ax,[pah+si]        ; AX = h...
+        add  ax,64              ; ...+ a quarter
+        push si
+        call SINQ               ; AX = cos(h)*256
+        mov  [mcos],ax          ; mcos = it
+        pop  si
+        mov  ax,[pax+si]        ; where it is
+        mov  [bcx],ax           ; bc = (pax, pay, paz)
+        mov  ax,[pay+si]
+        mov  [bcy],ax
+        mov  ax,[paz+si]
+        mov  [bcz],ax
+        mov  ax,[msin]          ; its velocity: SPEEDS along the heading,
+        imul word [SPEEDS+si]   ;  in 256ths of a unit a tick
+        mov  [bvx],ax           ; bvx = sin*256*speed
+        mov  ax,[mcos]          ; AX = cos*256
+        imul word [SPEEDS+si]   ; AX = cos*256*speed
+        mov  [bvz],ax           ; bvz = it
+        mov  ax,[gtx+di]         ; the round, from the aeroplane's centre:
+        sub  ax,[bcx]           ;  P
+        mov  [bpx],ax           ; bpx = round - centre, east
+        mov  ax,[gty+di]
+        sub  ax,[bcy]           ; ...up
+        mov  [bpy],ax
+        mov  ax,[gtz+di]
+        sub  ax,[bcz]           ; ...north
+        mov  [bpz],ax
+        mov  ax,[tvx+di]        ; its velocity against the aeroplane's
+        sub  ax,[bvx]           ; R.x = vx - bvx
+        mov  [brx],ax
+        mov  ax,[tvy+di]        ; R.y = vy: the aeroplane flies level
+        mov  [bry],ax
+        mov  ax,[tvz+di]
+        sub  ax,[bvz]           ; R.z = vz - bvz
+        mov  [brz],ax
+        mov  word [msum],0      ; ---- the pieces: lesson 21's NEWPLANE ----
+        xor  bp,bp              ; BP = the face
+.pc:    mov  bx,bp              ; BX = f
+        shl  bx,1               ; *2
+        shl  bx,1               ; *4
+        add  bx,bp              ; *5: a face is five bytes
+        add  bx,[mfb]           ; BX = &faces[f]
+        mov  [fptr],bx          ; fptr = it
+        mov  word [sumx],0      ; sum = 0
+        mov  word [sumy],0
+        mov  word [sumz],0
+        xor  cx,cx              ; CX = k = 0: the corner
+.c1:    mov  bx,[fptr]          ; BX = &faces[f]...
+        add  bx,cx              ; ...+ k: its k-th corner number
+        call VERTW              ; AX, DX, DI = the corner, turned
+        add  [sumx],ax          ; sum += it
+        add  [sumy],dx          ; ...up
+        add  [sumz],di          ; ...north
+        inc  cx                 ; k++
+        cmp  cx,4               ; four corners?
+        jb   .c1
+        mov  ax,[sumx]          ; the centre: /4
+        sar  ax,1               ; /2, keeping the sign
+        sar  ax,1               ; /4
+        mov  [cenx],ax          ; cen.x = it
+        mov  ax,[sumy]
+        sar  ax,1               ; /2, keeping the sign
+        sar  ax,1               ; /4
+        mov  [ceny],ax          ; cen.y
+        mov  ax,[sumz]
+        sar  ax,1               ; /2, keeping the sign
+        sar  ax,1               ; /4
+        mov  [cenz],ax          ; cen.z
+        mov  si,[wbase]         ; this piece's word index, in the pool
+        add  si,bp              ; + f...
+        add  si,bp              ; ...*2: words
+        mov  [wpi],si           ; kept: VERTW and AREA both use SI
+        xor  cx,cx              ; the corners from the centre
+.c2:    mov  bx,[fptr]          ; BX = &faces[f]...
+        add  bx,cx              ; ...+ k
+        call VERTW              ; AX, DX, DI = corner k, turned
+        mov  si,[wpi]           ; SI = p*2...
+        shl  si,1               ; *4
+        shl  si,1               ; SI = piece*8: four words of corners
+        add  si,cx              ; + k...
+        add  si,cx              ; ...*2: corner k's word
+        sub  ax,[cenx]          ; AX = corner - centre, east
+        mov  [WOX+si],ax        ; WOX[p][k] = it
+        sub  dx,[ceny]          ; up
+        mov  [WOY+si],dx
+        sub  di,[cenz]          ; north
+        mov  [WOZ+si],di
+        inc  cx                 ; k++
+        cmp  cx,4
+        jb   .c2
+        call AREA               ; the mass: the area
+        cmp  ax,8               ; at least 8 -
+        jge  .m1                ;  a sliver still weighs something
+        mov  ax,8
+.m1:    mov  si,[wpi]           ; SI = p*2
+        mov  [WM+si],ax         ; WM[p] = the mass
+        add  [msum],ax          ; M += it
+        call ISQRT              ; AX = its root: the size
+        mov  [WSZ+si],ax        ; WSZ[p] = it
+        mov  ax,[cenx]          ; the piece, where it is in the sky
+        add  ax,[bcx]           ; W = bc + cen
+        mov  [WX+si],ax
+        mov  ax,[ceny]
+        add  ax,[bcy]           ; + bc.y
+        mov  [WY+si],ax
+        mov  ax,[cenz]
+        add  ax,[bcz]           ; + bc.z
+        mov  [WZ+si],ax
+        mov  ax,[cenx]          ; and its centre from the aeroplane's, kept
+        mov  [WRX+si],ax        ;  for the blast
+        mov  ax,[ceny]
+        mov  [WRY+si],ax        ; WR = cen
+        mov  ax,[cenz]
+        mov  [WRZ+si],ax
+        mov  ax,[bvx]           ; the aeroplane's velocity
+        mov  [WVX+si],ax        ; WV = bv: before the blast, it flies whole
+        mov  word [WVY+si],0
+        mov  ax,[bvz]
+        mov  [WVZ+si],ax
+        xor  ax,ax              ; AX = 0
+        mov  [WA+si],ax         ; no tumble yet
+        mov  [WB+si],ax
+        mov  bx,si
+        shr  bx,1               ; BX = the piece's byte index
+        mov  [WFX+bx],al        ; no fractions
+        mov  [WFY+bx],al
+        mov  [WFZ+bx],al
+        mov  [WLAND+bx],al      ; in the air
+        mov  di,[fptr]          ; DI = &faces[f]
+        mov  al,[di+4]          ; its colour
+        mov  [WCOL+bx],al       ; WCOL[p] = it
+        inc  bp                 ; f++
+        cmp  bp,[wcnt]          ; all faces?
+        jb   .pc
+        mov  word [sjx],0       ; ---- PASS 1: the pushes, summed ----
+        mov  word [sjx+2],0     ; SJ = 0, three double words
+        mov  word [sjy],0
+        mov  word [sjy+2],0
+        mov  word [sjz],0
+        mov  word [sjz+2],0
+        xor  bp,bp              ; BP = p = 0
+.p1:    mov  si,[wbase]         ; SI = the piece's word index
+        add  si,bp              ; + p...
+        add  si,bp              ; ...*2: words
+        mov  ax,[WRX+si]        ; d = centre - P
+        sub  ax,[bpx]           ; d.x
+        mov  [DJX+si],ax
+        mov  ax,[WRY+si]
+        sub  ax,[bpy]           ; d.y
+        mov  [DJY+si],ax
+        mov  ax,[WRZ+si]
+        sub  ax,[bpz]           ; d.z
+        mov  [DJZ+si],ax
+        mov  ax,[DJX+si]        ; d^2: a word, |d| < 60 in the sky's units
+        imul ax                 ; AX = d.x * d.x
+        mov  bx,ax              ; BX = it
+        mov  ax,[DJY+si]
+        imul ax                 ; AX = d.y * d.y
+        add  bx,ax              ; BX += it
+        mov  ax,[DJZ+si]
+        imul ax                 ; AX = d.z * d.z
+        add  bx,ax              ; BX = d^2
+        add  bx,64              ; + the softening
+        mov  ax,KBLAST2 and 0FFFFh  ; DX:AX = KBLAST2 - past a word, so in two
+        mov  dx,KBLAST2 shr 16      ;  halves
+        div  bx                 ; s = KBLAST2 / it (< 2500: d^2+64 >= 64)
+        mov  cx,ax              ; CX = s
+        mov  ax,[DJX+si]        ; J = s * d, into the sums
+        imul cx                 ; DX:AX = s * d.x
+        mov  [DJX+si],ax        ; DJ.x = it (a word holds it)
+        add  [sjx],ax           ; SJ.x += it: low word...
+        adc  [sjx+2],dx         ; ...high word, with the carry
+        mov  ax,[DJY+si]
+        imul cx                 ; DX:AX = s * d.y
+        mov  [DJY+si],ax
+        add  [sjy],ax           ; SJ.y += it: low word...
+        adc  [sjy+2],dx         ; ...high, with the carry
+        mov  ax,[DJZ+si]
+        imul cx                 ; DX:AX = s * d.z
+        mov  [DJZ+si],ax
+        add  [sjz],ax           ; SJ.z += it
+        adc  [sjz+2],dx         ; ...with the carry
+        inc  bp                 ; p++
+        cmp  bp,[wcnt]
+        jb   .p1
+        mov  bx,[msum]          ; ---- SUM(J)/M, and the round's share ----
+        mov  ax,[sjx]           ; DX:AX = SJ.x
+        mov  dx,[sjx+2]
+        idiv bx                 ; AX = SJ.x / M
+        mov  [cjx],ax           ; cj.x = it
+        mov  ax,[sjy]
+        mov  dx,[sjy+2]
+        idiv bx                 ; SJ.y / M
+        mov  [cjy],ax
+        mov  ax,[sjz]
+        mov  dx,[sjz+2]
+        idiv bx                 ; SJ.z / M
+        mov  [cjz],ax
+        mov  ax,[brx]           ; the round: ROUNDM * its velocity / M
+        mov  cx,ROUNDM          ; CX = the round's mass
+        imul cx                 ; DX:AX = ROUNDM * R.x
+        idiv bx                 ; AX = / M
+        mov  [shx],ax           ; sh.x = it
+        mov  ax,[bry]
+        imul cx                 ; ROUNDM * R.y
+        idiv bx                 ; / M
+        mov  [shy],ax
+        mov  ax,[brz]
+        imul cx                 ; ROUNDM * R.z
+        idiv bx                 ; / M
+        mov  [shz],ax
+        xor  bp,bp              ; ---- PASS 2: the new velocities, the spins
+.p2:    mov  si,[wbase]         ; SI = the piece's word index
+        add  si,bp              ; + p...
+        add  si,bp              ; ...*2: words
+        mov  bx,[WM+si]         ; BX = m
+        mov  ax,[DJX+si]        ; AX = J.x
+        cwd                     ; DX:AX = it, signed
+        idiv bx                 ; AX = J.x / m
+        sub  ax,[cjx]           ; - SUM(J)/M: no net push
+        add  ax,[shx]           ; + the round's share
+        add  [WVX+si],ax        ; WV.x += it
+        mov  ax,[DJY+si]        ; the same, up
+        cwd
+        idiv bx                 ; J.y / m
+        sub  ax,[cjy]           ; - SUM(J)/M
+        add  ax,[shy]           ; + the round's share
+        add  [WVY+si],ax        ; WV.y += it
+        mov  ax,[DJZ+si]        ; ...and north
+        cwd
+        idiv bx                 ; J.z / m
+        sub  ax,[cjz]           ; - SUM(J)/M
+        add  ax,[shz]           ; + the round's share
+        add  [WVZ+si],ax        ; WV.z += it
+        mov  ax,bx              ; AX = m
+        mul  word [WSZ+si]      ; AX = m * size
+        mov  bx,ax              ; BX = m*size
+        mov  ax,[DJZ+si]        ; a push north turns it one way...
+        call SPINOF             ; AX = the spin
+        mov  [WWA+si],ax        ; WWA[p] = it
+        mov  ax,[DJX+si]        ; ...a push east, the other
+        call SPINOF
+        mov  [WWB+si],ax        ; WWB[p] = it
+        inc  bp                 ; p++
+        cmp  bp,[wcnt]
+        jb   .p2
+        ret
+
+; ---- SPINOF: AX = a push part, BX = m*size -> the spin, clamped -----------
+;  Eight times lesson 21's: its push was in eight-times units, per frame.
+;  In C:   s = j * 8 / msz;   return clamp(s, -SPINMAX, SPINMAX);
+SPINOF: mov  cx,8               ; CX = 8
+        imul cx                 ; DX:AX = J*8
+        idiv bx                 ; AX = J*8 / (m*size)
+        cmp  ax,SPINMAX         ; too fast one way?
+        jle  .a
+        mov  ax,SPINMAX         ;   the most it may
+.a:     cmp  ax,-SPINMAX        ; ...or the other?
+        jge  .b
+        mov  ax,-SPINMAX
+.b:     ret
+
+; ---- VERTW: BX = &face[f][k] -> AX, DX, DI = that vertex, turned by the
+;  heading (msin, mcos) - MODELDRAW's turn, one unit a cell. Clobbers SI.
+;  In C:   v = verts[face[f][k]];
+;          x = (v.x*cos + v.z*sin) / 256;   y = v.y;
+;          z = (v.z*cos - v.x*sin) / 256;
+VERTW:  mov  al,[bx]            ; AL = the corner's vertex number
+        xor  ah,ah              ; AX = v
+        mov  si,ax              ; SI = v
+        shl  si,1               ; *2
+        add  si,ax              ; *3
+        add  si,si              ; SI = v*6
+        add  si,[mvb]           ; SI = &verts[v]: three words
+        push cx
+        mov  ax,[si]            ; x' = (x cos + z sin)/256
+        imul word [mcos]        ; AX = x*cos (the low word is enough)
+        mov  cx,ax              ; CX = it
+        mov  ax,[si+4]          ; AX = z
+        imul word [msin]        ; AX = z*sin
+        add  ax,cx              ; AX = x cos + z sin
+        mov  al,ah              ; /256 (the middle bytes; |x| < 32)
+        cbw                     ; AX = it, signed
+        mov  [vwx],ax           ; kept: AX is needed below
+        mov  ax,[si+4]          ; z' = (z cos - x sin)/256
+        imul word [mcos]        ; AX = z*cos
+        mov  cx,ax              ; CX = it
+        mov  ax,[si]            ; AX = x
+        imul word [msin]        ; AX = x*sin
+        sub  cx,ax              ; CX = z cos - x sin
+        mov  al,ch              ; /256
+        cbw                     ; AX = it, signed
+        mov  di,ax              ; DI = z'
+        mov  dx,[si+2]          ; y
+        mov  ax,[vwx]           ; AX = x'
+        pop  cx
+        ret
+
+; ---- VERTC: BX = &face[f][k] -> AX, DX, DI = that vertex, in cells -------
+;  In C:   v = verts[face[f][k]];   return (v.x, v.y, v.z);
+VERTC:  mov  al,[bx]            ; AL = the vertex number
+        xor  ah,ah              ; AX = v
+        mov  si,ax              ; SI = v
+        shl  si,1               ; *2
+        add  si,ax              ; *3
+        add  si,si              ; SI = v*6
+        add  si,[mvb]           ; SI = &verts[v]
+        mov  ax,[si]            ; AX = x
+        mov  dx,[si+2]          ; DX = y
+        mov  di,[si+4]          ; DI = z
+        ret
+
+; ---- AREA, ISQRT32, ISQRT: lesson 21's, word for word --------------------
+;  AREA, in C:
+;      d1 = c2 - c0;  d2 = c3 - c1;             /* the diagonals */
+;      n  = d1 x d2;                             /* the cross product */
+;      return isqrt32(n.x*n.x + n.y*n.y + n.z*n.z) / 2;
+AREA:   mov  bx,[fptr]          ; BX = &face[f]...
+        add  bx,2               ; ...corner 2
+        call VERTC              ; AX, DX, DI = it
+        mov  [d1x],ax           ; d1 = c2...
+        mov  [d1y],dx
+        mov  [d1z],di
+        mov  bx,[fptr]          ; corner 0
+        call VERTC
+        sub  [d1x],ax           ; ...- c0
+        sub  [d1y],dx           ; ...up
+        sub  [d1z],di           ; ...north
+        mov  bx,[fptr]
+        add  bx,3               ; corner 3
+        call VERTC
+        mov  [d2x],ax           ; d2 = c3...
+        mov  [d2y],dx
+        mov  [d2z],di
+        mov  bx,[fptr]
+        inc  bx                 ; corner 1
+        call VERTC
+        sub  [d2x],ax           ; ...- c1
+        sub  [d2y],dx           ; ...up
+        sub  [d2z],di           ; ...north
+        mov  ax,[d1y]           ; n = d1 x d2
+        imul word [d2z]         ; AX = d1y*d2z
+        mov  cx,ax              ; CX = it
+        mov  ax,[d1z]
+        imul word [d2y]         ; AX = d1z*d2y
+        sub  cx,ax              ; CX = d1y*d2z - d1z*d2y
+        mov  [nxx],cx           ; n.x = it
+        mov  ax,[d1z]
+        imul word [d2x]         ; AX = d1z*d2x
+        mov  cx,ax
+        mov  ax,[d1x]
+        imul word [d2z]         ; AX = d1x*d2z
+        sub  cx,ax              ; CX = d1z*d2x - d1x*d2z
+        mov  [nyy],cx           ; n.y = it
+        mov  ax,[d1x]
+        imul word [d2y]         ; AX = d1x*d2y
+        mov  cx,ax
+        mov  ax,[d1y]
+        imul word [d2x]         ; AX = d1y*d2x
+        sub  cx,ax              ; CX = d1x*d2y - d1y*d2x
+        mov  [nzz],cx           ; n.z = it
+        mov  ax,[nxx]           ; |n|^2, a double word
+        imul ax                 ; DX:AX = n.x^2
+        mov  [t32],ax           ; t32 = it
+        mov  [t32+2],dx
+        mov  ax,[nyy]
+        imul ax                 ; DX:AX = n.y^2
+        add  [t32],ax           ; t32 += it, with the carry
+        adc  [t32+2],dx         ; ...high, with the carry
+        mov  ax,[nzz]
+        imul ax                 ; DX:AX = n.z^2
+        add  [t32],ax           ; t32 += it: low...
+        adc  [t32+2],dx         ; ...high, with the carry
+        call ISQRT32            ; AX = |n|
+        shr  ax,1               ; half: the area
+        ret
+;  ISQRT32, in C - Newton, ten rounds from 16384:
+;      if (t32 == 0) return 0;
+;      g = 16384;
+;      for (i = 0; i < 10; i++) { n = (t32 / g + g) / 2; if (!n) return 0; g = n; }
+;      return g;
+ISQRT32:
+        mov  ax,[t32]           ; nought?
+        or   ax,[t32+2]         ;  both words
+        jz   .x                 ;   yes: AX = 0
+        mov  bx,16384           ; BX = g, the first guess
+        mov  cx,10              ; ten rounds
+.r:     mov  ax,[t32]           ; DX:AX = t32
+        mov  dx,[t32+2]
+        div  bx                 ; AX = t32 / g
+        add  ax,bx              ; + g
+        shr  ax,1               ; /2: the better guess
+        jz   .x                 ;   nought: done
+        mov  bx,ax              ; g = it
+        loop .r
+        mov  ax,bx              ; AX = g
+.x:     ret
+;  ISQRT, in C - a small root by counting:  for (r = 1; r*r < ax; r++);
+ISQRT:  push bx
+        push dx
+        mov  bx,ax              ; BX = the number
+        xor  ax,ax              ; AX = r = 0
+.l:     inc  ax                 ; r++
+        push ax
+        mul  ax                 ; AX = r*r
+        cmp  ax,bx              ; still below?
+        pop  ax
+        jb   .l                 ;   yes: the next r
+        pop  dx
+        pop  bx
+        ret
+
+; ============================================================================
+;  WRKUPD - wreck slot BX, one tick of lesson 21's laws, per TICK now:
+;      v.y -= TGRAV;  v -= v/32;  pos += v;  a += spin;
+;      on the island's ground: stopped dead.
+;  A slot is let go 30 seconds after the hit.
+;  In C:
+;      if (!wact[w]) return;
+;      if (++wtime[w] >= WKEEP) { wact[w] = 0; return; }
+;      for (p = w*MAXP; p < w*MAXP + wn[w]; p++) {
+;          if (WLAND[p]) continue;
+;          WVY[p] -= TGRAV;  air(&WVX[p]);  air(&WVY[p]);  air(&WVZ[p]);
+;          WA[p] = (WA[p] + WWA[p]) & 4095;  WB[p] = (WB[p] + WWB[p]) & 4095;
+;          adv(&WX[p], &WFX[p], WVX[p]);  ... y, z the same
+;          g = groundat(WX[p], WZ[p]);
+;          if (WY[p] <= g) { WY[p] = g;  WLAND[p] = 1; }
+;      }
+; ============================================================================
+WRKUPD: cmp  byte [wact+bx],0   ; in use?
+        je   .x                 ;   no
+        mov  si,bx              ; SI = w...
+        add  si,si              ; ...*2
+        inc  word [wtime+si]    ; wtime[w]++
+        cmp  word [wtime+si],WKEEP  ; kept long enough?
+        jb   .on                ;   not yet
+        mov  byte [wact+bx],0   ; gone
+.x:     ret
+.on:    mov  ax,MAXP*2          ; AX = a slot's words
+        mul  bx                 ; AX = w * MAXP*2
+        mov  [wbase],ax         ; wbase = it
+        mov  al,[wn+bx]         ; AL = its pieces
+        xor  ah,ah              ; AX = it
+        mov  [wcnt],ax          ; wcnt = it
+        xor  bp,bp              ; BP = p = 0
+.p:     mov  si,[wbase]         ; SI = the slot's start...
+        add  si,bp              ; ...+ p...
+        add  si,bp              ; SI = the piece's word index
+        mov  bx,si
+        shr  bx,1               ; BX = its byte index
+        cmp  byte [WLAND+bx],0  ; on the ground?
+        jne  .n                 ;   yes: it lies still
+        sub  word [WVY+si],TGRAV    ; gravity
+        lea  di,[WVX+si]        ; the air: v/32
+        call AIR                ; WVX -= WVX/32
+        lea  di,[WVY+si]
+        call AIR                ; WVY -= WVY/32
+        lea  di,[WVZ+si]
+        call AIR                ; WVZ -= WVZ/32
+        mov  ax,[WWA+si]        ; the turn
+        add  [WA+si],ax         ; WA += its spin
+        and  word [WA+si],4095  ; 4096 sixteenths: the whole circle
+        mov  ax,[WWB+si]
+        add  [WB+si],ax         ; WB += its spin
+        and  word [WB+si],4095  ; the whole circle
+        push si                 ; pos += v
+        mov  ax,[WVX+si]        ; AX = vx
+        lea  dx,[WFX+bx]        ; DX = &the fraction
+        lea  si,[WX+si]         ; SI = &the units
+        call ADV                ; WX.WFX += vx
+        pop  si
+        push si
+        mov  ax,[WVY+si]
+        lea  dx,[WFY+bx]
+        lea  si,[WY+si]
+        call ADV                ; WY.WFY += vy
+        pop  si
+        push si
+        mov  ax,[WVZ+si]
+        lea  dx,[WFZ+bx]
+        lea  si,[WZ+si]
+        call ADV                ; WZ.WFZ += vz
+        pop  si
+        push bx                 ; the ground under it
+        mov  ax,[WX+si]         ; AX = x
+        mov  dx,[WZ+si]         ; DX = z
+        call GROUNDAT           ; AX = the ground's height there
+        pop  bx
+        cmp  [WY+si],ax         ; above it?
+        jg   .n                 ;   yes: falling still
+        mov  [WY+si],ax         ; on it, and still
+        mov  byte [WLAND+bx],1  ; WLAND[p] = 1
+.n:     inc  bp                 ; p++
+        cmp  bp,[wcnt]          ; all of them?
+        jb   .p
+        ret
+
+; ---- AIR: the word at DI loses 1/32 of itself, rounded towards nought ----
+;  In C:   *di -= *di / 32;     - C's / rounds towards nought, and SAR does
+;  not for a negative number, so 31 is added first: the C answer, by hand
+AIR:    mov  ax,[di]            ; AX = v
+        or   ax,ax              ; negative?
+        jns  .p                 ;   no
+        add  ax,31              ;   yes: round towards nought
+.p:     mov  cl,5               ; CL = 5
+        sar  ax,cl              ; AX = v/32
+        sub  [di],ax            ; v -= it
+        ret
+
+; ---- GROUNDAT: AX = x, DX = z -> AX = the ground's height at that node ----
+;  The node, as TERRPREP finds the one under the eye: (x + BIAS) >> 10.
+;  In C:   return worldh(hget((x + BIAS) >> 10, (z + BIAS) >> 10)) << VEXAG;
+GROUNDAT:
+        push si
+        add  ax,BIAS            ; AX = x + BIAS: never negative
+        mov  cl,2
+        shr  ax,cl              ; >> 2...
+        mov  cl,8
+        shr  ax,cl              ; AX = the column
+        mov  bx,ax              ; BX = it
+        add  dx,BIAS            ; the same for z
+        mov  cl,2
+        shr  dx,cl              ; >> 2...
+        mov  cl,8
+        shr  dx,cl              ; DX = the row
+        call HGET               ; AL = the map byte
+        xor  ah,ah              ; AX = it
+        call WORLDH             ; AX = the world height
+        mov  cl,VEXAG           ; CL = the hills' exaggeration
+        shl  ax,cl              ; AX <<= it: the ground's height in units
+        pop  si
+        ret
+
+; ============================================================================
+;  WRKDRAW - the wrecks, through the eye. Each corner is lesson 21's turn
+;  of its offset by the piece's two angles, plus the piece's place; then
+;  the ground's own ROTXZ takes it into the eye's space, and FACEFILL
+;  pitches, banks and fills it. The pieces of a wreck in painter's order.
+;  In C:
+;      for (w = 0; w < 2; w++) if (wact[w]) {
+;          p = w*MAXP;                        /* the first piece decides */
+;          if (abs(WX[p]-camx) < 12000 && abs(WZ[p]-camz) < 12000) wrk1(w);
+;      }
+; ============================================================================
+WRKDRAW:
+        mov  word [wdk],0       ; wdk = w = 0
+.w:     mov  bx,[wdk]           ; BX = w
+        cmp  byte [wact+bx],0   ; in use?
+        je   .wn                ;   no
+        mov  ax,MAXP*2          ; AX = a slot's words
+        mul  bx                 ; AX = w * MAXP*2
+        mov  [wbase],ax         ; wbase = it
+        mov  al,[wn+bx]         ; its pieces
+        xor  ah,ah              ; AX = it
+        mov  [wcnt],ax          ; wcnt = them
+        mov  si,[wbase]         ; far away? the first piece decides
+        mov  ax,[WX+si]         ; AX = x...
+        sub  ax,[camx]          ; ...from the eye
+        call ABS                ; AX = |dx|
+        cmp  ax,12000           ; past 12000?
+        jae  .wn                ;   yes: not drawn
+        mov  ax,[WZ+si]         ; the same for z
+        sub  ax,[camz]          ; AX = dz
+        call ABS
+        cmp  ax,12000
+        jae  .wn
+        call WRK1               ; draw this wreck
+.wn:    inc  word [wdk]         ; w++
+        cmp  word [wdk],2       ; both?
+        jb   .w
+        ret
+
+;  WRK1 - one wreck. In C (sin and cos *256, angles in 16ths of a step):
+;      for each piece p, for each corner k:
+;          a = WA[p] >> 4;  b = WB[p] >> 4;          /* the tumble */
+;          y1 = (WOY*cos a - WOZ*sin a) / 256;       /* turned by a... */
+;          z1 = (WOY*sin a + WOZ*cos a) / 256;
+;          x2 = (WOX*cos b + z1*sin b) / 256;        /* ...then by b */
+;          z2 = (z1*cos b - WOX*sin b) / 256;
+;          CAY = WY + y1 - camy;                     /* from the eye */
+;          (CAX, CAZ) = rotxz(WX + x2 - camx, WZ + z2 - camz);
+;      depth[p] = the mean of its four CAZ, by halves of halves;
+;      sort the pieces far to near (a bubble: twelve at most);
+;      for each piece: COLOR = WCOL;  facefill(its four corners);
+WRK1:   xor  bp,bp              ; ---- every corner, into the eye's space
+.pc:    mov  si,[wbase]         ; SI = the piece's word index
+        add  si,bp              ; + p...
+        add  si,bp              ; ...*2: words
+        mov  ax,[WA+si]         ; the piece's two angles
+        mov  cl,4
+        shr  ax,cl              ; AX = a: 16ths to steps
+        push si
+        push ax
+        call SINQ               ; AX = sin a * 256
+        mov  [sa],ax            ; sa = it
+        pop  ax
+        add  ax,64              ; + a quarter
+        call SINQ               ; AX = cos a * 256
+        mov  [ca],ax            ; ca = it
+        pop  si
+        mov  ax,[WB+si]         ; the same for b
+        mov  cl,4
+        shr  ax,cl              ; AX = b
+        push si
+        push ax
+        call SINQ               ; sin b
+        mov  [sb],ax
+        pop  ax
+        add  ax,64              ; + a quarter: the cosine
+        call SINQ               ; cos b
+        mov  [cb],ax
+        pop  si
+        mov  [wpi],si           ; wpi = the piece
+        xor  cx,cx              ; CX = k = 0
+.k:     mov  si,[wpi]           ; SI = p*2...
+        shl  si,1               ; *4
+        shl  si,1               ; *8
+        add  si,cx              ; + k...
+        add  si,cx              ; SI = corner's word index
+        push cx
+        mov  ax,[WOY+si]        ; y' = (y ca - z sa)/256
+        imul word [ca]          ; DX:AX = y*ca
+        mov  al,ah              ; /256: the middle bytes
+        mov  ah,dl
+        mov  bx,ax              ; BX = it
+        mov  ax,[WOZ+si]
+        imul word [sa]          ; DX:AX = z*sa
+        mov  al,ah              ; /256
+        mov  ah,dl
+        sub  bx,ax              ; BX = y ca - z sa
+        mov  [ry1],bx           ; y1 = it
+        mov  ax,[WOY+si]        ; z' = (y sa + z ca)/256
+        imul word [sa]          ; y*sa
+        mov  al,ah
+        mov  ah,dl              ; /256
+        mov  bx,ax
+        mov  ax,[WOZ+si]
+        imul word [ca]          ; z*ca
+        mov  al,ah
+        mov  ah,dl              ; /256
+        add  bx,ax              ; BX = y sa + z ca
+        mov  [rz1],bx           ; z1 = it
+        mov  ax,[WOX+si]        ; x" = (x cb + z' sb)/256
+        imul word [cb]          ; x*cb
+        mov  al,ah
+        mov  ah,dl              ; /256
+        mov  bx,ax
+        mov  ax,[rz1]
+        imul word [sb]          ; z1*sb
+        mov  al,ah
+        mov  ah,dl              ; /256
+        add  bx,ax              ; BX = x cb + z1 sb
+        mov  [rx2],bx           ; x2 = it
+        mov  ax,[rz1]           ; z" = (z' cb - x sb)/256
+        imul word [cb]          ; z1*cb
+        mov  al,ah
+        mov  ah,dl              ; /256
+        mov  bx,ax
+        mov  ax,[WOX+si]
+        imul word [sb]          ; x*sb
+        mov  al,ah
+        mov  ah,dl              ; /256
+        sub  bx,ax              ; BX = z1 cb - x sb
+        mov  [rz2],bx           ; z2 = it
+        push si
+        mov  si,[wpi]           ; SI = the piece
+        mov  ax,[WX+si]         ; the corner in the world, from the eye
+        add  ax,[rx2]           ; + x2
+        sub  ax,[camx]          ; - the eye
+        mov  [wdx],ax           ; ROTXZ's input, east
+        mov  ax,[WZ+si]
+        add  ax,[rz2]           ; + z2
+        sub  ax,[camz]          ; - the eye
+        mov  [wdz],ax           ; ...north
+        mov  ax,[WY+si]
+        add  ax,[ry1]           ; + y1
+        sub  ax,[camy]          ; - the eye: the height needs no turn
+        pop  si
+        mov  [CAY+si],ax        ; CAY = it
+        call ROTXZ              ; turned by your heading
+        mov  ax,[rc_x]          ; AX = across
+        mov  [CAX+si],ax        ; CAX = it
+        mov  ax,[rc_z]          ; AX = ahead
+        mov  [CAZ+si],ax        ; CAZ = it
+        pop  cx
+        inc  cx                 ; k++
+        cmp  cx,4
+        jb   .k
+        inc  bp                 ; the next piece
+        cmp  bp,[wcnt]
+        jb   .pc
+        xor  si,si              ; ---- depths: halves of halves ----
+.fd:    mov  bx,[wbase]         ; BX = the slot's start...
+        add  bx,si              ; + p...
+        add  bx,si              ; BX = the piece's word index
+        shl  bx,1               ; *2
+        shl  bx,1               ; BX = its corners
+        mov  cx,[CAZ+bx]        ; (z0 + z1)/2...
+        add  cx,[CAZ+bx+2]      ; + z1
+        sar  cx,1               ; CX = (z0 + z1)/2
+        mov  dx,[CAZ+bx+4]      ; (z2 + z3)/2...
+        add  dx,[CAZ+bx+6]      ; + z3
+        sar  dx,1               ; DX = (z2 + z3)/2
+        add  cx,dx              ; ...and the two halves
+        sar  cx,1               ; CX = the mean: no overflow on the way
+        mov  bx,si
+        add  bx,bx              ; BX = p*2
+        mov  [FCD+bx],cx        ; depth[p] = it
+        mov  ax,si
+        mov  [FCO+si],al        ; order[p] = p
+        inc  si                 ; p++
+        cmp  si,[wcnt]
+        jb   .fd
+        mov  cx,[wcnt]          ; ---- the bubble ----
+        dec  cx                 ; n-1 passes
+.bs:    push cx
+        xor  si,si              ; SI = j = 0
+.bi:    mov  bx,si
+        add  bx,bx              ; BX = j*2
+        mov  ax,[FCD+bx]        ; AX = depth[j]
+        cmp  ax,[FCD+bx+2]      ; nearer than depth[j+1]?
+        jge  .nsw               ;   no: in order
+        xchg ax,[FCD+bx+2]      ; swap the depths...
+        mov  [FCD+bx],ax
+        mov  al,[FCO+si]        ; ...and the pieces
+        xchg al,[FCO+si+1]
+        mov  [FCO+si],al
+.nsw:   inc  si                 ; j++
+        mov  bx,[wcnt]
+        dec  bx                 ; BX = n-1
+        cmp  si,bx
+        jb   .bi
+        pop  cx
+        loop .bs
+        mov  word [pfc],0       ; ---- paint, far to near ----
+.df:    mov  si,[pfc]           ; SI = the place in the order
+        mov  al,[FCO+si]        ; AL = the piece there
+        xor  ah,ah              ; AX = it
+        mov  bx,[wbase]
+        shr  bx,1               ; BX = the slot's first piece, bytes
+        add  bx,ax              ; + the piece
+        mov  dl,[WCOL+bx]       ; DL = its colour
+        mov  [COLOR],dl         ; COLOR = it
+        shl  bx,1               ; *2
+        shl  bx,1               ; *4
+        shl  bx,1               ; BX = the piece's corners, bytes
+        xor  di,di              ; DI = corner k*2 = 0
+.dc:    mov  ax,[CAX+bx]        ; the four corners, into FACEFILL's IX/IY/IZ
+        mov  [IX+di],ax
+        mov  ax,[CAY+bx]
+        mov  [IY+di],ax
+        mov  ax,[CAZ+bx]
+        mov  [IZ+di],ax
+        add  bx,2               ; the next corner
+        add  di,2               ; DI: the next of IX/IY/IZ
+        cmp  di,8               ; four?
+        jb   .dc
+        call FACEFILL           ; pitched, banked, filled
+        inc  word [pfc]         ; the next piece
+        mov  ax,[wcnt]
+        cmp  [pfc],ax
+        jb   .df
+        ret
+
+; ============================================================================
+;  TRCDRAW - each round a streak from where it is to half a tick back;
+;  the spark where yours struck; and the red sky put back after a hit.
+;  In C:
+;      if (pflash && --pflash == 0) daynight();          /* blue again */
+;      for (t = 0; t < 16; t++) if (tact[t]) {
+;          r = rnd16();                                  /* it flickers */
+;          COLOR = tact[t] == 1 ? PTRC : ATRC;           /* whose... */
+;          if ((r & 0x3000) == 0) COLOR = the other one; /* ...1 in 4 */
+;          head = wproj(gt[t]);  tail = wproj(gt[t] - tv[t]/512);
+;          tail.x += (r >> 8 & 3) - 1;  tail.y += (r >> 10 & 3) - 1;
+;          if (both in front) line(head, tail);
+;      }
+;      if (spark) { spark--;  a yellow star at wproj(hp2); }
+;      hitbands();
+; ============================================================================
+TRCDRAW:
+        cmp  byte [pflash],0    ; the red sky's frames
+        je   .nf                ;   none
+        dec  byte [pflash]      ; pflash--
+        jnz  .nf                ;   still red
+        call DAYNIGHT           ; the sky's own colour back
+.nf:    xor  bx,bx              ; BX = t = 0
+.t:     cmp  byte [tact+bx],0   ; in the air?
+        je   .tn                ;   no
+        push bx
+        mov  di,bx
+        add  di,di              ; DI = t*2
+        call RND16              ; AX = a random word: A TRACER BURNS, and
+        mov  [trnd],ax          ;  flickers - OWL FLY III's, yellow and red
+        mov  dl,PTRC            ; yours mostly yellow...
+        mov  dh,ATRC            ;  ...with red
+        cmp  byte [tact+bx],1   ; yours?
+        je   .c
+        xchg dl,dh              ; theirs mostly red, with yellow
+.c:     test ax,3000h           ; the top bits are the LCG's good ones: one
+        jnz  .c2                ;  frame in four, nought here...
+        mov  dl,dh              ;  ...and the other colour
+.c2:    mov  [COLOR],dl         ; COLOR = it
+        mov  ax,[gtx+di]         ; the head
+        mov  dx,[gty+di]
+        mov  cx,[gtz+di]
+        call WPROJ              ; AX, DX = the screen
+        jc   .tp                ;   behind the eye: not drawn
+        mov  [sx0],ax           ; the line's first end
+        mov  [sy0],dx
+        mov  ax,[tvx+di]        ; the tail: half a tick back - v/512
+        mov  cl,9
+        sar  ax,cl              ; AX = vx/512
+        neg  ax                 ; backwards
+        add  ax,[gtx+di]        ; AX = x - vx/512
+        push ax
+        mov  ax,[tvy+di]
+        mov  cl,9
+        sar  ax,cl              ; vy/512
+        neg  ax                 ; backwards
+        add  ax,[gty+di]        ; y - vy/512
+        mov  dx,ax              ; DX = it
+        mov  ax,[tvz+di]
+        mov  cl,9
+        sar  ax,cl              ; vz/512
+        neg  ax                 ; backwards
+        add  ax,[gtz+di]        ; z - vz/512
+        mov  cx,ax              ; CX = it
+        pop  ax                 ; AX = x
+        call WPROJ              ; AX, DX = the tail on the screen
+        jc   .tp
+        mov  cx,[trnd]          ; A PINCH OF TUMBLE on the tail, the game's:
+        mov  cl,ch              ;  CL = the random word's high byte
+        and  cx,3               ; CX = 0..3
+        dec  cx                 ; CX = -1..2 pixels
+        add  ax,cx              ; the tail's x, shaken
+        mov  cx,[trnd]          ; the next two bits...
+        mov  cl,ch
+        shr  cl,1
+        shr  cl,1               ; CL = the high byte >> 2
+        and  cx,3               ; CX = 0..3
+        dec  cx                 ; -1..2
+        add  dx,cx              ; the tail's y, shaken
+        mov  [sx1],ax           ; the line's other end
+        mov  [sy1],dx
+        call CLIPLINE           ; cut to the screen; CF if none of it is on
+        jc   .tp
+        call LINE               ; the streak
+.tp:    pop  bx
+.tn:    inc  bx                 ; t++
+        cmp  bx,NTRC
+        jb   .t
+        cmp  byte [spark],0     ; ---- the spark ----
+        je   .x
+        dec  byte [spark]       ; spark--
+        mov  ax,[hpx2]          ; where it struck
+        mov  dx,[hpy2]
+        mov  cx,[hpz2]
+        call WPROJ              ; on the screen
+        jc   .x
+        mov  [msx],ax           ; kept: two lines from it
+        mov  [msy],dx
+        mov  byte [COLOR],PTRC  ; yellow
+        mov  ax,[msx]           ; a star: across...
+        sub  ax,3               ; from x-3...
+        mov  [sx0],ax
+        add  ax,6               ; ...to x+3
+        mov  [sx1],ax
+        mov  ax,[msy]
+        mov  [sy0],ax           ; on its own row
+        mov  [sy1],ax
+        call MLINE
+        mov  ax,[msx]           ; ...and down
+        mov  [sx0],ax
+        mov  [sx1],ax
+        mov  ax,[msy]
+        sub  ax,3               ; from y-3...
+        mov  [sy0],ax
+        add  ax,6               ; ...to y+3
+        mov  [sy1],ax
+        call MLINE
+.x:     jmp  HITBANDS           ; the flare, last: its RET is ours
+
+; ---- HITBANDS: you are hit - the world flares red and yellow ------------
+;  OWL FLY III's HITFLSHF, SYM.INC: BANDS, not a wash. There is no alpha in
+;  a 256-colour buffer, so a full flood would only replace the picture;
+;  every second, third, fourth row filled lets the world show between them,
+;  and it reads as a flare rather than a curtain. The stride widens frame
+;  by frame - 2, 3, 4 - so it thins out on its own, and it lasts three
+;  frames of the five the sky stays red. Drawn after the world and before
+;  the HUD, so the gunsight and the tapes stay readable on top of it.
+;  In C:
+;      if (dying || pflash < 2) return;        /* TRCDRAW counted it: 4 3 2 */
+;      stride = 6 - pflash;
+;      for (y = 0; y < 200; y++) if (y % stride == 0)
+;          memset(buf + y*320, (y & 2) ? PTRC : ATRC, 320);
+HITBANDS:
+        cmp  byte [dying],0     ; going down has a picture of its own
+        jne  .x
+        mov  bl,[pflash]        ; BL = the red sky's frames left
+        cmp  bl,2               ; the first three of the five?
+        jb   .x                 ;   no: only the sky now
+        xor  bh,bh              ; BX = pflash
+        neg  bx                 ; BX = -pflash
+        add  bx,6               ; BX = 6 - pflash: the stride, 2 3 4
+        push es
+        mov  es,[bufseg]        ; ES = the back buffer
+        cld                     ; STOSB walks forwards
+        xor  si,si              ; SI = y = 0
+.row:   mov  ax,si              ; AX = y
+        xor  dx,dx              ; DX:AX = y
+        div  bx                 ; DX = y % stride
+        or   dx,dx              ; one of this frame's rows?
+        jnz  .nx                ;   no
+        mov  al,ATRC            ; red...
+        test si,2               ; ...and every other pair of rows
+        jz   .c1
+        mov  al,PTRC            ; ...yellow
+.c1:    push ax                 ; (MUL takes AX and DX)
+        mov  ax,si              ; AX = y
+        mov  dx,320             ; DX = a row's bytes
+        mul  dx                 ; AX = y*320: the row's first byte
+        mov  di,ax              ; DI = it
+        pop  ax                 ; AL = the colour
+        mov  cx,320             ; the whole row
+        rep  stosb              ; memset(buf + y*320, AL, 320)
+.nx:    inc  si                 ; y++
+        cmp  si,200             ; all 200 rows?
+        jb   .row
+        pop  es
+.x:     ret
+
+; ---- WPROJ: a world point AX, DX, CX -> the screen AX, DX; CF if behind --
+;  The eye's turn (ROTXZ), then PPOINT's pitch and lens. Keeps BX, DI.
+;  In C:   (x, z) = rotxz(p.x - camx, p.z - camz);  y = p.y - camy;
+;          if (z < NEARZ) return BEHIND;   return ppoint(x, y, z);
+WPROJ:  push bx
+        push di
+        sub  ax,[camx]          ; from the eye, east
+        mov  [wdx],ax
+        sub  cx,[camz]          ; ...north
+        mov  [wdz],cx
+        sub  dx,[camy]          ; ...up
+        push dx
+        call ROTXZ              ; turned by your heading
+        pop  dx
+        mov  ax,[rc_x]          ; AX = across
+        mov  cx,[rc_z]          ; CX = ahead
+        cmp  cx,NEARZ           ; behind the eye?
+        jl   .b
+        call PPOINT             ; AX, DX = the screen; CF if behind
+        pop  di
+        pop  bx
+        ret
+.b:     pop  di
+        pop  bx
+        stc                     ; CF = 1: behind
+        ret
+
+; ---- GUNWORDS: the belt and the hull, under the instruments ------------
+;  In C:   sprintf(HGUN, "GUN %3d  HULL %d", ammo, hull);  txt(8, 144, HGUN);
+GUNWORDS:
+        mov  ax,[ammo]          ; "GUN nnn"
+        mov  di,HGUN+6          ; DI = the last digit's place
+        mov  cx,3               ; three digits
+        mov  byte [nfill],' '   ; leading noughts as spaces
+        call NUMOUT
+        mov  al,[hull]          ; "HULL n"
+        add  al,'0'             ; the digit's letter
+        mov  [HGUN+14],al
+        mov  ax,144             ; row 144, under the throttle
+        mov  bx,8               ; column 8
+        mov  si,HGUN
+        call TXT
+        ret
+HGUN    db 'GUN 250  HULL 8',0
+; ============================================================================
+;  State: the lesson's own, then the contract the engine modules expect.
+; ============================================================================
+camx    dw 0                    ; where the eye stands, in world units
+rawh    db 0                    ; TERRPREP: one node's raw map height, kept
+                                ;  across WORLDH, which does not spare BX
+tgi     dw 0                    ; TOWNSPOT: the biggest town's square...
+tgj     dw 0
+tbest   dw 0                    ; ...how many built squares round it
+tcnt    dw 0                    ; ...the count for the square being looked at
+tmax    db 0                    ; ...the tallest byte on the way in
+townx   dw 0                    ; ...and where you appear: AIRBORNE reads it
+townz   dw 0
+towny   dw 0
+camxf   db 0                    ; THE FRACTION of camx, in 1/256ths
+camzf   db 0                    ; ...and of camz. Carried in by ADC
+camyf   db 0                    ; ...and of camy, now the height has a climb
+gtop    dw 0                    ; THE HIGHEST GROUND ON THIS ISLAND, in
+                                ;  world units. TOPOFMAP works it out once
+camy0   dw 0                    ; ...where the aeroplane appears, over it...
+camymax dw 0                    ; ...and the ceiling, over that
+camy    dw 0                    ; how high over the plane
+camz    dw 0
+camgi   dw 0                    ; ...and which node that is
+camgj   dw 0
+gi      dw 0                    ; the lattice's own counters
+gj      dw 0
+ta      dw 0                    ; ...and the cache's: which node, east
+tb      dw 0                    ; ...and north, counted from the far corner
+tsi     dw 0                    ; the slot GRIDC is working on, kept across
+                                ;  DRAWEDGE3D because that eats SI
+ordk    dw 0                    ; which entry of TORD is being drawn
+ordn    dw 0                    ; ORDPREP: how many are in the list so far
+ordd    dw 0                    ; ORDPREP: the distance it is filling in
+qor     db 0                    ; DRAWQUAD: the OR of the four outcodes
+qedge   db 0                    ; ...the edges still to look at
+qe      dw 0                    ; ...and which one it is on, in bytes
+orddisk dw 0                    ; ...and how many squares lie inside the
+                                ;  circle of radius NR: all GROUND draws
+ordhouse dw 0                   ; ...and inside RH: the ones with houses
+qband   db 0                    ; DRAWQUAD: the square's band, unfolded
+
+; ---- the houses ----------------------------------------------------------
+hfx     dw 0                    ; HPREP: the eye, inside its own square
+hfz     dw 0
+HAX     dw 17 dup(0)            ; k/16 of a square east, turned: x...
+HAZ     dw 17 dup(0)            ; ...and z
+HBX     dw 17 dup(0)            ; k/16 of a square north, turned: x...
+HBZ     dw 17 dup(0)            ; ...and z
+hc0x    dw 0                    ; HOUSES4: the square's corner 0, turned
+hc0z    dw 0
+hrx     dw 0                    ; ...the eye, from that corner, in the world
+hrz     dw 0
+hgi     dw 0                    ; ...the square's place on the map
+hgj     dw 0
+hh      dw 0                    ; ...and its hash: the town plan
+hy0     dw 0                    ; ...corner 0's ground, from the eye
+gl      dw 0                    ; ...the west side, down the lattice...
+gls     dw 0
+gr      dw 0                    ; ...and the east
+grs     dw 0
+GY      dw 64 dup(0)            ; ...the ground at the 64 house corners
+HCOL    db 4 dup(0)             ; ...the columns, farthest first
+HROW    db 4 dup(0)             ; ...and the rows
+hci     db 0                    ; ...which of them it is on
+hri     db 0
+oeye    dw 0                    ; HORD: the eye along its axis
+olo     db 0                    ; ...and the two ends still left
+ohi     db 0
+hc      db 0                    ; HOUSE: its column, 0..3
+hr      db 0                    ; ...its row
+hn      db 0                    ; ...its place in the block, 0..15
+hd      dw 0                    ; ...how far it is from the eye
+hs      dw 0                    ; ...its own number
+ha0     dw 0                    ; ...its walls, in sixteenths times two
+ha1     dw 0
+hb0     dw 0
+hb1     dw 0
+hfl     dw 0                    ; ...its storeys
+bry0    dw 0                    ; ...its floor and its roof, from the eye
+bry1    dw 0
+FRY     dw 4 dup(0)             ; ...the ground at its four corners
+fa      dw 0                    ; FACEV: the wall's two corners
+fb      dw 0
+FRX     dw 4 dup(0)             ; the four corners, turned: x...
+FRZ     dw 4 dup(0)             ; ...and z
+fbx0    dw 0                    ; HWALL: the wall's box on the screen
+fbx1    dw 0
+fby0    dw 0
+fby1    dw 0
+wux     dw 0                    ; ...the near way: an eighth of the wall
+wuz     dw 0
+HWX     dw 4 dup(0)             ; ...1, 3, 5 and 7 eighths along it
+HWZ     dw 4 dup(0)
+wy      dw 0                    ; ...the bottom of this row of glass
+wf      dw 0                    ; ...and how many rows are left
+wta     dw 0,0                  ; WSCREEN: the roof line, A and B...
+wtb     dw 0,0
+wfa     dw 0,0                  ; ...and the floor line
+wfb     dw 0,0
+wr      dw 0                    ; WFLOOR: how far down the floor is
+wrow    dw 0                    ; ...the row of panes being drawn
+wkl     dw 0                    ; WLAT: the columns' list...
+wnk     dw 0                    ; ...and how many
+wll     dw 0                    ; ...the rows' list...
+wnl     dw 0                    ; ...and how many
+wza     dw 0                    ; ...the two depths, quartered
+wzb     dw 0
+wci     dw 0                    ; ...which column, which row
+wli     dw 0
+wk      dw 0                    ; ...this column, in eighths
+wnum    dw 0                    ; ...the top of its fraction
+cfx     dw 0                    ; ...its floor point
+cfy     dw 0
+ctx     dw 0                    ; ...its roof point
+cty     dw 0
+LX      dw 32 dup(0)            ; ...and the lattice: eight rows of four
+LY      dw 32 dup(0)
+
+savesp  dw 0                    ; where TRAP0 puts the stack back to
+faults  dw 0                    ; ...and how many times it had to, this frame
+oldi0   dw 0,0                  ; the INT 0 vector we borrowed...
+oldi9   dw 0,0                  ; ...and the INT 9 one. Both go back at QUIT
+
+dying   db 0                    ; 1 = a wreck. The flight model is skipped,
+                                ;  everything else carries on
+dytick  dw 0                    ; frames since the impact - the message
+                                ;  blinks on bit 3 of it
+turn    dw 0                    ; which way the stick is held: -1, 0 or +1
+night   db 0                    ; 0 = day, 1 = night. N flips it
+nwas    db 0                    ; was N held last frame?
+twas    db 0                    ; ...and T
+tmode   db 2                    ; WHICH LETTERS: 0 the ROM's, 1 ours, 2 ours ringed
+rlen    dw 0                    ; RUNG: how long each side...
+rgap    dw 0                    ; ...how much of the middle is left empty...
+rdash   db 0                    ; ...and dashed or not
+lnx     dw 0                    ; RUNG: the line's centre on the screen...
+lny     dw 0
+lnt     dw 0                    ; ...the pixel being walked...
+rx8     dw 0                    ; ...and its offset from the centre, 8.8
+ry8     dw 0
+f0      dw 0                    ; MIDHUD: the horizon, below the nose
+lk      dw 0                    ; ...the rung being drawn...
+lke     dw 0                    ; ...and the last
+tlx     dw 0                    ; ...where its number goes
+tly     dw 0
+LBUF    db ' 10',0              ; ...and the number itself
+hpass   db 1                    ; TAPES: 0 the ring pass, 1 the ink pass
+bcol    db 0                    ; BAR's colour
+tmark   dw 0                    ; TAPES: the mark being drawn...
+trow    dw 0                    ; ...its row...
+tdist   dw 0                    ; ...and how far it is from the value
+tx      dw 0                    ; ...and the compass tick's x
+NBUF    db 6 dup(0)             ; NUMSTR and NUMK write here; NBUF+5 stays 0
+HCMP    db '000',0              ; a compass number
+GBUF    db ' 1.0G',0            ; the G meter: sign, digit, point, tenth
+gq      db 10 dup(0)            ; TXT46O: a letter's rows, shifted, and padded
+fwas    db 0                    ; was F held last frame? - so one press is
+                                ;  one flip and not sixty
+rkey    db 0                    ; REMOTE: the code fed from outside, 0 = none
+rhold   db 0                    ; ...and how many frames it is still held for
+
+fastp   db 1                    ; WHICH ENGINE: 1 = the lessons' way (no
+                                ;  divide in ROTXZ, lesson 8's Line), 0 =
+                                ;  the classic the game shipped with. F
+                                ;  flips it in flight; ENGINE\E_M3D.INC
+                                ;  and E_RAST.INC read it and nothing else
+fpsn    dw 0                    ; frames counted this second...
+fpst    dw 0                    ; ...since this BIOS tick...
+fpsv    dw 0                    ; ...and the number the HUD shows
+tcol    db HINK                 ; TXT's colour: the HUD's ink
+nfill   db ' '                  ; NUMOUT: what goes in front of a short number
+
+; ---- THE FORCES: what PHYS keeps from one tick to the next -----------------
+vel     dw 0                    ; THE SPEED, in 64ths of a unit a tick
+velf    db 0                    ; ...and its fraction, in 256ths of a vel
+throt   dw 0                    ; the throttle lever, 0..64
+fuel    dw 0                    ; the tank: FUELMAX full, one unit a tick
+alpha   dw 0                    ; THE WING: the angle of attack, eighths
+ncmd    dw 10                   ; ...the load the stick asks for, tenths of G
+nmax    dw 10                   ; ...the most the wing can give, tenths
+nload   dw 10                   ; ...the load it carries
+stalled db 0                    ; ...1 past the critical angle
+vstl    dw VS1                  ; ...the stall speed for this pull
+vdiv    dw 64                   ; step 7: the speed to divide by
+pcosw   dw 256                  ; step 7: cos(pitch)*256
+tlo     dw 0                    ; step 9: T, the stall speed squared
+thi     dw 0
+ppath   dw 0                    ; NOSEIN: the path, kept for one frame
+hpath   dw 0
+rpath   dw 0
+noffp   dw 0                    ; NSTEP: the nose's pitch offset, as drawn
+noffh   dw 0                    ; ...and its heading offset
+fpy     dw 0                    ; FPM: the marker's row
+q       dw 0                    ; the pull on the stick, signed, in eighths
+rud     dw 0                    ; ...and the push on the pedals
+qramp   dw 0                    ; ...and how far a held pull has built
+pfrac   dw 0                    ; eighths of a step of pitch not yet turned
+hfrac   dw 0                    ; ...and of heading
+abon    db 0                    ; 1 while the afterburner is lit
+; ...and what one tick works out on its way, kept where a reader can see it
+rho     dw 256                  ; the air: 256 at the sea
+thrust  dw 0                    ; the engine's pull, this tick (THRUST is
+                                ;  the constant: FASM tells the two apart
+                                ;  by their capitals)
+drag    dw 0                    ; the air's push back
+nsin    dw 0                    ; sin(nose)*256
+ncos    dw 256                  ; cos(nose)*256
+step    dw 0                    ; this tick's travel, in 256ths of a unit
+fwd     dw 0                    ; ...the part of it along the ground
+wdy     dw 0                    ; ...and the part of it up
+agl     dw 0                    ; height above the ground, for the wind
+steps   dw 0                    ; FLY: the ticks owed this frame...
+lasttk  dw 0                    ; ...counted from the tick of the last one
+WIY     dw 4 dup(0)             ; HWALL: the wall's corners, y and z, as the
+WIZ     dw 4 dup(0)             ;  heading left them - before PITCH4
+ty      dw 0                    ; TERRPREP: a node's y' as the camera sees it...
+tz      dw 0                    ; ...and its z'
+tcode   db 0                    ; ...and the ground point's five bits
+
+; THE TWO FENCES ARE NOT BYTES ANY MORE. Lesson 13 made donear and doside
+; switchable so a stage could take one down and let you look at what it was
+; holding back; lesson 14 left them standing at 1. On the polygon path they
+; are not optional and there is nowhere to put a switch: the near-plane clip
+; is INSIDE FACEFILL, and the scanline filler clips to the screen as it
+; goes, one span at a time. The fence became part of the wall.
+
+KEYS    db 128 dup(0)           ; THE KEY TABLE. KBINT writes it, PHYS reads
+                                ;  it, and nothing else in the program knows
+                                ;  the keyboard exists. One byte a scan code:
+                                ;  1 while held, 0 when let go
+
+; ---- engine contract: E_MATH + E_TERR ------------------------------------
+rseed   dw 1                    ; LCG state
+dss     dw 0                    ; DS: current side length
+dsh     dw 0                    ; DS: half side
+dsx     dw 0                    ; DS: loop x / scratch
+dsy     dw 0                    ; DS: loop y / scratch
+dsamp   dw 0                    ; DS: noise amplitude (power of two)
+dsac    dw 0                    ; DS: accumulator / scratch
+
+; ---- engine contract: E_M3D + E_RAST -------------------------------------
+bufseg  dw 0
+heading dw 0                    ; the camera: turned by the arrows...
+pitch   dw 0                    ; ...level...
+roll    dw 0                    ; ...and not banked
+hsin    dw 0
+hcos    dw 256
+rsin    dw 0
+rcos    dw 256
+psin    dw 0
+pcos    dw 256
+pofs    dw 0
+horiz   dw 100                  ; where the eye's axis meets the glass
+swayx   dw 0
+swayy   dw 0
+wdx     dw 0                    ; ROTXZ in...
+wdz     dw 0
+rc_x    dw 0                    ; ...and out
+rc_z    dw 0
+ptmp    dw 0                    ; projection scratch
+rddx    dw 0
+rddy    dw 0
+rsxo    dw 0
+tnum    dw 0                    ; clip interpolation scratch
+tden    dw 0
+cdx     dw 0                    ; line clip deltas / new point
+cdy     dw 0
+nx      dw 0
+ny      dw 0
+IX      dw 4 dup(0)             ; the polygon path's face buffers. This
+IY      dw 4 dup(0)             ;  lesson draws no faces - the relief in
+IZ      dw 4 dup(0)             ;  the next one does - but E_RAST.INC is
+OX      dw 6 dup(0)             ;  one file and it is assembled whole, so
+OY      dw 6 dup(0)             ;  the names it uses have to exist
+OZ      dw 6 dup(0)
+PX      dw 6 dup(0)
+PY      dw 6 dup(0)
+NPOLY   dw 0
+oc      dw 0
+ci      dw 0
+ni      dw 0
+pk      dw 0
+pminy   dw 0
+pmaxy   dw 0
+scy     dw 0                    ; scanline filler state
+scymax  dw 0
+scxl    dw 0
+scxr    dw 0
+oc0     db 0                    ; Cohen-Sutherland outcodes
+oc1     db 0
+ocsel   db 0
+lx      dw 0                    ; Bresenham state (LINE)
+ly      dw 0
+ldx     dw 0
+ldy     dw 0
+lsx     dw 0
+lsy     dw 0
+lerr    dw 0
+sx0     dw 0
+sy0     dw 0
+sx1     dw 0
+sy1     dw 0
+COLOR   db 0
+
+; ---- THE GUNS' state -------------------------------------------------------
+tact    db NTRC dup(0)          ; each round: 0 none, 1 yours, 2 theirs
+tlife   db NTRC dup(0)          ; ...ticks left
+tfx     db NTRC dup(0)          ; ...its fractions
+tfy     db NTRC dup(0)
+tfz     db NTRC dup(0)
+gtx      dw NTRC dup(0)          ; ...where
+gty      dw NTRC dup(0)
+gtz      dw NTRC dup(0)
+tvx     dw NTRC dup(0)          ; ...its velocity, 256ths of a unit a tick
+tvy     dw NTRC dup(0)
+tvz     dw NTRC dup(0)
+trnext  dw 0                    ; the next slot of the ring
+tstep   db 0                    ; TRCMOVE's quarter steps
+pst     db (NPLANE+1) dup(0)    ; each aeroplane: 0 flying, 1 a wreck
+php     db NPLANE dup(0)        ; ...hits left in it
+pursue  db NPLANE dup(0)        ; ...chasing you (the fighter)
+pcool   dw NPLANE dup(0)        ; ...ticks till its gun may fire
+pdead   dw NPLANE dup(0)        ; ...ticks till a wreck is replaced
+ammo    dw AMMO                 ; your belt
+hull    db HULL                 ; your hits left
+pflash  db 0                    ; frames of red sky left
+bwas    db 0                    ; B held last tick: DRILL's one press
+spup    db 0                    ; SPACE let go since the crash: only then
+                                ;  is it "another aeroplane" and not the gun
+trnd    dw 0                    ; TRCDRAW: this round's random word
+spark   db 0                    ; frames of the hit's spark left
+hpx2    dw 0                    ; where your last hit struck
+hpy2    dw 0
+hpz2    dw 0
+adx     dw 0                    ; AIM: you, from it
+ady     dw 0
+adz     dw 0
+ash     dw 0                    ; ...its heading's sine and cosine
+ach     dw 0
+ahead32 dw 0,0                  ; ...how far in front, *256
+side32  dw 0,0                  ; ...how far aside, *256
+ahd     dw 0                    ; ...in front, units
+npit    dw 0                    ; NOSEKEEP: the nose's pitch...
+nhdg    dw 0                    ; ...and heading, this frame
+fps     dw 0                    ; FIRE1: your nose's sines
+fpc     dw 0
+fhs     dw 0
+fhc     dw 0
+fhm     dw 0                    ; ...the flat part of the muzzle speed
+wnext   db 0                    ; BREAK: the next wreck slot
+wslot   dw 0
+wbase   dw 0                    ; a slot's first piece, bytes into the pool
+wcnt    dw 0                    ; ...its pieces
+wn      db 2 dup(0)             ; each slot: how many pieces
+wact    db 2 dup(0)             ; ...in use
+wtime   dw 2 dup(0)             ; ...ticks since the hit
+bcx     dw 0                    ; the aeroplane broken: where...
+bcy     dw 0
+bcz     dw 0
+bvx     dw 0                    ; ...how fast
+bvz     dw 0
+bpx     dw 0                    ; ...where the round struck, from its centre
+bpy     dw 0
+bpz     dw 0
+brx     dw 0                    ; ...the round's velocity against it
+bry     dw 0
+brz     dw 0
+msum    dw 0                    ; ...its mass
+fptr    dw 0                    ; ...the face
+wpi     dw 0                    ; ...the piece, bytes into the pool
+sumx    dw 0                    ; ...a centre being summed...
+sumy    dw 0
+sumz    dw 0
+cenx    dw 0                    ; ...and found
+ceny    dw 0
+cenz    dw 0
+vwx     dw 0                    ; VERTW's x
+d1x     dw 0                    ; AREA's diagonals...
+d1y     dw 0
+d1z     dw 0
+d2x     dw 0
+d2y     dw 0
+d2z     dw 0
+nxx     dw 0                    ; ...their cross product...
+nyy     dw 0
+nzz     dw 0
+t32     dw 0,0                  ; ...its length squared
+sjx     dw 0,0                  ; the pushes, summed
+sjy     dw 0,0
+sjz     dw 0,0
+cjx     dw 0                    ; ...over M
+cjy     dw 0
+cjz     dw 0
+shx     dw 0                    ; the round's share
+shy     dw 0
+shz     dw 0
+sa      dw 0                    ; WRK1: a piece's angles
+ca      dw 0
+sb      dw 0
+cb      dw 0
+ry1     dw 0                    ; ...a corner on its way round
+rz1     dw 0
+rx2     dw 0
+rz2     dw 0
+wdk     dw 0                    ; WRKDRAW's slot
+; ---- the pool of pieces: two wrecks of twelve -------------------------------
+WX      dw 2*MAXP dup(0)        ; where, units...
+WY      dw 2*MAXP dup(0)
+WZ      dw 2*MAXP dup(0)
+WFX     db 2*MAXP dup(0)        ; ...and 256ths
+WFY     db 2*MAXP dup(0)
+WFZ     db 2*MAXP dup(0)
+WVX     dw 2*MAXP dup(0)        ; velocity, 256ths a tick
+WVY     dw 2*MAXP dup(0)
+WVZ     dw 2*MAXP dup(0)
+WA      dw 2*MAXP dup(0)        ; two angles, 16ths of a step
+WB      dw 2*MAXP dup(0)
+WWA     dw 2*MAXP dup(0)        ; ...and their spins
+WWB     dw 2*MAXP dup(0)
+WM      dw 2*MAXP dup(0)        ; mass: area
+WSZ     dw 2*MAXP dup(0)        ; size: its root
+WRX     dw 2*MAXP dup(0)        ; centre, from the aeroplane's, at the hit
+WRY     dw 2*MAXP dup(0)
+WRZ     dw 2*MAXP dup(0)
+DJX     dw 2*MAXP dup(0)        ; d, then the push J
+DJY     dw 2*MAXP dup(0)
+DJZ     dw 2*MAXP dup(0)
+WLAND   db 2*MAXP dup(0)        ; on the ground
+WCOL    db 2*MAXP dup(0)        ; colour
+WOX     dw 2*MAXP*4 dup(0)      ; four corners from the centre
+WOY     dw 2*MAXP*4 dup(0)
+WOZ     dw 2*MAXP*4 dup(0)
+CAX     dw 2*MAXP*4 dup(0)      ; ...and in the eye's space, this frame
+CAY     dw 2*MAXP*4 dup(0)
+CAZ     dw 2*MAXP*4 dup(0)
+
+; ---- THE TRAFFIC's state ---------------------------------------------------
+pax     dw (NPLANE+1) dup(0)    ; each aeroplane: east...
+pay     dw (NPLANE+1) dup(0)    ; ...up...
+paz     dw (NPLANE+1) dup(0)    ; ...north...
+pah     dw (NPLANE+1) dup(0)    ; ...and its heading. The sixth is your own,
+                                ;  copied in while F4 is on
+ptick   dw 0                    ; PLANESUPD's own count of ticks
+pidx    dw 0                    ; PLANESDRAW: the slot, in bytes
+plim    dw 0                    ; ...and how far to go
+pdx     dw 0                    ; MODELDRAW's stand: right of the eye...
+pdy     dw 0                    ; ...above it...
+pdz     dw 0                    ; ...in front of it
+myaw    dw 0                    ; the model's turn to the eye
+msin    dw 0                    ; ...its sine and cosine
+mcos    dw 0
+mvb     dw MVERT                ; the type's vertex table...
+mvn     dw 13*6                 ; ...its bytes...
+mfb     dw MFACE                ; ...its face table...
+nfc     dw 8                    ; ...its faces
+pfc     dw 0                    ; the face being painted
+PVX     dw 25 dup(0)            ; every vertex, turned and placed
+PVY     dw 25 dup(0)
+PVZ     dw 25 dup(0)
+FCD     dw 12 dup(0)            ; every face's depth
+FCO     db 12 dup(0)            ; the painter's order
+msx     dw 0                    ; MARKER: the centre on the screen...
+msy     dw 0
+mhalf   dw 0                    ; ...and the half size
+ppx     dw 0                    ; PPOINT: the point...
+ppy     dw 0
+ppz     dw 0
+ppy2    dw 0                    ; ...pitched
+pdz2    dw 0                    ; ...and how far, pitched
+gcnt    dw 0                    ; GLOW: frames...
+gph     dw 0                    ; ...and the phase
+cammode db 0                    ; F4: 0 the cockpit, 1..6 the slot watched
+f4was   db 0                    ; F4 held last frame
+tgaz    dw 0                    ; the eye on its sphere: the way round...
+tgel    dw 12                   ; ...how high...
+tgrad   dw 100                  ; ...how far
+tslot   dw 0                    ; CAMSET: the slot watched, in bytes
+cth     dw 0                    ; ...the eye's height over it
+ctr     dw 0                    ; ...and its distance along the ground
+svx     dw 0                    ; the pilot's eye, put aside
+svy     dw 0
+svz     dw 0
+svh     dw 0
+svp     dw 0
+svr     dw 0
+
+; quarter sine table: SINT[i] = round(256*sin(i*90/64 deg)), i=0..64
+; ============================================================================
+;  THE METER - how many multiplies and divides ONE FRAME really does.
+;
+;  Reading the source cannot answer it: one IMUL inside a loop over 2500
+;  nodes is 2500 IMULs, one inside a routine every polygon calls is
+;  thousands more. So the PROCESSOR counts them, by a door it has had since
+;  the first 8086: the TRAP FLAG. Bit 8 of the flags register. While it is
+;  1, the CPU stops after EVERY instruction and calls INT 1 - this is how a
+;  debugger single-steps a program. Our INT 1 looks at the instruction
+;  about to run and counts it if it is a multiply or a divide.
+;
+;  HOW IT KNOWS. MUL, IMUL, DIV and IDIV are one family of opcodes: F6 (the
+;  byte forms) and F7 (the word forms). The byte after - the ModR/M byte -
+;  says WHICH, in its middle three bits:
+;
+;      bits 5..3:   4 MUL    5 IMUL    6 DIV    7 IDIV
+;                   (0 is TEST, 2 NOT, 3 NEG: the same opcode, not ours)
+;
+;  `imul word [hcos]` assembles to F7 2E xx xx: F7, then 2Eh = 00 101 110 -
+;  the middle bits 101 are 5, IMUL. A byte of segment override (26h ES:,
+;  2Eh CS:, 36h SS:, 3Eh DS:) may come first; it is stepped over.
+;
+;  M counts the next frame. It is slow while it counts - every instruction
+;  stops for the handler - so the frame M hits takes half a second. The
+;  numbers then stay on the screen, under the frame rate:
+;
+;      MUL nnnnnnn  DIV nnnnnnn      multiplies, divides: one frame
+;
+;  In C:
+;
+;      void interrupt trap1(void)              /* after every instruction */
+;      {
+;          unsigned char far *p = the_next_instruction;
+;          while (*p == 0x26 || *p == 0x2E || *p == 0x36 || *p == 0x3E) p++;
+;          if ((*p & 0xFE) != 0xF6) return;     /* not the family         */
+;          int op = (p[1] >> 3) & 7;            /* the middle three bits  */
+;          if (op == 4 || op == 5) mmul++;      /* MUL, IMUL              */
+;          if (op == 6 || op == 7) mdiv++;      /* DIV, IDIV              */
+;      }
+; ============================================================================
+TRAP1:  push bp                 ; keep BP
+        mov  bp,sp              ; BP = the stack: the CPU pushed FLAGS, CS,
+                                ;  IP, so [bp+2] is IP and [bp+4] is CS - the
+                                ;  address of the instruction ABOUT to run
+        push ds                 ; keep everything this touches
+        push si
+        push ax
+        lds  si,[bp+2]          ; DS:SI = CS:IP. LDS loads a far pointer:
+                                ;  SI from [bp+2], DS from [bp+4]
+.pre:   lodsb                   ; AL = the next byte of the instruction
+        cmp  al,26h             ; ES: ?
+        je   .pre               ;   a prefix: step over it
+        cmp  al,2Eh             ; CS: ?
+        je   .pre
+        cmp  al,36h             ; SS: ?
+        je   .pre
+        cmp  al,3Eh             ; DS: ?
+        je   .pre
+        and  al,0FEh            ; F6 and F7 differ only in bit 0 (byte or
+        cmp  al,0F6h            ;  word): clear it, and one compare is both
+        jne  .out               ;   not the family: nothing to count
+        lodsb                   ; AL = the ModR/M byte
+        and  al,38h             ; AL = its middle three bits, still in place:
+                                ;  38h is 0011 1000b
+        cmp  al,20h             ; below 4 (4 in place is 20h)?
+        jb   .out               ;   TEST, NOT, NEG: not ours
+        cmp  al,30h             ; 6 or 7 (30h, 38h): a divide?
+        jae  .div               ;   yes
+        add  word [cs:mmul],1   ; mmul++, a double word: ADD the low word...
+        adc  word [cs:mmul+2],0 ;  ...and the carry into the high one. CS:
+        jmp  .out               ;  because DS is anyone's while we run
+.div:   add  word [cs:mdiv],1   ; mdiv++
+        adc  word [cs:mdiv+2],0
+.out:   pop  ax                 ; everything back as it was
+        pop  si
+        pop  ds
+        pop  bp
+        iret                    ; IRET pops IP, CS, FLAGS - and FLAGS still
+                                ;  has TF set, so the next instruction traps
+
+; ---- METER: called at the top of every frame -----------------------------
+;  marm says where it is: 0 idle, 1 asked (M was pressed), 2 counting.
+;  TF cannot be MOVed - no instruction writes a flag register bit by name
+;  except CF, DF and IF - so it goes the long way: PUSHF puts the flags on
+;  the stack, POP takes them into AX, OR or AND changes bit 8 (bit 0 of
+;  AH), and PUSH plus POPF puts them back.
+;  In C:
+;
+;      void meter(void)
+;      {
+;          if (marm == 2) {                    /* a frame was counted      */
+;              TF = 0;
+;              dec7(mmul, MSTR + 4);  dec7(mdiv, MSTR + 17);
+;              marm = 0;
+;          } else if (marm == 1) {             /* count the frame to come  */
+;              mmul = 0;  mdiv = 0;  marm = 2;
+;              TF = 1;
+;          }
+;      }
+METER:  cmp  byte [marm],2      ; was the frame just drawn being counted?
+        jne  .ask               ;   no
+        pushf                   ; the flags onto the stack...
+        pop  ax                 ; ...and into AX
+        and  ah,0FEh            ; AH bit 0 is flag bit 8, TF: clear it
+        push ax                 ; back onto the stack...
+        popf                    ; ...and into the flags: no more traps
+        mov  ax,[mmul]          ; DX:AX = mmul
+        mov  dx,[mmul+2]
+        mov  di,MSTR+4          ; DI = where its digits go
+        call DEC7               ; dec7(mmul, MSTR + 4)
+        mov  ax,[mdiv]          ; DX:AX = mdiv
+        mov  dx,[mdiv+2]
+        mov  di,MSTR+17         ; DI = where its digits go
+        call DEC7               ; dec7(mdiv, MSTR + 17)
+        mov  byte [marm],0      ; marm = 0: idle
+        ret
+.ask:   cmp  byte [marm],1      ; was M pressed?
+        jne  .r                 ;   no: nothing to do
+        xor  ax,ax              ; AX = 0
+        mov  [mmul],ax          ; mmul = 0
+        mov  [mmul+2],ax
+        mov  [mdiv],ax          ; mdiv = 0
+        mov  [mdiv+2],ax
+        mov  byte [marm],2      ; marm = 2: counting
+        pushf                   ; the flags...
+        pop  ax                 ; ...into AX
+        or   ah,1               ; TF = 1
+        push ax
+        popf                    ; and from the instruction after the next,
+.r:     ret                     ;  every instruction traps
+
+; ---- DEC7: DX:AX = n, under ten million -> seven digits at DI -------------
+;  A number this size will not go through one DIV: a word divide wants the
+;  answer to fit sixteen bits, and 98000 / 10 does not. So it is done the
+;  way it is done on paper, with no divide at all: how many millions can be
+;  taken away, how many hundred thousands, ... how many ones. At most nine
+;  subtractions a digit.
+;  In C:
+;
+;      void dec7(unsigned long n, char *s)
+;      {
+;          static const unsigned long p[7] = { 1000000, 100000, 10000,
+;                                              1000, 100, 10, 1 };
+;          for (int k = 0; k < 7; k++) {
+;              char d = '0';
+;              while (n >= p[k]) { n -= p[k]; d++; }
+;              *s++ = d;
+;          }
+;      }
+DEC7:   mov  si,PW10            ; SI = &p[0], the biggest first
+        mov  cx,7               ; CX = 7 digits
+.dig:   mov  bl,'0'             ; BL = d = '0'
+.take:  sub  ax,[si]            ; DX:AX -= p[k], low word first...
+        sbb  dx,[si+2]          ;  ...then the high word and the borrow
+        jc   .back              ; borrowed out of the top: n was < p[k]
+        inc  bl                 ; d++: one more taken away
+        jmp  .take
+.back:  add  ax,[si]            ; DX:AX += p[k]: give back the one too many
+        adc  dx,[si+2]
+        mov  [di],bl            ; *s = d
+        inc  di                 ; s++
+        add  si,4               ; k++: a double word on
+        loop .dig               ; seven times
+        ret
+
+marm    db 0                    ; THE METER: 0 idle, 1 asked, 2 counting
+mwas    db 0                    ; M held last frame
+mmul    dw 0,0                  ; multiplies counted, a double word
+mdiv    dw 0,0                  ; divides counted
+oldi1   dw 0,0                  ; INT 1 as we found it: offset, segment
+PW10    dd 1000000,100000,10000,1000,100,10,1   ; DEC7's powers of ten
+MSTR    db 'MUL -------  DIV -------',0         ; the meter's line on the HUD
+
+SINT    dw 0,6,13,19,25,31,38,44,50,56,62,68,74,80,86,92,98,104,109,115
+        dw 121,126,132,137,142,147,153,157,162,167,172,177,181,185,190,194
+        dw 198,202,206,209,213,216,220,223,226,229,231,234,237,239,241,243
+        dw 245,247,248,250,251,252,253,254,255,255,256,256,256
+
+        include '..\..\ENGINE\E_MATH.INC'
+        include '..\..\ENGINE\E_TERR.INC'
+        include '..\..\ENGINE\E_M3D.INC'
+        include '..\..\ENGINE\E_RAST.INC'
+
+TOWNB   db 4096 dup(0)          ; TOWNSPOT: 1 where a square has houses
+HMAP    db 4096 dup(0)          ; the 64x64 heightmap DSGEN fills
+
+; ---- the node cache TERRPREP fills, and GRIDC reads ------------------------
+;  Four hundred and eighty four nodes, three words each: where the node is
+;  after the heading has turned it, and how high the ground is there. Not
+;  quite three kilobytes, and it buys three rotations out of every four.
+TRX     dw TSIDE*TSIDE dup(0)   ; the node, rotated: east of the eye
+TRZ     dw TSIDE*TSIDE dup(0)   ; ...and in front of it
+TWY     dw TSIDE*TSIDE dup(0)   ; ...and the world height of the ground
+TOUT    db TSIDE*TSIDE dup(0)   ; ...and each node's OUTCODE: behind, off
+                                ;  the right, off the left, one bit each
+TH      db TSIDE*TSIDE dup(0)   ; ...and the RAW map byte, so the drawing
+                                ;  loop never touches the map at all
+
+; ---- the drawing order, nearest square first. ORDPREP fills it once -------
+TORD    dw NSIDE*NSIDE dup(0)   ; each entry is a slot, ready to use
+TDA     db NSIDE*NSIDE dup(0)   ; ...where each square is: squares east
+TDB     db NSIDE*NSIDE dup(0)   ;  and north of the eye's own
+TEDGE   db NSIDE*NSIDE dup(0)   ; ...and beside each one, the edges that
+                                ;  square owns: bit i = corner i to i+1

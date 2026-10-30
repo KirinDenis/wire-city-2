@@ -22,6 +22,9 @@
 ; PITCH4 - rotate the 4 face vertices IY/IZ about the camera X axis by the
 ; current pitch. One shared spot: every filled/stroked polygon passes here,
 ; so the whole world pitches for loops and dives. Clobbers AX,BX,CX,DI.
+; A program that defines NOMUL brings its own PITCH4 (lesson 23's NOMUL.ASM:
+; the same turn with no IDIV in it), and this one is not assembled.
+if ~ defined NOMUL
 PITCH4: push si
         xor  si,si
 .l:    mov  ax,[IY+si]
@@ -51,6 +54,7 @@ PITCH4: push si
         jl   .l
         pop  si
         ret
+end if
 
 CLIPNEAR:
         call PITCH4             ; apply pitch before the near-plane clip

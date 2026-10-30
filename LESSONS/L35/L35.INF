@@ -1,0 +1,10 @@
+.title  Multiplying without MUL: what a multiply costs, and where a table pays
+.what   Two programs. MUL.ASM is lesson 22's flight with a meter in it: M sets the trap flag for one frame, and INT 1 - called after every instruction - counts the multiplies and divides by their opcode. Some eighty thousand a frame, near three seconds of an 8086 at 4.77 MHz, because the 8086 has no multiplier: a MUL is microcode shifting and adding once a bit. NOMUL.ASM takes them out of its busiest places: a divide by 256 is the middle two bytes of the product, and the ground's 2500 nodes are turned from tables built once a frame, because the sine and the grid's distances are known in advance. Two thirds of the divides gone, a third of the multiplies. And the famous table of squares, said honestly: on the 8086 it does not pay
+.tier   LESSON
+.main   NOMUL.ASM
+.needs  MUL.ASM
+.build  FASM NOMUL.ASM NOMUL.COM
+.build  FASM MUL.ASM MUL.COM
+.run    NOMUL.COM
+.uses   IMUL IDIV PUSHF POPF LDS IRET ADC SBB
+.engine ENGINE\E_M3D.INC ENGINE\E_RAST.INC

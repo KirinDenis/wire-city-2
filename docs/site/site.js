@@ -25,7 +25,7 @@ import { DosCm } from '../owlosui/apps/dos.js';
 import { DriveGates } from '../owlosui/dosbox/gates.js';
 import { unzip } from '../owlosui/dosbox/unzip.js';
 import { log } from '../owlosui/apps/log.js';
-import { CourseApp, Cm, A, lessonFromAddress, leaveIsolation } from '../course/course.js';
+import { CourseApp, Cm, A, lessonFromAddress, leaveIsolation, diskVersion } from '../course/course.js';
 import { Drive, LocalFolder, crlf, fingerprint, guardRemovals, loadTable, saveTable, keepHandle, handleOf, forgetHandle, freeFolder, statsOf, sizeText, dateText, journalRemovals } from './drives.js';
 import { TableWindow } from './tablewin.js';
 import { Presence, doingText, serverUrl } from './net.js';
@@ -1279,7 +1279,7 @@ export class SiteApp extends CourseApp {
       // and 458 files it never reads. That DOS PC's A: is then without them -
       // the disk is written hushed, not pushed to a running machine - and the
       // next switch-on has them all.
-      const fresh = !!this.course.disk && (await this.browser.read(`${A}COURSE.VER`).catch(() => '')).trim() !== this.course.disk.version;
+      const fresh = !!this.course.disk && (await this.browser.read(`${A}COURSE.VER`).catch(() => '')).trim() !== diskVersion(this.course.disk);
       const gameFirst = !!ADDRESS_PLAYS[wanted?.toLowerCase()]?.game;
       const disk = this.track(gameFirst ? loading.done.then(() => this.installDisk({ quiet: true })) : this.installDisk({ quiet: true }));
       const waits = fresh && !gameFirst;

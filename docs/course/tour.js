@@ -42,6 +42,7 @@
 //   waitnored X0 Y0 X1 Y1 [S] until it is gone again
 //   lesson Lnn              open that lesson as the list does (it builds; `waitbuild` waits for it)
 //   run Lnn NAME            a program in that lesson's folder on A:, as Enter in the commander runs it
+//   open Lnn NAME            a source in that lesson's folder in an editor, or that editor to the front
 //   game KEY                a game from the DOS menu (owlfly, owlfly2, owlfly3)
 //   fly [S]                  Enter through OWL FLY's front screens into the cockpit (S seconds at most, 60)
 //   fresh Lnn                that lesson's files on A: as the course ships them
@@ -399,6 +400,21 @@ export class Tour {
           const l = app.course.lessons.find(x => x.id === args.trim());
           this.buildMark = app.buildsStarted ?? 0;
           if (l) await app.openLesson(l);
+          break;
+        }
+        case 'open': {
+          // A second source of the lesson in an editor of its own - lesson
+          // 23 reads MUL.ASM and NOMUL.ASM - or the one already open, brought
+          // to the front. F9 then builds the one in front.
+          const [folder, file] = args.trim().split(/\s+/);
+          const path = `/DOS A Drive/LESSONS/${folder}/${file}`;
+          const open = [...app.docs].find(([, d]) => d.path === path);
+          if (open) {
+            owl.activate(open[0]);
+          } else {
+            app.documents.add(file, await app.browser.read(path), app.browser, path);
+          }
+          owl.refresh?.();
           break;
         }
         case 'run': {

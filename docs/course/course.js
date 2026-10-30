@@ -50,6 +50,10 @@ export const Cm = {
 // disk (disk.zip, made by ../pack-course.ps1) is unpacked into it once.
 export const A = '/DOS A Drive/';
 const DISK_VERSION = `${A}COURSE.VER`;
+const DISK_RULES = 2;          // 2: a newer disk replaces ENGINE\ too - see installDisk
+
+/** What COURSE.VER on A: says once this disk is on it, under these rules. */
+export function diskVersion(disk) { return `${disk.version} ${DISK_RULES}`; }
 // FASM's memory in KB; ?m=N on the page tries another (testing the crash).
 const FASM_KB = Number(new URLSearchParams(globalThis.location?.search ?? '').get('m')) || 4096;
 
@@ -552,14 +556,19 @@ export class CourseApp {
    * TOOLS, ENGINE, every lesson, the examples and the games, each with its
    * own MAKE.BAT. A file already on A: is left alone: it may be the
    * student's. A newer disk (its version in course.json) adds what is new,
-   * and replaces the commander (TOOLS\KC).
+   * and replaces the commander (TOOLS\KC) and the engine (ENGINE\): every
+   * lesson on the disk is built against the engine of the same disk, and
+   * an old E_M3D.INC beside lesson 23's NOMUL.ASM is "symbol already
+   * defined" (2026-10-30). DISK_RULES is part of the version written on A:,
+   * so a change to these rules copies once more for everyone.
    */
   async installDisk() {
     const disk = this.course?.disk;
     if (!disk) return;
     const S = this.browser;
     const had = await S.read(DISK_VERSION).catch(() => '');
-    if (had.trim() === disk.version) return;
+    const version = diskVersion(disk);
+    if (had.trim() === version) return;
     this.showBuild(`Putting the course disk on drive A: - ${disk.files} files, the lessons, the examples and the games...`);
     const files = await courseDisk(disk.url);
     let added = 0;
@@ -568,13 +577,14 @@ export class CourseApp {
         const to = `${A}${f.path}`;
         // The commander's own files are the course's, not the student's: a
         // newer disk replaces them. Its setup, menu and extension table
-        // (KC.INI, KC.MNU, KC.EXT) are not on the disk and stay.
-        const ours = f.path.startsWith('TOOLS/KC/');
+        // (KC.INI, KC.MNU, KC.EXT) are not on the disk and stay. So is the
+        // engine: the lessons include it, and it must match them.
+        const ours = f.path.startsWith('TOOLS/KC/') || f.path.startsWith('ENGINE/');
         const there = !ours && await S.readBytes(to).then(() => true, () => false);
         if (!there) { await S.write(to, f.contents); added++; }
       }
     });
-    await S.write(DISK_VERSION, `${disk.version}\r\n`);
+    await S.write(DISK_VERSION, `${version}\r\n`);
     log.info('course', `course disk ${disk.version}: ${added} of ${files.length} files put on A:`);
     this.showBuild(`Drive A: holds the course: LESSONS, EXAMPLES, GAMES, ENGINE and TOOLS - ${added} files new. ` +
       'Tools > Commander shows them; MAKE.BAT in any folder builds what is there.');

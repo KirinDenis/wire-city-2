@@ -192,7 +192,10 @@ end if
 ;   in: AX=sx_raw, DX=sy_raw   out: AX=sx, DX=sy   clobbers BX,SI,rddx/rddy/rsxo
 ;   Same *256 / idiv 256 fixed-point rotate as ROTXZ. Applied per vertex
 ;   inside PROJPT so all world geometry tilts; HUD/crosshair bypass it.
+;   A program that defines NOMUL brings its own (lesson 23's NOMUL.ASM: the
+;   same turn with no IDIV in it), and this one is not assembled.
 ; ============================================================================
+if ~ defined NOMUL
 APPLYROLL:
         sub  ax,160             ; rddx,rddy = offset from the view centre
         mov  [rddx],ax
@@ -228,6 +231,7 @@ APPLYROLL:
         mov  ax,[rsxo]
         mov  dx,bx
         ret
+end if
 
 ; ============================================================================
 ;  PROJPT  perspective-project one camera-space point, then bank + clamp.
