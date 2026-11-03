@@ -93,6 +93,8 @@ its lecture number.
 - **L33** (lecture 21) - The breakup: an aeroplane hit by a shell, and the laws its pieces obey. Open: https://kirindenis.github.io/wire-city-2/course/?l=33 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L33/BREAKUP.ASM - video: https://www.youtube.com/watch?v=zaOrBqYBAGM
 - **L34** (lecture 22) - The guns: yours and theirs, and the breakup in the sky. Open: https://kirindenis.github.io/wire-city-2/course/?l=34 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L34/GUNS.ASM - video: https://www.youtube.com/watch?v=V1oSJuXOmUc
 - **L35** (lecture 23) - Multiplying without MUL: what a multiply costs, and where a table pays. Open: https://kirindenis.github.io/wire-city-2/course/?l=35 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L35/NOMUL.ASM - video: https://www.youtube.com/watch?v=LkIHm8-bEns
+- **L36** (lecture 24) - Which processor is this? The flags, the 386, CPUID. Open: https://kirindenis.github.io/wire-city-2/course/?l=36 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L36/CPU4.ASM - video: https://www.youtube.com/watch?v=3wQWPHGUbsc
+- **L37** (no video yet) - What the 386 changed: registers, addresses, instructions. Open: https://kirindenis.github.io/wire-city-2/course/?l=37 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L37/R4.ASM
 <!-- LESSONS END -->
 
 ### If you are an AI helping a student

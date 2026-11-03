@@ -2,9 +2,9 @@
     "playlist":  "PLYAv8-EdgIF8",
     "disk":  {
                  "url":  "disk.zip",
-                 "version":  "BC21FF025B10",
-                 "files":  691,
-                 "bytes":  16072475
+                 "version":  "42EBC9566DAD",
+                 "files":  714,
+                 "bytes":  16301812
              },
     "lessons":  [
                     {
@@ -438,6 +438,30 @@
                         "size":  453483,
                         "video":  "LkIHm8-bEns",
                         "length":  "6:59"
+                    },
+                    {
+                        "id":  "L36",
+                        "folder":  "L36",
+                        "lecture":  "24",
+                        "title":  "Which processor is this? The flags, the 386, CPUID",
+                        "about":  "Four small programs, one growing. CPU1 prints the flags register in ones and zeros. CPU2 writes into it and reads back: bits 12 to 15 are wires - tied to 1 on an 8086, to 0 on a 286, and on a 386 they take what is written. CPU3 goes past that verdict into the first 32-bit code of the course - EAX, PUSHFD, the 66h prefix - and turns bit 18 of EFLAGS over: a 486 keeps it, a 386 cannot. CPU4 turns bit 21: if it moves, CPUID is there, and the processor says its own name. The detector itself has to be 8086 code to the last jump, or it dies on the chip it was meant to recognise",
+                        "main":  "CPU4.ASM",
+                        "buildable":  true,
+                        "size":  14815,
+                        "video":  "3wQWPHGUbsc",
+                        "length":  "7:38"
+                    },
+                    {
+                        "id":  "L37",
+                        "folder":  "L37",
+                        "lecture":  "",
+                        "title":  "What the 386 changed: registers, addresses, instructions",
+                        "about":  "The map lecture before writing for the 386, in four small programs, one growing; each asks first whether this is an 80386 (ENGINE\\E_CPU.INC, lesson 24\u0027s detector) and then prints the 8086\u0027s way and the 386\u0027s side by side. R1 the registers: 32 bits, the low half keeps the 8086\u0027s name, the top half has none, FS and GS; 100000 + 50000 is ADD and ADC on the 8086 and one ADD on the 386. R2 the addresses: any register, times 1, 2, 4 or 8, and LEA as a calculator. R3 the new instructions: MOVZX, MOVSX, IMUL into any register, SETcc, BSR. R4 what did not change: one address an instruction - memory to memory still goes through a register - and real mode\u0027s 1 MB and 64 KB segments. The 186 and 286 are passed over",
+                        "main":  "R4.ASM",
+                        "buildable":  true,
+                        "size":  20503,
+                        "video":  null,
+                        "length":  null
                     }
                 ]
 }

@@ -1,0 +1,12 @@
+.title  Which processor is this? The flags, the 386, CPUID
+.what   Four small programs, one growing. CPU1 prints the flags register in ones and zeros. CPU2 writes into it and reads back: bits 12 to 15 are wires - tied to 1 on an 8086, to 0 on a 286, and on a 386 they take what is written. CPU3 goes past that verdict into the first 32-bit code of the course - EAX, PUSHFD, the 66h prefix - and turns bit 18 of EFLAGS over: a 486 keeps it, a 386 cannot. CPU4 turns bit 21: if it moves, CPUID is there, and the processor says its own name. The detector itself has to be 8086 code to the last jump, or it dies on the chip it was meant to recognise
+.tier   LESSON
+.main   CPU4.ASM
+.needs  CPU1.ASM CPU2.ASM CPU3.ASM
+.build  FASM CPU1.ASM CPU1.COM
+.build  FASM CPU2.ASM CPU2.COM
+.build  FASM CPU3.ASM CPU3.COM
+.build  FASM CPU4.ASM CPU4.COM
+.run    CPU4.COM
+.uses   PUSHF POPF PUSHFD POPFD CPUID ADC XOR TEST
+.engine ENGINE\E_8086.INC

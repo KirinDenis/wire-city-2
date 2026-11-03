@@ -1,0 +1,12 @@
+.title  What the 386 changed: registers, addresses, instructions
+.what   The map lecture before writing for the 386, in four small programs, one growing; each asks first whether this is an 80386 (ENGINE\E_CPU.INC, lesson 24's detector) and then prints the 8086's way and the 386's side by side. R1 the registers: 32 bits, the low half keeps the 8086's name, the top half has none, FS and GS; 100000 + 50000 is ADD and ADC on the 8086 and one ADD on the 386. R2 the addresses: any register, times 1, 2, 4 or 8, and LEA as a calculator. R3 the new instructions: MOVZX, MOVSX, IMUL into any register, SETcc, BSR. R4 what did not change: one address an instruction - memory to memory still goes through a register - and real mode's 1 MB and 64 KB segments. The 186 and 286 are passed over
+.tier   LESSON
+.main   R4.ASM
+.needs  R1.ASM R2.ASM R3.ASM
+.build  FASM R1.ASM R1.COM
+.build  FASM R2.ASM R2.COM
+.build  FASM R3.ASM R3.COM
+.build  FASM R4.ASM R4.COM
+.run    R4.COM
+.uses   MOVZX MOVSX IMUL SETL BSR LEA ADC CBW MOVSD
+.engine ENGINE\E_CPU.INC

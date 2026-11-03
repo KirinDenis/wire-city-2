@@ -47,6 +47,7 @@
 //   fly [S]                  Enter through OWL FLY's front screens into the cockpit (S seconds at most, 60)
 //   fresh Lnn                that lesson's files on A: as the course ships them
 //   speed auto|max           the DOS PC's speed, quietly - every take starts the same
+//   cpu auto|386|486_slow|pentium_slow   the DOS PC's processor for its next start, this visit only
 
 import { log } from '../owlosui/apps/log.js';
 import { KEYS } from '../owlosui/dosbox/dosbox.js';
@@ -373,6 +374,10 @@ export class Tour {
           try { localStorage.setItem(app.dos.settingsKey, JSON.stringify(app.dos.settings)); } catch { /* this visit only */ }
           break;
         }
+        // The DOS PC's processor, as DOS > Settings > CPU sets it - lesson
+        // 24 runs one program on three. This visit only: the viewer's own
+        // setting is not touched, and the next start of the PC takes it.
+        case 'cpu': app.dos.settings = { ...app.dos.settings, cputype: args.trim() }; break;
         case 'waitred':
         case 'waitnored': {
           // Until something RED is on the DOS picture inside a box - a

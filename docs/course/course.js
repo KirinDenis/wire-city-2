@@ -754,7 +754,12 @@ export class CourseApp {
       return this.runDos(this.browser, game, 'BUILD.BAT');
     }
     await this.saveQuietly();
-    if (this.lesson?.buildable) await this.install(this.lesson);
+    // The lesson's own batch files - unless this build writes them itself,
+    // in the same folder. Two writes of one BUILD.BAT a moment apart race
+    // each other into the running DOS, and the older one could land last:
+    // DOS then handed it back to the folder, and F9 on CPU3.ASM assembled
+    // the lesson's CPU4.ASM (lesson 24's tour, 2026-11-02).
+    if (this.lesson?.buildable && this.dir(this.lesson) !== t.dir) await this.install(this.lesson);
     await this.batches(t);
     this.lastTarget = t;
     const out = `${t.dir}BUILD.TXT`;
