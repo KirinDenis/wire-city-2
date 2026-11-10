@@ -1,0 +1,7 @@
+.title  The grain
+.what   A lit aeroplane in neon, shades mixed by a 4x4 Bayer matrix, four pixels a write - 386
+.tier   EXAMPLE
+.main   GRAIN.ASM
+.build  FASM GRAIN.ASM GRAIN.COM
+.run    GRAIN.COM
+.engine ENGINE_CPU.INC ENGINE_MATH.INC ENGINE_M3D.INC ENGINE_RAST.INC

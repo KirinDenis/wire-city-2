@@ -608,9 +608,14 @@ export class CourseApp {
    * the program starts, and waits for a key after it: a program that
    * prints and ends (lesson 2's HELLO) would otherwise be gone at once,
    * the DOS commander drawn over its words.
+   *
+   * A source that says `format MZ` builds an .EXE (lesson 27's FLY, which
+   * outgrew 64K): FASM writes whatever name it is given, and DOS would run
+   * an MZ image called .COM too, but the name should say what the file is.
    */
   async batches({ dir, asm }) {
-    const com = asm.replace(/\.ASM$/i, '.COM');
+    const src = await this.browser.read(`${dir}${asm}`).catch(() => '');
+    const com = asm.replace(/\.ASM$/i, /^\s*format\s+MZ\b/im.test(src) ? '.EXE' : '.COM');
     await this.browser.write(`${dir}BUILD.BAT`, [
       '@echo off',
       `if exist ${com} del ${com}`,

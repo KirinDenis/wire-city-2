@@ -2,9 +2,9 @@
     "playlist":  "PLYAv8-EdgIF8",
     "disk":  {
                  "url":  "disk.zip",
-                 "version":  "42EBC9566DAD",
-                 "files":  714,
-                 "bytes":  16301812
+                 "version":  "4C7D6FAD47FC",
+                 "files":  732,
+                 "bytes":  17473073
              },
     "lessons":  [
                     {
@@ -454,12 +454,36 @@
                     {
                         "id":  "L37",
                         "folder":  "L37",
-                        "lecture":  "",
+                        "lecture":  "25",
                         "title":  "What the 386 changed: registers, addresses, instructions",
                         "about":  "The map lecture before writing for the 386, in four small programs, one growing; each asks first whether this is an 80386 (ENGINE\\E_CPU.INC, lesson 24\u0027s detector) and then prints the 8086\u0027s way and the 386\u0027s side by side. R1 the registers: 32 bits, the low half keeps the 8086\u0027s name, the top half has none, FS and GS; 100000 + 50000 is ADD and ADC on the 8086 and one ADD on the 386. R2 the addresses: any register, times 1, 2, 4 or 8, and LEA as a calculator. R3 the new instructions: MOVZX, MOVSX, IMUL into any register, SETcc, BSR. R4 what did not change: one address an instruction - memory to memory still goes through a register - and real mode\u0027s 1 MB and 64 KB segments. The 186 and 286 are passed over",
                         "main":  "R4.ASM",
                         "buildable":  true,
                         "size":  20503,
+                        "video":  "CL1---8_WeU",
+                        "length":  "7:19"
+                    },
+                    {
+                        "id":  "L38",
+                        "folder":  "L38",
+                        "lecture":  "26",
+                        "title":  "The game on the 386: double words and a clock of its own",
+                        "about":  "Lesson 23\u0027s flight rewritten for the 80386 in one file, CLOCK.ASM, with TICK.ASM before it. TICK is the timer chip on its own: the crystal\u0027s 1193182 pulses, a divider of 16384 instead of 65536, INT 8 taken, 72.8 ticks a second, every fourth handed to the BIOS, and all of it given back at the end. CLOCK asks NEED386 first, fills four pixels a write with REP STOSD and REP MOVSD, draws every polygon with one divide an edge and then only adds, x held as 16.16 in a double word, and draws the picture between the steps of the physics, which stays on 18.2. The picture\u0027s angles count in eighths of a step, 2048 to the circle, so a bank turns without jumps. No slow mode: the F key and the meter are gone",
+                        "main":  "CLOCK.ASM",
+                        "buildable":  true,
+                        "size":  475085,
+                        "video":  "QyWuEeXbDtc",
+                        "length":  "7:44"
+                    },
+                    {
+                        "id":  "L39",
+                        "folder":  "L39",
+                        "lecture":  "",
+                        "title":  "Flat memory: protected mode, and the game past 64K",
+                        "about":  "CLOCK.COM of lesson 26 was 64803 bytes: a .COM is one segment, and it was full. Three small programs, one growing, go and get the memory above one megabyte. FLAT1 looks: CR0\u0027s PE bit read by SMSW (real mode, or a memory manager\u0027s virtual 8086), the A20 gate tested by writing at 0000:0500 and FFFF:0510, and HIMEM\u0027s free memory through XMS. FLAT2 asks HIMEM for a megabyte, opens A20 itself through the keyboard controller\u0027s output port, writes a GDT, sets PE, writes the megabyte through a flat selector and reads it back, and comes home. FLAT3 stays there: an IDT, the interrupt controller moved to INT 32, the timer at 72.8 ticks a second, its own keys, a picture drawn above 1 MB and copied to 0A0000h, and a fault comes home with its number. FLY is lesson 26\u0027s flight as a 32-bit protected-mode program in an .EXE: the back buffer and the tables in HIMEM\u0027s memory behind selectors, every 16-bit habit that breaks in 32-bit code named where it was fixed",
+                        "main":  "FLY.ASM",
+                        "buildable":  true,
+                        "size":  491665,
                         "video":  null,
                         "length":  null
                     }

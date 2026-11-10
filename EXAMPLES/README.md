@@ -36,6 +36,7 @@ agreements about globals and registers.
 | 12 | `SOLO.ASM` | The first solo: the whole flight school in one machine and nobody in the back seat. Parked on the slab — throttle, roll, rotate when the wing is ready (the lift decides, not a script), fly the flat world, judge the descent, gear, flaps, and put it on the next runway. | `E_MATH`, `E_SND` |
 | 13 | `BBS.ASM` | The chat terminal: multi-user IPX broadcast written against the real IPX API — INT 7Ah, ECBs, broadcast packets. In desktop DOSBox it talks over `ipxnet`; in the browser the emulator tunnels the same packets through WebSocket. | — |
 | 14 | `NETSQ.ASM` | A square each, on the network: the smallest multiplayer game. Arrows move yours; every machine in the room draws them all; a player not heard for three seconds is gone. On the site: `build A:\EXAMPLES\NETSQ.ASM --net=netsq`, and the same in a second window. | `E_NET` |
+| 15 | `GRAIN.ASM` | The grain, an 80386 program: the aeroplanes lit by a real normal, six shades a colour mixed on the screen by a 4x4 Bayer matrix, in a neon palette. A row of the matrix is four pixels, one double word, so a span is `REP STOSD` and the grain costs what a flat fill costs. G steps from the 8086 flat fill to grain and neon; the counter on the screen shows what each one costs. | `E_CPU`, `E_MATH`, `E_M3D`, `E_RAST` |
 
 The pairs are the point of the set. `TKOFF`/`TKPHYS` and `LAND`/`LNDPHYS` are
 the same manoeuvre twice: once as a recording played back, once as forces

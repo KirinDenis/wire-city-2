@@ -192,6 +192,9 @@ PROJPOLY:
 ;  edges), take min/max x, clamp to [0,319], and rep-stosb the span. The
 ;  fills (drawn far->near) are what hide buildings behind nearer ones.
 ; ============================================================================
+; A program that defines OWNSCAN brings its own SCANPOLY (lesson 26's CLOCK.ASM:
+; one divide an edge, then adds), and this one is not assembled.
+if ~ defined OWNSCAN
 SCANPOLY:
         mov  ax,[PY]
         mov  [pminy],ax
@@ -288,8 +291,15 @@ SCANPOLY:
         mov  cx,[scxr]
         sub  cx,[scxl]
         inc  cx
+;  A program that declares SPANHOOK fills the span itself: SPANFILL gets
+;  ES:DI and CX, and [scy] says the row (EXAMPLES\GRAIN.ASM, a span in four
+;  pixels at a time). Everything else assembles the two lines below.
+if defined SPANHOOK
+        call SPANFILL
+else
         mov  al,[COLOR]
         rep  stosb
+end if
 .nextY:
         mov  ax,[scy]
         inc  ax
@@ -297,6 +307,7 @@ SCANPOLY:
         cmp  ax,[scymax]
         jle  .yloop
 .done: ret
+end if
 
 ; ============================================================================
 ;  STROKEPOLY: outline polygon PX/PY[0..NPOLY-1] with COLOR  (ES=bufseg)
@@ -605,17 +616,17 @@ end if
         mov  ax,[ldy]
         mov  [ly],ax
         mov  ax,[lsx]
-        mov  [.majs+2],ax       ; ...so the driving ADD gets +-1
+        mov  [.majsi],ax        ; ...so the driving ADD gets +-1
         mov  ax,[lsy]
-        mov  [.mins+2],ax       ; ...and the debt ADD gets +-320
+        mov  [.minsi],ax        ; ...and the debt ADD gets +-320
         jmp  .go
 .ymaj:  mov  [ly],ax            ; y-major: the roles swap, nothing else
         mov  ax,[ldy]
         mov  [lx],ax
         mov  ax,[lsy]
-        mov  [.majs+2],ax
+        mov  [.majsi],ax
         mov  ax,[lsx]
-        mov  [.mins+2],ax
+        mov  [.minsi],ax
 .go:    jmp  short .fl          ; THE RULE: patch, then jump
 if defined linereg
         ; THE REGISTER LOOP (programs that define `linereg`, OWL FLY III
@@ -647,8 +658,12 @@ if defined linereg
         jb   .nod
         sub  dx,bp              ; paid off...
 .mins:  add  di,320             ; ...with one sideways step   (REWRITTEN)
+.minsi = $ - 2                  ; ITS NUMBER: the instruction's last two bytes.
+                                ;  In 16-bit code that is .mins+2; assembled
+                                ;  for 32 bits a 66h comes first and it is +3
 .nod:
 .majs:  add  di,320             ; the driving step, every pixel (REWRITTEN)
+.majsi = $ - 2                  ; and its number, the same way
         loop .px
         pop  bp
         pop  si
@@ -672,8 +687,12 @@ else
         jb   .nod
         sub  dx,[lx]            ; paid off...
 .mins:  add  di,320             ; ...with one sideways step   (REWRITTEN)
+.minsi = $ - 2                  ; ITS NUMBER: the instruction's last two bytes.
+                                ;  In 16-bit code that is .mins+2; assembled
+                                ;  for 32 bits a 66h comes first and it is +3
 .nod:
 .majs:  add  di,320             ; the driving step, every pixel (REWRITTEN)
+.majsi = $ - 2                  ; and its number, the same way
         loop .px
         pop  di
         pop  dx

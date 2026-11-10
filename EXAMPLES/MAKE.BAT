@@ -3,7 +3,7 @@ REM ============================================================================
 REM MAKE.BAT - assemble the teaching machines, from inside DOS.
 REM
 REM   cd EXAMPLES
-REM   MAKE            all fourteen
+REM   MAKE            all fifteen
 REM   MAKE JET        just that one
 REM
 REM Run it from this folder. Every path below is relative to here on purpose:
@@ -19,7 +19,7 @@ REM assembly rather than once at the top.
 REM
 REM WHY IT CALLS ITSELF. DOS has no subroutines in a batch file - CALL :label
 REM is a Windows invention, and so is FOR - so the way to run the same three
-REM lines fourteen times is to CALL this file again with a name. One level
+REM lines fifteen times is to CALL this file again with a name. One level
 REM deep, which DOS has managed since 3.3.
 REM
 REM   MAKE ... EXIT   assembles and then closes DOSBox. That is for
@@ -48,6 +48,7 @@ call MAKE.BAT JET
 call MAKE.BAT SOLO
 call MAKE.BAT BBS
 call MAKE.BAT RELIEF
+call MAKE.BAT GRAIN
 echo.
 echo Done. Type RUN and a name - RUN JET - to run one of them.
 goto done
@@ -64,8 +65,8 @@ goto done
 :noasm
 if exist %1 goto withext
 echo.
-echo %1.ASM is not here. The fourteen are TERRA RING SPOOL FLIGHT LAND
-echo LNDPHYS TKOFF TKPHYS SMOKE AVIO JET SOLO BBS RELIEF.
+echo %1.ASM is not here. The fifteen are TERRA RING SPOOL FLIGHT LAND
+echo LNDPHYS TKOFF TKPHYS SMOKE AVIO JET SOLO BBS RELIEF GRAIN.
 goto done
 
 REM You typed a real file, just with its extension on - which is what Tab

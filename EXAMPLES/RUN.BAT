@@ -22,6 +22,7 @@ REM   TKPHYS   the take-off, with the physics doing the work
 REM   SMOKE    a particle trail, painter-sorted
 REM   AVIO     the instrument panel
 REM   JET      the aeroplane model, rotated and projected
+REM   GRAIN    the aeroplane lit, in neon and Bayer grain - needs a 386
 REM   SOLO     all of it at once - the nearest thing here to a game
 REM   BBS      two machines talking over IPX
 REM

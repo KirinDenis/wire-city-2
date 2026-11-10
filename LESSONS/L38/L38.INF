@@ -1,0 +1,10 @@
+.title  The game on the 386: double words and a clock of its own
+.what   Lesson 23's flight rewritten for the 80386 in one file, CLOCK.ASM, with TICK.ASM before it. TICK is the timer chip on its own: the crystal's 1193182 pulses, a divider of 16384 instead of 65536, INT 8 taken, 72.8 ticks a second, every fourth handed to the BIOS, and all of it given back at the end. CLOCK asks NEED386 first, fills four pixels a write with REP STOSD and REP MOVSD, draws every polygon with one divide an edge and then only adds, x held as 16.16 in a double word, and draws the picture between the steps of the physics, which stays on 18.2. The picture's angles count in eighths of a step, 2048 to the circle, so a bank turns without jumps. No slow mode: the F key and the meter are gone
+.tier   LESSON
+.main   CLOCK.ASM
+.needs  TICK.ASM
+.build  FASM TICK.ASM TICK.COM
+.build  FASM CLOCK.ASM CLOCK.COM
+.run    CLOCK.COM
+.uses   STOSD MOVSD OUT IRET MOVSX MOVZX IDIV SAR
+.engine ENGINE\E_CPU.INC ENGINE\E_MATH.INC ENGINE\E_TERR.INC ENGINE\E_M3D.INC ENGINE\E_RAST.INC

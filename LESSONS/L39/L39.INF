@@ -1,0 +1,12 @@
+.title  Flat memory: protected mode, and the game past 64K
+.what   CLOCK.COM of lesson 26 was 64803 bytes: a .COM is one segment, and it was full. Three small programs, one growing, go and get the memory above one megabyte. FLAT1 looks: CR0's PE bit read by SMSW (real mode, or a memory manager's virtual 8086), the A20 gate tested by writing at 0000:0500 and FFFF:0510, and HIMEM's free memory through XMS. FLAT2 asks HIMEM for a megabyte, opens A20 itself through the keyboard controller's output port, writes a GDT, sets PE, writes the megabyte through a flat selector and reads it back, and comes home. FLAT3 stays there: an IDT, the interrupt controller moved to INT 32, the timer at 72.8 ticks a second, its own keys, a picture drawn above 1 MB and copied to 0A0000h, and a fault comes home with its number. FLY is lesson 26's flight as a 32-bit protected-mode program in an .EXE: the back buffer and the tables in HIMEM's memory behind selectors, every 16-bit habit that breaks in 32-bit code named where it was fixed
+.tier   LESSON
+.main   FLY.ASM
+.needs  FLAT1.ASM FLAT2.ASM FLAT3.ASM
+.build  FASM FLAT1.ASM FLAT1.COM
+.build  FASM FLAT2.ASM FLAT2.COM
+.build  FASM FLAT3.ASM FLAT3.COM
+.build  FASM FLY.ASM FLY.EXE
+.run    FLY.EXE
+.uses   SMSW LGDT LIDT IRETD MUL LOOPW
+.engine ENGINE\E_CPU.INC ENGINE\E_MATH.INC ENGINE\E_TERR.INC ENGINE\E_M3D.INC ENGINE\E_RAST.INC

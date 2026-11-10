@@ -94,7 +94,9 @@ its lecture number.
 - **L34** (lecture 22) - The guns: yours and theirs, and the breakup in the sky. Open: https://kirindenis.github.io/wire-city-2/course/?l=34 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L34/GUNS.ASM - video: https://www.youtube.com/watch?v=V1oSJuXOmUc
 - **L35** (lecture 23) - Multiplying without MUL: what a multiply costs, and where a table pays. Open: https://kirindenis.github.io/wire-city-2/course/?l=35 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L35/NOMUL.ASM - video: https://www.youtube.com/watch?v=LkIHm8-bEns
 - **L36** (lecture 24) - Which processor is this? The flags, the 386, CPUID. Open: https://kirindenis.github.io/wire-city-2/course/?l=36 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L36/CPU4.ASM - video: https://www.youtube.com/watch?v=3wQWPHGUbsc
-- **L37** (no video yet) - What the 386 changed: registers, addresses, instructions. Open: https://kirindenis.github.io/wire-city-2/course/?l=37 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L37/R4.ASM
+- **L37** (lecture 25) - What the 386 changed: registers, addresses, instructions. Open: https://kirindenis.github.io/wire-city-2/course/?l=37 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L37/R4.ASM - video: https://www.youtube.com/watch?v=CL1---8_WeU
+- **L38** (lecture 26) - The game on the 386: double words and a clock of its own. Open: https://kirindenis.github.io/wire-city-2/course/?l=38 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L38/CLOCK.ASM - video: https://www.youtube.com/watch?v=QyWuEeXbDtc
+- **L39** (no video yet) - Flat memory: protected mode, and the game past 64K. Open: https://kirindenis.github.io/wire-city-2/course/?l=39 - source: https://raw.githubusercontent.com/KirinDenis/wire-city-2/main/LESSONS/L39/FLY.ASM
 <!-- LESSONS END -->
 
 ### If you are an AI helping a student
